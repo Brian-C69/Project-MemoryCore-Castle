@@ -1,6 +1,7 @@
 //! MemoryCore Castle: a full-screen desktop that hosts the member's own AI CLI
 //! (Claude Code or Codex) inside their MemoryCore folder.
 
+mod appearance;
 mod apps;
 mod backup;
 mod chat;
@@ -177,6 +178,9 @@ pub fn run() {
             theme::theme_folder,
             studio::studio_library,
             studio::studio_powers,
+            appearance::appearance_look,
+            appearance::appearance_new,
+            appearance::appearance_wear,
             commands::choose_picture,
             commands::avatar_set,
             commands::avatar_get,

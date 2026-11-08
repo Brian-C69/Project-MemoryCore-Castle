@@ -125,7 +125,11 @@ fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols
     let (Some(folder), Some(program), true) = (room.folder(&settings), program, ready.ready) else {
         return Err(ready.message);
     };
-    let vars = env::session_env(settings.cli, &|name| key::load(name), &tools_folder(app));
+    let mut vars = env::session_env(settings.cli, &|name| key::load(name), &tools_folder(app));
+    // the drawing styles (standard appearance, turnarounds, try-on) ship beside the tools
+    if let Ok(dir) = app.path().resource_dir() {
+        vars.push(("CASTLE_STYLES".into(), dir.join("styles").display().to_string()));
+    }
     let (output_event, exit_event) = room.events();
     let output = app.clone();
     let ending = app.clone();
