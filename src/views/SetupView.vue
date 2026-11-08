@@ -21,6 +21,7 @@ import {
   setupInspect,
 } from '../api/castle.js'
 import { builtInThemes } from '../themes/loader.js'
+import BackupPanel from '../components/BackupPanel.vue'
 
 const emit = defineEmits(['done', 'close'])
 const props = defineProps({
@@ -28,7 +29,9 @@ const props = defineProps({
   reopened: { type: Boolean, default: false },
 })
 
-const STEPS = ['Folder', 'Companion app', 'Names', 'Keys', 'Look']
+const STEPS = ['Folder', 'Companion app', 'Names', 'Keys', 'Look', 'Backup']
+// The Look step saves everything; Backup comes after, because it works on the saved folder.
+const LAST_FORM_STEP = 4
 const STYLES = ['A friendly partner', 'A calm mentor', 'A cheerful helper', 'A focused work assistant', 'A caring companion']
 const KEY_HELP = {
   openai: 'Draws pictures (ChatGPT image). Not needed with Codex - it draws by itself.',
@@ -218,12 +221,17 @@ async function finish() {
     }
     return saveSettings(next)
   })
-  if (done) emit('done')
+  // the memory is saved: the optional backup step follows
+  if (done) {
+    step.value = LAST_FORM_STEP + 1
+    problem.value = ''
+  }
 }
 
 function next() {
   if (!canNext.value) return
-  if (step.value === STEPS.length - 1) return finish()
+  if (step.value === LAST_FORM_STEP) return finish()
+  if (step.value > LAST_FORM_STEP) return emit('done')
   step.value += 1
   problem.value = ''
   if (step.value === 1 && !form.cliCheck) checkCli()
@@ -371,6 +379,12 @@ onMounted(async () => {
         <p v-if="form.cli === 'codex'" class="hint">The ChatGPT key is hidden: Codex draws pictures with your ChatGPT account.</p>
       </div>
 
+      <!-- 6. Backup (after everything is saved) -->
+      <div v-else-if="step > LAST_FORM_STEP" class="body">
+        <h2>Keep the memory safe (optional)</h2>
+        <BackupPanel :companion="form.companion" />
+      </div>
+
       <!-- 5. Look -->
       <div v-else class="body">
         <h2>Make it yours</h2>
@@ -386,10 +400,11 @@ onMounted(async () => {
         <p v-if="busy" class="busy">{{ busy }}</p>
         <p v-else-if="problem" class="problem">{{ problem }}</p>
         <span class="spacer"></span>
-        <button v-if="step > 0" :disabled="!!busy" @click="step -= 1; problem = ''">Back</button>
+        <button v-if="step > 0 && step <= LAST_FORM_STEP" :disabled="!!busy" @click="step -= 1; problem = ''">Back</button>
+        <button v-if="step > LAST_FORM_STEP" @click="emit('done')">Skip for now</button>
         <button v-if="step === 3" :disabled="!!busy" @click="next">Skip</button>
         <button class="primary" :disabled="!canNext || !!busy" @click="next">
-          {{ step === STEPS.length - 1 ? `Wake ${form.companion || 'my companion'}` : 'Next' }}
+          {{ step > LAST_FORM_STEP ? `Wake ${form.companion || 'my companion'}` : step === LAST_FORM_STEP ? 'Save and continue' : 'Next' }}
         </button>
       </footer>
     </section>

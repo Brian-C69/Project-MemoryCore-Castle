@@ -24,6 +24,15 @@ export const avatarSet = (path) => invoke('avatar_set', { path })
 export const avatarGet = () => invoke('avatar_get')
 export const avatarClear = () => invoke('avatar_clear')
 
+// The private GitHub backup. -> BackupStatus { gitInstalled, ghInstalled, ghSignedIn, ghUser, isRepo, remoteUrl,
+//   remoteIsTemplate, remoteOwned, visibility, changed, ahead, lastBackup, ready, nextStep }
+export const backupStatus = () => invoke('backup_status')
+export const backupCreate = (name) => invoke('backup_create', { name })
+export const backupNow = () => invoke('backup_now')
+export const backupSignIn = () => invoke('backup_sign_in')
+export const openUrl = (url) => invoke('open_url', { url })
+export const onBackupDone = (handler) => listen('backup-done', (event) => handler(event.payload))
+
 // Keys, kept encrypted by Windows. -> [{ name, label, set, masked }]
 export const keyStatus = () => invoke('key_status')
 export const keySave = (name, value) => invoke('key_save', { name, value })

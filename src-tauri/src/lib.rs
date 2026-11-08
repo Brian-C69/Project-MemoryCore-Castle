@@ -179,6 +179,8 @@ pub fn run() {
             backup::backup_status,
             backup::backup_create,
             backup::backup_now,
+            backup::backup_sign_in,
+            commands::open_url,
             take_auto_wake,
             chat::chat_poll,
             chat::chat_media,

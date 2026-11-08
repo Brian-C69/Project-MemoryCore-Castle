@@ -154,3 +154,12 @@ pub fn avatar_clear(store: State<SettingsStore>) {
         let _ = std::fs::remove_file(folder.join(old));
     }
 }
+
+/// Opens a web page in the member's browser (only https addresses).
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") || url.contains(char::is_whitespace) {
+        return Err("Only https addresses can be opened.".into());
+    }
+    std::process::Command::new("explorer.exe").arg(&url).spawn().map(|_| ()).map_err(|_| "The browser could not be opened.".to_string())
+}

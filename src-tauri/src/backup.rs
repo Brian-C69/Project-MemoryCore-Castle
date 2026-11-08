@@ -295,6 +295,20 @@ pub async fn backup_now(store: State<'_, SettingsStore>) -> Result<BackupStatus,
         .map_err(|_| "The backup stopped.".to_string())?
 }
 
+/// Opens GitHub's own sign-in in a console window of its own (browser + one-time code); the
+/// member finishes it there, then presses Check again.
+#[tauri::command]
+pub fn backup_sign_in() -> Result<(), String> {
+    let gh = env::find_on_path("gh").ok_or("Install the GitHub CLI first (cli.github.com).")?;
+    Command::new("cmd.exe")
+        .args(["/c", "start", "GitHub sign-in", "cmd", "/k"])
+        .arg(gh)
+        .args(["auth", "login", "--web", "--hostname", "github.com", "--git-protocol", "https"])
+        .spawn()
+        .map(|_| ())
+        .map_err(|_| "The GitHub sign-in could not be opened.".to_string())
+}
+
 /// The newest change time of anything in daily-diary/ (two levels: files and day folders).
 fn diary_changed(folder: &Path) -> Option<SystemTime> {
     let diary = folder.join("daily-diary");
