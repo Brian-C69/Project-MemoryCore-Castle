@@ -59,6 +59,8 @@ export const chatAttach = (paths) => invoke('chat_attach', { paths })
 
 // Which MemoryCore features the member's folder holds. -> { diary, projects, library, saveMemory, ... }
 export const memoryFeatures = () => invoke('memory_features')
+// Everything HOME shows. today = the member's local date (YYYY-MM-DD). -> { features, reminders, projects, diary, growth } or null
+export const memoryHome = (today) => invoke('memory_home', { today })
 
 // The desktop.
 export const systemMeters = () => invoke('system_meters')
