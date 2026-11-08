@@ -26,8 +26,40 @@ pub struct FolderState {
     pub needs_names: bool,
     /// The file the companion reads first.
     pub entry_file: Option<String>,
-    /// The names already written, when setup ran before (read back from Castle's block).
+    /// The names already in the memory (from MemoryCore's own wizard or an earlier setup).
     pub companion_name: Option<String>,
+    pub member_name: Option<String>,
+    pub relationship_style: Option<String>,
+}
+
+/// The value after `label` on the first line that carries it, cut at " - " (MemoryCore writes
+/// "- **My Name**: Lyra - Chosen by you"). Placeholders still in brackets are not names.
+fn value_after(text: &str, label: &str) -> Option<String> {
+    let line = text.lines().find(|l| l.contains(label))?;
+    let mut rest = line.split_once(label)?.1.trim();
+    // a label that opens bold ("You are **") ends where the bold closes
+    if label.ends_with("**") {
+        rest = rest.split("**").next()?;
+    }
+    let value = rest.split(" - ").next()?.trim().trim_matches('*').trim();
+    let value = value.strip_suffix(" AND learning companion").unwrap_or(value).trim();
+    (!value.is_empty() && !value.starts_with('[') && value.chars().count() <= 60).then(|| value.to_string())
+}
+
+/// The names a memory already holds: identity-core.md (or main-memory.md after Memory
+/// Consolidation) first, master-memory.md's "I am ..." line next, Castle's own block last.
+pub fn names_in(folder: &Path) -> (Option<String>, Option<String>, Option<String>) {
+    let read = |p: PathBuf| std::fs::read_to_string(p).unwrap_or_default();
+    let identity = read(folder.join("main").join("identity-core.md")) + "
+" + &read(folder.join("main").join("main-memory.md"));
+    let master = read(folder.join("master-memory.md"));
+    let block = read(folder.join("CLAUDE.md"));
+    let companion = value_after(&identity, "**My Name**:")
+        .or_else(|| value_after(&master, "**I am ").map(|v| v.trim_end_matches("**").to_string()))
+        .or_else(|| value_after(&block, "You are **"));
+    let member = value_after(&identity, "**Your Name**:").or_else(|| value_after(&block, "companion of **"));
+    let style = value_after(&identity, "**My Role**:");
+    (companion, member, style)
 }
 
 fn entry_file(folder: &Path) -> Option<&'static str> {
@@ -55,17 +87,16 @@ pub fn inspect(folder: &Path) -> FolderState {
     let needs_names = memory_files(folder)
         .iter()
         .any(|p| std::fs::read_to_string(p).is_ok_and(|t| t.contains("[AI_NAME]")));
-    let companion_name = std::fs::read_to_string(folder.join("CLAUDE.md")).ok().and_then(|t| {
-        let start = t.find("You are **")? + "You are **".len();
-        let end = t[start..].find("**")?;
-        Some(t[start..start + end].to_string())
-    });
+    // placeholders still in brackets are skipped by value_after, so this is safe on a fresh memory
+    let (companion_name, member_name, relationship_style) = names_in(folder);
     FolderState {
         exists: folder.is_dir(),
         is_memorycore: entry.is_some(),
         needs_names,
         entry_file: entry.map(str::to_string),
         companion_name,
+        member_name,
+        relationship_style,
     }
 }
 
@@ -357,6 +388,31 @@ mod tests {
         // after Memory Consolidation the entry file moves
         std::fs::write(root.join("main").join("main-memory.md"), "x").unwrap();
         assert_eq!(inspect(&root).entry_file.as_deref(), Some("main/main-memory.md"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn names_written_by_memorycores_own_wizard_are_read_back() {
+        let root = memory("names");
+        std::fs::write(root.join("master-memory.md"), "**I am Nova** - Your personal AI companion
+").unwrap();
+        std::fs::write(
+            root.join("main").join("identity-core.md"),
+            "# Identity Core - Nova
+- **My Name**: Nova - Chosen by you, carried with pride
+- **My Role**: a calm mentor AND learning companion
+- **Your Name**: Aiman - My human partner and focus
+",
+        )
+        .unwrap();
+        let state = inspect(&root);
+        assert!(!state.needs_names);
+        assert_eq!(state.companion_name.as_deref(), Some("Nova"));
+        assert_eq!(state.member_name.as_deref(), Some("Aiman"));
+        assert_eq!(state.relationship_style.as_deref(), Some("a calm mentor"));
+        // only master-memory.md filled in: the "I am" line still names the companion
+        std::fs::remove_file(root.join("main").join("identity-core.md")).unwrap();
+        assert_eq!(inspect(&root).companion_name.as_deref(), Some("Nova"));
         let _ = std::fs::remove_dir_all(root);
     }
 

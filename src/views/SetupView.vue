@@ -43,6 +43,10 @@ const settings = ref(null)
 const form = reactive({
   folder: '',
   folderState: null,
+  // true when the folder came from Create it (the tick shows under that box)
+  created: false,
+  // true when the names were found in the memory (MemoryCore's own wizard or an earlier setup)
+  namesFromMemory: false,
   newParent: '',
   newName: 'My MemoryCore',
   cli: 'claude',
@@ -87,15 +91,31 @@ async function attempt(label, work) {
 
 // ---------- Step 1: the folder ----------
 
+// Names a memory already holds fill the boxes, so an existing member is never asked twice.
+function useFoundNames(state) {
+  if (!state) return
+  if (state.companionName && !form.companion) form.companion = state.companionName
+  if (state.memberName && !form.member) form.member = state.memberName
+  if (state.relationshipStyle) {
+    if (STYLES.includes(state.relationshipStyle)) form.style = state.relationshipStyle
+    else {
+      form.style = 'custom'
+      form.customStyle = state.relationshipStyle
+    }
+  }
+  form.namesFromMemory = !state.needsNames && !!state.companionName && !!state.memberName
+}
+
 async function chooseExisting() {
   const folder = await chooseFolder('Choose your MemoryCore folder')
   if (!folder) return
   form.folder = folder
+  form.created = false
   form.folderState = await attempt('Looking at the folder…', () => setupInspect(folder))
   if (form.folderState && !form.folderState.isMemorycore) {
     problem.value = 'This folder has no master-memory.md, so it is not a MemoryCore folder. Choose another, or create a new one below.'
   }
-  if (form.folderState?.companionName && !form.companion) form.companion = form.folderState.companionName
+  useFoundNames(form.folderState)
 }
 
 async function chooseParent() {
@@ -111,6 +131,8 @@ async function createNew() {
   if (state) {
     form.folder = target
     form.folderState = state
+    form.created = true
+    form.namesFromMemory = false
   }
 }
 
@@ -205,6 +227,7 @@ onMounted(async () => {
     if (s.memoryFolder) {
       form.folder = s.memoryFolder
       form.folderState = await setupInspect(s.memoryFolder)
+      useFoundNames(form.folderState)
     }
     form.keys = await keyStatus()
     form.avatar = await avatarGet()
@@ -233,7 +256,7 @@ onMounted(async () => {
         <div class="choice">
           <h3>I already have one</h3>
           <button class="primary" @click="chooseExisting">Choose my MemoryCore folder</button>
-          <p v-if="form.folderState?.isMemorycore" class="good">✓ {{ form.folder }}</p>
+          <p v-if="form.folderState?.isMemorycore && !form.created" class="good">✓ {{ form.folder }}</p>
         </div>
         <div class="choice">
           <h3>I'm new to MemoryCore</h3>
@@ -243,7 +266,8 @@ onMounted(async () => {
             <input v-model="form.newName" aria-label="New folder name" />
             <button class="primary" :disabled="!form.newParent || !form.newName.trim()" @click="createNew">Create it</button>
           </div>
-          <p v-if="form.newParent" class="hint">{{ form.newParent }}\{{ form.newName }}</p>
+          <p v-if="form.created && form.folderState?.isMemorycore" class="good">✓ Created {{ form.folder }}</p>
+          <p v-else-if="form.newParent" class="hint">{{ form.newParent }}\{{ form.newName }}</p>
         </div>
       </div>
 
@@ -274,6 +298,9 @@ onMounted(async () => {
       <!-- 3. Names -->
       <div v-else-if="step === 2" class="body">
         <h2>Who are you two?</h2>
+        <p v-if="form.namesFromMemory" class="good">
+          ✓ Found in your memory - press Next to keep them. Changing a name here only changes what Castle shows; ask {{ form.companion }} to update the memory if you rename.
+        </p>
         <div class="names">
           <label>Your companion's name <input v-model="form.companion" placeholder="Lyra" maxlength="40" /></label>
           <label>Your name <input v-model="form.member" placeholder="Rin" maxlength="40" /></label>
