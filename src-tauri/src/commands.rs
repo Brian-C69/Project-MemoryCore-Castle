@@ -41,10 +41,20 @@ pub fn app_open(path: String, store: State<SettingsStore>) -> Result<(), String>
 
 /// What a paste puts into the terminal: copied files' paths, text, or a saved picture's path.
 #[tauri::command]
-pub async fn clipboard_paste() -> Result<clipboard::Pasted, String> {
-    tauri::async_runtime::spawn_blocking(clipboard::read)
+pub async fn clipboard_paste(member: State<'_, crate::chat::MemberPictures>) -> Result<clipboard::Pasted, String> {
+    let pasted = tauri::async_runtime::spawn_blocking(clipboard::read)
         .await
-        .map_err(|_| "The clipboard could not be read.".to_string())?
+        .map_err(|_| "The clipboard could not be read.".to_string())??;
+    // A pasted picture, or copied picture files: Chat may show them before they are sent.
+    if pasted.kind == "picture" || pasted.kind == "files" {
+        let mut allowed = member.0.lock().unwrap();
+        for path in crate::transcript::media_paths(&pasted.text) {
+            if crate::transcript::media_kind(&path) == Some("picture") {
+                allowed.insert(path);
+            }
+        }
+    }
+    Ok(pasted)
 }
 
 #[tauri::command]

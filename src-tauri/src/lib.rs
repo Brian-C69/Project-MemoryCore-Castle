@@ -2,6 +2,7 @@
 //! (Claude Code or Codex) inside their MemoryCore folder.
 
 mod apps;
+mod chat;
 mod clipboard;
 mod commands;
 mod env;
@@ -14,6 +15,7 @@ mod settings;
 mod startup;
 mod system;
 mod themes;
+mod transcript;
 mod tray;
 
 use serde::Serialize;
@@ -135,6 +137,9 @@ pub fn run() {
         .manage(session::MainHost::default())
         .manage(session::StoryHost::default())
         .manage(system::SystemMeters::default())
+        .manage(chat::MainChat::default())
+        .manage(chat::StoryChat::default())
+        .manage(chat::MemberPictures::default())
         .invoke_handler(tauri::generate_handler![
             get_settings,
             save_settings,
@@ -157,7 +162,10 @@ pub fn run() {
             commands::user_themes,
             commands::hide_castle,
             commands::media_open,
-            take_auto_wake
+            take_auto_wake,
+            chat::chat_poll,
+            chat::chat_media,
+            chat::chat_attach
         ])
         .setup(|app| {
             let config = match settings::test_override(settings::TEST_CONFIG_VAR) {
