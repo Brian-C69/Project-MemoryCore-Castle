@@ -11,6 +11,7 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 3. [Quick actions](#3-quick-actions)
 4. [First run](#4-first-run)
 5. [Backing up your memory](#5-backing-up-your-memory)
+6. [HOME](#6-home)
 
 ---
 
@@ -149,3 +150,32 @@ After that:
 - Castle never backs up your `.env`, key files or videos.
 
 **Safety:** if your folder came from MemoryCore's public template, it still points at that public repository. Castle will **never** send your memory there. It tells you so and creates your own private backup instead, keeping the template as `upstream`. If your backup repository is ever public, Castle warns you.
+
+---
+
+## 6. HOME
+
+HOME is your desktop. Your companion's panel is on the left; the cards on the right read your memory and update by themselves every minute.
+
+### The companion panel
+
+At the top: your companion's picture (or the glowing crystal), their name, and the app they think with (**Claude Code** or **Codex**). Under it are the quick actions, then **CHAT** and **LOG** (see chapters 2 and 3).
+
+### The cards
+
+| Card | What it shows | Where it comes from |
+|------|---------------|---------------------|
+| **Clock** | The time and date | Your computer |
+| **CPU / RAM** | How busy your computer is | Your computer |
+| **TODAY** | Your open reminders, with their due dates | `main/reminders.md` (MemoryCore's Reminders) |
+| **PROJECTS** | Your active projects, most recent first. Click one to open its file | `projects/project-list.md` (MemoryCore's Projects) |
+| **DIARY** | Your newest diary entry. Click it to open the page | `daily-diary/` |
+| **GROWTH** | How many memory files, days since your first diary, and skills | Your MemoryCore folder |
+| **BACKUP** | When your memory was last backed up, with **Back up now** | Your private GitHub backup (chapter 5) |
+
+A card with nothing to show yet says so in a friendly line - for example, a new memory's DIARY card reminds you to press **Save diary** after a talk.
+
+### Rooms that appear by themselves
+
+Some rooms only show in the top bar once your MemoryCore has that feature: **DIARY**, **PROJECTS** and **LIBRARY**. Install the feature (ask your companion), and the room appears within a minute.
+
