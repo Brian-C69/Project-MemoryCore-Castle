@@ -18,6 +18,8 @@ pub fn show_main(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+    // the WORLD on the other screens comes back with Castle
+    crate::world::set_visible(app, true);
 }
 
 /// Hides Castle when it is in front, otherwise brings it forward.
@@ -28,6 +30,7 @@ pub fn toggle_main(app: &AppHandle) {
             && window.is_focused().unwrap_or(false);
         if in_front {
             let _ = window.hide();
+            crate::world::set_visible(app, false);
         } else {
             show_main(app);
         }

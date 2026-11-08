@@ -74,6 +74,7 @@ pub fn hide_castle(app: AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
     }
+    crate::world::set_visible(&app, false);
 }
 
 /// Opens a file from the memory folder in its own app, or its folder with the file selected.

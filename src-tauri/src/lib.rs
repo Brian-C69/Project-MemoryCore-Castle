@@ -24,6 +24,7 @@ mod theme;
 mod themes;
 mod transcript;
 mod tray;
+mod world;
 
 use serde::Serialize;
 use settings::{Settings, SettingsStore};
@@ -184,6 +185,9 @@ pub fn run() {
             appearance::appearance_wear,
             story::story_prepare,
             story::story_worlds,
+            world::world_screens,
+            world::world_open,
+            world::world_close,
             commands::choose_picture,
             commands::avatar_set,
             commands::avatar_get,
@@ -255,6 +259,7 @@ pub fn run() {
                 if window.label() == "main" {
                     api.prevent_close();
                     let _ = window.hide();
+                    world::set_visible(window.app_handle(), false);
                 }
             }
         })
