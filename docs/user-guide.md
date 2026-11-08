@@ -9,6 +9,8 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 1. [Getting started](#1-getting-started)
 2. [Chat and Log](#2-chat-and-log)
 3. [Quick actions](#3-quick-actions)
+4. [First run](#4-first-run)
+5. [Backing up your memory](#5-backing-up-your-memory)
 
 ---
 
@@ -88,3 +90,62 @@ You do not need to remember MemoryCore's commands. The row of buttons under **CH
 - The buttons are greyed out until your companion's session is running.
 - After a click the button shows **Sent ✓** for a moment, and your companion answers in Chat as usual.
 - You can add your own buttons (a label and the words to type) in **Settings**.
+
+---
+
+## 4. First run
+
+The first time Castle opens, it walks you through six short steps. You can open them again later with **Open setup** in the companion panel, or the **⚙** button.
+
+| Step | What you do |
+|------|-------------|
+| **Folder** | Choose your MemoryCore folder, or press **Create it** to download a fresh MemoryCore into a new folder |
+| **Companion app** | Pick **Claude Code** or **Codex**. Castle checks that it is installed and signed in, and shows the install command to copy if it is not |
+| **Names** | Your companion's name, your name, and how your companion should be (a friendly partner, a calm mentor, ... or your own words). Add a picture if you like; without one your companion is a glowing crystal |
+| **Keys** | Optional keys for extra powers (see below). Skip any you don't have |
+| **Look** | Choose a theme, and whether Castle starts with Windows and wakes your companion when it opens. Press **Save and continue** |
+| **Backup** | Optional: keep your memory safe on GitHub (see [chapter 5](#5-backing-up-your-memory)). Press **Skip for now** to do it later |
+
+### Already using MemoryCore?
+
+Castle reads what your memory already holds, so you are never asked twice:
+
+- The names you gave in MemoryCore's own setup are filled in for you (*"Found in your memory - press Next to keep them"*). Castle never rewrites your memory files; renaming in Castle only changes what Castle shows.
+- Keys you already keep in your MemoryCore `.env` are offered: press **Keep them encrypted in Castle**. Your `.env` is left as it is.
+
+### What Castle writes into your memory folder
+
+- The names, in place of MemoryCore's `[AI_NAME]`, `[YOUR_NAME]` and `[RELATIONSHIP_STYLE]` placeholders (only when they are still there).
+- A short block in **CLAUDE.md** and **AGENTS.md** that tells Claude Code and Codex who your companion is and to load your memory first. Castle only rewrites the part between its two `castle` markers; anything you write outside them stays.
+
+### Keys
+
+| Key | What it adds | Without it |
+|-----|--------------|------------|
+| **ChatGPT (OpenAI)** | Your companion can draw pictures (Claude Code only - Codex draws by itself, so this key is hidden for Codex) | The picture's description is saved instead, and Castle tells you |
+| **Seedance** | Short videos | The video's description is saved instead |
+| **Suno** | Songs sung from lyrics | The lyrics are saved instead |
+| **ElevenLabs** | A speaking voice | The words are saved instead |
+
+Keys are kept **encrypted by Windows** (Credential Manager, tied to your Windows sign-in). They never go into your memory folder and are only handed to your companion's session while it runs.
+
+---
+
+## 5. Backing up your memory
+
+Your memory is precious. Castle can keep a copy on GitHub in a **private** repository that only you can see. You need a free GitHub account.
+
+Open the backup from setup's last step (or later from Settings) and follow the ticks:
+
+1. **Git installed** - if not, press **Get Git**, install it, then **Check again**.
+2. **GitHub CLI installed** - if not, press **Get the GitHub CLI**, install it, then **Check again**.
+3. **Signed in to GitHub** - press **Sign in to GitHub**. A small window opens; follow it in your browser (you type a one-time code), then press **Check again**. Castle never sees or stores your GitHub password.
+4. **Your own private backup** - choose a name and press **Create my private backup**. Castle makes the private repository and sends the first backup.
+
+After that:
+
+- Press **Back up now** whenever you like. Castle shows when the last backup was and how many files changed since.
+- Turn on **Back up after every Save diary** and Castle backs up by itself a minute after each diary save.
+- Castle never backs up your `.env`, key files or videos.
+
+**Safety:** if your folder came from MemoryCore's public template, it still points at that public repository. Castle will **never** send your memory there. It tells you so and creates your own private backup instead, keeping the template as `upstream`. If your backup repository is ever public, Castle warns you.
