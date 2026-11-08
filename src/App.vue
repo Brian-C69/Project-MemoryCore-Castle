@@ -14,8 +14,9 @@ import MemoryRoom from './views/MemoryRoom.vue'
 import ThemeView from './views/ThemeView.vue'
 import StudioView from './views/StudioView.vue'
 import AppearanceView from './views/AppearanceView.vue'
+import StoryView from './views/StoryView.vue'
 import NoticeToasts from './components/NoticeToasts.vue'
-import { avatarGet, backupNow, backupStatus, getSettings, hideCastle, memoryHome, onBackupDone, userThemes } from './api/castle.js'
+import { avatarGet, backupNow, backupStatus, getSettings, hideCastle, memoryHome, onBackupDone, onStoryOutput, userThemes } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
 
 // The rooms across the top. A room whose MemoryCore feature is not installed stays hidden
@@ -42,7 +43,14 @@ const cliLabel = ref('Claude Code')
 const memoryFolder = ref('')
 const backupOpen = ref(false)
 // Rooms that are built; any other room shows its name until its phase lands.
-const BUILT = new Set(['home', 'theme', 'apps', 'diary', 'projects', 'library', 'studio', 'appearance'])
+const BUILT = new Set(['home', 'theme', 'apps', 'diary', 'projects', 'library', 'studio', 'appearance', 'story'])
+// Tabs with something new waiting (the story speaking while the member is elsewhere).
+const marks = ref([])
+const memberName = ref('')
+const storyOpened = ref(false)
+watch(active, (room) => {
+  if (room === 'story') storyOpened.value = true
+})
 // a file a HOME card asked to open in its room
 const roomFile = ref('')
 const memoryStamp = ref(0)
@@ -66,6 +74,7 @@ async function loadSettingsAndTheme() {
     cli.value = view.settings.cli
     cliLabel.value = view.cliLabel
     memoryFolder.value = view.settings.memoryFolder ?? ''
+    memberName.value = view.settings.memberName ?? ''
     if (!view.settings.setupDone) {
       setupOpen.value = true
       setupReopened.value = false
@@ -150,6 +159,7 @@ async function onBackupCard(mode) {
 
 let refresh
 let stopBackupEvents
+let stopStoryEvents
 onMounted(async () => {
   await loadSettingsAndTheme()
   loadHome()
@@ -158,6 +168,9 @@ onMounted(async () => {
   refresh = setInterval(loadHome, 60000)
   try {
     stopBackupEvents = await onBackupDone(() => loadBackup())
+    stopStoryEvents = await onStoryOutput(() => {
+      if (active.value !== 'story' && !marks.value.includes('story')) marks.value = [...marks.value, 'story']
+    })
   } catch {
     // outside Castle's window
   }
@@ -165,6 +178,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   clearInterval(refresh)
   stopBackupEvents?.()
+  stopStoryEvents?.()
 })
 watch(settingsStamp, () => {
   loadHome()
@@ -177,7 +191,9 @@ watch(settingsStamp, () => {
     <TopBar
       :tabs="tabs"
       :active="active"
-      @select="active = $event"
+      :marks="marks"
+      :mark-titles="{ story: 'The story has new lines' }"
+      @select="active = $event; marks = marks.filter((m) => m !== $event)"
       @settings="openSettings"
       @hide="hideCastle().catch(() => {})"
     />
@@ -199,6 +215,7 @@ watch(settingsStamp, () => {
         </div>
       </div>
       <AppsView v-if="active === 'apps'" class="room" />
+      <StoryView v-show="active === 'story'" v-if="storyOpened" :companion="companion" :member="memberName" :cli="cli" />
       <AppearanceView v-if="active === 'appearance'" :companion="companion" :stamp="memoryStamp" @keys="openSetup" @show-chat="active = 'home'" />
       <StudioView v-if="active === 'studio'" :companion="companion" :stamp="memoryStamp" @keys="openSetup" />
       <ThemeView v-if="active === 'theme'" :companion="companion" @changed="loadSettingsAndTheme" @show-chat="active = 'home'" />
