@@ -87,5 +87,10 @@ export const onTerminalOutput = on('terminal-output')
 export const onTerminalExit = on('terminal-exit')
 export const onStoryOutput = on('story-output')
 export const onStoryExit = on('story-exit')
+// STUDIO: what the companion made, and each power's state (ready | builtin | prompt).
+export const studioLibrary = () => invoke('studio_library')
+export const studioPowers = () => invoke('studio_powers')
+// A helper's notice (a key was missing): { at, kind, file, reason, settings }
+export const onNotice = on('castle-notice')
 // The tray's Wake companion.
 export const onWakeRequest = (handler) => listen('castle-wake', () => handler())

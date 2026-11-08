@@ -16,6 +16,7 @@ mod session;
 mod settings;
 mod setup;
 mod startup;
+mod studio;
 mod system;
 mod theme;
 mod themes;
@@ -84,6 +85,7 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
     *store.startup_note.lock().unwrap() = startup::sync(&app, settings.start_with_windows);
     *store.current.lock().unwrap() = settings;
     *store.warning.lock().unwrap() = None;
+    studio::allow_memory_folder(&app);
     Ok(view(&store))
 }
 
@@ -173,6 +175,8 @@ pub fn run() {
             theme::theme_create,
             theme::theme_delete,
             theme::theme_folder,
+            studio::studio_library,
+            studio::studio_powers,
             commands::choose_picture,
             commands::avatar_set,
             commands::avatar_get,
@@ -214,6 +218,8 @@ pub fn run() {
 
             tray::install(app.handle())?;
             backup::start_diary_watcher(app.handle());
+            studio::start_notice_watcher(app.handle());
+            studio::allow_memory_folder(app.handle());
 
             let toggle = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyM);
             app.handle().plugin(
