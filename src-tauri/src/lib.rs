@@ -167,6 +167,8 @@ pub fn run() {
             commands::media_open,
             commands::memory_features,
             memory::memory_home,
+            memory::memory_shelves,
+            memory::memory_read,
             commands::choose_picture,
             commands::avatar_set,
             commands::avatar_get,

@@ -10,7 +10,8 @@ import CompanionHeader from './components/CompanionHeader.vue'
 import ModalSheet from './components/ModalSheet.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import AppsView from './views/AppsView.vue'
-import { avatarGet, backupNow, backupStatus, chatMediaOpen, getSettings, hideCastle, memoryHome, onBackupDone, userThemes } from './api/castle.js'
+import MemoryRoom from './views/MemoryRoom.vue'
+import { avatarGet, backupNow, backupStatus, getSettings, hideCastle, memoryHome, onBackupDone, userThemes } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
 
 // The rooms across the top. A room whose MemoryCore feature is not installed stays hidden
@@ -36,7 +37,10 @@ const cliLabel = ref('Claude Code')
 const memoryFolder = ref('')
 const backupOpen = ref(false)
 // Rooms that are built; any other room shows its name until its phase lands.
-const BUILT = new Set(['home', 'apps'])
+const BUILT = new Set(['home', 'apps', 'diary', 'projects', 'library'])
+// a file a HOME card asked to open in its room
+const roomFile = ref('')
+const memoryStamp = ref(0)
 const tabs = computed(() => allTabs.filter((tab) => !tab.needs || home.value?.features?.[tab.needs]))
 const companion = ref('Your companion')
 const cli = ref('claude')
@@ -101,6 +105,7 @@ function today() {
 }
 
 async function loadHome() {
+  memoryStamp.value += 1
   try {
     home.value = await memoryHome(today())
     avatar.value = await avatarGet()
@@ -119,11 +124,11 @@ async function loadBackup() {
   }
 }
 
-// A project or diary file opens in its own app (fenced to the memory folder); the DIARY and
-// PROJECTS rooms read them inside Castle.
+// A project or diary card opens its page in the DIARY or PROJECTS room.
 function openMemoryFile(file) {
-  if (!file || !memoryFolder.value) return
-  chatMediaOpen(`${memoryFolder.value.replace(/[\\/]+$/, '')}\\${file.replace(/\//g, '\\')}`).catch(() => {})
+  if (!file) return
+  roomFile.value = file
+  active.value = file.startsWith('projects/') ? 'projects' : 'diary'
 }
 
 async function onBackupCard(mode) {
@@ -189,6 +194,7 @@ watch(settingsStamp, () => {
         </div>
       </div>
       <AppsView v-if="active === 'apps'" class="room" />
+      <MemoryRoom v-if="['diary', 'projects', 'library'].includes(active)" :room="active" :stamp="memoryStamp" :open-file="roomFile" />
       <div v-if="!BUILT.has(active)" class="room-soon">
         <p>{{ activeLabel }}</p>
       </div>

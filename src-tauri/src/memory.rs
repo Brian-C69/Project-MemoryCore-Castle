@@ -303,6 +303,171 @@ pub fn memory_home(today: String, store: tauri::State<crate::settings::SettingsS
     store.get().memory_folder.map(|folder| home(Path::new(&folder), &today))
 }
 
+// ---------- The DIARY, PROJECTS and LIBRARY rooms ----------
+
+/// One readable page in a room's list.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Page {
+    pub title: String,
+    /// relative to the memory folder, forward slashes
+    pub file: String,
+    pub date: Option<String>,
+}
+
+/// A group of pages: a diary month, "Active" / "Archived" projects, a library section.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Shelf {
+    pub name: String,
+    pub pages: Vec<Page>,
+}
+
+fn relative(folder: &Path, path: &Path) -> String {
+    path.strip_prefix(folder).map(|p| p.display().to_string().replace('\\', "/")).unwrap_or_default()
+}
+
+/// A page's title: its first "# " heading, else the file name in words.
+fn page_title(path: &Path) -> String {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|t| t.lines().find_map(|l| l.trim().strip_prefix("# ").map(|h| h.trim().to_string())))
+        .filter(|t| !t.is_empty())
+        .unwrap_or_else(|| path.file_stem().map(|s| s.to_string_lossy().replace(['-', '_'], " ")).unwrap_or_default())
+}
+
+fn md_files(dir: &Path) -> Vec<PathBuf> {
+    let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map(|e| e.flatten().map(|e| e.path()).filter(|p| p.is_file() && p.extension().and_then(|x| x.to_str()) == Some("md")).collect())
+        .unwrap_or_default();
+    files.sort();
+    files
+}
+
+/// The diary, newest first, grouped by month ("2026-11"); the older numbered files under "Earlier".
+/// Archived months (daily-diary/archived/YYYY-MM/) are read too.
+pub fn diary_shelves(folder: &Path) -> Vec<Shelf> {
+    let mut pages: Vec<(String, Page)> = Vec::new();
+    for path in diary_files(folder) {
+        let text = std::fs::read_to_string(&path).unwrap_or_default();
+        let date = is_dated_md(&path).then(|| path.file_stem().unwrap_or_default().to_string_lossy().to_string());
+        let month = date.as_deref().map(|d| d[..7].to_string()).unwrap_or_else(|| "Earlier".into());
+        pages.push((month, Page { title: diary_title(&text).unwrap_or_else(|| page_title(&path)), file: relative(folder, &path), date }));
+    }
+    if let Ok(months) = std::fs::read_dir(folder.join("daily-diary").join("archived")) {
+        for month in months.flatten().map(|e| e.path()).filter(|p| p.is_dir()) {
+            let name = month.file_name().unwrap_or_default().to_string_lossy().to_string();
+            for path in md_files(&month) {
+                let text = std::fs::read_to_string(&path).unwrap_or_default();
+                let date = is_dated_md(&path).then(|| path.file_stem().unwrap_or_default().to_string_lossy().to_string());
+                pages.push((name.clone(), Page { title: diary_title(&text).unwrap_or_else(|| page_title(&path)), file: relative(folder, &path), date }));
+            }
+        }
+    }
+    // newest first: dated pages by date, "Earlier" last
+    pages.sort_by(|a, b| b.1.date.cmp(&a.1.date).then(b.1.file.cmp(&a.1.file)));
+    let mut shelves: Vec<Shelf> = Vec::new();
+    for (month, page) in pages {
+        match shelves.iter_mut().find(|s| s.name == month) {
+            Some(shelf) => shelf.pages.push(page),
+            None => shelves.push(Shelf { name: month, pages: vec![page] }),
+        }
+    }
+    shelves
+}
+
+/// Active and archived projects (LRU Projects keeps them in projects/active and projects/archived).
+pub fn project_shelves(folder: &Path) -> Vec<Shelf> {
+    [("Active", "active"), ("Archived", "archived")]
+        .iter()
+        .map(|(name, dir)| Shelf {
+            name: name.to_string(),
+            pages: md_files(&folder.join("projects").join(dir))
+                .iter()
+                .map(|p| Page { title: page_title(p), file: relative(folder, p), date: None })
+                .collect(),
+        })
+        .filter(|s| !s.pages.is_empty())
+        .collect()
+}
+
+/// Where the Library lives: a backticked folder named on a master-memory line that mentions the
+/// library (the member may have chosen another path at install), else library/, else MemoryCore's
+/// own library-items/.
+pub fn library_folder(folder: &Path) -> Option<PathBuf> {
+    let master = std::fs::read_to_string(folder.join("master-memory.md")).unwrap_or_default();
+    // lines that mention the library, and every line of a section whose heading does
+    let mut in_section = false;
+    let lines: Vec<&str> = master
+        .lines()
+        .filter(|l| {
+            if l.trim_start().starts_with('#') {
+                in_section = l.to_lowercase().contains("library");
+            }
+            in_section || l.to_lowercase().contains("library")
+        })
+        .collect();
+    for line in lines {
+        let mut parts = line.split('`');
+        while let (Some(_), Some(inside)) = (parts.next(), parts.next()) {
+            let candidate = folder.join(inside.trim().trim_end_matches(['/', '\\']));
+            if !inside.trim().is_empty() && candidate.is_dir() && candidate.starts_with(folder) {
+                return Some(candidate);
+            }
+        }
+    }
+    ["library", "library-items"].iter().map(|n| folder.join(n)).find(|p| p.is_dir())
+}
+
+/// The library's sections (its sub-folders) and their pages.
+pub fn library_shelves(folder: &Path) -> Vec<Shelf> {
+    let Some(library) = library_folder(folder) else { return Vec::new() };
+    let mut sections: Vec<PathBuf> = std::fs::read_dir(&library)
+        .map(|e| e.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect())
+        .unwrap_or_default();
+    sections.sort();
+    let mut shelves: Vec<Shelf> = sections
+        .iter()
+        .map(|dir| Shelf {
+            name: dir.file_name().unwrap_or_default().to_string_lossy().replace(['-', '_'], " "),
+            pages: md_files(dir).iter().map(|p| Page { title: page_title(p), file: relative(folder, p), date: None }).collect(),
+        })
+        .filter(|s| !s.pages.is_empty())
+        .collect();
+    let loose = md_files(&library);
+    if !loose.is_empty() {
+        shelves.insert(0, Shelf { name: "General".into(), pages: loose.iter().map(|p| Page { title: page_title(p), file: relative(folder, p), date: None }).collect() });
+    }
+    shelves
+}
+
+/// A room's shelves: "diary", "projects" or "library".
+#[tauri::command]
+pub fn memory_shelves(room: String, store: tauri::State<crate::settings::SettingsStore>) -> Vec<Shelf> {
+    let Some(folder) = store.get().memory_folder.map(PathBuf::from) else { return Vec::new() };
+    match room.as_str() {
+        "diary" => diary_shelves(&folder),
+        "projects" => project_shelves(&folder),
+        "library" => library_shelves(&folder),
+        _ => Vec::new(),
+    }
+}
+
+/// One markdown page of the memory, for the room's reader - only a .md file inside the memory
+/// folder, at most 2 MB.
+#[tauri::command]
+pub fn memory_read(file: String, store: tauri::State<crate::settings::SettingsStore>) -> Result<String, String> {
+    let folder = store.get().memory_folder.map(PathBuf::from).ok_or("No MemoryCore folder is chosen yet.")?;
+    let path = crate::files::fenced_in(&folder, &file)?;
+    if path.extension().and_then(|x| x.to_str()) != Some("md") {
+        return Err("Only memory pages (.md) open here.".into());
+    }
+    if path.metadata().map(|m| m.len()).unwrap_or(0) > 2 * 1024 * 1024 {
+        return Err("This page is too large to show here.".into());
+    }
+    std::fs::read_to_string(&path).map_err(|_| "The page could not be read.".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -346,6 +511,34 @@ mod tests {
         assert_eq!(entry.title, "Daily Diary - First Day");
         assert_eq!(entry.date, None);
         assert_eq!(entry.file, "daily-diary/Daily-Diary-001.md");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn the_rooms_list_the_existing_memory() {
+        let root = fixture("memory-existing");
+        let diary = diary_shelves(&root);
+        assert_eq!(diary[0].name, "2026-11");
+        assert_eq!(diary[0].pages[0].title, "The day we planned the garden");
+        let projects = project_shelves(&root);
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].name, "Active");
+        assert_eq!(projects[0].pages[0].file, "projects/active/portfolio-site.md");
+        assert!(library_shelves(&root).is_empty());
+        assert!(diary_shelves(&fixture("memory-fresh")).is_empty());
+    }
+
+    #[test]
+    fn a_library_moved_to_another_folder_is_found() {
+        let root = std::env::temp_dir().join(format!("castle-library-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("knowledge").join("security")).unwrap();
+        std::fs::write(root.join("master-memory.md"), "### Library\n- **Location**: `knowledge/`\n").unwrap();
+        std::fs::write(root.join("knowledge").join("security").join("headers.md"), "# Security headers\n").unwrap();
+        assert_eq!(library_folder(&root), Some(root.join("knowledge")));
+        let shelves = library_shelves(&root);
+        assert_eq!(shelves[0].name, "security");
+        assert_eq!(shelves[0].pages[0].title, "Security headers");
         let _ = std::fs::remove_dir_all(root);
     }
 

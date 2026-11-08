@@ -61,6 +61,10 @@ export const chatAttach = (paths) => invoke('chat_attach', { paths })
 export const memoryFeatures = () => invoke('memory_features')
 // Everything HOME shows. today = the member's local date (YYYY-MM-DD). -> { features, reminders, projects, diary, growth } or null
 export const memoryHome = (today) => invoke('memory_home', { today })
+// A room's shelves (room: diary | projects | library) -> [{ name, pages: [{ title, file, date }] }]
+export const memoryShelves = (room) => invoke('memory_shelves', { room })
+// One memory page's markdown (only .md inside the memory folder).
+export const memoryRead = (file) => invoke('memory_read', { file })
 
 // The desktop.
 export const systemMeters = () => invoke('system_meters')
