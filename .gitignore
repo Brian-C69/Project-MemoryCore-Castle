@@ -1,9 +1,28 @@
-# List of ignore folder and files
-/[Tt]emp/
-# List of ignore files
-*.exe
-*.txt
-# Project Resources (Alice working reference - never commit)
-Project Resources
+# Node / Vite
+node_modules/
+dist/
+*.log
+npm-debug.log*
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+# Castle is a Windows desktop app; the mobile icon sets the icon tool also writes are not used
+src-tauri/icons/android/
+src-tauri/icons/ios/
+
+# Secrets never live in the repo (keys are kept by Windows Credential Manager)
+.env
+.env.*
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
 # Claude Code settings
 .claude/
+
+# Project Resources (Alice working reference - never commit)
+Project Resources
