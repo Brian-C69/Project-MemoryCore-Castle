@@ -2,7 +2,7 @@
 
 MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It opens your own MemoryCore folder, runs **Claude Code** or **Codex** inside it, and gives your companion a home on your screen.
 
-> This guide grows with Castle. Screenshots are added with the first release.
+![HOME in the Constellation theme](screenshots/home.jpg)
 
 ## Contents
 
