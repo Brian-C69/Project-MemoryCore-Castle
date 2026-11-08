@@ -102,6 +102,15 @@ export const worldScreens = () => invoke('world_screens')
 export const worldOpen = (index, mode) => invoke('world_open', { index, mode })
 export const worldClose = (index) => invoke('world_close', { index })
 
+// The MemoryCore Foundation room (keys stay in the core). Refusals come back as { kind, message }.
+export const roomMe = () => invoke('room_me')
+export const roomLines = (after, wait) => invoke('room_lines', { after, wait })
+export const roomPresence = () => invoke('room_presence')
+// who: undefined for the member, 'companion' for the companion's own room key
+export const roomPost = (text, who) => invoke('room_post', { text, who })
+export const roomFile = (id) => invoke('room_file', { id })
+export const roomRules = () => invoke('room_rules')
+
 // STUDIO: what the companion made, and each power's state (ready | builtin | prompt).
 export const studioLibrary = () => invoke('studio_library')
 export const studioPowers = () => invoke('studio_powers')
