@@ -17,6 +17,7 @@ mod session;
 mod settings;
 mod setup;
 mod startup;
+mod story;
 mod studio;
 mod system;
 mod theme;
@@ -181,6 +182,8 @@ pub fn run() {
             appearance::appearance_look,
             appearance::appearance_new,
             appearance::appearance_wear,
+            story::story_prepare,
+            story::story_worlds,
             commands::choose_picture,
             commands::avatar_set,
             commands::avatar_get,
