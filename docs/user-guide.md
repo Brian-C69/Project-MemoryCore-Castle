@@ -12,6 +12,8 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 4. [First run](#4-first-run)
 5. [Backing up your memory](#5-backing-up-your-memory)
 6. [HOME](#6-home)
+7. [Themes](#7-themes)
+8. [Apps, Diary, Projects and Library](#8-apps-diary-projects-and-library)
 
 ---
 
@@ -178,4 +180,38 @@ A card with nothing to show yet says so in a friendly line - for example, a new 
 ### Rooms that appear by themselves
 
 Some rooms only show in the top bar once your MemoryCore has that feature: **DIARY**, **PROJECTS** and **LIBRARY**. Install the feature (ask your companion), and the room appears within a minute.
+
+---
+
+## 7. Themes
+
+Open **THEME** (right after HOME) to change how Castle looks.
+
+- Every theme is a card with a preview. Press **Use** to switch; the theme in use says **In use**.
+- **Create theme:** give it a name, describe the mood and colours in your own words, and upload a picture (or leave it out for a soft gradient). Press **Create** - Castle reads the colours from your picture and makes a working theme straight away, with text kept easy to read.
+- On your own themes:
+  - **Polish** asks your companion to fine-tune the colours and layout from your words.
+  - **Paint** asks your companion to paint a wallpaper for the theme (it tells you the cost first; with Codex it draws by itself).
+  - **Delete** removes the theme (choose another theme first if it is in use).
+- After your companion has worked on a theme, press **Reload themes**. If a theme cannot be read, it is listed at the bottom with the reason, and Castle keeps showing the theme you had.
+
+Your themes live in Castle's settings folder (`%APPDATA%\com.memorycore.castle\themes`), one folder each with a `theme.json` and a wallpaper, so you can also make or share themes by hand - see `MAKE-IT-YOURS.md`.
+
+---
+
+## 8. Apps, Diary, Projects and Library
+
+### APPS
+
+Your Start-menu apps, with the ones you use most at the top. Type to search, then press **Enter** or click to open an app.
+
+### DIARY, PROJECTS and LIBRARY
+
+These rooms let you read your companion's memory without leaving Castle (they appear once your MemoryCore has the feature):
+
+- **DIARY** - every page, newest first, grouped by month. Older diaries are read too.
+- **PROJECTS** - your active and archived projects.
+- **LIBRARY** - your saved knowledge by section, wherever your library lives.
+
+Pick a page on the left to read it on the right; type in **Search** to find one. **Show file** opens the page's folder. The rooms only read - your companion is the one who writes your memory. Clicking a project or the diary on HOME opens it here.
 
