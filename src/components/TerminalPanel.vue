@@ -6,6 +6,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import ChatView from './ChatView.vue'
+import QuickActions from './QuickActions.vue'
 import {
   clipboardCopy,
   clipboardPaste,
@@ -337,6 +338,8 @@ defineExpose({ wake, screenLines, writeToSession })
         >{{ expanded ? '⤡' : '⤢' }}</button>
       </div>
     </div>
+
+    <QuickActions v-if="room !== 'story'" :running="running" :write="writeToSession" :settings-stamp="settingsStamp" />
 
     <div class="body">
     <div v-show="view === 'log'" ref="surface" class="surface"></div>

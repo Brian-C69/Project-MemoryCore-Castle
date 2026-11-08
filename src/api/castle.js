@@ -33,6 +33,9 @@ export const chatMedia = (path, room) => invoke('chat_media', { path, room })
 // Pictures the member dropped or pasted; returns the ones Chat may show.
 export const chatAttach = (paths) => invoke('chat_attach', { paths })
 
+// Which MemoryCore features the member's folder holds. -> { diary, projects, library, saveMemory, ... }
+export const memoryFeatures = () => invoke('memory_features')
+
 // The desktop.
 export const systemMeters = () => invoke('system_meters')
 export const appsList = () => invoke('apps_list')

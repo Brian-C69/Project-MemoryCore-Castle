@@ -36,6 +36,14 @@ impl Cli {
     }
 }
 
+/// A button the member added to the quick-action row: its label and the words it types.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuickAction {
+    pub label: String,
+    pub command: String,
+}
+
 /// The WORLD room: 3D isles or the 2D slideshow, and its music.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -74,6 +82,8 @@ pub struct Settings {
     pub world: WorldSettings,
     /// True once the first-run setup has finished.
     pub setup_done: bool,
+    /// The member's own quick-action buttons, after Castle's built-in ones.
+    pub quick_actions: Vec<QuickAction>,
 }
 
 impl Default for Settings {
@@ -90,6 +100,7 @@ impl Default for Settings {
             room_base_url: None,
             world: WorldSettings::default(),
             setup_done: false,
+            quick_actions: Vec::new(),
         }
     }
 }
@@ -107,6 +118,12 @@ impl Settings {
         self.theme = clean(self.theme);
         self.room_base_url = clean(self.room_base_url).map(|v| v.trim_end_matches('/').to_string());
         self.world.volume = self.world.volume.clamp(0.0, 1.0);
+        self.quick_actions.retain(|a| !a.label.trim().is_empty() && !a.command.trim().is_empty());
+        for action in &mut self.quick_actions {
+            action.label = action.label.trim().to_string();
+            // a quick action types one line: no line breaks may sneak in
+            action.command = action.command.replace(['\r', '\n'], " ").trim().to_string();
+        }
         if self.world.mode != "2d" {
             self.world.mode = "3d".into();
         }
@@ -239,6 +256,7 @@ mod tests {
             room_base_url: Some("https://example.test".into()),
             world: WorldSettings { mode: "2d".into(), music: false, volume: 0.25, folders: vec!["D:\\Pictures".into()] },
             setup_done: true,
+            quick_actions: vec![QuickAction { label: "Plan my day".into(), command: "plan my day".into() }],
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));
@@ -288,6 +306,19 @@ mod tests {
         assert_eq!(settings.world.mode, "3d");
         assert_eq!(settings.world.volume, 1.0);
         assert_eq!(settings.companion_label(), "Your companion");
+    }
+
+    #[test]
+    fn quick_actions_are_one_clean_line_each() {
+        let settings = Settings {
+            quick_actions: vec![
+                QuickAction { label: " Review ".into(), command: "review\r\nmy week ".into() },
+                QuickAction { label: "".into(), command: "x".into() },
+            ],
+            ..Settings::default()
+        }
+        .normalized();
+        assert_eq!(settings.quick_actions, vec![QuickAction { label: "Review".into(), command: "review  my week".into() }]);
     }
 
     #[test]

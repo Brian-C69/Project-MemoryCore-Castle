@@ -90,3 +90,12 @@ pub fn media_open(path: String, folder: bool, store: State<SettingsStore>) -> Re
     }
     command.spawn().map(|_| ()).map_err(|_| "Windows could not open it.".to_string())
 }
+
+/// Which MemoryCore features the member's folder holds (rooms and quick actions follow it).
+#[tauri::command]
+pub fn memory_features(store: State<SettingsStore>) -> crate::memory::Features {
+    match store.get().memory_folder {
+        Some(folder) => crate::memory::features(std::path::Path::new(&folder)),
+        None => crate::memory::Features::default(),
+    }
+}

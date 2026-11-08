@@ -8,6 +8,7 @@ mod commands;
 mod env;
 mod files;
 mod key;
+mod memory;
 mod pty;
 mod screen;
 mod session;
@@ -162,6 +163,7 @@ pub fn run() {
             commands::user_themes,
             commands::hide_castle,
             commands::media_open,
+            commands::memory_features,
             take_auto_wake,
             chat::chat_poll,
             chat::chat_media,
