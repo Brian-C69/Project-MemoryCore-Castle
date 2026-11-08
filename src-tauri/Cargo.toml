@@ -27,3 +27,5 @@ base64 = "0.22"
 sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 arboard = "3.7"
 png = "0.18"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }

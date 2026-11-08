@@ -13,6 +13,7 @@ mod pty;
 mod screen;
 mod session;
 mod settings;
+mod setup;
 mod startup;
 mod system;
 mod themes;
@@ -164,6 +165,10 @@ pub fn run() {
             commands::hide_castle,
             commands::media_open,
             commands::memory_features,
+            setup::setup_inspect,
+            setup::setup_create,
+            setup::setup_check_cli,
+            setup::setup_apply,
             take_auto_wake,
             chat::chat_poll,
             chat::chat_media,
