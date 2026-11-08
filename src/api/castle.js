@@ -113,6 +113,12 @@ export const roomPost = (text, who) => invoke('room_post', { text, who })
 export const roomFile = (id) => invoke('room_file', { id })
 export const roomRules = () => invoke('room_rules')
 
+// Updates (official builds only). -> { official, version, available, notes, message }
+export const updateCheck = () => invoke('update_check')
+export const updateInstall = () => invoke('update_install')
+// The diary's newest change (seconds), to wait for Save diary before an update.
+export const diaryStamp = () => invoke('diary_stamp')
+
 // STUDIO: what the companion made, and each power's state (ready | builtin | prompt).
 export const studioLibrary = () => invoke('studio_library')
 export const studioPowers = () => invoke('studio_powers')

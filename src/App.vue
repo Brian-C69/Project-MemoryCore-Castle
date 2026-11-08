@@ -18,6 +18,7 @@ import StoryView from './views/StoryView.vue'
 import WorldView from './views/WorldView.vue'
 import ChatRoomView from './views/ChatRoomView.vue'
 import SettingsView from './views/SettingsView.vue'
+import UpdateChip from './components/UpdateChip.vue'
 import NoticeToasts from './components/NoticeToasts.vue'
 import { avatarGet, backupNow, backupStatus, getSettings, hideCastle, memoryHome, onBackupDone, onStoryOutput, userThemes } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
@@ -48,6 +49,8 @@ const backupOpen = ref(false)
 // the Settings sheet and the section it opens on
 const settingsOpen = ref(false)
 const settingsSection = ref('companion')
+// the update line for Settings > About
+const updateInfo = ref(null)
 // Rooms that are built; any other room shows its name until its phase lands.
 const BUILT = new Set(['home', 'theme', 'apps', 'diary', 'projects', 'library', 'studio', 'appearance', 'story', 'world', 'chat'])
 // Tabs with something new waiting (the story speaking while the member is elsewhere).
@@ -246,6 +249,8 @@ watch(settingsStamp, () => {
       <SettingsView
         v-if="settingsOpen"
         :section="settingsSection"
+        :version="updateInfo?.version ?? ''"
+        :update-line="updateInfo?.message ?? ''"
         @close="settingsOpen = false"
         @saved="settingsSaved"
         @setup="settingsOpen = false; openSetup()"
@@ -254,6 +259,7 @@ watch(settingsStamp, () => {
         <BackupPanel :companion="companion" />
       </ModalSheet>
       <NoticeToasts @keys="openKeys" />
+      <UpdateChip @status="updateInfo = $event" />
       <SetupView v-if="setupOpen" :reopened="setupReopened" @done="setupDone" @close="setupOpen = false" />
     </main>
   </div>

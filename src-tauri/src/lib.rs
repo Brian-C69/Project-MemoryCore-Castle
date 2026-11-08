@@ -25,6 +25,7 @@ mod theme;
 mod themes;
 mod transcript;
 mod tray;
+mod update;
 mod world;
 
 use serde::Serialize;
@@ -140,7 +141,11 @@ fn key_reveal(name: String) -> Option<String> {
 }
 
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // the signed self-updater lives only in official builds (scripts/release.ps1)
+    #[cfg(feature = "official")]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    builder
         // Must come first: a second launch only brings the running Castle forward.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             tray::show_main(app);
@@ -202,6 +207,9 @@ pub fn run() {
             chatroom::room_post,
             chatroom::room_file,
             chatroom::room_rules,
+            update::update_check,
+            update::update_install,
+            update::diary_stamp,
             commands::choose_picture,
             commands::avatar_set,
             commands::avatar_get,
