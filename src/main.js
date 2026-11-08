@@ -12,4 +12,13 @@ window.addEventListener('keydown', (event) => {
   if (BLOCKED.has(combo) || BLOCKED.has(event.key)) event.preventDefault()
 })
 
-createApp(App).mount('#app')
+// A WORLD window on another screen is told what it is before the page loads (world.rs):
+// { view: 'world', mode: '3d' | '2d', screen }.
+const view = window.__CASTLE_VIEW__
+if (view?.view === 'world') {
+  Object.assign(document.documentElement.style, { height: '100%', overflow: 'hidden' })
+  Object.assign(document.body.style, { margin: '0', height: '100%', overflow: 'hidden', background: '#040817' })
+  import('./world2d/WorldWindow.vue').then(({ default: WorldWindow }) => createApp(WorldWindow, { initial: view }).mount('#app'))
+} else {
+  createApp(App).mount('#app')
+}

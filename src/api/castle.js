@@ -97,6 +97,11 @@ export const storyPrepare = () => invoke('story_prepare')
 // -> [{ id, name, status, chapter, parts, summary, scenes }]
 export const storyWorlds = () => invoke('story_worlds')
 
+// WORLD on the other screens. -> [{ index, name, width, height, isMain, open }]
+export const worldScreens = () => invoke('world_screens')
+export const worldOpen = (index, mode) => invoke('world_open', { index, mode })
+export const worldClose = (index) => invoke('world_close', { index })
+
 // STUDIO: what the companion made, and each power's state (ready | builtin | prompt).
 export const studioLibrary = () => invoke('studio_library')
 export const studioPowers = () => invoke('studio_powers')

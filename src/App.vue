@@ -15,6 +15,7 @@ import ThemeView from './views/ThemeView.vue'
 import StudioView from './views/StudioView.vue'
 import AppearanceView from './views/AppearanceView.vue'
 import StoryView from './views/StoryView.vue'
+import WorldView from './views/WorldView.vue'
 import NoticeToasts from './components/NoticeToasts.vue'
 import { avatarGet, backupNow, backupStatus, getSettings, hideCastle, memoryHome, onBackupDone, onStoryOutput, userThemes } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
@@ -43,7 +44,7 @@ const cliLabel = ref('Claude Code')
 const memoryFolder = ref('')
 const backupOpen = ref(false)
 // Rooms that are built; any other room shows its name until its phase lands.
-const BUILT = new Set(['home', 'theme', 'apps', 'diary', 'projects', 'library', 'studio', 'appearance', 'story'])
+const BUILT = new Set(['home', 'theme', 'apps', 'diary', 'projects', 'library', 'studio', 'appearance', 'story', 'world'])
 // Tabs with something new waiting (the story speaking while the member is elsewhere).
 const marks = ref([])
 const memberName = ref('')
@@ -215,6 +216,7 @@ watch(settingsStamp, () => {
         </div>
       </div>
       <AppsView v-if="active === 'apps'" class="room" />
+      <WorldView v-if="active === 'world'" :active="active === 'world'" :wallpaper="theme?.wallpaperUrl ?? ''" />
       <StoryView v-show="active === 'story'" v-if="storyOpened" :companion="companion" :member="memberName" :cli="cli" />
       <AppearanceView v-if="active === 'appearance'" :companion="companion" :stamp="memoryStamp" @keys="openSetup" @show-chat="active = 'home'" />
       <StudioView v-if="active === 'studio'" :companion="companion" :stamp="memoryStamp" @keys="openSetup" />
