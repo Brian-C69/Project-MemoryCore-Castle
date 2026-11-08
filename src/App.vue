@@ -17,6 +17,7 @@ import AppearanceView from './views/AppearanceView.vue'
 import StoryView from './views/StoryView.vue'
 import WorldView from './views/WorldView.vue'
 import ChatRoomView from './views/ChatRoomView.vue'
+import SettingsView from './views/SettingsView.vue'
 import NoticeToasts from './components/NoticeToasts.vue'
 import { avatarGet, backupNow, backupStatus, getSettings, hideCastle, memoryHome, onBackupDone, onStoryOutput, userThemes } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
@@ -44,6 +45,9 @@ const avatar = ref(null)
 const cliLabel = ref('Claude Code')
 const memoryFolder = ref('')
 const backupOpen = ref(false)
+// the Settings sheet and the section it opens on
+const settingsOpen = ref(false)
+const settingsSection = ref('companion')
 // Rooms that are built; any other room shows its name until its phase lands.
 const BUILT = new Set(['home', 'theme', 'apps', 'diary', 'projects', 'library', 'studio', 'appearance', 'story', 'world', 'chat'])
 // Tabs with something new waiting (the story speaking while the member is elsewhere).
@@ -100,9 +104,18 @@ async function loadSettingsAndTheme() {
   applyTheme(chosen.theme)
 }
 
-function openSettings() {
-  // The Settings sheet arrives in Phase 12; until then the gear reopens setup.
-  openSetup()
+function openSettings(section = 'companion') {
+  settingsSection.value = typeof section === 'string' ? section : 'companion'
+  settingsOpen.value = true
+}
+
+function openKeys() {
+  openSettings('keys')
+}
+
+async function settingsSaved() {
+  await loadSettingsAndTheme()
+  settingsStamp.value += 1
 }
 
 function openSetup() {
@@ -222,18 +235,25 @@ watch(settingsStamp, () => {
       <ChatRoomView v-show="active === 'chat'" v-if="chatOpened" :visible="active === 'chat'" :companion="companion" @fresh="!marks.includes('chat') && (marks = [...marks, 'chat'])" />
       <WorldView v-if="active === 'world'" :active="active === 'world'" :wallpaper="theme?.wallpaperUrl ?? ''" />
       <StoryView v-show="active === 'story'" v-if="storyOpened" :companion="companion" :member="memberName" :cli="cli" />
-      <AppearanceView v-if="active === 'appearance'" :companion="companion" :stamp="memoryStamp" @keys="openSetup" @show-chat="active = 'home'" />
-      <StudioView v-if="active === 'studio'" :companion="companion" :stamp="memoryStamp" @keys="openSetup" />
+      <AppearanceView v-if="active === 'appearance'" :companion="companion" :stamp="memoryStamp" @keys="openKeys" @show-chat="active = 'home'" />
+      <StudioView v-if="active === 'studio'" :companion="companion" :stamp="memoryStamp" @keys="openKeys" />
       <ThemeView v-if="active === 'theme'" :companion="companion" @changed="loadSettingsAndTheme" @show-chat="active = 'home'" />
       <MemoryRoom v-if="['diary', 'projects', 'library'].includes(active)" :room="active" :stamp="memoryStamp" :open-file="roomFile" />
       <div v-if="!BUILT.has(active)" class="room-soon">
         <p>{{ activeLabel }}</p>
       </div>
       <p v-if="themeNotice" class="theme-notice">{{ themeNotice }}</p>
+      <SettingsView
+        v-if="settingsOpen"
+        :section="settingsSection"
+        @close="settingsOpen = false"
+        @saved="settingsSaved"
+        @setup="settingsOpen = false; openSetup()"
+      />
       <ModalSheet v-if="backupOpen" tag="BACKUP" title="Keep the memory safe" @close="backupOpen = false; loadBackup()">
         <BackupPanel :companion="companion" />
       </ModalSheet>
-      <NoticeToasts @keys="openSetup" />
+      <NoticeToasts @keys="openKeys" />
       <SetupView v-if="setupOpen" :reopened="setupReopened" @done="setupDone" @close="setupOpen = false" />
     </main>
   </div>

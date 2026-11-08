@@ -103,6 +103,43 @@ pub fn forget(account: &str) -> Result<(), String> {
     forget_as(account)
 }
 
+/// What a key test found, in words.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyTest {
+    pub ok: bool,
+    pub message: String,
+}
+
+/// Checks a kept key against the service's free account endpoint - never anything that costs.
+pub fn test(account: &str) -> KeyTest {
+    let said = |ok: bool, message: &str| KeyTest { ok, message: message.into() };
+    let Some(key) = load(account) else { return said(false, "No key is kept for this yet.") };
+    let (url, header) = match account {
+        "openai" => ("https://api.openai.com/v1/models", "bearer"),
+        "suno" => ("https://api.sunoapi.org/api/v1/generate/credit", "bearer"),
+        "elevenlabs" => ("https://api.elevenlabs.io/v1/user", "xi-api-key"),
+        "seedance" => return said(true, "Kept. Seedance has no free check, so Castle cannot test it without spending."),
+        _ => return said(true, "Kept. This key is checked when the room is used."),
+    };
+    let client = match reqwest::blocking::Client::builder()
+        .user_agent(concat!("MemoryCoreCastle/", env!("CARGO_PKG_VERSION")))
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+    {
+        Ok(client) => client,
+        Err(_) => return said(false, "The check could not start."),
+    };
+    let request = client.get(url);
+    let request = if header == "bearer" { request.bearer_auth(&key) } else { request.header(header, &key) };
+    match request.send() {
+        Ok(response) if response.status().is_success() => said(true, "The key works."),
+        Ok(response) if response.status().as_u16() == 401 || response.status().as_u16() == 403 => said(false, "The service refused this key. Check it and save it again."),
+        Ok(response) => said(false, &format!("The service answered {}. Try again later.", response.status().as_u16())),
+        Err(_) => said(false, "The service could not be reached. Check the internet connection."),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

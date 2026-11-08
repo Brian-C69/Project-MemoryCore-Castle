@@ -127,6 +127,12 @@ fn key_forget(name: String) -> Result<Vec<key::KeyStatus>, String> {
     Ok(key::statuses())
 }
 
+/// Tests a kept key against the service's free account check.
+#[tauri::command]
+async fn key_test(name: String) -> Result<key::KeyTest, String> {
+    tauri::async_runtime::spawn_blocking(move || key::test(&name)).await.map_err(|_| "The check stopped.".to_string())
+}
+
 /// The whole key, only when the member presses Show in Settings.
 #[tauri::command]
 fn key_reveal(name: String) -> Option<String> {
@@ -158,6 +164,7 @@ pub fn run() {
             key_save,
             key_forget,
             key_reveal,
+            key_test,
             session::terminal_state,
             session::terminal_start,
             session::terminal_write,

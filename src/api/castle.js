@@ -39,6 +39,8 @@ export const keySave = (name, value) => invoke('key_save', { name, value })
 export const keyForget = (name) => invoke('key_forget', { name })
 // The whole key, only when the member presses Show.
 export const keyReveal = (name) => invoke('key_reveal', { name })
+// Checks a key with the service's free account endpoint. -> { ok, message }
+export const keyTest = (name) => invoke('key_test', { name })
 
 // The companion's sessions. room: undefined for the main session, 'story' for the STORY room's.
 // -> { running, status: { ready, message, fix }, snapshot }
