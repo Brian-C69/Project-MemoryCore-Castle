@@ -15,6 +15,7 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 7. [Themes](#7-themes)
 8. [Apps, Diary, Projects and Library](#8-apps-diary-projects-and-library)
 9. [Studio](#9-studio)
+10. [Appearance](#10-appearance)
 
 ---
 
@@ -249,3 +250,34 @@ The idea is saved next to where the file would have gone (a `.prompt.md`, `.lyri
 - **Saved prompts** - the ideas saved while a key was missing, with **Show file**.
 
 Everything lives in your MemoryCore folder (`media-generation/`, `music/`, and the story's own folders), so it is part of your memory and your backup.
+
+---
+
+## 10. Appearance
+
+**APPEARANCE** gives your companion a face of their own, and clothes and hairstyles to change into.
+
+### How drawing works here
+
+Your companion draws the pictures. The top of the room says whether it can:
+
+- **Ready to draw** - Claude Code with a ChatGPT (OpenAI) key.
+- **Codex draws by itself** - no key needed.
+- **No ChatGPT key - prompts are saved** - the picture's description is saved instead; press **Add the ChatGPT key** to draw for real.
+
+Your companion tells you the cost first and asks before drawing. When a picture is saved, press **Refresh**.
+
+### The standard look
+
+Press **Draw the standard look**. Your companion draws a front portrait from `appearance/companion.md` - its look in words. If your MemoryCore already describes your companion's appearance (MemoryCore's Image Prompt feature), Castle starts from those words. Change the words any time (ask your companion, or edit the file), then **Redraw**.
+
+The standard look also becomes your companion's picture in the panel, unless you chose your own picture in setup.
+
+### Wardrobe and hair
+
+- Press **+ New** on **WARDROBE** or **HAIR**, give it a name and describe it, then **Add and draw**. Your companion draws a turnaround sheet - front, side and back - using the standard look so the face stays the same.
+- Click a sheet to see it large. **Redraw** asks for a new one.
+- **Wear** chooses today's outfit or hairstyle (press again to take it off). Your companion reads today's look from `appearance/current.json`.
+- **Try on today's look** asks for a portrait in today's outfit and hair.
+
+Everything lives in your MemoryCore folder under `appearance/`, so it is part of your memory and your backup.
