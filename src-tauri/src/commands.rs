@@ -1,8 +1,9 @@
 //! The small commands the page uses for the desktop itself: gauges, apps, clipboard, themes.
 
 use crate::settings::SettingsStore;
-use crate::{apps, clipboard, system, themes};
-use tauri::State;
+use crate::{apps, clipboard, files, system, themes};
+use std::path::PathBuf;
+use tauri::{AppHandle, Manager, State};
 
 /// The two gauges: processor and memory in use on this computer, in percent.
 #[tauri::command]
@@ -55,4 +56,27 @@ pub fn clipboard_copy(text: String) -> Result<(), String> {
 #[tauri::command]
 pub fn user_themes(store: State<SettingsStore>) -> Vec<themes::UserTheme> {
     themes::list(&store.folder())
+}
+
+/// Hides Castle to the tray (the top bar's minus button).
+#[tauri::command]
+pub fn hide_castle(app: AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
+
+/// Opens a file from the memory folder in its own app, or its folder with the file selected.
+/// Only files inside the memory folder may be opened.
+#[tauri::command]
+pub fn media_open(path: String, folder: bool, store: State<SettingsStore>) -> Result<(), String> {
+    let memory = store.get().memory_folder.map(PathBuf::from).ok_or("No MemoryCore folder is chosen yet.")?;
+    let file = files::fenced(&memory, &path)?;
+    let mut command = std::process::Command::new("explorer.exe");
+    if folder {
+        command.arg(format!("/select,{}", file.display()));
+    } else {
+        command.arg(&file);
+    }
+    command.spawn().map(|_| ()).map_err(|_| "Windows could not open it.".to_string())
 }

@@ -32,6 +32,15 @@ pub struct Launch {
     pub at_sign_in: bool,
 }
 
+/// The one automatic start of this run; taken once by the screen.
+pub struct AutoWake(pub std::sync::Mutex<bool>);
+
+/// True once, when this run should start the companion's session by itself; false every time after.
+#[tauri::command]
+fn take_auto_wake(auto_wake: State<AutoWake>) -> bool {
+    std::mem::replace(&mut *auto_wake.0.lock().unwrap(), false)
+}
+
 /// What the page reads about the settings.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -145,7 +154,10 @@ pub fn run() {
             commands::app_open,
             commands::clipboard_paste,
             commands::clipboard_copy,
-            commands::user_themes
+            commands::user_themes,
+            commands::hide_castle,
+            commands::media_open,
+            take_auto_wake
         ])
         .setup(|app| {
             let config = match settings::test_override(settings::TEST_CONFIG_VAR) {
@@ -153,10 +165,15 @@ pub fn run() {
                 None => app.path().app_config_dir()?,
             };
             let store = SettingsStore::open(&config);
-            let wanted = store.get().start_with_windows;
-            *store.startup_note.lock().unwrap() = startup::sync(app.handle(), wanted);
+            let current = store.get();
+            *store.startup_note.lock().unwrap() = startup::sync(app.handle(), current.start_with_windows);
             app.manage(store);
-            app.manage(Launch { at_sign_in: startup::is_sign_in_launch(std::env::args()) });
+            let at_sign_in = startup::is_sign_in_launch(std::env::args());
+            app.manage(Launch { at_sign_in });
+            app.manage(AutoWake(std::sync::Mutex::new(startup::should_auto_wake(
+                at_sign_in,
+                current.start_session_on_launch,
+            ))));
 
             // Pasted pictures are only needed for a while; yesterday's go.
             clipboard::clear_old(&clipboard::paste_folder(), clipboard::PASTES_KEPT_FOR);

@@ -1,0 +1,36 @@
+{
+  "id": "constellation",
+  "name": "The Constellation",
+  "description": "A deep night sky where every diary day is a star and projects are bright clusters, joined into constellations above a quiet lake.",
+  "wallpaper": "wallpaper.png",
+  "wallpaperPosition": "center",
+  "widgetStyle": "glass",
+  "portrait": "panel",
+  "colors": {
+    "--background": "#050b1f",
+    "--bar-background": "rgba(6, 12, 34, 0.72)",
+    "--panel-background": "rgba(10, 20, 52, 0.62)",
+    "--widget-background": "rgba(12, 24, 60, 0.55)",
+    "--line": "rgba(150, 190, 255, 0.34)",
+    "--text": "#eef3ff",
+    "--text-dim": "#a6b8de",
+    "--accent": "#8fb8ff",
+    "--hover": "rgba(150, 190, 255, 0.14)",
+    "--glass-blur": "12px"
+  },
+  "panel": {
+    "left": "1.6%",
+    "top": "3%",
+    "bottom": "3%",
+    "width": "31%"
+  },
+  "widgets": {
+    "clock": { "right": "21%", "top": "4%", "size": "l" },
+    "gauges": { "right": "2%", "top": "4%" },
+    "today": { "right": "2%", "top": "22%", "width": "28%" },
+    "projects": { "right": "2%", "top": "calc(22% + 190px)", "width": "28%" },
+    "diary": { "right": "2%", "top": "calc(22% + 395px)", "width": "28%" },
+    "growth": { "right": "2%", "bottom": "4%", "width": "28%" },
+    "backup": { "right": "31%", "bottom": "4%", "width": "16%" }
+  }
+}
