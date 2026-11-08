@@ -363,7 +363,7 @@ defineExpose({ wake, screenLines, writeToSession })
       <p class="title">{{ ended ? `${companion}'s session ended.` : `${companion} is resting.` }}</p>
       <p class="message">{{ problem || status.message }}</p>
       <div class="buttons">
-        <button class="primary" :disabled="!status.ready" @click="wake">Wake {{ companion }}</button>
+        <button class="primary" :disabled="!status.ready" @click="wake">Wake {{ companion === 'Your companion' ? 'your companion' : companion }}</button>
         <button v-if="status.fix === 'setup'" @click="emit('setup')">Open setup</button>
         <button v-if="status.fix === 'settings' || status.fix === 'install'" @click="emit('settings')">Settings</button>
       </div>
