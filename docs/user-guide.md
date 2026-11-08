@@ -14,6 +14,7 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 6. [HOME](#6-home)
 7. [Themes](#7-themes)
 8. [Apps, Diary, Projects and Library](#8-apps-diary-projects-and-library)
+9. [Studio](#9-studio)
 
 ---
 
@@ -215,3 +216,36 @@ These rooms let you read your companion's memory without leaving Castle (they ap
 
 Pick a page on the left to read it on the right; type in **Search** to find one. **Show file** opens the page's folder. The rooms only read - your companion is the one who writes your memory. Clicking a project or the diary on HOME opens it here.
 
+---
+
+## 9. Studio
+
+Your companion can make pictures, short videos, songs and voice lines. Just ask in Chat - for example *"Draw me a picture of our garden at night"* or *"Write and sing a song about today"*.
+
+### The four cards
+
+At the top of **STUDIO**, each power shows its state:
+
+| State | Meaning |
+|-------|---------|
+| **Ready** | The key is kept, so your companion can make the real thing |
+| **Built in (Codex)** | Codex draws pictures with your ChatGPT account - no key needed |
+| **Prompt only - add a key** | No key yet: your companion saves the idea (the picture description, the lyrics, the words) instead, and Castle tells you |
+
+Press **Add the ... key** on a card to add it (see chapter 4, Keys).
+
+### Before anything costs money
+
+Your companion always tells you the estimated cost first and asks before making a picture, video, song or voice line.
+
+### When a key is missing
+
+The idea is saved next to where the file would have gone (a `.prompt.md`, `.lyrics.md` or `.line.txt` file), and a note appears at the bottom right: *"Saved the lyrics instead - add the Suno key in Settings to hear it sung."* Add the key, then ask again to make the real thing.
+
+### The gallery
+
+- **Pictures** - click one to see it large; use the arrow keys to move between them.
+- **Videos**, **Songs** and **Voice** - play them right in Castle. Songs are grouped by album.
+- **Saved prompts** - the ideas saved while a key was missing, with **Show file**.
+
+Everything lives in your MemoryCore folder (`media-generation/`, `music/`, and the story's own folders), so it is part of your memory and your backup.
