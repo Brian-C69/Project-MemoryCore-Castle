@@ -17,6 +17,7 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 9. [Studio](#9-studio)
 10. [Appearance](#10-appearance)
 11. [Story](#11-story)
+12. [World](#12-world)
 
 ---
 
@@ -310,3 +311,20 @@ Each scene ends with numbered choices - type a number, or write anything you wan
 - **Leave the story** ends the story session (your everyday session keeps running).
 
 When the story speaks while you are in another room, the **STORY** tab glows.
+
+---
+
+## 12. World
+
+**WORLD** is a little world for your companion, to watch while you work or rest.
+
+- **3D isles** - floating islands joined by bridges of light, under a sky that follows the real time and moon. Your companion is the glowing crystal: it brightens while it is working, dims while it rests, gives a small spin when you send it a message, and wanders between the isles when it is idle.
+- **2D slideshow** - your theme's wallpaper and every picture your companion has drawn, slowly drifting one into the next. Move the mouse for **Prev**, **Pause** and **Next**.
+
+### Music (2D)
+
+The slideshow plays the songs your companion has made. Turn the music on or off and set the volume with the small player; Castle remembers your choice.
+
+### On your other screens
+
+If you have more than one screen, press **Show on <screen>** to fill that screen with the world (in the mode you chose). **Close on <screen>** takes it away. The world windows hide and come back together with Castle, and they rest while hidden so your computer stays cool.
