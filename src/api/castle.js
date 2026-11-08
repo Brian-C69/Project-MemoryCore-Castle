@@ -74,6 +74,10 @@ export const appOpen = (path) => invoke('app_open', { path })
 export const clipboardPaste = () => invoke('clipboard_paste')
 export const clipboardCopy = (text) => invoke('clipboard_copy', { text })
 export const userThemes = () => invoke('user_themes')
+// Create theme: a draft from a picture (or a gradient) -> the new theme's id.
+export const themeCreate = (name, mood, picture) => invoke('theme_create', { name, mood, picture })
+export const themeDelete = (id) => invoke('theme_delete', { id })
+export const themeFolder = (id) => invoke('theme_folder', { id })
 // Opens a file from the memory folder in its own app, or its folder with the file selected.
 export const chatMediaOpen = (path, folder = false) => invoke('media_open', { path, folder })
 

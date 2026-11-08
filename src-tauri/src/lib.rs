@@ -17,6 +17,7 @@ mod settings;
 mod setup;
 mod startup;
 mod system;
+mod theme;
 mod themes;
 mod transcript;
 mod tray;
@@ -169,6 +170,9 @@ pub fn run() {
             memory::memory_home,
             memory::memory_shelves,
             memory::memory_read,
+            theme::theme_create,
+            theme::theme_delete,
+            theme::theme_folder,
             commands::choose_picture,
             commands::avatar_set,
             commands::avatar_get,

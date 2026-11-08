@@ -11,6 +11,7 @@ import ModalSheet from './components/ModalSheet.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import AppsView from './views/AppsView.vue'
 import MemoryRoom from './views/MemoryRoom.vue'
+import ThemeView from './views/ThemeView.vue'
 import { avatarGet, backupNow, backupStatus, getSettings, hideCastle, memoryHome, onBackupDone, userThemes } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
 
@@ -18,6 +19,7 @@ import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolde
 // (`needs`); the rest always show.
 const allTabs = [
   { id: 'home', label: 'HOME' },
+  { id: 'theme', label: 'THEME' },
   { id: 'apps', label: 'APPS' },
   { id: 'diary', label: 'DIARY', needs: 'diary' },
   { id: 'projects', label: 'PROJECTS', needs: 'projects' },
@@ -37,7 +39,7 @@ const cliLabel = ref('Claude Code')
 const memoryFolder = ref('')
 const backupOpen = ref(false)
 // Rooms that are built; any other room shows its name until its phase lands.
-const BUILT = new Set(['home', 'apps', 'diary', 'projects', 'library'])
+const BUILT = new Set(['home', 'theme', 'apps', 'diary', 'projects', 'library'])
 // a file a HOME card asked to open in its room
 const roomFile = ref('')
 const memoryStamp = ref(0)
@@ -194,6 +196,7 @@ watch(settingsStamp, () => {
         </div>
       </div>
       <AppsView v-if="active === 'apps'" class="room" />
+      <ThemeView v-if="active === 'theme'" :companion="companion" @changed="loadSettingsAndTheme" @show-chat="active = 'home'" />
       <MemoryRoom v-if="['diary', 'projects', 'library'].includes(active)" :room="active" :stamp="memoryStamp" :open-file="roomFile" />
       <div v-if="!BUILT.has(active)" class="room-soon">
         <p>{{ activeLabel }}</p>
