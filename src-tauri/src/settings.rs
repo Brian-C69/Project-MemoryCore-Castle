@@ -84,6 +84,8 @@ pub struct Settings {
     pub setup_done: bool,
     /// The member's own quick-action buttons, after Castle's built-in ones.
     pub quick_actions: Vec<QuickAction>,
+    /// Back up the memory to the member's private GitHub repository after every Save diary.
+    pub backup_after_diary: bool,
 }
 
 impl Default for Settings {
@@ -101,6 +103,7 @@ impl Default for Settings {
             world: WorldSettings::default(),
             setup_done: false,
             quick_actions: Vec::new(),
+            backup_after_diary: false,
         }
     }
 }
@@ -257,6 +260,7 @@ mod tests {
             world: WorldSettings { mode: "2d".into(), music: false, volume: 0.25, folders: vec!["D:\\Pictures".into()] },
             setup_done: true,
             quick_actions: vec![QuickAction { label: "Plan my day".into(), command: "plan my day".into() }],
+            backup_after_diary: true,
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));

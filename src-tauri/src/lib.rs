@@ -2,6 +2,7 @@
 //! (Claude Code or Codex) inside their MemoryCore folder.
 
 mod apps;
+mod backup;
 mod chat;
 mod clipboard;
 mod commands;
@@ -175,6 +176,9 @@ pub fn run() {
             setup::setup_apply,
             setup::setup_found_keys,
             setup::setup_import_keys,
+            backup::backup_status,
+            backup::backup_create,
+            backup::backup_now,
             take_auto_wake,
             chat::chat_poll,
             chat::chat_media,
@@ -200,6 +204,7 @@ pub fn run() {
             clipboard::clear_old(&clipboard::paste_folder(), clipboard::PASTES_KEPT_FOR);
 
             tray::install(app.handle())?;
+            backup::start_diary_watcher(app.handle());
 
             let toggle = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyM);
             app.handle().plugin(
