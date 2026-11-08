@@ -21,3 +21,4 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-autostart = "2"
+keyring = { version = "3", features = ["windows-native"] }
