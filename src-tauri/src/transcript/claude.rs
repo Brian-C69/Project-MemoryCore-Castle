@@ -228,7 +228,7 @@ mod tests {
 
         let companion_line = r#"{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[
             {"type":"thinking","thinking":"private"},
-            {"type":"text","text":"Konbanwa, Danna-sama."},
+            {"type":"text","text":"Good evening, Rin."},
             {"type":"tool_use","name":"Read","input":{"file_path":"D:\\Castle\\src\\lib.rs"}}]}}"#
             .replace('\n', "");
         let entries = parse_line(&companion_line);
@@ -299,7 +299,7 @@ mod tests {
         );
         let speak = "powershell -File castle-voice.ps1 -TextFile \"C:\\t\\line.txt\" -Lang ja -OutFile \"D:\\Memory\\voice\\day 203.mp3\"";
         assert_eq!(media_paths(speak), ["D:\\Memory\\voice\\day 203.mp3"]);
-        assert_eq!(media_paths("saved to /d/Afif Personal/art/x.webp done"), ["D:\\Afif Personal\\art\\x.webp"]);
+        assert_eq!(media_paths("saved to /d/My Files/art/x.webp done"), ["D:\\My Files\\art\\x.webp"]);
         assert!(media_paths("edited D:\\Castle\\src\\lib.rs and C:\\notes.txt").is_empty());
         assert_eq!(media_paths("a C:\\a.png then D:\\b.mp3"), ["C:\\a.png", "D:\\b.mp3"]);
         assert_eq!(media_kind("x.JPEG"), Some("picture"));

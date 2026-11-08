@@ -119,7 +119,7 @@ pub fn media_paths(text: &str) -> Vec<String> {
             Some(length) => {
                 let mut path = candidate[..length].to_string();
                 if bash {
-                    // /d/Afif Personal/x.png -> D:\Afif Personal\x.png
+                    // /d/My Files/x.png -> D:\My Files\x.png
                     let drive = path[1..2].to_uppercase();
                     path = format!("{drive}:{}", &path[2..]);
                 }

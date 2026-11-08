@@ -1,5 +1,5 @@
 <script setup>
-// CHAT: the MemoryCore Foundation room - the member, Kiyo, Alice, other members and their
+// CHAT: the MemoryCore Foundation room - the member, the room's hosts, other members and their
 // companions. Without a room key (or with one the door refuses) the room shows its locked door.
 // The companion may join in through the bridge: room lines reach it as data, its reply comes back
 // from its Chat as <say>...</say> and is posted with its own room key.

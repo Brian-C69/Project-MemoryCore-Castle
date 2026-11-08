@@ -135,6 +135,6 @@ mod tests {
     #[test]
     fn paths_with_spaces_are_quoted() {
         assert_eq!(quoted(Path::new("C:\\a.png")), "C:\\a.png");
-        assert_eq!(quoted(Path::new("D:\\Afif Personal\\a.png")), "\"D:\\Afif Personal\\a.png\"");
+        assert_eq!(quoted(Path::new("D:\\My Files\\a.png")), "\"D:\\My Files\\a.png\"");
     }
 }
