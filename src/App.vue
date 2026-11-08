@@ -13,6 +13,7 @@ import AppsView from './views/AppsView.vue'
 import MemoryRoom from './views/MemoryRoom.vue'
 import ThemeView from './views/ThemeView.vue'
 import StudioView from './views/StudioView.vue'
+import AppearanceView from './views/AppearanceView.vue'
 import NoticeToasts from './components/NoticeToasts.vue'
 import { avatarGet, backupNow, backupStatus, getSettings, hideCastle, memoryHome, onBackupDone, userThemes } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
@@ -41,7 +42,7 @@ const cliLabel = ref('Claude Code')
 const memoryFolder = ref('')
 const backupOpen = ref(false)
 // Rooms that are built; any other room shows its name until its phase lands.
-const BUILT = new Set(['home', 'theme', 'apps', 'diary', 'projects', 'library', 'studio'])
+const BUILT = new Set(['home', 'theme', 'apps', 'diary', 'projects', 'library', 'studio', 'appearance'])
 // a file a HOME card asked to open in its room
 const roomFile = ref('')
 const memoryStamp = ref(0)
@@ -198,6 +199,7 @@ watch(settingsStamp, () => {
         </div>
       </div>
       <AppsView v-if="active === 'apps'" class="room" />
+      <AppearanceView v-if="active === 'appearance'" :companion="companion" :stamp="memoryStamp" @keys="openSetup" @show-chat="active = 'home'" />
       <StudioView v-if="active === 'studio'" :companion="companion" :stamp="memoryStamp" @keys="openSetup" />
       <ThemeView v-if="active === 'theme'" :companion="companion" @changed="loadSettingsAndTheme" @show-chat="active = 'home'" />
       <MemoryRoom v-if="['diary', 'projects', 'library'].includes(active)" :room="active" :stamp="memoryStamp" :open-file="roomFile" />

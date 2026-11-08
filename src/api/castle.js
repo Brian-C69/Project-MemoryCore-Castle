@@ -87,6 +87,11 @@ export const onTerminalOutput = on('terminal-output')
 export const onTerminalExit = on('terminal-exit')
 export const onStoryOutput = on('story-output')
 export const onStoryExit = on('story-exit')
+// APPEARANCE. -> { folder, canon, portrait, wardrobe: [{ id, name, note, sheet, savedPrompt }], hairstyles, current: { outfit, hair } }
+export const appearanceLook = () => invoke('appearance_look')
+export const appearanceNew = (kind, name, description) => invoke('appearance_new', { kind, name, description })
+export const appearanceWear = (outfit, hair) => invoke('appearance_wear', { outfit, hair })
+
 // STUDIO: what the companion made, and each power's state (ready | builtin | prompt).
 export const studioLibrary = () => invoke('studio_library')
 export const studioPowers = () => invoke('studio_powers')

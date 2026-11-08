@@ -143,7 +143,13 @@ pub fn avatar_set(path: String, store: State<SettingsStore>) -> Result<String, S
 #[tauri::command]
 pub fn avatar_get(store: State<SettingsStore>) -> Option<String> {
     let folder = store.folder();
-    AVATAR_NAMES.iter().map(|n| folder.join(n)).find(|p| p.is_file()).and_then(|p| files::data_url(&p).ok())
+    let chosen = AVATAR_NAMES.iter().map(|n| folder.join(n)).find(|p| p.is_file());
+    // without a chosen picture, the standard appearance drawn in APPEARANCE is the avatar
+    let drawn = || {
+        let memory = PathBuf::from(store.get().memory_folder?);
+        ["portrait.png", "portrait.jpg", "portrait.webp"].iter().map(|n| memory.join("appearance").join(n)).find(|p| p.is_file())
+    };
+    chosen.or_else(drawn).and_then(|p| files::data_url(&p).ok())
 }
 
 /// Puts the default crystal back.
