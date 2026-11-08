@@ -28,6 +28,8 @@ const props = defineProps({
   room: { type: String, default: undefined },
   // the companion's name, for the buttons and messages
   companion: { type: String, default: 'Your companion' },
+  // 'claude' or 'codex'
+  cli: { type: String, default: 'claude' },
 })
 const emit = defineEmits(['settings', 'setup'])
 
@@ -346,6 +348,8 @@ defineExpose({ wake, screenLines, writeToSession })
         :write="writeToSession"
         :read-screen="screenLines"
         :companion="companion"
+        :room="room"
+        :cli="cli"
         @show-log="setView('log')"
       />
     </div>

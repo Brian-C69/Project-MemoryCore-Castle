@@ -23,6 +23,7 @@ const tabs = [
 ]
 const active = ref('home')
 const companion = ref('Your companion')
+const cli = ref('claude')
 const settingsStamp = ref(0)
 const theme = ref(null)
 const themeNotice = ref('')
@@ -34,6 +35,7 @@ async function loadSettingsAndTheme() {
   try {
     const view = await getSettings()
     companion.value = view.companionLabel
+    cli.value = view.settings.cli
     wanted = view.settings.theme ?? DEFAULT_THEME_ID
   } catch {
     // Outside Castle's window (a browser preview): defaults.
@@ -73,6 +75,7 @@ onMounted(loadSettingsAndTheme)
         <TerminalPanel
           :settings-stamp="settingsStamp"
           :companion="companion"
+          :cli="cli"
           @settings="openSettings"
           @setup="openSettings"
         />

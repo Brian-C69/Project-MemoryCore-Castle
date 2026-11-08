@@ -26,6 +26,13 @@ export const storyClose = () => invoke('story_close')
 // True once, when Windows started Castle and the start-session switch is on.
 export const takeAutoWake = () => invoke('take_auto_wake')
 
+// Chat: new entries from the session's own record. -> { entries: [{ id, role, text, at, path, pictures, state }], reset, status }
+export const chatPoll = (room) => invoke('chat_poll', { room })
+// A picture or voice Chat showed this session, as a data URL.
+export const chatMedia = (path, room) => invoke('chat_media', { path, room })
+// Pictures the member dropped or pasted; returns the ones Chat may show.
+export const chatAttach = (paths) => invoke('chat_attach', { paths })
+
 // The desktop.
 export const systemMeters = () => invoke('system_meters')
 export const appsList = () => invoke('apps_list')
