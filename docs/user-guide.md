@@ -16,6 +16,7 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 8. [Apps, Diary, Projects and Library](#8-apps-diary-projects-and-library)
 9. [Studio](#9-studio)
 10. [Appearance](#10-appearance)
+11. [Story](#11-story)
 
 ---
 
@@ -281,3 +282,31 @@ The standard look also becomes your companion's picture in the panel, unless you
 - **Try on today's look** asks for a portrait in today's outfit and hair.
 
 Everything lives in your MemoryCore folder under `appearance/`, so it is part of your memory and your backup.
+
+---
+
+## 11. Story
+
+**STORY** is a fantasy adventure you play together with your companion, in a session of its own so your everyday chat stays separate. It follows MemoryCore's Interactive Story, so adventures you already have in `adventures/` show up here too.
+
+### Starting an adventure
+
+1. Open **STORY** and press **Wake** in the story panel on the left.
+2. In **NEW ADVENTURE** choose:
+   - **Duo** (your companion fights beside you) or **Solo**
+   - **OP** (win with style) or **Balanced** (real danger)
+   - your **hero name** and one of eight **classes** (Sword Saint, Lancer, Archmage, Shadow Reaper, Guardian, Ranger, Enchanter, Berserker)
+   - a **world** (High Fantasy, Dark Fantasy, Eastern Fantasy, Steampunk, Celestial, Pirate/Naval, Demonic) or **Random**
+3. Press **Open the portal**. Your companion builds the world and the story begins.
+
+### Playing
+
+Each scene ends with numbered choices - type a number, or write anything you want your hero to say or do. Your companion may offer a scene picture at big moments, an opening song for the first chapter, an ending song at the end, and voiced lines - always with the cost first. Without a key, the idea is saved instead and Castle tells you (see chapter 9).
+
+### Saving and coming back
+
+- Press **Save adventure** (or type *save adventure*). Your story is kept in `adventures/<world>/` inside your memory.
+- Under **YOUR WORLDS**, **Continue** picks an unfinished adventure back up; **Read** opens its chapters to read again; scene pictures show as small pictures you can open.
+- **Leave the story** ends the story session (your everyday session keeps running).
+
+When the story speaks while you are in another room, the **STORY** tab glows.
