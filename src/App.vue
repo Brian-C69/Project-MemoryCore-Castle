@@ -9,6 +9,7 @@ import HomeCards from './components/widgets/HomeCards.vue'
 import CompanionHeader from './components/CompanionHeader.vue'
 import ModalSheet from './components/ModalSheet.vue'
 import BackupPanel from './components/BackupPanel.vue'
+import AppsView from './views/AppsView.vue'
 import { avatarGet, backupNow, backupStatus, chatMediaOpen, getSettings, hideCastle, memoryHome, onBackupDone, userThemes } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
 
@@ -34,6 +35,8 @@ const avatar = ref(null)
 const cliLabel = ref('Claude Code')
 const memoryFolder = ref('')
 const backupOpen = ref(false)
+// Rooms that are built; any other room shows its name until its phase lands.
+const BUILT = new Set(['home', 'apps'])
 const tabs = computed(() => allTabs.filter((tab) => !tab.needs || home.value?.features?.[tab.needs]))
 const companion = ref('Your companion')
 const cli = ref('claude')
@@ -185,7 +188,8 @@ watch(settingsStamp, () => {
           <HomeCards v-if="widgets[kind]" :kind="kind" :data="home" :backup="backup" @open="openMemoryFile" @backup="onBackupCard" />
         </div>
       </div>
-      <div v-if="active !== 'home'" class="room-soon">
+      <AppsView v-if="active === 'apps'" class="room" />
+      <div v-if="!BUILT.has(active)" class="room-soon">
         <p>{{ activeLabel }}</p>
       </div>
       <p v-if="themeNotice" class="theme-notice">{{ themeNotice }}</p>
@@ -268,6 +272,11 @@ body {
 .home.bare .widget {
   background: transparent;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+}
+
+.room {
+  position: absolute;
+  inset: 0;
 }
 
 .room-soon {
