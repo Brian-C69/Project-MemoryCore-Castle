@@ -1,13 +1,19 @@
 //! MemoryCore Castle: a full-screen desktop that hosts the member's own AI CLI
 //! (Claude Code or Codex) inside their MemoryCore folder.
 
+mod apps;
+mod clipboard;
+mod commands;
 mod env;
+mod files;
 mod key;
 mod pty;
 mod screen;
 mod session;
 mod settings;
 mod startup;
+mod system;
+mod themes;
 mod tray;
 
 use serde::Serialize;
@@ -119,6 +125,7 @@ pub fn run() {
         ))
         .manage(session::MainHost::default())
         .manage(session::StoryHost::default())
+        .manage(system::SystemMeters::default())
         .invoke_handler(tauri::generate_handler![
             get_settings,
             save_settings,
@@ -131,7 +138,14 @@ pub fn run() {
             session::terminal_start,
             session::terminal_write,
             session::terminal_resize,
-            session::story_close
+            session::story_close,
+            commands::system_meters,
+            commands::apps_list,
+            commands::apps_draw_icons,
+            commands::app_open,
+            commands::clipboard_paste,
+            commands::clipboard_copy,
+            commands::user_themes
         ])
         .setup(|app| {
             let config = match settings::test_override(settings::TEST_CONFIG_VAR) {
@@ -143,6 +157,9 @@ pub fn run() {
             *store.startup_note.lock().unwrap() = startup::sync(app.handle(), wanted);
             app.manage(store);
             app.manage(Launch { at_sign_in: startup::is_sign_in_launch(std::env::args()) });
+
+            // Pasted pictures are only needed for a while; yesterday's go.
+            clipboard::clear_old(&clipboard::paste_folder(), clipboard::PASTES_KEPT_FOR);
 
             tray::install(app.handle())?;
 
