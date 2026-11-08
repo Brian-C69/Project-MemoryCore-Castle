@@ -1,8 +1,11 @@
 //! MemoryCore Castle: a full-screen desktop that hosts the member's own AI CLI
 //! (Claude Code or Codex) inside their MemoryCore folder.
 
+mod env;
 mod key;
+mod pty;
 mod screen;
+mod session;
 mod settings;
 mod startup;
 mod tray;
@@ -13,9 +16,9 @@ use tauri::{AppHandle, Manager, RunEvent, State, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
-/// Whether any companion session is running (asked before quitting). Sessions arrive in Task 2.2.
-pub fn sessions_running(_app: &AppHandle) -> bool {
-    false
+/// Whether any companion session is running (asked before quitting).
+pub fn sessions_running(app: &AppHandle) -> bool {
+    session::any_running(app)
 }
 
 /// Whether this launch came from the Windows sign-in entry.
@@ -114,6 +117,8 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![startup::SIGN_IN_ARG]),
         ))
+        .manage(session::MainHost::default())
+        .manage(session::StoryHost::default())
         .invoke_handler(tauri::generate_handler![
             get_settings,
             save_settings,
@@ -121,7 +126,12 @@ pub fn run() {
             key_status,
             key_save,
             key_forget,
-            key_reveal
+            key_reveal,
+            session::terminal_state,
+            session::terminal_start,
+            session::terminal_write,
+            session::terminal_resize,
+            session::story_close
         ])
         .setup(|app| {
             let config = match settings::test_override(settings::TEST_CONFIG_VAR) {
@@ -168,9 +178,10 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("MemoryCore Castle could not start")
-        .run(|_app, event| {
+        .run(|app, event| {
+            // The companion's sessions belong to Castle: when Castle ends, so do they.
             if let RunEvent::Exit = event {
-                // Task 2.2: the companion's sessions end with Castle.
+                session::end_all(app);
             }
         });
 }
