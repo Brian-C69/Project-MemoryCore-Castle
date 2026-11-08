@@ -103,7 +103,9 @@ pub fn inspect(folder: &Path) -> FolderState {
 /// Replaces MemoryCore's placeholders with the member's choices in every memory file.
 /// Returns how many placeholders were filled.
 pub fn fill_names(folder: &Path, companion: &str, member: &str, style: &str) -> Result<usize, String> {
-    let values = [companion.trim(), member.trim(), style.trim()];
+    // "A friendly partner" on a button reads "designed to be a friendly partner" in a sentence
+    let style = sentence_case(style.trim());
+    let values = [companion.trim(), member.trim(), style.as_str()];
     if values[0].is_empty() || values[1].is_empty() {
         return Err("Both names are needed.".into());
     }
@@ -123,6 +125,16 @@ pub fn fill_names(folder: &Path, companion: &str, member: &str, style: &str) -> 
         }
     }
     Ok(filled)
+}
+
+/// "A calm mentor" -> "a calm mentor": a style is written in the middle of a sentence.
+/// Words in capitals throughout ("AI", "NASA") are left alone.
+pub fn sentence_case(style: &str) -> String {
+    let mut chars = style.chars();
+    match (chars.next(), chars.next()) {
+        (Some(first), Some(second)) if first.is_uppercase() && !second.is_uppercase() => first.to_lowercase().chain(style.chars().skip(1)).collect(),
+        _ => style.to_string(),
+    }
 }
 
 /// Castle's block with the member's names in it.
@@ -426,6 +438,8 @@ mod tests {
         assert_eq!(identity, "# Lyra\nbe a friendly partner for Rin\n");
         assert!(std::fs::read_to_string(root.join("main").join("notes.txt")).unwrap().contains("[AI_NAME]"));
         assert!(fill_names(&root, " ", "Rin", "").is_err());
+        assert_eq!(sentence_case("A friendly partner"), "a friendly partner");
+        assert_eq!(sentence_case("AI study buddy"), "AI study buddy");
         let _ = std::fs::remove_dir_all(root);
     }
 
