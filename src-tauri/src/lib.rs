@@ -5,6 +5,7 @@ mod appearance;
 mod apps;
 mod backup;
 mod chat;
+mod chatroom;
 mod clipboard;
 mod commands;
 mod env;
@@ -188,6 +189,11 @@ pub fn run() {
             world::world_screens,
             world::world_open,
             world::world_close,
+            chatroom::room_me,
+            chatroom::room_lines,
+            chatroom::room_presence,
+            chatroom::room_post,
+            chatroom::room_file,
             commands::choose_picture,
             commands::avatar_set,
             commands::avatar_get,
