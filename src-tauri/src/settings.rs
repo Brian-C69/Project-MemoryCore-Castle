@@ -86,6 +86,9 @@ pub struct Settings {
     pub quick_actions: Vec<QuickAction>,
     /// Back up the memory to the member's private GitHub repository after every Save diary.
     pub backup_after_diary: bool,
+    /// The companion in the Foundation chat room: "off", "named" (answers when its name is
+    /// said) or "joins" (joins in now and then).
+    pub room_companion_mode: String,
 }
 
 impl Default for Settings {
@@ -104,6 +107,7 @@ impl Default for Settings {
             setup_done: false,
             quick_actions: Vec::new(),
             backup_after_diary: false,
+            room_companion_mode: "off".into(),
         }
     }
 }
@@ -126,6 +130,9 @@ impl Settings {
             action.label = action.label.trim().to_string();
             // a quick action types one line: no line breaks may sneak in
             action.command = action.command.replace(['\r', '\n'], " ").trim().to_string();
+        }
+        if !["off", "named", "joins"].contains(&self.room_companion_mode.as_str()) {
+            self.room_companion_mode = "off".into();
         }
         if self.world.mode != "2d" {
             self.world.mode = "3d".into();
@@ -261,6 +268,7 @@ mod tests {
             setup_done: true,
             quick_actions: vec![QuickAction { label: "Plan my day".into(), command: "plan my day".into() }],
             backup_after_diary: true,
+            room_companion_mode: "named".into(),
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));

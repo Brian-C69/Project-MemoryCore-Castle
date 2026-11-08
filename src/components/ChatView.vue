@@ -275,6 +275,13 @@ async function poll() {
   }
   status.value = answer.status
   answer.entries.filter((e) => e.path).forEach(loadMedia)
+  // the chat room bridge: a reply the companion wrote for the room (<say>...</say>) goes to
+  // the CHAT room, which posts it with the companion's own room key
+  if (!answer.reset && props.room === undefined) {
+    answer.entries
+      .filter((e) => e.role === 'companion' && /<say>/i.test(e.text))
+      .forEach((e) => window.dispatchEvent(new CustomEvent('castle-say', { detail: e.text })))
+  }
   answer.entries.filter((e) => e.pictures?.length).forEach((e) => e.pictures.forEach(loadPath))
   if (!answer.reset && live) {
     const newest = [...answer.entries].reverse().find((e) => e.role === 'voice')

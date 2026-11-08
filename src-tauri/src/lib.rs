@@ -194,6 +194,7 @@ pub fn run() {
             chatroom::room_presence,
             chatroom::room_post,
             chatroom::room_file,
+            chatroom::room_rules,
             commands::choose_picture,
             commands::avatar_set,
             commands::avatar_get,
