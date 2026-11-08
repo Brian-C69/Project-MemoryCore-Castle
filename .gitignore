@@ -14,6 +14,8 @@ src-tauri/icons/ios/
 # Secrets never live in the repo (keys are kept by Windows Credential Manager)
 .env
 .env.*
+# the test memory carries a .env with FAKE keys on purpose
+!src-tauri/tests/fixtures/**/.env
 
 # Editors / OS
 .vscode/

@@ -173,6 +173,8 @@ pub fn run() {
             setup::setup_create,
             setup::setup_check_cli,
             setup::setup_apply,
+            setup::setup_found_keys,
+            setup::setup_import_keys,
             take_auto_wake,
             chat::chat_poll,
             chat::chat_media,

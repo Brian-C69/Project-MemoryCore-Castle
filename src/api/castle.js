@@ -15,6 +15,9 @@ export const setupCreate = (folder) => invoke('setup_create', { folder })
 // -> { cli, label, installed, version, signedIn, installCommand, signInHint }
 export const setupCheckCli = (cli) => invoke('setup_check_cli', { cli })
 export const setupApply = (folder, companion, member, style) => invoke('setup_apply', { folder, companion, member, style })
+// Keys the member already keeps in the memory folder's .env (masked), and keeping them in Castle.
+export const setupFoundKeys = (folder) => invoke('setup_found_keys', { folder })
+export const setupImportKeys = (folder, names) => invoke('setup_import_keys', { folder, names })
 export const choosePicture = (title) => invoke('choose_picture', { title })
 // The companion's picture (a data URL), or null for the default crystal.
 export const avatarSet = (path) => invoke('avatar_set', { path })

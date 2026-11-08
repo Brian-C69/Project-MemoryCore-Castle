@@ -16,6 +16,8 @@ import {
   setupApply,
   setupCheckCli,
   setupCreate,
+  setupFoundKeys,
+  setupImportKeys,
   setupInspect,
 } from '../api/castle.js'
 import { builtInThemes } from '../themes/loader.js'
@@ -57,6 +59,8 @@ const form = reactive({
   customStyle: '',
   avatar: null,
   keys: [],
+  // keys found in the memory folder's .env and not yet kept by Castle
+  foundKeys: [],
   keyDrafts: {},
   theme: 'constellation',
   startWithWindows: false,
@@ -166,6 +170,25 @@ async function choosePortrait() {
 
 // ---------- Step 4: keys ----------
 
+// Keys a member already keeps in MemoryCore's .env are offered, never asked for again.
+async function loadFoundKeys() {
+  if (!form.folder) return
+  try {
+    const kept = new Set(form.keys.filter((k) => k.set).map((k) => k.name))
+    form.foundKeys = (await setupFoundKeys(form.folder)).filter((k) => !kept.has(k.name))
+  } catch {
+    form.foundKeys = []
+  }
+}
+
+async function importFoundKeys() {
+  const keys = await attempt('Keeping the keys safe…', () => setupImportKeys(form.folder, form.foundKeys.map((k) => k.name)))
+  if (keys) {
+    form.keys = keys
+    form.foundKeys = []
+  }
+}
+
 async function saveKey(name) {
   const value = (form.keyDrafts[name] ?? '').trim()
   if (!value) return
@@ -204,6 +227,7 @@ function next() {
   step.value += 1
   problem.value = ''
   if (step.value === 1 && !form.cliCheck) checkCli()
+  if (step.value === 3) loadFoundKeys()
 }
 
 onMounted(async () => {
@@ -327,6 +351,11 @@ onMounted(async () => {
       <!-- 4. Keys -->
       <div v-else-if="step === 3" class="body">
         <h2>Extra powers (optional)</h2>
+        <div v-if="form.foundKeys.length" class="found">
+          <p class="good">✓ Found in your MemoryCore's .env: {{ form.foundKeys.map((k) => `${k.variable} (${k.masked})`).join(', ') }}</p>
+          <button class="primary" @click="importFoundKeys">Keep them encrypted in Castle</button>
+          <p class="hint">Your .env stays as it is - you can delete it yourself once Castle keeps the keys.</p>
+        </div>
         <p class="hint">Keys are kept encrypted by Windows and only handed to {{ form.companion || 'your companion' }}'s session. Skip any you don't have - without a key, Castle saves the prompt or lyrics instead and tells you.</p>
         <div v-for="key in shownKeys" :key="key.name" class="key">
           <div>
@@ -528,6 +557,12 @@ label {
   font-size: 40px;
   color: #bcd4ff;
   text-shadow: 0 0 18px #6f9cff;
+}
+.found {
+  margin: 8px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--good);
+  border-radius: 12px;
 }
 .key {
   display: grid;

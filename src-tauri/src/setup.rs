@@ -295,6 +295,76 @@ fn download_zip(target: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// The keys MemoryCore's own media scripts read from a .env, and Castle's account for each.
+pub const ENV_KEYS: [(&str, &str); 4] = [
+    ("OPENAI_API_KEY", "openai"),
+    ("ARK_API_KEY", "seedance"),
+    ("SUNOAPI_ORG_KEY", "suno"),
+    ("ELEVENLABS_API_KEY", "elevenlabs"),
+];
+
+/// A key found in the member's .env, shown masked; the value stays in Rust.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FoundKey {
+    pub name: String,
+    pub variable: String,
+    pub masked: String,
+}
+
+/// The real key values in a .env text: quotes trimmed, comments, empty values and
+/// placeholders (`<your-key>`, `your_key_here`) left out.
+pub fn env_values(text: &str) -> Vec<(String, String)> {
+    let mut found = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('#') {
+            continue;
+        }
+        let Some((name, value)) = line.split_once('=') else { continue };
+        let Some((_, account)) = ENV_KEYS.iter().find(|(v, _)| *v == name.trim()) else { continue };
+        let value = value.trim().trim_matches(|c| c == '"' || c == '\'');
+        let lower = value.to_lowercase();
+        if value.len() < 8 || value.starts_with('<') || lower.contains("your") || lower.contains("placeholder") {
+            continue;
+        }
+        found.push((account.to_string(), value.to_string()));
+    }
+    found
+}
+
+fn env_file_keys(folder: &Path) -> Vec<(String, String)> {
+    std::fs::read_to_string(folder.join(".env")).map(|t| env_values(&t)).unwrap_or_default()
+}
+
+/// Keys the member already keeps in the memory folder's .env, for the Keys step's offer.
+pub fn found_keys(folder: &Path) -> Vec<FoundKey> {
+    env_file_keys(folder)
+        .into_iter()
+        .map(|(name, value)| FoundKey {
+            variable: ENV_KEYS.iter().find(|(_, a)| *a == name).map(|(v, _)| v.to_string()).unwrap_or_default(),
+            masked: crate::key::mask(&value),
+            name,
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn setup_found_keys(folder: String) -> Vec<FoundKey> {
+    found_keys(Path::new(&folder))
+}
+
+/// Keeps the chosen .env keys encrypted in Castle. The .env itself is left exactly as it was.
+#[tauri::command]
+pub fn setup_import_keys(folder: String, names: Vec<String>) -> Result<Vec<crate::key::KeyStatus>, String> {
+    for (name, value) in env_file_keys(Path::new(&folder)) {
+        if names.contains(&name) {
+            crate::key::save(&name, &value)?;
+        }
+    }
+    Ok(crate::key::statuses())
+}
+
 // ---------- Commands for the setup screens ----------
 
 #[tauri::command]
@@ -414,6 +484,35 @@ mod tests {
         std::fs::remove_file(root.join("main").join("identity-core.md")).unwrap();
         assert_eq!(inspect(&root).companion_name.as_deref(), Some("Nova"));
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    fn fixture(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join(name)
+    }
+
+    #[test]
+    fn the_fresh_and_the_existing_memory_are_told_apart() {
+        let fresh = inspect(&fixture("memory-fresh"));
+        assert!(fresh.is_memorycore && fresh.needs_names);
+        assert_eq!((fresh.companion_name, fresh.member_name), (None, None));
+        let existing = inspect(&fixture("memory-existing"));
+        assert!(existing.is_memorycore && !existing.needs_names);
+        assert_eq!(existing.companion_name.as_deref(), Some("Nova"));
+        assert_eq!(existing.member_name.as_deref(), Some("Aiman"));
+        assert_eq!(existing.relationship_style.as_deref(), Some("a calm mentor"));
+    }
+
+    #[test]
+    fn keys_in_a_members_env_are_found_and_placeholders_are_not() {
+        let found = found_keys(&fixture("memory-existing"));
+        let names: Vec<_> = found.iter().map(|k| k.name.as_str()).collect();
+        assert_eq!(names, ["openai", "seedance"]);
+        assert_eq!(found[1].variable, "ARK_API_KEY");
+        assert!(!found[0].masked.contains("not-a-real"), "the page only sees the ends");
+        assert!(found_keys(&fixture("memory-fresh")).is_empty());
+        assert_eq!(env_values("# OPENAI_API_KEY=sk-commented-out-0000
+SUNOAPI_ORG_KEY='suno-real-ish-123'
+"), vec![("suno".to_string(), "suno-real-ish-123".to_string())]);
     }
 
     #[test]
