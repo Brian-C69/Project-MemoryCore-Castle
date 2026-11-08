@@ -4,6 +4,7 @@ import TopBar from './components/TopBar.vue'
 import TerminalPanel from './components/TerminalPanel.vue'
 import ClockWidget from './components/widgets/ClockWidget.vue'
 import GaugeWidget from './components/widgets/GaugeWidget.vue'
+import SetupView from './views/SetupView.vue'
 import { getSettings, hideCastle, userThemes } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
 
@@ -25,6 +26,9 @@ const active = ref('home')
 const companion = ref('Your companion')
 const cli = ref('claude')
 const settingsStamp = ref(0)
+// The first-run setup: open until it is done; reopened from the panel or the gear.
+const setupOpen = ref(false)
+const setupReopened = ref(false)
 const theme = ref(null)
 const themeNotice = ref('')
 const activeLabel = computed(() => tabs.find((t) => t.id === active.value)?.label ?? '')
@@ -36,6 +40,10 @@ async function loadSettingsAndTheme() {
     const view = await getSettings()
     companion.value = view.companionLabel
     cli.value = view.settings.cli
+    if (!view.settings.setupDone) {
+      setupOpen.value = true
+      setupReopened.value = false
+    }
     wanted = view.settings.theme ?? DEFAULT_THEME_ID
   } catch {
     // Outside Castle's window (a browser preview): defaults.
@@ -54,7 +62,18 @@ async function loadSettingsAndTheme() {
 }
 
 function openSettings() {
-  // The Settings sheet arrives in Phase 12; setup in Phase 4.
+  // The Settings sheet arrives in Phase 12; until then the gear reopens setup.
+  openSetup()
+}
+
+function openSetup() {
+  setupReopened.value = true
+  setupOpen.value = true
+}
+
+async function setupDone() {
+  setupOpen.value = false
+  await loadSettingsAndTheme()
   settingsStamp.value += 1
 }
 
@@ -77,7 +96,7 @@ onMounted(loadSettingsAndTheme)
           :companion="companion"
           :cli="cli"
           @settings="openSettings"
-          @setup="openSettings"
+          @setup="openSetup"
         />
         <div class="widget-slot" :style="placeStyle(widgets.clock)"><ClockWidget :size="widgets.clock?.size ?? 'm'" /></div>
         <div class="widget-slot" :style="placeStyle(widgets.gauges)"><GaugeWidget /></div>
@@ -86,6 +105,7 @@ onMounted(loadSettingsAndTheme)
         <p>{{ activeLabel }}</p>
       </div>
       <p v-if="themeNotice" class="theme-notice">{{ themeNotice }}</p>
+      <SetupView v-if="setupOpen" :reopened="setupReopened" @done="setupDone" @close="setupOpen = false" />
     </main>
   </div>
 </template>

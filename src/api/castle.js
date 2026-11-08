@@ -9,6 +9,18 @@ export const getSettings = () => invoke('get_settings')
 export const saveSettings = (settings) => invoke('save_settings', { settings })
 export const chooseFolder = (title) => invoke('choose_folder', { title })
 
+// First-run setup. -> FolderState { exists, isMemorycore, needsNames, entryFile, companionName }
+export const setupInspect = (folder) => invoke('setup_inspect', { folder })
+export const setupCreate = (folder) => invoke('setup_create', { folder })
+// -> { cli, label, installed, version, signedIn, installCommand, signInHint }
+export const setupCheckCli = (cli) => invoke('setup_check_cli', { cli })
+export const setupApply = (folder, companion, member, style) => invoke('setup_apply', { folder, companion, member, style })
+export const choosePicture = (title) => invoke('choose_picture', { title })
+// The companion's picture (a data URL), or null for the default crystal.
+export const avatarSet = (path) => invoke('avatar_set', { path })
+export const avatarGet = () => invoke('avatar_get')
+export const avatarClear = () => invoke('avatar_clear')
+
 // Keys, kept encrypted by Windows. -> [{ name, label, set, masked }]
 export const keyStatus = () => invoke('key_status')
 export const keySave = (name, value) => invoke('key_save', { name, value })

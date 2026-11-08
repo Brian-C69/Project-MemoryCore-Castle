@@ -99,3 +99,58 @@ pub fn memory_features(store: State<SettingsStore>) -> crate::memory::Features {
         None => crate::memory::Features::default(),
     }
 }
+
+/// Opens a picture picker (png, jpg, webp); None when the member closes it.
+#[tauri::command]
+pub async fn choose_picture(app: AppHandle, title: Option<String>) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title(title.unwrap_or_else(|| "Choose a picture".into()))
+            .add_filter("Pictures", &["png", "jpg", "jpeg", "webp"])
+            .blocking_pick_file()
+            .and_then(|file| file.into_path().ok())
+            .map(|path| path.display().to_string())
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+const AVATAR_NAMES: [&str; 3] = ["avatar.png", "avatar.jpg", "avatar.webp"];
+
+/// Keeps a copy of the chosen picture as the companion's avatar in Castle's settings folder.
+#[tauri::command]
+pub fn avatar_set(path: String, store: State<SettingsStore>) -> Result<String, String> {
+    let source = PathBuf::from(&path);
+    let mime = files::mime(&source).filter(|m| m.starts_with("image")).ok_or("That file is not a picture.")?;
+    let name = match mime {
+        "image/png" => "avatar.png",
+        "image/webp" => "avatar.webp",
+        _ => "avatar.jpg",
+    };
+    let folder = store.folder();
+    std::fs::create_dir_all(&folder).map_err(|_| "Castle's settings folder could not be created.".to_string())?;
+    for old in AVATAR_NAMES {
+        let _ = std::fs::remove_file(folder.join(old));
+    }
+    std::fs::copy(&source, folder.join(name)).map_err(|_| "The picture could not be copied.".to_string())?;
+    files::data_url(&folder.join(name))
+}
+
+/// The companion's avatar as a data URL, or None for the default crystal.
+#[tauri::command]
+pub fn avatar_get(store: State<SettingsStore>) -> Option<String> {
+    let folder = store.folder();
+    AVATAR_NAMES.iter().map(|n| folder.join(n)).find(|p| p.is_file()).and_then(|p| files::data_url(&p).ok())
+}
+
+/// Puts the default crystal back.
+#[tauri::command]
+pub fn avatar_clear(store: State<SettingsStore>) {
+    let folder = store.folder();
+    for old in AVATAR_NAMES {
+        let _ = std::fs::remove_file(folder.join(old));
+    }
+}
