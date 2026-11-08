@@ -166,6 +166,7 @@ pub fn run() {
             commands::hide_castle,
             commands::media_open,
             commands::memory_features,
+            memory::memory_home,
             commands::choose_picture,
             commands::avatar_set,
             commands::avatar_get,
