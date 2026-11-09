@@ -87,9 +87,6 @@ fn get_settings(store: State<SettingsStore>) -> SettingsView {
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>) -> Result<SettingsView, String> {
     let settings = settings.normalized();
-    if let Some(problem) = settings.problem() {
-        return Err(problem);
-    }
     settings::save(&store.path, &settings).map_err(|_| "The settings could not be saved.".to_string())?;
     *store.startup_note.lock().unwrap() = startup::sync(&app, settings.start_with_windows);
     *store.current.lock().unwrap() = settings;
@@ -210,6 +207,7 @@ pub fn run() {
             signin::member_sign_in,
             signin::member_status,
             signin::member_sign_out,
+            chatroom::room_companion_in,
             worlds::worlds_mine,
             worlds::world_new,
             worlds::world_delete,

@@ -167,8 +167,8 @@ pub struct Settings {
     pub start_with_windows: bool,
     /// Start the companion's session when Castle opens.
     pub start_session_on_launch: bool,
-    /// The MemoryCore Foundation room's address, e.g. https://example.com - no trailing slash, no /api.
-    pub room_base_url: Option<String>,
+    /// The id of the companion's room key Castle made on the Portfolio (so it can be removed again).
+    pub room_companion_key_id: Option<String>,
     pub world: WorldSettings,
     /// True once the first-run setup has finished.
     pub setup_done: bool,
@@ -198,7 +198,7 @@ impl Default for Settings {
             theme: None,
             start_with_windows: false,
             start_session_on_launch: true,
-            room_base_url: None,
+            room_companion_key_id: None,
             world: WorldSettings::default(),
             setup_done: false,
             quick_actions: Vec::new(),
@@ -220,7 +220,7 @@ impl Settings {
         self.member_name = clean(self.member_name);
         self.relationship_style = clean(self.relationship_style);
         self.theme = clean(self.theme);
-        self.room_base_url = clean(self.room_base_url).map(|v| v.trim_end_matches('/').to_string());
+        self.room_companion_key_id = clean(self.room_companion_key_id);
         self.world.volume = self.world.volume.clamp(0.0, 1.0);
         self.quick_actions.retain(|a| !a.label.trim().is_empty() && !a.command.trim().is_empty());
         for action in &mut self.quick_actions {
@@ -240,16 +240,6 @@ impl Settings {
     /// HOME is always on; any other room as the member set it.
     pub fn room_on(&self, room: &str) -> bool {
         room == "home" || self.rooms.get(room).copied().unwrap_or(true)
-    }
-
-    /// A plain reason when the settings cannot be kept, else None.
-    pub fn problem(&self) -> Option<String> {
-        if let Some(url) = &self.room_base_url {
-            if !(url.starts_with("https://") || url.starts_with("http://")) {
-                return Some("The room address must start with https:// or http://".into());
-            }
-        }
-        None
     }
 
     /// The companion's name for the screen, or a gentle default before setup.
@@ -365,7 +355,7 @@ mod tests {
             theme: Some("constellation".into()),
             start_with_windows: true,
             start_session_on_launch: false,
-            room_base_url: Some("https://example.test".into()),
+            room_companion_key_id: Some("17".into()),
             world: WorldSettings {
                 music: false,
                 volume: 0.25,
@@ -415,13 +405,13 @@ mod tests {
     #[test]
     fn text_is_trimmed_and_odd_values_are_brought_back_in_range() {
         let settings = Settings {
-            room_base_url: Some("  https://example.test/ ".into()),
+            room_companion_key_id: Some("   ".into()),
             companion_name: Some("   ".into()),
             world: WorldSettings { volume: 3.0, ..WorldSettings::default() },
             ..Settings::default()
         }
         .normalized();
-        assert_eq!(settings.room_base_url.as_deref(), Some("https://example.test"));
+        assert_eq!(settings.room_companion_key_id, None);
         assert_eq!(settings.companion_name, None);
         assert_eq!(settings.world.volume, 1.0);
         assert_eq!(settings.companion_label(), "Your companion");
@@ -498,10 +488,4 @@ mod tests {
         assert_eq!(settings.quick_actions, vec![QuickAction { label: "Review".into(), command: "review  my week".into() }]);
     }
 
-    #[test]
-    fn a_room_address_without_a_scheme_is_refused() {
-        let settings = Settings { room_base_url: Some("example.test".into()), ..Settings::default() };
-        assert!(settings.problem().is_some());
-        assert!(Settings::default().problem().is_none());
-    }
 }

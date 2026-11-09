@@ -137,17 +137,83 @@ impl Room {
     }
 }
 
-/// The member's room (who: "me" for their own key, "companion" for their companion's key).
+/// The member's room (who: "me" with their sign-in, "companion" with the key Castle made for it).
 fn room_for(store: &SettingsStore, who: &str) -> Result<Room, RoomRefusal> {
     if !store.get().room_on("chat") {
         return Err(refusal("off", crate::rooms::off_line("chat")));
     }
-    let base = store.get().room_base_url.ok_or_else(|| refusal("notSetUp", "Add the room address in the CHAT room first."))?;
-    let account = if who == "companion" { "room-companion" } else { "room" };
+    let base = crate::signin::portfolio();
+    let account = if who == "companion" { "room-companion" } else { "member" };
     let key = key::load(account).ok_or_else(|| {
-        refusal("notSetUp", if who == "companion" { "Add your companion's room key to let it speak in the room." } else { "Add your room key to enter." })
+        refusal("notSetUp", if who == "companion" { "Your companion is not in the room yet." } else { "Sign in to enter the room." })
     })?;
     Ok(Room::new(&base, &key))
+}
+
+/// The page's plain line when a room key could not be made (pure, tested).
+pub fn key_refusal(status: u16, body: &str) -> String {
+    let said = serde_json::from_str::<Value>(body).ok().and_then(|v| v.get("error").and_then(Value::as_str).map(str::to_string));
+    match status {
+        401 => "Your sign-in has run out - sign in again.".into(),
+        403 => said.unwrap_or_else(|| "Only MemoryCore Foundation members can let a companion in.".into()),
+        _ => match said {
+            Some(s) if s.to_lowercase().contains("key") => format!("{s} - you can remove an old room key on your Library card (the Room keys tab)."),
+            Some(s) => s,
+            None => format!("The companion's room key could not be made ({status})."),
+        },
+    }
+}
+
+/// Lets the member's companion into the room (Castle makes its own room key with the member's
+/// sign-in, speaksAs ASSISTANT, and keeps it in Credential Manager - never shown), or keeps it out
+/// again (the key is removed on the Portfolio and here).
+#[tauri::command]
+pub async fn room_companion_in(on: bool, store: State<'_, SettingsStore>) -> Result<bool, String> {
+    let settings = store.get();
+    if !settings.room_on("chat") {
+        return Err(crate::rooms::off_line("chat"));
+    }
+    let token = key::load("member").ok_or("Sign in to the room first.")?;
+    let base = crate::signin::portfolio();
+    let companion = settings.companion_label();
+    let had_id = settings.room_companion_key_id.clone();
+    let made = tauri::async_runtime::spawn_blocking(move || -> Result<Option<String>, String> {
+        let http = reqwest::blocking::Client::builder().user_agent(USER_AGENT).timeout(Duration::from_secs(20)).build().map_err(|_| "Castle could not reach the internet.".to_string())?;
+        if on {
+            if key::load("room-companion").is_some() {
+                return Ok(had_id);
+            }
+            let answer = http
+                .post(format!("{base}/api/member/room-keys"))
+                .bearer_auth(&token)
+                .json(&serde_json::json!({ "label": "MemoryCore Castle", "speaksAs": "ASSISTANT", "assistantName": companion }))
+                .send()
+                .map_err(|_| "The Portfolio could not be reached.".to_string())?;
+            let status = answer.status().as_u16();
+            let body = answer.text().unwrap_or_default();
+            if !(200..300).contains(&status) {
+                return Err(key_refusal(status, &body));
+            }
+            let v: Value = serde_json::from_str(&body).map_err(|_| "The Portfolio's answer could not be read.".to_string())?;
+            let new_key = v.get("key").and_then(Value::as_str).ok_or("The Portfolio's answer had no key.")?;
+            key::save("room-companion", new_key)?;
+            Ok(v.get("id").map(|id| id.to_string().trim_matches('"').to_string()))
+        } else {
+            if let Some(id) = had_id.filter(|i| i.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')) {
+                // a key already gone on the Portfolio is fine
+                let _ = http.delete(format!("{base}/api/member/room-keys/{id}")).bearer_auth(&token).send();
+            }
+            let _ = key::forget("room-companion");
+            Ok(None)
+        }
+    })
+    .await
+    .map_err(|_| "The room call stopped.".to_string())??;
+    let mut next = store.get();
+    next.room_companion_key_id = made;
+    crate::settings::save(&store.path, &next).map_err(|_| "The settings could not be saved.".to_string())?;
+    *store.current.lock().unwrap() = next;
+    Ok(on)
 }
 
 async fn blocking<T: Send + 'static>(work: impl FnOnce() -> Result<T, RoomRefusal> + Send + 'static) -> Result<T, RoomRefusal> {
@@ -215,6 +281,14 @@ mod tests {
     }
 
     #[test]
+    fn a_companion_key_that_cannot_be_made_says_why() {
+        assert!(key_refusal(401, "").contains("sign in again"));
+        assert_eq!(key_refusal(403, r#"{"error":"This room is for MemoryCore Foundation members"}"#), "This room is for MemoryCore Foundation members");
+        assert!(key_refusal(409, r#"{"error":"You already have 3 room keys"}"#).contains("Library card"));
+        assert!(key_refusal(500, "").contains("500"));
+    }
+
+    #[test]
     fn the_room_address_is_built_from_the_portfolio_address() {
         assert_eq!(room_url("https://example.test/", "/me"), "https://example.test/api/room/me");
         assert_eq!(room_url("https://example.test/api", "/lines"), "https://example.test/api/room/lines");
@@ -233,18 +307,18 @@ mod tests {
     #[test]
     fn a_held_read_sends_the_key_the_cursor_and_a_named_agent() {
         let (base, seen) = mock(200, r#"{"cursor":12,"lines":[{"id":12,"text":"hi","author":{"name":"Rin","kind":"member"}}],"cleared":[],"more":false}"#, "application/json");
-        let answer = Room::new(&base, "mcr_test").lines(Some(11), 2).unwrap();
+        let answer = Room::new(&base, "member-test-token").lines(Some(11), 2).unwrap();
         assert_eq!(answer["cursor"], 12);
         let request = seen.join().unwrap();
         assert!(request.starts_with("GET /api/room/lines?after=11&wait=2 "));
-        assert!(request.to_lowercase().contains("authorization: bearer mcr_test"));
+        assert!(request.to_lowercase().contains("authorization: bearer member-test-token"));
         assert!(request.contains("MemoryCoreCastle/"));
     }
 
     #[test]
     fn a_locked_door_and_a_long_message_are_refused_plainly() {
         let (base, seen) = mock(403, r#"{"error":"This room is for MemoryCore Foundation members"}"#, "application/json");
-        let refused = Room::new(&base, "mcr_old").me().unwrap_err();
+        let refused = Room::new(&base, "member-old-token").me().unwrap_err();
         assert_eq!(refused.kind, "locked");
         let _ = seen.join();
         assert_eq!(Room::new("http://127.0.0.1:9", "k").post(&"x".repeat(1001)).unwrap_err().kind, "tooLarge");
@@ -254,7 +328,7 @@ mod tests {
     #[test]
     fn a_room_picture_comes_back_as_a_data_url() {
         let (base, seen) = mock(200, "PNG", "image/png");
-        let url = Room::new(&base, "mcr_test").file("abc123").unwrap();
+        let url = Room::new(&base, "member-test-token").file("abc123").unwrap();
         assert_eq!(url, "data:image/png;base64,UE5H");
         let _ = seen.join();
     }
