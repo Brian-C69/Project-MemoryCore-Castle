@@ -4,7 +4,7 @@
 // The companion may join in through the bridge: room lines reach it as data, its reply comes back
 // from its Chat as <say>...</say> and is posted with its own room key.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getSettings, keySave, keyStatus, roomFile, roomLines, roomMe, roomPost, roomPresence, roomRules, saveSettings } from '../api/castle.js'
+import { getSettings, keyStatus, memberSignIn, memberSignOut, memberStatus, openUrl, roomCompanionIn, roomFile, roomLines, roomMe, roomPost, roomPresence, roomRules, saveSettings } from '../api/castle.js'
 import { askCompanion } from '../api/ask.js'
 import { readSay, roomBlock, shouldForward } from '../components/roombridge.js'
 
@@ -24,15 +24,18 @@ const refused = ref(null)
 const draft = ref('')
 const files = ref({})
 const scroller = ref(null)
-const setup = ref({ address: '', key: '', companionKey: '' })
+// the member's door, step by step (member_status): signedIn, card, foundation, name, roomOpen, expired
+const member = ref(null)
+const signing = ref(false)
+const doorProblem = ref('')
+const PORTFOLIO = 'https://www.afifmaahi-portfolio.com'
 let alive = true
 let rulesSent = false
 let lastForward = 0
 let waiting = []
 
-const haveKey = computed(() => keys.value.some((k) => k.name === 'room' && k.set))
 const haveCompanionKey = computed(() => keys.value.some((k) => k.name === 'room-companion' && k.set))
-const ready = computed(() => !!settings.value?.roomBaseUrl && haveKey.value)
+const ready = computed(() => !!member.value?.roomOpen)
 const locked = computed(() => !ready.value || refused.value?.kind === 'locked' || refused.value?.kind === 'notSetUp')
 const mode = computed(() => settings.value?.roomCompanionMode ?? 'off')
 const shown = computed(() => lines.value)
@@ -164,20 +167,104 @@ async function setMode(next) {
   }
 }
 
-// ---------- The locked door ----------
+// ---------- The door: a guide that opens by itself ----------
 
-async function saveDoor() {
+const STEP = { done: '✓', wait: '…', todo: '' }
+const steps = computed(() => {
+  const m = member.value
+  const signed = !!m?.signedIn
+  const card = m?.card === 'active'
+  const f = m?.foundation ?? 'NONE'
+  const foundationLine = !signed || !card
+    ? 'After your Library card, join the MemoryCore Foundation on its MemoryCore tab.'
+    : {
+        NONE: 'Join the MemoryCore Foundation on your Library card (the MemoryCore tab).',
+        PENDING: 'Waiting for Kiyo to promote you - Castle checks by itself, nothing to paste.',
+        APPROVED: m?.roomOpen ? 'You are in.' : 'Promoted - opening the room…',
+        REJECTED: 'This request was not accepted. You can ask again on your Library card.',
+        REVOKED: 'Your Foundation place was removed, so the room is closed to you.',
+      }[f] ?? 'Castle is checking your Foundation place…'
+  return [
+    {
+      n: 1,
+      title: 'Sign in with Google',
+      line: signed ? `Signed in${m?.name ? ` as ${m.name}` : ''}.` : m?.expired ? 'Your sign-in ran out - sign in again.' : 'Castle opens your browser; you sign in there once.',
+      state: signed ? 'done' : 'todo',
+    },
+    {
+      n: 2,
+      title: 'Your Library card',
+      line: !signed ? 'Made for you when you sign in.' : card ? 'Your card is active.' : m?.card === 'inactive' ? 'Your Library card is not active yet - open the Library to set it up.' : 'Castle is checking your card…',
+      state: card ? 'done' : signed ? 'wait' : 'todo',
+    },
+    { n: 3, title: 'The MemoryCore Foundation', line: foundationLine, state: f === 'APPROVED' ? 'done' : f === 'PENDING' ? 'wait' : 'todo' },
+  ]
+})
+
+async function checkDoor() {
   try {
-    if (setup.value.address.trim()) settings.value = (await saveSettings({ ...settings.value, roomBaseUrl: setup.value.address.trim() })).settings
-    if (setup.value.key.trim()) keys.value = await keySave('room', setup.value.key.trim())
-    if (setup.value.companionKey.trim()) keys.value = await keySave('room-companion', setup.value.companionKey.trim())
-    setup.value = { address: settings.value.roomBaseUrl ?? '', key: '', companionKey: '' }
+    const was = member.value?.roomOpen
+    member.value = await memberStatus()
+    if (member.value?.roomOpen && was === false) {
+      emit('fresh') // the door just opened: the tab glows
+      lines.value = []
+      cursor.value = null
+      refused.value = null
+    }
+  } catch {
+    // outside Castle's window
+  }
+}
+
+async function signIn() {
+  doorProblem.value = ''
+  signing.value = true
+  try {
+    member.value = await memberSignIn()
     refused.value = null
+  } catch (reason) {
+    doorProblem.value = String(reason?.message ?? reason)
+  } finally {
+    signing.value = false
+  }
+}
+
+async function signOut() {
+  try {
+    await roomCompanionIn(false).catch(() => {})
+    await memberSignOut()
+  } finally {
+    member.value = null
     lines.value = []
     cursor.value = null
-  } catch (reason) {
-    refused.value = { kind: 'other', message: String(reason) }
+    await checkDoor()
+    keys.value = await keyStatus().catch(() => keys.value)
   }
+}
+
+async function setCompanionIn(on) {
+  doorProblem.value = ''
+  try {
+    await roomCompanionIn(on)
+    keys.value = await keyStatus()
+    if (!on && mode.value !== 'off') await setMode('off')
+  } catch (reason) {
+    doorProblem.value = String(reason?.message ?? reason)
+  }
+}
+
+const openLibrary = () => openUrl(`${PORTFOLIO}/alice/library`).catch(() => {})
+
+// While the door is shut, Castle looks again by itself: every 30 s while CHAT is shown, every
+// five minutes while hidden.
+let doorTimer = 0
+function scheduleDoor() {
+  clearTimeout(doorTimer)
+  if (!alive) return
+  doorTimer = setTimeout(async () => {
+    if (!ready.value) await checkDoor()
+    scheduleDoor()
+  }, props.visible ? 30000 : 300000)
 }
 
 let presenceTimer
@@ -185,11 +272,12 @@ onMounted(async () => {
   try {
     settings.value = (await getSettings()).settings
     keys.value = await keyStatus()
-    setup.value.address = settings.value.roomBaseUrl ?? ''
   } catch {
     // outside Castle's window
   }
   window.addEventListener('castle-say', onSay)
+  await checkDoor()
+  scheduleDoor()
   presenceTimer = setInterval(refreshPresence, 30000)
   refreshPresence()
   loop()
@@ -197,28 +285,44 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   alive = false
   clearInterval(presenceTimer)
+  clearTimeout(doorTimer)
   window.removeEventListener('castle-say', onSay)
 })
-watch(() => props.visible, (on) => on && (refreshPresence(), scrollDown()))
+watch(() => props.visible, (on) => {
+  if (on) {
+    refreshPresence()
+    scrollDown()
+    if (!ready.value) checkDoor()
+  }
+  scheduleDoor()
+})
 </script>
 
 <template>
   <div class="chat-room">
     <section v-if="locked" class="door widget">
       <p class="eyebrow">MEMORYCORE FOUNDATION</p>
-      <h2>The room is behind this door</h2>
-      <p class="hint">
-        This room is for MemoryCore Foundation members. Join the Library on the Portfolio; once you are promoted to the
-        Foundation, make a <strong>room key</strong> on your Library card (the "Room keys" tab) and paste it here.
-      </p>
-      <p v-if="refused && refused.kind !== 'notSetUp'" class="problem">{{ refused.message }}</p>
-      <label>Room address <input v-model="setup.address" placeholder="https://the-portfolio-address" /></label>
-      <label>Your room key <input v-model="setup.key" type="password" :placeholder="haveKey ? 'Kept - paste to replace' : 'mcr_...'" autocomplete="off" /></label>
-      <label>{{ companion }}'s room key (optional - lets {{ companion }} speak in the room)
-        <input v-model="setup.companionKey" type="password" :placeholder="haveCompanionKey ? 'Kept - paste to replace' : 'a key made with speaks as assistant'" autocomplete="off" />
-      </label>
-      <button class="primary" @click="saveDoor">Enter</button>
-      <p class="hint">Keys are kept encrypted by Windows and only used to talk to the room.</p>
+      <h2>The room for MemoryCore Foundation members</h2>
+      <p class="hint">Three steps, and the door opens by itself - nothing to paste.</p>
+      <ol class="steps">
+        <li v-for="st in steps" :key="st.n" :class="st.state">
+          <span class="mark">{{ STEP[st.state] || st.n }}</span>
+          <div>
+            <strong>{{ st.title }}</strong>
+            <p class="hint">{{ st.line }}</p>
+          </div>
+          <button v-if="st.n === 1 && !member?.signedIn" class="primary" :disabled="signing" @click="signIn">{{ signing ? 'Waiting for your browser…' : 'Sign in' }}</button>
+          <button v-if="st.n === 2 && member?.signedIn" @click="openLibrary">Open the Library</button>
+        </li>
+      </ol>
+      <p v-if="doorProblem || member?.problem" class="problem">{{ doorProblem || member.problem }}</p>
+      <p v-if="refused && !['notSetUp', 'locked', 'off'].includes(refused.kind)" class="problem">{{ refused.message }}</p>
+      <div v-if="member?.signedIn" class="row">
+        <span class="hint">Castle looks again by itself every half minute while you are here.</span>
+        <span class="spacer"></span>
+        <button @click="checkDoor">Check now</button>
+        <button @click="signOut">Sign out</button>
+      </div>
     </section>
 
     <template v-else>
@@ -258,14 +362,55 @@ watch(() => props.visible, (on) => on && (refreshPresence(), scrollDown()))
         <label v-for="m in [{ id: 'off', text: 'Off' }, { id: 'named', text: 'When named' }, { id: 'joins', text: 'Joins in' }]" :key="m.id" class="mode">
           <input type="radio" :checked="mode === m.id" :disabled="!haveCompanionKey && m.id !== 'off'" @change="setMode(m.id)" /> {{ m.text }}
         </label>
-        <p class="hint">{{ haveCompanionKey ? `${companion} speaks on your own usage, kindly and without anything private. Wake ${companion} for it to answer.` : `Add ${companion}'s room key at the door to let it speak.` }}</p>
-        <button @click="refused = { kind: 'notSetUp', message: '' }">Room keys</button>
+        <label class="mode"><input type="checkbox" :checked="haveCompanionKey" @change="setCompanionIn($event.target.checked)" /> Let {{ companion }} in</label>
+        <p class="hint">{{ haveCompanionKey ? `${companion} speaks on your own usage, kindly and without anything private.` : `${companion} is not in the room. Let it in and Castle makes its room key for it - nothing to paste.` }}</p>
+        <p v-if="doorProblem" class="problem">{{ doorProblem }}</p>
+        <button @click="signOut">Sign out</button>
       </aside>
     </template>
   </div>
 </template>
 
 <style scoped>
+.steps {
+  display: grid;
+  gap: 12px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+.steps li {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.steps .mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 13px;
+}
+.steps li.done .mark {
+  background: var(--good);
+  border-color: var(--good);
+  color: #07142e;
+}
+.steps li.wait .mark {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.spacer {
+  flex: 1;
+}
 .chat-room {
   position: absolute;
   inset: 24px;

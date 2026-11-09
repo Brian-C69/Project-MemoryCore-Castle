@@ -110,6 +110,12 @@ export const worldNew = (name, description, layout, picture) => invoke('world_ne
 export const worldDelete = (slug) => invoke('world_delete', { slug })
 export const worldPrepare = (slug) => invoke('world_prepare', { slug })
 
+// Signing in to the MemoryCore Foundation through the browser (the token stays in the core).
+export const memberSignIn = () => invoke('member_sign_in')
+export const memberStatus = () => invoke('member_status')
+export const memberSignOut = () => invoke('member_sign_out')
+export const roomCompanionIn = (on) => invoke('room_companion_in', { on })
+
 // The MemoryCore Foundation room (keys stay in the core). Refusals come back as { kind, message }.
 export const roomMe = () => invoke('room_me')
 export const roomLines = (after, wait) => invoke('room_lines', { after, wait })
