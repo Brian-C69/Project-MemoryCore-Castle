@@ -590,6 +590,127 @@ mod tests {
         assert!(Room::new("http://127.0.0.1:9", "k").file("../etc").is_err());
     }
 
+    /// A mock Portfolio for several requests in a row: answers each with the next (status, body)
+    /// and gives back every request's first line (and the whole of the last one).
+    fn mock_many(replies: Vec<(u16, &'static str)>) -> (String, std::thread::JoinHandle<Vec<String>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            let mut seen = Vec::new();
+            for (status, body) in replies {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = Vec::new();
+                let mut buf = [0u8; 16384];
+                loop {
+                    let n = stream.read(&mut buf).unwrap();
+                    if n == 0 {
+                        break;
+                    }
+                    request.extend_from_slice(&buf[..n]);
+                    let text = String::from_utf8_lossy(&request).to_string();
+                    if let Some(end) = text.find("\r\n\r\n") {
+                        let head = text[..end].to_lowercase();
+                        let length = head.lines().find_map(|l| l.strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0)));
+                        let body_len = request.len() - (end + 4);
+                        let complete = match length {
+                            Some(want) => body_len >= want,
+                            None if head.contains("transfer-encoding: chunked") => text.ends_with("0\r\n\r\n"),
+                            None => true,
+                        };
+                        if complete {
+                            break;
+                        }
+                    }
+                }
+                seen.push(String::from_utf8_lossy(&request).to_string());
+                let reply = format!("HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+                stream.write_all(reply.as_bytes()).unwrap();
+            }
+            seen
+        });
+        (base, handle)
+    }
+
+    fn noisy_png(side: u32) -> Vec<u8> {
+        let mut seed: u32 = 7;
+        let img = image::RgbImage::from_fn(side, side, |_, _| {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            image::Rgb([(seed >> 24) as u8, (seed >> 16) as u8, (seed >> 8) as u8])
+        });
+        let mut png = Vec::new();
+        image::DynamicImage::ImageRgb8(img).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        png
+    }
+
+    #[test]
+    fn a_small_picture_goes_as_it_is_and_a_big_one_is_shrunk_to_fit() {
+        let small = vec![1u8, 2, 3];
+        assert_eq!(fit_for_room(small.clone(), "image/png").unwrap(), (small, "image/png"));
+        let big = noisy_png(1200);
+        assert!(big.len() > ROOM_PICTURE_MAX);
+        let (fitted, kind) = fit_for_room(big, "image/png").unwrap();
+        assert!(fitted.len() <= ROOM_PICTURE_MAX);
+        assert_eq!(kind, "image/jpeg");
+        let back = image::load_from_memory(&fitted).unwrap();
+        assert!(back.width() <= 512 && back.height() <= 512);
+        assert!(fit_for_room(vec![0u8; ROOM_PICTURE_MAX + 1], "image/png").is_err());
+        assert_eq!(picture_kind(std::path::Path::new("a/face.JPG")), Some("image/jpeg"));
+        assert_eq!(picture_kind(std::path::Path::new("a/face.gif")), None);
+    }
+
+    #[test]
+    fn the_key_is_remade_only_when_its_name_is_not_the_name_in_settings() {
+        assert!(!needs_rename(Some("Mika"), "Mika"));
+        assert!(!needs_rename(Some(" Mika "), "Mika"));
+        assert!(needs_rename(Some("Mika"), "Kociness"));
+        assert!(needs_rename(None, "Mika"));
+    }
+
+    #[test]
+    fn a_rename_makes_the_new_key_first_then_removes_the_old_one_then_sends_the_picture() {
+        let folder = std::env::temp_dir().join(format!("castle-face-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();
+        let picture = folder.join("avatar.png");
+        std::fs::write(&picture, noisy_png(64)).unwrap();
+        let (base, seen) = mock_many(vec![(201, r#"{"id":42,"key":"mcr_new"}"#), (204, ""), (200, "{}")]);
+        let done = refresh_companion(&base, "member-token", "17", Some("Kociness"), Some(&picture)).unwrap();
+        assert_eq!(done.new_key, Some((Some("42".to_string()), "mcr_new".to_string())));
+        assert!(done.face.is_ok());
+        let seen = seen.join().unwrap();
+        assert!(seen[0].starts_with("POST /api/member/room-keys "));
+        assert!(seen[0].contains(r#""assistantName":"Kociness""#));
+        assert!(seen[1].starts_with("DELETE /api/member/room-keys/17 "));
+        assert!(seen[2].starts_with("POST /api/member/room-keys/42/avatar "));
+        assert!(seen[2].to_lowercase().contains("multipart/form-data"));
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
+    fn no_picture_clears_the_face_and_a_refused_picture_is_said_in_words() {
+        let (base, seen) = mock_many(vec![(204, "")]);
+        let done = refresh_companion(&base, "member-token", "17", None, None).unwrap();
+        assert!(done.new_key.is_none() && done.face.is_ok());
+        assert!(seen.join().unwrap()[0].starts_with("DELETE /api/member/room-keys/17/avatar "));
+
+        let folder = std::env::temp_dir().join(format!("castle-face-refused-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();
+        let picture = folder.join("avatar.png");
+        std::fs::write(&picture, noisy_png(32)).unwrap();
+        let (base, seen) = mock_many(vec![(415, r#"{"error":"Only PNG, JPEG or WebP pictures"}"#)]);
+        let done = refresh_companion(&base, "member-token", "17", None, Some(&picture)).unwrap();
+        assert_eq!(done.face.unwrap_err(), refusal_for(415, r#"{"error":"Only PNG, JPEG or WebP pictures"}"#).message);
+        let _ = seen.join();
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
+    fn a_failed_new_key_leaves_the_old_one_alone() {
+        let (base, seen) = mock_many(vec![(409, r#"{"error":"You already have 3 room keys"}"#)]);
+        let refused = refresh_companion(&base, "member-token", "17", Some("Kociness"), None).err().unwrap();
+        assert!(refused.contains("Library card"));
+        assert_eq!(seen.join().unwrap().len(), 1);
+    }
+
     #[test]
     fn a_room_picture_comes_back_as_a_data_url() {
         let (base, seen) = mock(200, "PNG", "image/png");

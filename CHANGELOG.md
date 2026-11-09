@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- Your companion's **picture and name** in Settings now reach the chat room by themselves while it is let in - a large drawn portrait is shrunk to fit, a rename shows on its next line, and a refused picture is said in words.
+
 ## 0.2.0 - 2026-11-09
 
 - **WORLD** is a settings room: pick which screen shows which world, identify your screens by number, and Castle remembers them when it starts. Ask your companion to create a new 3D world from a few words.
