@@ -4,7 +4,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
-## 0.2.0
+## 0.2.0 - 2026-11-09
 
 - **WORLD** is a settings room: pick which screen shows which world, identify your screens by number, and Castle remembers them when it starts. Ask your companion to create a new 3D world from a few words.
 - **The Crystal Isle** world comes alive, and its great crystal shines with the weekly limit left on your Claude Code or Codex plan - bright when full, dim and warm when nearly used up.
