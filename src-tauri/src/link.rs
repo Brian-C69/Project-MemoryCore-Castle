@@ -389,6 +389,72 @@ pub fn prune_read(link: &Path) {
     }
 }
 
+// ---------- the page ----------
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HereView {
+    pub terminal: String,
+    pub place: String,
+    pub seen: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteView {
+    pub from: String,
+    pub to: String,
+    pub at: String,
+    pub about: String,
+    pub wake: bool,
+}
+
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkView {
+    /// false while the Neural Link is off or no memory folder is set
+    pub on: bool,
+    pub here: Vec<HereView>,
+    pub notes: Vec<NoteView>,
+}
+
+/// Who is here and which notes wait, for Settings (read straight from the folder; read-only).
+pub fn view_of(link: &Path) -> LinkView {
+    let mut view = LinkView { on: true, ..LinkView::default() };
+    if let Ok(entries) = fs::read_dir(link.join("here")) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let age = age_of(&path);
+            if path.extension().is_none_or(|x| x != "json") || age > STALE_AFTER {
+                continue;
+            }
+            if let Some(row) = fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str::<Row>(&t).ok()).filter(|r| terminal_ok(&r.terminal)) {
+                view.here.push(HereView { terminal: row.terminal, place: one_line(&row.place), seen: ago(age) });
+            }
+        }
+    }
+    view.here.sort_by(|a, b| a.terminal.cmp(&b.terminal));
+    if let Ok(targets) = fs::read_dir(link.join("notes")) {
+        let mut names: Vec<String> = targets.flatten().filter(|e| e.path().is_dir()).map(|e| e.file_name().to_string_lossy().to_string()).filter(|t| terminal_ok(t)).collect();
+        names.sort();
+        for to in names {
+            for (_, n) in waiting(link, &to) {
+                view.notes.push(NoteView { from: n.from, to: n.to, at: n.at, about: if n.about.is_empty() { "the member's word".into() } else { one_line(&n.about) }, wake: n.wake });
+            }
+        }
+    }
+    view
+}
+
+#[tauri::command]
+pub fn link_view(store: tauri::State<crate::settings::SettingsStore>) -> LinkView {
+    let settings = store.get();
+    match settings.memory_folder.filter(|_| settings.link_on) {
+        Some(memory) => view_of(&link_folder(Path::new(&memory))),
+        None => LinkView::default(),
+    }
+}
+
 // ---------- the watcher ----------
 
 /// Starts the watcher: every 5 seconds, while the Neural Link is on and a memory folder is set.
@@ -553,6 +619,8 @@ mod tests {
         mark_read(&link, "main", &name);
         assert!(link.join("read/main").join(&name).exists());
         assert_eq!(waiting(&link, "main").len(), 1);
+        let view = view_of(&link);
+        assert!(view.on && view.here.iter().any(|h| h.terminal == "main") && view.notes.len() == 1);
         let _ = fs::remove_dir_all(&link);
     }
 }

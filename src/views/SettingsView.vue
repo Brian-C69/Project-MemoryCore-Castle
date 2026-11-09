@@ -8,6 +8,7 @@ import BackupPanel from '../components/BackupPanel.vue'
 import {
   roomsApply,
   roomCompanionRefresh,
+  linkView,
   avatarClear,
   avatarGet,
   avatarSet,
@@ -59,6 +60,16 @@ const busy = ref('')
 const problem = ref('')
 const done = ref('')
 const newAction = ref({ label: '', command: '' })
+const link = ref(null)
+
+async function readLink() {
+  link.value = await linkView().catch(() => null)
+}
+
+async function switchLink(patch) {
+  await save(patch, 'Saved.')
+  await readLink()
+}
 
 // The rooms that can be switched off (HOME always stays).
 const ROOM_SWITCHES = [
@@ -215,6 +226,7 @@ onMounted(async () => {
     settings.value = view.value.settings
     keys.value = await keyStatus()
     avatar.value = await avatarGet()
+    await readLink()
   } catch (reason) {
     problem.value = String(reason)
   }
@@ -304,6 +316,18 @@ onMounted(async () => {
           </label>
         </div>
         <p class="hint">Turning STORY off ends the story session; turning WORLD off closes the world screens; CHAT stops reading the room. Their files stay.</p>
+
+        <h3>Neural Link</h3>
+        <label class="toggle"><input type="checkbox" :checked="settings.linkOn !== false" :disabled="!!busy" @change="switchLink({ linkOn: $event.target.checked })" /> Neural Link - your terminals leave each other notes in the memory folder's <code>link</code> folder</label>
+        <label class="toggle"><input type="checkbox" :checked="!!settings.roomMayPass" :disabled="!!busy || settings.linkOn === false" @change="switchLink({ roomMayPass: $event.target.checked })" /> {{ settings.companionName ?? 'Your companion' }} may pass my own words from the chat room to my workspace</label>
+        <p class="hint">Only lines you post yourself can be passed on - never a guest's. Your workspace answers in a note, and your companion says it in the room in its own words. Nothing in the link folder leaves this computer.</p>
+        <div v-if="link?.on" class="link-list">
+          <p v-if="!link.here.length" class="hint">No terminal is here right now.</p>
+          <p v-for="h in link.here" :key="h.terminal" class="hint"><strong>{{ h.terminal }}</strong><span v-if="h.place"> - {{ h.place }}</span> (seen {{ h.seen }})</p>
+          <p v-if="!link.notes.length" class="hint">No notes are waiting.</p>
+          <p v-for="(n, i) in link.notes" :key="i" class="hint">{{ n.from }} &rarr; {{ n.to }}: {{ n.about }}<span v-if="!n.wake"> (no knock)</span></p>
+          <button @click="readLink">Look again</button>
+        </div>
       </section>
 
       <section v-else-if="tab === 'story'" class="pane">

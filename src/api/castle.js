@@ -131,6 +131,8 @@ export const roomFaceSet = (path, companion = false) => invoke('room_face_set', 
 // after the companion's name or picture changes in Settings: the room is brought up to date
 // ({ inRoom, renamed, face }; inRoom false = the companion is not in the room, nothing to do)
 export const roomCompanionRefresh = () => invoke('room_companion_refresh')
+// the Neural Link, read-only: { on, here: [{ terminal, place, seen }], notes: [{ from, to, at, about, wake }] }
+export const linkView = () => invoke('link_view')
 // Castle's room reader (it reads from the moment Castle starts)
 export const roomBacklog = () => invoke('room_backlog')
 export const roomVisible = (on) => invoke('room_visible', { on })
