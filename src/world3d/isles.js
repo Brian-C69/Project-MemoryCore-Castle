@@ -5,6 +5,8 @@
 import * as THREE from 'three'
 import { seeded, hashSeed } from './random.js'
 import { arc, neighbours } from './walk.js'
+import { cloudSea, motes, softDot } from './effects.js'
+import { surfaceY } from './glb.js'
 
 // at = the centre of the isle's grass top; radius = the grass radius, in metres.
 export const LAYOUT = [
@@ -90,23 +92,6 @@ export function planIsles({ layout = LAYOUT, bridges = BRIDGES, seed = 7 } = {})
 
 // ---------- the build ----------
 
-let dotTexture
-function softDot() {
-  if (dotTexture) return dotTexture
-  const c = document.createElement('canvas')
-  c.width = c.height = 64
-  const g = c.getContext('2d')
-  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32)
-  grad.addColorStop(0, 'rgba(255,255,255,1)')
-  grad.addColorStop(0.35, 'rgba(255,255,255,0.45)')
-  grad.addColorStop(1, 'rgba(255,255,255,0)')
-  g.fillStyle = grad
-  g.fillRect(0, 0, 64, 64)
-  dotTexture = new THREE.CanvasTexture(c)
-  dotTexture.colorSpace = THREE.SRGBColorSpace
-  return dotTexture
-}
-
 // A rock that hangs under the grass: a downward cone, its points nudged by a hash of their
 // position (so the seam's twin vertices move together and the rock never cracks open).
 function rockGeometry(radius, depth, seed) {
@@ -153,42 +138,12 @@ function ribbonGeometry(points, halfWidth) {
   return geometry
 }
 
-const SEA_VERTEX = `
-varying vec3 vWorld;
-void main() {
-  vec4 w = modelMatrix * vec4(position, 1.0);
-  vWorld = w.xyz;
-  gl_Position = projectionMatrix * viewMatrix * w;
-}`
-const SEA_FRAGMENT = `
-uniform float time;
-uniform vec3 light;
-uniform vec3 shade;
-uniform vec3 haze;
-varying vec3 vWorld;
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float noise(vec2 p) {
-  vec2 i = floor(p); vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
-}
-float fbm(vec2 p) {
-  float v = 0.0; float a = 0.5;
-  for (int i = 0; i < 4; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; }
-  return v;
-}
-void main() {
-  vec2 p = vWorld.xz * 0.018 + vec2(time * 0.012, time * 0.007);
-  float c = fbm(p + fbm(p * 0.7 - time * 0.004));
-  vec3 col = mix(shade, light, smoothstep(0.3, 0.8, c));
-  float far = smoothstep(120.0, 480.0, length(vWorld.xz - cameraPosition.xz));
-  gl_FragColor = vec4(mix(col, haze, far), 1.0);
-  #include <colorspace_fragment>
-}`
-
 // Builds the isles into world.scene. Returns the plan's helpers for walking:
 // { ids, centre, bridges, stand(id), bridge(a, b), plan }
-export function buildIsles(world, { layout = LAYOUT, bridges = BRIDGES, seed = 7 } = {}) {
+// `models` (isle id -> a loaded piece) stands a model isle in place of a drawn one, its top
+// surface at the isle's height so the bridges and the crystal's walk still meet it; `props` are
+// extra pieces at fixed places ({ object, at }).
+export function buildIsles(world, { layout = LAYOUT, bridges = BRIDGES, seed = 7, models = new Map(), props = [] } = {}) {
   const plan = planIsles({ layout, bridges, seed })
   const root = new THREE.Group()
   root.name = 'isles'
@@ -216,6 +171,14 @@ export function buildIsles(world, { layout = LAYOUT, bridges = BRIDGES, seed = 7
   for (const [id, isle] of plan.isles) {
     const { spec } = isle
     const [x, y, z] = spec.at
+    const model = models.get(id)
+    if (model) {
+      model.position.set(x, 0, z)
+      model.rotation.y = Math.atan2(-x, -z) // its front faces the heart
+      root.add(model)
+      model.position.y = y - (surfaceY(model, x, z) ?? 0)
+      continue
+    }
     const group = new THREE.Group()
     group.name = `isle-${id}`
     group.position.set(x, y, z)
@@ -261,6 +224,11 @@ export function buildIsles(world, { layout = LAYOUT, bridges = BRIDGES, seed = 7
     }
   }
 
+  for (const prop of props) {
+    prop.object.position.set(...(prop.at ?? [0, 0, 0]))
+    root.add(prop.object)
+  }
+
   // bridges of light: a faint deck, two bright rails and a spark that travels across
   const deckMaterial = new THREE.MeshBasicMaterial({ color: '#8fe6ff', transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })
   const railMaterial = new THREE.MeshBasicMaterial({ color: '#bff2ff', transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false })
@@ -287,40 +255,12 @@ export function buildIsles(world, { layout = LAYOUT, bridges = BRIDGES, seed = 7
     sparks.push(spark)
   }
 
-  // the sea of clouds far below
-  const seaUniforms = {
-    time: { value: 0 },
-    light: { value: new THREE.Color('#f4f0ff') },
-    shade: { value: new THREE.Color('#9a90c0') },
-    haze: { value: new THREE.Color('#9a8ac0') },
-  }
-  const sea = new THREE.Mesh(
-    new THREE.CircleGeometry(700, 48),
-    new THREE.ShaderMaterial({ uniforms: seaUniforms, vertexShader: SEA_VERTEX, fragmentShader: SEA_FRAGMENT, fog: false }),
-  )
-  sea.rotation.x = -Math.PI / 2
-  sea.position.y = SEA_Y
-  root.add(sea)
+  // the sea of clouds far below, and motes drifting between the isles
+  const sea = cloudSea(SEA_Y)
+  root.add(sea.mesh)
+  const dust = motes({ seed })
+  root.add(dust.points)
 
-  // motes drifting between the isles: fireflies by night, faint dust by day
-  const moteRand = seeded(`${seed}:motes`)
-  const MOTES = 220
-  const motePositions = new Float32Array(MOTES * 3)
-  const moteBase = new Float32Array(MOTES * 3)
-  for (let i = 0; i < MOTES; i++) {
-    moteBase[i * 3] = (moteRand() - 0.5) * 90
-    moteBase[i * 3 + 1] = -6 + moteRand() * 22
-    moteBase[i * 3 + 2] = (moteRand() - 0.5) * 90 - 6
-  }
-  motePositions.set(moteBase)
-  const moteGeometry = new THREE.BufferGeometry()
-  moteGeometry.setAttribute('position', new THREE.BufferAttribute(motePositions, 3))
-  const moteMaterial = new THREE.PointsMaterial({ color: '#fff3c8', size: 0.35, map: softDot(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })
-  root.add(new THREE.Points(moteGeometry, moteMaterial))
-
-  const lightColour = new THREE.Color()
-  const WHITE = new THREE.Color('#ffffff')
-  const horizon = new THREE.Color()
   const remove = world.onUpdate((dt, t, sky) => {
     const glow = sky?.glow ?? 1
     deckMaterial.opacity = 0.12 + glow * 0.2 + Math.sin(t * 1.3) * 0.03
@@ -331,21 +271,8 @@ export function buildIsles(world, { layout = LAYOUT, bridges = BRIDGES, seed = 7
       spark.position.copy(spark.userData.curve.getPointAt(k < 1 ? k : 2 - k))
       spark.material.opacity = 0.35 + glow * 0.65
     }
-    seaUniforms.time.value = t
-    if (sky) {
-      horizon.set(sky.horizon)
-      lightColour.copy(horizon).lerp(WHITE, 0.35 + sky.strength * 0.25)
-      seaUniforms.light.value.copy(lightColour)
-      seaUniforms.shade.value.set(sky.top).lerp(horizon, 0.45)
-      seaUniforms.haze.value.copy(horizon)
-    }
-    moteMaterial.opacity = 0.15 + glow * 0.75
-    for (let i = 0; i < MOTES; i++) {
-      motePositions[i * 3] = moteBase[i * 3] + Math.sin(t * 0.21 + i) * 1.2
-      motePositions[i * 3 + 1] = moteBase[i * 3 + 1] + Math.sin(t * 0.37 + i * 1.7) * 0.6
-      motePositions[i * 3 + 2] = moteBase[i * 3 + 2] + Math.cos(t * 0.19 + i * 0.6) * 1.2
-    }
-    moteGeometry.attributes.position.needsUpdate = true
+    sea.update(t, sky)
+    dust.update(t, glow)
     for (const p of pebbles) p.position.y = p.userData.y + Math.sin(t * 0.6 + p.userData.bob) * 0.35
   })
 

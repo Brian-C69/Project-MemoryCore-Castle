@@ -35,8 +35,7 @@ const state = ref(null) // readiness of a model world
 const world = computed(() => findWorld(allWorlds(props.mine), props.config.world) ?? findWorld(allWorlds(), DEFAULT_WORLD))
 const showing = computed(() => {
   const w = world.value
-  // (model worlds draw from 13.6 on; until then a model world shows the built-in isles)
-  if (w.engine === 'glb') return findWorld(allWorlds(), DEFAULT_WORLD)
+  if (w.engine === 'glb' && !state.value?.ready) return findWorld(allWorlds(), DEFAULT_WORLD)
   return w
 })
 const waiting = computed(() => (world.value.engine === 'glb' && state.value && !state.value.ready ? `${world.value.title} is waiting for its pieces (${state.value.have}/${state.value.total}) - the built-in isles meanwhile` : ''))
@@ -77,7 +76,14 @@ watch(() => props.mine, check, { deep: true })
 
 <template>
   <div class="stage">
-    <World3D v-if="showing.kind === '3d'" :signals="signals" :active="active" :camera="camera" />
+    <World3D
+      v-if="showing.kind === '3d'"
+      :key="showing.id"
+      :world="showing.engine === 'glb' ? showing : null"
+      :signals="signals"
+      :active="active"
+      :camera="camera"
+    />
     <Slideshow v-else :pictures="pictures" :interval="config.seconds || 15" :shuffled="config.shuffle !== false" />
     <p v-if="waiting" class="waiting">{{ waiting }}</p>
     <MusicPlayer v-if="lead" v-show="false" :tracks="tracks" :enabled="music.enabled && active" :volume="music.volume" />
