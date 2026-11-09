@@ -1,0 +1,16 @@
+{
+  "slug": "memory-isles",
+  "title": "Isles of Memory",
+  "line": "Five isles joined by bridges of light - a shrine, a library, a garden, an observatory and a harbour - and the crystal walking between them",
+  "layout": "archipelago",
+  "camera": { "default": "director", "scale": 1 },
+  "glow": "#8fe6ff",
+  "pieces": [
+    { "file": "01-crystal-shrine-isle.glb", "role": "isle", "isle": "heart", "size": 22 },
+    { "file": "02-library-isle.glb", "role": "isle", "isle": "north", "size": 17 },
+    { "file": "03-garden-isle.glb", "role": "isle", "isle": "east", "size": 16 },
+    { "file": "04-observatory-isle.glb", "role": "isle", "isle": "west", "size": 15 },
+    { "file": "05-harbor-isle.glb", "role": "isle", "isle": "south", "size": 14 },
+    { "file": "06-small-islets.glb", "role": "prop", "size": 8, "at": [18, 9, 20] }
+  ]
+}
