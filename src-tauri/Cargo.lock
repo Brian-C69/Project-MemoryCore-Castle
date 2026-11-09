@@ -2320,6 +2320,7 @@ dependencies = [
  "tauri-plugin-global-shortcut",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
+ "windows-sys 0.60.2",
  "zip 2.6.1",
 ]
 

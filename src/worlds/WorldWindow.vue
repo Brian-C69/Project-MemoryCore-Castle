@@ -14,6 +14,10 @@ const config = ref(props.initial.config ?? {})
 const lead = ref(!!props.initial.lead)
 const music = reactive({ enabled: !!props.initial.music, volume: props.initial.volume ?? 0.5 })
 const visible = ref(true)
+// covered for ten minutes: the world is let go to free the memory, and comes back when seen
+const UNLOAD_MS = 10 * 60 * 1000
+const unloaded = ref(false)
+let unloadTimer = 0
 const mine = ref([])
 // this window has no session of its own: the crystal simply lives here
 const signals = reactive({ busy: false, asleep: false, sentAt: 0 })
@@ -26,17 +30,27 @@ function take(payload) {
   music.volume = payload.volume ?? music.volume
 }
 
+function seen(on) {
+  visible.value = on
+  clearTimeout(unloadTimer)
+  if (on) unloaded.value = false
+  else unloadTimer = setTimeout(() => (unloaded.value = true), UNLOAD_MS)
+}
+
 onMounted(async () => {
   stops.push(await listen('castle-world-config', (event) => take(event.payload)))
-  stops.push(await listen('world-visible', (event) => (visible.value = !!event.payload)))
+  stops.push(await listen('world-visible', (event) => seen(!!event.payload)))
   mine.value = await worldsMine().catch(() => [])
 })
-onBeforeUnmount(() => stops.forEach((stop) => stop()))
+onBeforeUnmount(() => {
+  clearTimeout(unloadTimer)
+  stops.forEach((stop) => stop())
+})
 </script>
 
 <template>
   <div class="world-window">
-    <WorldStage :config="config" :signals="signals" :mine="mine" :lead="lead" :music="music" :active="visible" />
+    <WorldStage v-if="!unloaded" :config="config" :signals="signals" :mine="mine" :lead="lead" :music="music" :active="visible" />
   </div>
 </template>
 

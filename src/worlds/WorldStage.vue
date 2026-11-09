@@ -99,7 +99,7 @@ watch(() => props.mine, check, { deep: true })
 .waiting {
   position: absolute;
   left: 50%;
-  bottom: 18px;
+  top: 18px; /* the bottom of a screen may sit under its taskbar */
   margin: 0;
   padding: 6px 14px;
   border-radius: 10px;

@@ -196,6 +196,56 @@ pub async fn world_identify(app: AppHandle, index: usize) -> Result<(), String> 
     Ok(())
 }
 
+/// The points a covered-check looks at: the middle and four points near the corners.
+pub fn probe_points(x: i32, y: i32, width: u32, height: u32) -> [(i32, i32); 5] {
+    let at = |fx: f64, fy: f64| (x + (width as f64 * fx) as i32, y + (height as f64 * fy) as i32);
+    [at(0.5, 0.5), at(0.2, 0.2), at(0.8, 0.2), at(0.2, 0.8), at(0.8, 0.8)]
+}
+
+/// Can the member see any of this world window? Hidden, minimised, or covered at every probe
+/// point by another window means no.
+#[cfg(windows)]
+fn seen(window: &tauri::WebviewWindow) -> bool {
+    use windows_sys::Win32::Foundation::{HWND, POINT};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetAncestor, WindowFromPoint, GA_ROOT};
+    if !window.is_visible().unwrap_or(false) || window.is_minimized().unwrap_or(false) {
+        return false;
+    }
+    let (Ok(own), Ok(pos), Ok(size)) = (window.hwnd(), window.outer_position(), window.outer_size()) else { return true };
+    let own = own.0 as HWND;
+    probe_points(pos.x, pos.y, size.width, size.height).iter().any(|&(x, y)| {
+        // SAFETY: plain Win32 queries with a point; no memory is handed over
+        let top = unsafe { GetAncestor(WindowFromPoint(POINT { x, y }), GA_ROOT) };
+        top == own
+    })
+}
+
+#[cfg(not(windows))]
+fn seen(window: &tauri::WebviewWindow) -> bool {
+    window.is_visible().unwrap_or(true) && !window.is_minimized().unwrap_or(false)
+}
+
+/// Every 1.5 s each world window learns whether it can be seen (`world-visible`), so a covered
+/// world stops drawing.
+pub fn watch_covered(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let mut last: std::collections::HashMap<String, bool> = std::collections::HashMap::new();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+            let windows: Vec<_> = app.webview_windows().into_iter().filter(|(name, _)| name.starts_with(PREFIX)).collect();
+            last.retain(|name, _| windows.iter().any(|(n, _)| n == name));
+            for (name, window) in windows {
+                let now = seen(&window);
+                if last.get(&name) != Some(&now) {
+                    let _ = app.emit_to(name.as_str(), "world-visible", now);
+                    last.insert(name, now);
+                }
+            }
+        }
+    });
+}
+
 /// At start: the screens the member left on come back.
 pub fn restore(app: &AppHandle) {
     let app = app.clone();
@@ -246,6 +296,14 @@ mod tests {
         let entries = vec![entry("A", 0, true, "3d/floating-isles"), entry("B", 1920, false, "2d/mine"), entry("C", 3840, true, "2d/mine")];
         let want = wanted(&entries, &screens, Some(0));
         assert_eq!(want.iter().map(|(i, _)| *i).collect::<Vec<_>>(), vec![2]);
+    }
+
+    #[test]
+    fn the_covered_check_looks_at_the_middle_and_near_each_corner() {
+        let points = probe_points(1920, 0, 1920, 1080);
+        assert_eq!(points[0], (2880, 540));
+        assert!(points.iter().all(|&(x, y)| (1920..3840).contains(&x) && (0..1080).contains(&y)));
+        assert_eq!(points.len(), 5);
     }
 
     #[test]

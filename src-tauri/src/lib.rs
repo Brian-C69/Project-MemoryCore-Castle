@@ -274,6 +274,7 @@ pub fn run() {
                 window.show()?;
             }
             world::restore(app.handle());
+            world::watch_covered(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {

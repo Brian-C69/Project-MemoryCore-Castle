@@ -35,3 +35,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 zip = { version = "2", default-features = false, features = ["deflate"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 tauri-plugin-updater = { version = "2", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+# the world windows ask which window is on top at a few points, to rest when covered
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
