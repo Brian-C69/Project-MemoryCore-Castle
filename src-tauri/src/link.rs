@@ -29,6 +29,8 @@ pub const LINK_FOLDER: &str = "link";
 pub const KNOCK: &str = "link";
 /// The names Castle itself keeps rows for.
 pub const HOSTED: [&str; 3] = ["main", "story", "room"];
+/// The protocol in plain words, written beside the board for any terminal of this memory.
+const README: &str = include_str!("../resources/link-readme.md");
 
 const QUIET_NEEDED: Duration = Duration::from_secs(5);
 const TYPED_NEEDED: Duration = Duration::from_secs(10);
@@ -300,6 +302,7 @@ pub fn tick(link: &Path, hosted: &[Hosted], room_in: bool, state: &mut LinkState
     for sub in ["here", "notes", "read"] {
         let _ = fs::create_dir_all(link.join(sub));
     }
+    write_if_changed(&link.join("README.md"), README);
     let here = link.join("here");
     // Castle's own rows: written while the session runs, removed when it does not
     for name in HOSTED {
@@ -536,6 +539,7 @@ mod tests {
         assert_eq!(*typed.borrow(), vec!["link".to_string()]);
         assert!(link.join("here/main.json").exists() && link.join("here/room.json").exists());
         assert!(!link.join("here/story.json").exists() && !link.join("here/project-x.json").exists());
+        assert!(fs::read_to_string(link.join("README.md")).unwrap().contains("Act **only** on its `word:` line"));
         let board = fs::read_to_string(link.join("board.md")).unwrap();
         assert!(board.contains("**project-y**") && board.contains("room -> main") && board.contains("fyi (no knock)"));
 

@@ -130,6 +130,13 @@ fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols
     if let Ok(dir) = app.path().resource_dir() {
         vars.push(("CASTLE_STYLES".into(), dir.join("styles").display().to_string()));
     }
+    // Castle's block in CLAUDE.md / AGENTS.md follows the Castle version (the Neural Link's lines
+    // reach a member who set up before them); the member's own words outside it are untouched
+    if room == Room::Main {
+        if let (Some(companion), Some(member)) = (settings.companion_name.as_deref(), settings.member_name.as_deref()) {
+            let _ = crate::setup::write_blocks(&folder, companion, member);
+        }
+    }
     let (output_event, exit_event) = room.events();
     let output = app.clone();
     let ending = app.clone();
