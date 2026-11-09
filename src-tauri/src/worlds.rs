@@ -197,6 +197,7 @@ pub fn worlds_mine(store: State<SettingsStore>) -> Vec<MyWorld> {
 
 #[tauri::command]
 pub fn world_new(name: String, description: String, layout: String, picture: Option<String>, store: State<SettingsStore>) -> Result<MyWorld, String> {
+    crate::rooms::need(&store, "world")?;
     let memory = memory_of(&store)?;
     create(&memory, &name, &description, &layout, picture.as_deref().map(Path::new))
 }
@@ -220,6 +221,7 @@ struct Progress {
 /// (`world-prepare` events). No session and no tokens: Castle runs the helper itself.
 #[tauri::command]
 pub async fn world_prepare(app: AppHandle, slug: String, store: State<'_, SettingsStore>) -> Result<(), String> {
+    crate::rooms::need(&store, "world")?;
     let dir = world_dir(&store, &slug)?;
     let helper = session::tools_folder(&app).join("castle-world.ps1");
     if !helper.is_file() {

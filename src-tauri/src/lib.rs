@@ -14,6 +14,7 @@ mod key;
 mod memory;
 mod pty;
 mod quota;
+mod rooms;
 mod screen;
 mod session;
 mod settings;
@@ -204,6 +205,7 @@ pub fn run() {
             world::world_apply,
             world::world_identify,
             quota::cli_quota,
+            rooms::rooms_apply,
             worlds::worlds_mine,
             worlds::world_new,
             worlds::world_delete,

@@ -177,6 +177,9 @@ pub fn terminal_start(
     story: State<StoryHost>,
 ) -> Result<TerminalView, String> {
     let room = Room::named(room.as_deref());
+    if room == Room::Story {
+        crate::rooms::need(&store, "story")?;
+    }
     let host = host(room, &main, &story);
     wake(&app, &store, host, room, cols, rows)?;
     Ok(view(&store, host, room))

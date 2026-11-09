@@ -139,6 +139,9 @@ impl Room {
 
 /// The member's room (who: "me" for their own key, "companion" for their companion's key).
 fn room_for(store: &SettingsStore, who: &str) -> Result<Room, RoomRefusal> {
+    if !store.get().room_on("chat") {
+        return Err(refusal("off", crate::rooms::off_line("chat")));
+    }
     let base = store.get().room_base_url.ok_or_else(|| refusal("notSetUp", "Add the room address in the CHAT room first."))?;
     let account = if who == "companion" { "room-companion" } else { "room" };
     let key = key::load(account).ok_or_else(|| {

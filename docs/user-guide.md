@@ -182,6 +182,10 @@ At the top: your companion's picture (or the glowing crystal), their name, and t
 
 A card with nothing to show yet says so in a friendly line - for example, a new memory's DIARY card reminds you to press **Save diary** after a talk.
 
+### Turning a room off
+
+In **Settings › Rooms** you can switch off any room you don't use (HOME always stays). Its tab disappears and nothing runs for it - STORY's session ends, WORLD's screens close, CHAT stops reading the room - but **nothing is removed**: turn it back on and everything is there as it was.
+
 ### Rooms that appear by themselves
 
 Some rooms only show in the top bar once your MemoryCore has that feature: **DIARY**, **PROJECTS** and **LIBRARY**. Install the feature (ask your companion), and the room appears within a minute.

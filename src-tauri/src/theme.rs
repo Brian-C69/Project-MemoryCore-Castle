@@ -220,11 +220,13 @@ pub fn folder_of(settings_folder: &Path, id: &str) -> PathBuf {
 
 #[tauri::command]
 pub fn theme_create(name: String, mood: String, picture: Option<String>, store: State<SettingsStore>) -> Result<String, String> {
+    crate::rooms::need(&store, "theme")?;
     create(&store.folder(), &name, &mood, picture.as_deref().map(Path::new))
 }
 
 #[tauri::command]
 pub fn theme_delete(id: String, store: State<SettingsStore>) -> Result<(), String> {
+    crate::rooms::need(&store, "theme")?;
     delete(&store.folder(), &id)
 }
 

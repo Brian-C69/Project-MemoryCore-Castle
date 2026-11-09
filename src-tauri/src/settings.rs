@@ -44,6 +44,10 @@ pub struct QuickAction {
     pub command: String,
 }
 
+/// The rooms the member may switch off in Settings (HOME is always on). Off = not available:
+/// the tab is gone and nothing runs for it, but nothing is removed.
+pub const ROOMS: [&str; 10] = ["theme", "apps", "diary", "projects", "library", "appearance", "studio", "story", "world", "chat"];
+
 pub const DEFAULT_WORLD: &str = "3d/floating-isles";
 pub const CAMERAS: [&str; 4] = ["director", "follow", "wide", "orbit"];
 pub const SHOTS: [&str; 5] = ["follow", "wide", "close", "orbit", "crane"];
@@ -175,6 +179,12 @@ pub struct Settings {
     /// The companion in the Foundation chat room: "off", "named" (answers when its name is
     /// said) or "joins" (joins in now and then).
     pub room_companion_mode: String,
+    /// Which rooms are available (every one in ROOMS, on by default).
+    pub rooms: std::collections::BTreeMap<String, bool>,
+}
+
+fn all_rooms_on() -> std::collections::BTreeMap<String, bool> {
+    ROOMS.iter().map(|r| (r.to_string(), true)).collect()
 }
 
 impl Default for Settings {
@@ -194,6 +204,7 @@ impl Default for Settings {
             quick_actions: Vec::new(),
             backup_after_diary: false,
             room_companion_mode: "off".into(),
+            rooms: all_rooms_on(),
         }
     }
 }
@@ -221,7 +232,14 @@ impl Settings {
             self.room_companion_mode = "off".into();
         }
         self.world.screens = std::mem::take(&mut self.world.screens).into_iter().map(WorldScreen::normalized).collect();
+        // every known room is listed (a missing one is on); unknown names go
+        self.rooms = ROOMS.iter().map(|r| (r.to_string(), self.rooms.get(*r).copied().unwrap_or(true))).collect();
         self
+    }
+
+    /// HOME is always on; any other room as the member set it.
+    pub fn room_on(&self, room: &str) -> bool {
+        room == "home" || self.rooms.get(room).copied().unwrap_or(true)
     }
 
     /// A plain reason when the settings cannot be kept, else None.
@@ -358,6 +376,7 @@ mod tests {
             quick_actions: vec![QuickAction { label: "Plan my day".into(), command: "plan my day".into() }],
             backup_after_diary: true,
             room_companion_mode: "named".into(),
+            rooms: { let mut r = all_rooms_on(); r.insert("story".into(), false); r },
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));
@@ -442,6 +461,22 @@ mod tests {
         assert!(!is_world_id("my/-x"));
         assert!(!is_world_id("5d/x"));
         assert!(!is_world_id("crystal-isle"));
+    }
+
+    #[test]
+    fn every_room_starts_on_home_cannot_be_off_and_unknown_rooms_go() {
+        let fresh = Settings::default();
+        assert!(ROOMS.iter().all(|r| fresh.room_on(r)));
+        let mut rooms = std::collections::BTreeMap::new();
+        rooms.insert("story".to_string(), false);
+        rooms.insert("home".to_string(), false);
+        rooms.insert("spaceship".to_string(), true);
+        let s = Settings { rooms, ..Settings::default() }.normalized();
+        assert!(!s.room_on("story"));
+        assert!(s.room_on("home"));
+        assert!(s.room_on("world"), "a room missing from the file is on");
+        assert!(!s.rooms.contains_key("spaceship") && !s.rooms.contains_key("home"));
+        assert_eq!(s.rooms.len(), ROOMS.len());
     }
 
     #[test]

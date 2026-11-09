@@ -116,6 +116,7 @@ pub fn worlds(memory: &Path) -> Vec<World> {
 
 #[tauri::command]
 pub fn story_prepare(store: State<SettingsStore>) -> Result<String, String> {
+    crate::rooms::need(&store, "story")?;
     let s = store.get();
     let memory = s.memory_folder.clone().map(PathBuf::from).ok_or("No MemoryCore folder is chosen yet.")?;
     let member = s.member_name.clone().unwrap_or_else(|| "the member".into());

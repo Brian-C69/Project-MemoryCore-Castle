@@ -160,6 +160,7 @@ fn memory_of(store: &SettingsStore) -> Result<(PathBuf, String), String> {
 
 #[tauri::command]
 pub fn appearance_look(store: State<SettingsStore>) -> Result<Look, String> {
+    crate::rooms::need(&store, "appearance")?;
     let (memory, companion) = memory_of(&store)?;
     ensure(&memory, &companion).map_err(|_| "The appearance folder could not be created.".to_string())?;
     Ok(look(&memory))
@@ -167,6 +168,7 @@ pub fn appearance_look(store: State<SettingsStore>) -> Result<Look, String> {
 
 #[tauri::command]
 pub fn appearance_new(kind: String, name: String, description: String, store: State<SettingsStore>) -> Result<String, String> {
+    crate::rooms::need(&store, "appearance")?;
     let (memory, companion) = memory_of(&store)?;
     ensure(&memory, &companion).map_err(|_| "The appearance folder could not be created.".to_string())?;
     new_item(&memory, &kind, &name, &description)
@@ -174,6 +176,7 @@ pub fn appearance_new(kind: String, name: String, description: String, store: St
 
 #[tauri::command]
 pub fn appearance_wear(outfit: Option<String>, hair: Option<String>, store: State<SettingsStore>) -> Result<Look, String> {
+    crate::rooms::need(&store, "appearance")?;
     let (memory, _) = memory_of(&store)?;
     set_current(&memory, &Current { outfit, hair })?;
     Ok(look(&memory))

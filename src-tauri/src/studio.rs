@@ -139,6 +139,16 @@ pub fn notices_file() -> Option<PathBuf> {
     std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("MemoryCore Castle").join("notices.jsonl"))
 }
 
+/// The room a notice belongs to: a world prepare is WORLD's, a drawing for the companion's look
+/// (a file under appearance/) is APPEARANCE's, every other picture, video, song or voice STUDIO's.
+pub fn notice_room(notice: &serde_json::Value) -> &'static str {
+    if notice.get("kind").and_then(|k| k.as_str()) == Some("world") {
+        return "world";
+    }
+    let file = notice.get("file").and_then(|f| f.as_str()).unwrap_or("").replace('\\', "/").to_lowercase();
+    if file.contains("/appearance/") { "appearance" } else { "studio" }
+}
+
 /// Watches notices.jsonl and sends each new line to the page as a toast. Lines written before
 /// Castle started are not repeated.
 pub fn start_notice_watcher(app: &AppHandle) {
@@ -157,9 +167,13 @@ pub fn start_notice_watcher(app: &AppHandle) {
             }
             if let Ok(bytes) = std::fs::read(&path) {
                 let fresh = String::from_utf8_lossy(&bytes[offset as usize..]).to_string();
+                let settings = app.state::<SettingsStore>().get();
                 for line in fresh.lines().filter(|l| !l.trim().is_empty()) {
                     if let Ok(notice) = serde_json::from_str::<serde_json::Value>(line) {
-                        let _ = app.emit(NOTICE_EVENT, notice);
+                        // a room switched off in Settings holds its notices back (the line stays in the file)
+                        if settings.room_on(notice_room(&notice)) {
+                            let _ = app.emit(NOTICE_EVENT, notice);
+                        }
                     }
                 }
                 offset = len;
@@ -172,6 +186,14 @@ pub fn start_notice_watcher(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_notice_belongs_to_the_room_that_made_it() {
+        let n = |v: &str| serde_json::from_str::<serde_json::Value>(v).unwrap();
+        assert_eq!(notice_room(&n(r#"{"kind":"image","file":"D:\\Memory\\appearance\\wardrobe\\coat\\turnaround.prompt.md"}"#)), "appearance");
+        assert_eq!(notice_room(&n(r#"{"kind":"song","file":"D:\\Memory\\music\\a\\x.lyrics.md"}"#)), "studio");
+        assert_eq!(notice_room(&n(r#"{"kind":"world","file":"D:\\Memory\\worlds\\x\\hd"}"#)), "world");
+    }
 
     #[test]
     fn made_things_are_sorted_into_their_shelves() {

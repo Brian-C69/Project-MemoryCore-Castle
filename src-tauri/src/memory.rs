@@ -444,6 +444,9 @@ pub fn library_shelves(folder: &Path) -> Vec<Shelf> {
 /// A room's shelves: "diary", "projects" or "library".
 #[tauri::command]
 pub fn memory_shelves(room: String, store: tauri::State<crate::settings::SettingsStore>) -> Vec<Shelf> {
+    if !store.get().room_on(&room) {
+        return Vec::new();
+    }
     let Some(folder) = store.get().memory_folder.map(PathBuf::from) else { return Vec::new() };
     match room.as_str() {
         "diary" => diary_shelves(&folder),
@@ -457,7 +460,12 @@ pub fn memory_shelves(room: String, store: tauri::State<crate::settings::Setting
 /// folder, at most 2 MB.
 #[tauri::command]
 pub fn memory_read(file: String, store: tauri::State<crate::settings::SettingsStore>) -> Result<String, String> {
-    let folder = store.get().memory_folder.map(PathBuf::from).ok_or("No MemoryCore folder is chosen yet.")?;
+    // the reader of DIARY, PROJECTS, LIBRARY and STORY: refused only when all four are off
+    let s = store.get();
+    if !["diary", "projects", "library", "story"].iter().any(|r| s.room_on(r)) {
+        return Err(crate::rooms::off_line("diary"));
+    }
+    let folder = s.memory_folder.map(PathBuf::from).ok_or("No MemoryCore folder is chosen yet.")?;
     let path = crate::files::fenced_in(&folder, &file)?;
     if path.extension().and_then(|x| x.to_str()) != Some("md") {
         return Err("Only memory pages (.md) open here.".into());

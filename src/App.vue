@@ -65,7 +65,19 @@ watch(active, (room) => {
 // a file a HOME card asked to open in its room
 const roomFile = ref('')
 const memoryStamp = ref(0)
-const tabs = computed(() => allTabs.filter((tab) => !tab.needs || home.value?.features?.[tab.needs]))
+// rooms the member switched off in Settings are not available (never removed)
+const rooms = ref({})
+const tabs = computed(() =>
+  allTabs.filter((tab) => (!tab.needs || home.value?.features?.[tab.needs]) && (tab.id === 'home' || rooms.value[tab.id] !== false)),
+)
+// a room switched off closes: its tab goes, its mark clears, a kept-alive room unmounts
+watch(tabs, (list) => {
+  const ids = new Set(list.map((t) => t.id))
+  if (!ids.has(active.value)) active.value = 'home'
+  if (!ids.has('story')) storyOpened.value = false
+  if (!ids.has('chat')) chatOpened.value = false
+  marks.value = marks.value.filter((m) => ids.has(m))
+})
 const companion = ref('Your companion')
 const cli = ref('claude')
 const settingsStamp = ref(0)
@@ -86,6 +98,7 @@ async function loadSettingsAndTheme() {
     cliLabel.value = view.cliLabel
     memoryFolder.value = view.settings.memoryFolder ?? ''
     memberName.value = view.settings.memberName ?? ''
+    rooms.value = view.settings.rooms ?? {}
     if (!view.settings.setupDone) {
       setupOpen.value = true
       setupReopened.value = false
@@ -161,8 +174,10 @@ async function loadBackup() {
 // A project or diary card opens its page in the DIARY or PROJECTS room.
 function openMemoryFile(file) {
   if (!file) return
+  const room = file.startsWith('projects/') ? 'projects' : 'diary'
+  if (!tabs.value.some((t) => t.id === room)) return
   roomFile.value = file
-  active.value = file.startsWith('projects/') ? 'projects' : 'diary'
+  active.value = room
 }
 
 async function onBackupCard(mode) {

@@ -5,6 +5,7 @@ import { computed, onMounted, ref } from 'vue'
 import ModalSheet from '../components/ModalSheet.vue'
 import BackupPanel from '../components/BackupPanel.vue'
 import {
+  roomsApply,
   avatarClear,
   avatarGet,
   avatarSet,
@@ -34,6 +35,7 @@ const SECTIONS = [
   { id: 'companion', label: 'Companion' },
   { id: 'keys', label: 'Keys' },
   { id: 'quick', label: 'Quick actions' },
+  { id: 'rooms', label: 'Rooms' },
   { id: 'backup', label: 'Backup' },
   { id: 'startup', label: 'Start-up' },
   { id: 'about', label: 'About' },
@@ -52,6 +54,29 @@ const busy = ref('')
 const problem = ref('')
 const done = ref('')
 const newAction = ref({ label: '', command: '' })
+
+// The rooms that can be switched off (HOME always stays).
+const ROOM_SWITCHES = [
+  { id: 'theme', label: 'THEME' },
+  { id: 'apps', label: 'APPS' },
+  { id: 'diary', label: 'DIARY' },
+  { id: 'projects', label: 'PROJECTS' },
+  { id: 'library', label: 'LIBRARY' },
+  { id: 'appearance', label: 'APPEARANCE' },
+  { id: 'studio', label: 'STUDIO' },
+  { id: 'story', label: 'STORY' },
+  { id: 'world', label: 'WORLD' },
+  { id: 'chat', label: 'CHAT' },
+]
+
+async function switchRoom(id, on) {
+  await attempt('Saving…', async () => {
+    const rooms = await roomsApply({ ...settings.value.rooms, [id]: on })
+    settings.value = { ...settings.value, rooms }
+    done.value = on ? `${id.toUpperCase()} is back.` : `${id.toUpperCase()} is turned off - nothing was removed.`
+    emit('saved')
+  })
+}
 
 const shownKeys = computed(() => keys.value.filter((k) => !k.name.startsWith('room') && !(k.name === 'openai' && settings.value?.cli === 'codex')))
 
@@ -251,6 +276,16 @@ onMounted(async () => {
         <BackupPanel :companion="settings.companionName ?? 'your companion'" />
       </section>
 
+      <section v-else-if="tab === 'rooms'" class="pane">
+        <p class="hint">Turn off a room you don't use: its tab goes and nothing runs for it. Nothing is removed - turn it back on and everything is there as it was. HOME always stays.</p>
+        <div class="rooms">
+          <label v-for="r in ROOM_SWITCHES" :key="r.id" class="toggle">
+            <input type="checkbox" :checked="settings.rooms?.[r.id] !== false" :disabled="!!busy" @change="switchRoom(r.id, $event.target.checked)" /> {{ r.label }}
+          </label>
+        </div>
+        <p class="hint">Turning STORY off ends the story session; turning WORLD off closes the world screens; CHAT stops reading the room. Their files stay.</p>
+      </section>
+
       <section v-else-if="tab === 'startup'" class="pane">
         <label class="toggle"><input type="checkbox" :checked="settings.startWithWindows" @change="save({ startWithWindows: $event.target.checked })" /> Start Castle when Windows starts</label>
         <p v-if="view?.startupNote" class="hint">{{ view.startupNote }}</p>
@@ -275,6 +310,11 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.rooms {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px 16px;
+}
 .settings {
   display: flex;
   flex-direction: column;

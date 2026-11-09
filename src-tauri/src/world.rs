@@ -152,6 +152,7 @@ async fn apply(app: &AppHandle, entries: &[WorldScreen]) -> Result<(), String> {
 /// The WORLD room's whole list of screens: saved, then every window made to match.
 #[tauri::command]
 pub async fn world_apply(app: AppHandle, screens: Vec<WorldScreen>, store: State<'_, SettingsStore>) -> Result<Vec<WorldScreen>, String> {
+    crate::rooms::need(&store, "world")?;
     let mut next = store.get();
     next.world.screens = screens;
     let next = next.normalized();
@@ -246,11 +247,24 @@ pub fn watch_covered(app: &AppHandle) {
     });
 }
 
-/// At start: the screens the member left on come back.
+/// The WORLD room was switched off: every world window closes (the saved screens stay).
+pub fn close_all(app: &AppHandle) {
+    for (name, window) in app.webview_windows() {
+        if name.starts_with(PREFIX) {
+            let _ = window.close();
+        }
+    }
+}
+
+/// At start (or when the WORLD room is switched back on): the screens the member left on come back.
 pub fn restore(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let entries = app.state::<SettingsStore>().get().world.screens;
+        let settings = app.state::<SettingsStore>().get();
+        if !settings.room_on("world") {
+            return;
+        }
+        let entries = settings.world.screens;
         if entries.iter().any(|e| e.on) {
             if let Err(error) = apply(&app, &entries).await {
                 eprintln!("MemoryCore Castle: the world screens could not be restored: {error}");
