@@ -20,7 +20,13 @@ const devWorld = import.meta.env.DEV ? new URLSearchParams(location.search).get(
 const view = devWorld
   ? { view: 'world', screen: 0, lead: false, config: { world: devWorld, camera: new URLSearchParams(location.search).get('camera') || 'orbit', holdMin: 8, holdMax: 20, glide: 'mix', shots: ['follow', 'wide', 'close', 'orbit', 'crane'], seconds: 15, shuffle: true } }
   : window.__CASTLE_VIEW__
-if (view?.view === 'world') {
+// Dev only: ?stage=classic|cinema|book|messenger|jrpg shows the STORY stage with a sample beat.
+const devStage = import.meta.env.DEV ? new URLSearchParams(location.search).get('stage') : null
+if (devStage) {
+  import('./components/stage/StageDemo.vue').then(({ default: StageDemo }) =>
+    createApp(StageDemo, { look: devStage, faces: new URLSearchParams(location.search).get('faces') ?? '' }).mount('#app'),
+  )
+} else if (view?.view === 'world') {
   Object.assign(document.documentElement.style, { height: '100%', overflow: 'hidden' })
   Object.assign(document.body.style, { margin: '0', height: '100%', overflow: 'hidden', background: '#040817' })
   import('./worlds/WorldWindow.vue').then(({ default: WorldWindow }) => createApp(WorldWindow, { initial: view }).mount('#app'))

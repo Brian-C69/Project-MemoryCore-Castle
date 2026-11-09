@@ -276,6 +276,10 @@ async function poll() {
   status.value = answer.status
   answer.entries.filter((e) => e.path).forEach(loadMedia)
   answer.entries.filter((e) => e.pictures?.length).forEach((e) => e.pictures.forEach(loadPath))
+  // the STORY stage reads the story's replies too (its fallback when no beat card is written)
+  if (props.room === 'story' && !answer.reset) {
+    answer.entries.filter((e) => e.role === 'companion' && e.text).forEach((e) => window.dispatchEvent(new CustomEvent('castle-story-reply', { detail: e.text })))
+  }
   if (!answer.reset && live) {
     const newest = [...answer.entries].reverse().find((e) => e.role === 'voice')
     if (newest) {

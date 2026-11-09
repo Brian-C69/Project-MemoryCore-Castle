@@ -98,6 +98,7 @@ export const appearanceWear = (outfit, hair) => invoke('appearance_wear', { outf
 export const storyPrepare = () => invoke('story_prepare')
 // -> [{ id, name, status, chapter, parts, summary, scenes }]
 export const storyWorlds = () => invoke('story_worlds')
+export const storyBeat = (world) => invoke('story_beat', { world })
 
 // WORLD on the other screens. -> [{ index, name, width, height, isMain, open }]
 export const worldScreens = () => invoke('world_screens')
