@@ -11,6 +11,7 @@ mod commands;
 mod env;
 mod files;
 mod key;
+mod link;
 mod memory;
 mod pty;
 mod quota;
@@ -309,6 +310,7 @@ pub fn run() {
             world::restore(app.handle());
             world::watch_covered(app.handle());
             roomread::start(app.handle());
+            link::start(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {

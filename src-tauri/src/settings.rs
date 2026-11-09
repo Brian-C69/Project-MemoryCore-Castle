@@ -187,6 +187,10 @@ pub struct Settings {
     pub story_look: String,
     /// The last Castle version whose "What's new" the member was shown (None before the first launch).
     pub last_seen_version: Option<String>,
+    /// The Neural Link: the member's own terminals leave each other notes in <memory>/link/.
+    pub link_on: bool,
+    /// The room companion may pass the member's own words to the workspace (off until ticked).
+    pub room_may_pass: bool,
 }
 
 pub const STORY_LOOKS: [&str; 5] = ["classic", "cinema", "book", "messenger", "jrpg"];
@@ -216,6 +220,8 @@ impl Default for Settings {
             rooms: all_rooms_on(),
             story_look: "classic".into(),
             last_seen_version: None,
+            link_on: true,
+            room_may_pass: false,
         }
     }
 }
@@ -386,6 +392,8 @@ mod tests {
             rooms: { let mut r = all_rooms_on(); r.insert("story".into(), false); r },
             story_look: "jrpg".into(),
             last_seen_version: Some("0.2.0".into()),
+            link_on: false,
+            room_may_pass: true,
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));

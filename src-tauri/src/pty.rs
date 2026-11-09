@@ -136,6 +136,10 @@ pub struct PtyHost {
     scrollback: Arc<Mutex<Vec<u8>>>,
     /// When the current session started, and its id, so Chat can find its record.
     started: Mutex<Option<(u64, std::time::SystemTime)>>,
+    /// When the session last printed anything (the Neural Link knocks only into a quiet one).
+    last_output: Arc<Mutex<Option<std::time::Instant>>>,
+    /// When the member last typed into it.
+    last_input: Mutex<Option<std::time::Instant>>,
 }
 
 impl PtyHost {
@@ -172,6 +176,8 @@ impl PtyHost {
         };
         self.scrollback.lock().unwrap().clear();
         let scrollback = Arc::clone(&self.scrollback);
+        let last_output = Arc::clone(&self.last_output);
+        *last_output.lock().unwrap() = Some(std::time::Instant::now());
         let session = Session::spawn(
             command,
             cols,
@@ -185,6 +191,7 @@ impl PtyHost {
                         kept.drain(..excess);
                     }
                 }
+                *last_output.lock().unwrap() = Some(std::time::Instant::now());
                 on_output(text);
             },
             move |code| on_exit(id, code),
@@ -203,10 +210,33 @@ impl PtyHost {
     }
 
     pub fn write(&self, data: &[u8]) -> Result<(), String> {
+        *self.last_input.lock().unwrap() = Some(std::time::Instant::now());
+        self.write_quietly(data)
+    }
+
+    fn write_quietly(&self, data: &[u8]) -> Result<(), String> {
         match self.session.lock().unwrap().as_mut() {
             Some((_, session)) => session.write(data),
             None => Err("Your companion's session is not running.".into()),
         }
+    }
+
+    /// How the session looks to the Neural Link: running, how long quiet, how long since typing.
+    pub fn idle(&self) -> crate::link::Idle {
+        let since = |at: Option<std::time::Instant>| at.map(|t| t.elapsed()).unwrap_or(std::time::Duration::from_secs(3600));
+        crate::link::Idle {
+            running: self.is_running(),
+            quiet: since(*self.last_output.lock().unwrap()),
+            typed: since(*self.last_input.lock().unwrap()),
+        }
+    }
+
+    /// Types one word and Enter, the way a quick action does - Castle's knock, which never counts
+    /// as the member typing.
+    pub fn knock(&self, word: &str) -> Result<(), String> {
+        self.write_quietly(word.as_bytes())?;
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        self.write_quietly(b"\r")
     }
 
     pub fn resize(&self, cols: u16, rows: u16) -> Result<(), String> {
