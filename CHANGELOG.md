@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.1 - 2026-11-09
+
 - **Deep Space**, a new WORLD: a nebula and its stars drawn entirely by code - nothing to download - with fog that drifts as the camera orbits and a few sparkles flashing. Recipe by Ashran Helmi · ashranhelmi.com.
 - **The Neural Link**: your terminals leave each other notes in your memory folder's `link` folder, and Castle knocks on a quiet workspace when one waits. Tick one switch in Settings > Rooms and your companion in the chat room can pass your own words to your workspace - never a guest's - and say the answer back in its own words.
 - Your companion's **picture and name** in Settings now reach the chat room by themselves while it is let in - a large drawn portrait is shrunk to fit, a rename shows on its next line, and a refused picture is said in words.
