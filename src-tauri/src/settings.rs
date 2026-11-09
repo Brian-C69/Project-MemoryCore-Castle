@@ -55,11 +55,14 @@ pub struct WorldSettings {
     pub volume: f32,
     /// Extra picture folders for the 2D slideshow, beside the memory folder's own pictures.
     pub folders: Vec<String>,
+    /// What the 2D world shows: a built-in world's folder name (e.g. "isles-of-memory") or
+    /// "mine" for the pictures the companion made.
+    pub scene: String,
 }
 
 impl Default for WorldSettings {
     fn default() -> Self {
-        Self { mode: "3d".into(), music: true, volume: 0.5, folders: Vec::new() }
+        Self { mode: "3d".into(), music: true, volume: 0.5, folders: Vec::new(), scene: "isles-of-memory".into() }
     }
 }
 
@@ -133,6 +136,9 @@ impl Settings {
         }
         if !["off", "named", "joins"].contains(&self.room_companion_mode.as_str()) {
             self.room_companion_mode = "off".into();
+        }
+        if self.world.scene.trim().is_empty() || self.world.scene.contains(['/', '\\', '.']) {
+            self.world.scene = "isles-of-memory".into();
         }
         if self.world.mode != "2d" {
             self.world.mode = "3d".into();
@@ -264,7 +270,7 @@ mod tests {
             start_with_windows: true,
             start_session_on_launch: false,
             room_base_url: Some("https://example.test".into()),
-            world: WorldSettings { mode: "2d".into(), music: false, volume: 0.25, folders: vec!["D:\\Pictures".into()] },
+            world: WorldSettings { mode: "2d".into(), music: false, volume: 0.25, folders: vec!["D:\\Pictures".into()], scene: "mine".into() },
             setup_done: true,
             quick_actions: vec![QuickAction { label: "Plan my day".into(), command: "plan my day".into() }],
             backup_after_diary: true,

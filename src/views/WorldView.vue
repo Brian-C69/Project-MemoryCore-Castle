@@ -6,6 +6,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import Slideshow from '../world2d/Slideshow.vue'
 import MusicPlayer from '../world2d/MusicPlayer.vue'
 import { worldSignals } from '../world3d/signals.js'
+import { builtInWorlds } from '../world2d/worlds.js'
 import { getSettings, saveSettings, studioLibrary, worldClose, worldOpen, worldScreens } from '../api/castle.js'
 
 // three.js is large: it loads only when the 3D world is first shown
@@ -22,7 +23,12 @@ const screens = ref([])
 const problem = ref('')
 
 const mode = computed(() => settings.value?.world?.mode ?? '3d')
+const worlds = builtInWorlds()
+const scene = computed(() => settings.value?.world?.scene ?? 'isles-of-memory')
+// a built-in world's scenes, or the member's own: the theme wallpaper and what the companion drew
 const pictures = computed(() => {
+  const world = worlds.find((w) => w.id === scene.value)
+  if (world) return world.pictures
   const made = lib.value.images.map((m) => convertFileSrc(m.path))
   return props.wallpaper ? [props.wallpaper, ...made] : made
 })
@@ -59,8 +65,8 @@ async function toggleScreen(screen) {
   screens.value = await worldScreens()
 }
 
-// an open world on another screen follows the mode
-watch(mode, async (m) => {
+// an open world on another screen follows the mode and the chosen 2D world
+watch([mode, scene], async ([m]) => {
   for (const s of screens.value.filter((x) => x.open)) await worldOpen(s.index, m).catch(() => {})
 })
 
@@ -78,7 +84,11 @@ watch(() => props.active, (on) => on && load())
     <div class="controls widget">
       <div class="row">
         <button :class="{ primary: mode === '3d' }" @click="saveWorld({ mode: '3d' })">3D isles</button>
-        <button :class="{ primary: mode === '2d' }" @click="saveWorld({ mode: '2d' })">2D slideshow</button>
+        <button :class="{ primary: mode === '2d' }" @click="saveWorld({ mode: '2d' })">2D world</button>
+      </div>
+      <div v-if="mode === '2d'" class="row">
+        <button v-for="w in worlds" :key="w.id" :class="{ primary: scene === w.id }" @click="saveWorld({ scene: w.id })">{{ w.title }}</button>
+        <button :class="{ primary: scene === 'mine' }" @click="saveWorld({ scene: 'mine' })">My pictures</button>
       </div>
       <MusicPlayer
         v-if="mode === '2d' && settings"

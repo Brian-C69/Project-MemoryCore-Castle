@@ -4,7 +4,8 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import Slideshow from './Slideshow.vue'
-import { studioLibrary } from '../api/castle.js'
+import { getSettings, studioLibrary } from '../api/castle.js'
+import { builtInWorlds } from './worlds.js'
 
 const World3D = defineAsyncComponent(() => import('../world3d/World3D.vue'))
 
@@ -13,16 +14,20 @@ const mode = ref(props.initial.mode === '2d' ? '2d' : '3d')
 const lib = ref({ images: [] })
 // this window has no session of its own: the crystal simply lives here
 const signals = reactive({ busy: false, asleep: false, sentAt: 0 })
-const pictures = computed(() => lib.value.images.map((m) => convertFileSrc(m.path)))
+const scene = ref('isles-of-memory')
+const worlds = builtInWorlds()
+const pictures = computed(() => worlds.find((w) => w.id === scene.value)?.pictures ?? lib.value.images.map((m) => convertFileSrc(m.path)))
 
-function onMode(event) {
+async function onMode(event) {
   mode.value = event.detail === '2d' ? '2d' : '3d'
+  scene.value = (await getSettings().catch(() => null))?.settings.world?.scene ?? scene.value
 }
 
 onMounted(async () => {
   window.addEventListener('castle-world-mode', onMode)
   try {
     lib.value = await studioLibrary()
+    scene.value = (await getSettings()).settings.world?.scene ?? 'isles-of-memory'
   } catch {
     // no pictures
   }
