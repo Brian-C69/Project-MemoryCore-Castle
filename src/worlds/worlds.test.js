@@ -24,6 +24,7 @@ describe('the registry', () => {
     expect(ids).toContain('3d/crystal-isle')
     expect(ids).toContain('3d/memory-isles')
     expect(ids).toContain(DEFAULT_WORLD)
+    expect(ids).toContain('3d/deep-space')
     expect(ids).toContain('2d/isles-of-memory')
     expect(ids).toContain('2d/mine')
     expect(new Set(ids).size).toBe(ids.length)
@@ -94,5 +95,15 @@ describe('readiness', () => {
     expect(statusLine(crystal, { have: 0, total: 5, ready: false })).toBe('waiting · 0/5 · make in Tripo')
     expect(statusLine(crystal, { have: 5, total: 5, ready: true })).toBe('ready')
     expect(statusLine(findWorld(allWorlds(), '2d/isles-of-memory'))).toBe('ready · 6 pictures')
+  })
+})
+
+describe('Deep Space', () => {
+  it('is built in, always ready, and carries its credit', () => {
+    const space = findWorld(allWorlds(), '3d/deep-space')
+    expect(space.engine).toBe('space')
+    expect(space.kind).toBe('3d')
+    expect(statusLine(space, null)).toBe('ready · built in')
+    expect(space.line).toContain('recipe by Ashran Helmi · ashranhelmi.com')
   })
 })

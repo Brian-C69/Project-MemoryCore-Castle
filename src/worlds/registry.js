@@ -1,6 +1,7 @@
 // Every world Castle can show on a screen, in one list:
 //   3d/<slug>  a world made of model pieces (src/worlds/<slug>/world.json, pieces in public/worlds/<slug>/)
 //   3d/floating-isles  the isles built from geometry alone - always ready, the fallback
+//   3d/deep-space      a nebula and its stars drawn by code - always ready (recipe by Ashran Helmi)
 //   2d/<slug>  a built-in slideshow (src/world2d/worlds/<slug>/)
 //   2d/mine    the member's own pictures (theme wallpaper + what the companion drew)
 //   my/<slug>  a world the member created with their companion (<memory>/worlds/<slug>/)
@@ -22,6 +23,20 @@ export const PROCEDURAL = {
   line: 'Five little isles joined by bridges of light, the crystal wandering between them - built in, always ready',
   preview: '/worlds/floating-isles/preview.jpg',
   camera: { default: 'director', scale: 1 },
+  pieces: [],
+  source: 'built-in',
+}
+
+// Deep Space - recipe by Ashran Helmi · ashranhelmi.com (src/world3d/space.js).
+export const SPACE = {
+  id: '3d/deep-space',
+  kind: '3d',
+  engine: 'space',
+  title: 'Deep Space',
+  line: 'A nebula and its stars, drawn by code - recipe by Ashran Helmi · ashranhelmi.com',
+  credit: 'Recipe by Ashran Helmi · ashranhelmi.com',
+  preview: '/worlds/deep-space/preview.jpg',
+  camera: { default: 'orbit', scale: 1 },
   pieces: [],
   source: 'built-in',
 }
@@ -91,7 +106,7 @@ export function fromMine(item, convert) {
 
 // `mine` = the member's own created worlds (already entries, see fromMine).
 export function allWorlds(mine = []) {
-  return [...builtIn3d(), PROCEDURAL, ...mine, ...builtIn2d(), MY_PICTURES]
+  return [...builtIn3d(), PROCEDURAL, SPACE, ...mine, ...builtIn2d(), MY_PICTURES]
 }
 
 export const findWorld = (list, id) => list.find((w) => w.id === id) ?? null

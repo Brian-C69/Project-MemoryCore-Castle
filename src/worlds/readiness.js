@@ -38,7 +38,7 @@ export async function readinessOf(world, { fresh = false, fetcher } = {}) {
 
 export function statusLine(world, state) {
   if (!world) return ''
-  if (world.engine === 'procedural') return 'ready · built in'
+  if (world.engine === 'procedural' || world.engine === 'space') return 'ready · built in'
   if (world.engine === 'slideshow') return `ready · ${world.pictures?.length ?? 0} pictures`
   if (world.engine === 'mine') return 'your pictures'
   if (!state) return 'looking…'

@@ -14,6 +14,7 @@ import { ambienceFor, songTitle } from './ambience.js'
 
 // three.js is large: it loads only when a 3D world is shown
 const World3D = defineAsyncComponent(() => import('../world3d/World3D.vue'))
+const DeepSpace = defineAsyncComponent(() => import('../world3d/DeepSpace.vue'))
 
 const props = defineProps({
   // one WorldScreen: { world, camera, holdMin, holdMax, glide, shots, seconds, shuffle }
@@ -94,8 +95,9 @@ watch(() => props.mine, check, { deep: true })
 
 <template>
   <div class="stage">
+    <DeepSpace v-if="showing.engine === 'space'" :key="showing.id" :active="active" />
     <World3D
-      v-if="showing.kind === '3d'"
+      v-else-if="showing.kind === '3d'"
       :key="showing.id"
       :world="showing.engine === 'glb' ? showing : null"
       :signals="signals"
