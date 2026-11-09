@@ -88,7 +88,13 @@ fn get_settings(store: State<SettingsStore>) -> SettingsView {
 
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>) -> Result<SettingsView, String> {
-    let settings = settings.normalized();
+    let mut settings = settings.normalized();
+    // the companion's room key is Rust's to keep: a page holding an older copy never writes it back
+    {
+        let current = store.get();
+        settings.room_companion_key_id = current.room_companion_key_id;
+        settings.room_companion_name = current.room_companion_name;
+    }
     settings::save(&store.path, &settings).map_err(|_| "The settings could not be saved.".to_string())?;
     *store.startup_note.lock().unwrap() = startup::sync(&app, settings.start_with_windows);
     *store.current.lock().unwrap() = settings;

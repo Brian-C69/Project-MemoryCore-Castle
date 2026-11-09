@@ -128,6 +128,9 @@ export const roomAvatar = (token) => invoke('room_avatar', { token })
 export const roomMine = () => invoke('room_mine')
 // path = a picture the member chose, or null for back to their Google picture; companion = its picture
 export const roomFaceSet = (path, companion = false) => invoke('room_face_set', { path, companion })
+// after the companion's name or picture changes in Settings: the room is brought up to date
+// ({ inRoom, renamed, face }; inRoom false = the companion is not in the room, nothing to do)
+export const roomCompanionRefresh = () => invoke('room_companion_refresh')
 // Castle's room reader (it reads from the moment Castle starts)
 export const roomBacklog = () => invoke('room_backlog')
 export const roomVisible = (on) => invoke('room_visible', { on })

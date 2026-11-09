@@ -7,6 +7,7 @@ import { LOOKS } from '../components/stage/stage.js'
 import BackupPanel from '../components/BackupPanel.vue'
 import {
   roomsApply,
+  roomCompanionRefresh,
   avatarClear,
   avatarGet,
   avatarSet,
@@ -133,6 +134,13 @@ async function saveNames() {
   }
   const saved = await save({}, 'Names saved.')
   if (saved && s.memoryFolder) await attempt('Updating CLAUDE.md and AGENTS.md…', () => setupApply(s.memoryFolder, s.companionName, s.memberName, s.relationshipStyle ?? ''))
+  if (saved) await tellRoom('Names saved.')
+}
+
+// When the companion is in the chat room, its name and picture there follow Settings.
+async function tellRoom(message) {
+  const told = await attempt('Telling the room…', roomCompanionRefresh)
+  if (told?.inRoom) done.value = `${message} ${told.renamed ? 'The room shows the new name and picture.' : 'The room shows it too.'}`
 }
 
 async function switchCli(cli) {
@@ -143,13 +151,19 @@ async function switchCli(cli) {
 
 async function changeAvatar() {
   const path = await choosePicture('Choose a picture for your companion')
-  if (path) avatar.value = await attempt('Saving…', () => avatarSet(path))
+  if (!path) return
+  const saved = await attempt('Saving…', () => avatarSet(path))
+  if (saved) {
+    avatar.value = saved
+    await tellRoom('Picture saved.')
+  }
   emit('saved')
 }
 
 async function clearAvatar() {
   await attempt('Saving…', avatarClear)
   avatar.value = await avatarGet()
+  await tellRoom('Picture cleared.')
   emit('saved')
 }
 
@@ -231,6 +245,7 @@ onMounted(async () => {
         </div>
         <button class="primary" @click="saveNames">Save names</button>
         <p class="hint">Names already written in your memory files stay as they are - ask your companion to update the memory if you rename.</p>
+        <p class="hint">Your name in the chat room is your Foundation name (Library card > Profile). Your companion's name and picture here go to the room when it is let in.</p>
         <h3>Picture</h3>
         <div class="row">
           <div class="avatar"><img v-if="avatar" :src="avatar" alt="" /><span v-else>◆</span></div>
