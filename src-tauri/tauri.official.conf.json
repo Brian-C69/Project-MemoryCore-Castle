@@ -1,0 +1,16 @@
+{
+  "bundle": {
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJEMjFBREFEMjE0NzFDMUIKUldRYkhFY2hyYTBodlNCc25GMG9CUGk4TWZCcGhjWnMzUW5UQU4zT2VwYVRuWGpBdkF5ZXlXcXAK",
+      "endpoints": [
+        "https://github.com/Kiyoraka/Project-MemoryCore-Castle/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}
