@@ -11,6 +11,8 @@
     "build": "vite build",
     "test": "vitest run",
     "world:lighten": "node scripts/lighten-world.mjs",
+    "bump": "node scripts/bump.mjs",
+    "release:files": "node scripts/latest-json.mjs",
     "tauri": "tauri"
   },
   "dependencies": {

@@ -34,3 +34,6 @@ Project Resources
 src-tauri/tests/fixtures/memory-existing/adventures/
 src-tauri/tests/fixtures/memory-existing/appearance/
 src-tauri/tests/fixtures/memory-existing/worlds/
+
+# release files made by scripts/release.ps1 or the release workflow
+release-out/
