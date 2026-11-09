@@ -46,6 +46,8 @@ pub struct WorldConfig {
     pub view: &'static str,
     pub screen: usize,
     pub lead: bool,
+    pub music: bool,
+    pub volume: f32,
     pub config: WorldScreen,
 }
 
@@ -118,6 +120,7 @@ async fn apply(app: &AppHandle, entries: &[WorldScreen]) -> Result<(), String> {
     let monitors = app.available_monitors().map_err(|_| "The screens could not be read.".to_string())?;
     let want = wanted(entries, &boxes(&monitors), main_index(app, &monitors));
     let lead = want.first().map(|(i, _)| *i);
+    let sound = app.state::<SettingsStore>().get().world;
     for (name, window) in app.webview_windows() {
         let Some(index) = name.strip_prefix(PREFIX).and_then(|n| n.parse::<usize>().ok()) else { continue };
         if !want.iter().any(|(i, _)| *i == index) {
@@ -125,7 +128,7 @@ async fn apply(app: &AppHandle, entries: &[WorldScreen]) -> Result<(), String> {
         }
     }
     for (index, entry) in want {
-        let payload = WorldConfig { view: "world", screen: index, lead: Some(index) == lead, config: entry };
+        let payload = WorldConfig { view: "world", screen: index, lead: Some(index) == lead, music: sound.music, volume: sound.volume, config: entry };
         if let Some(existing) = app.get_webview_window(&label(index)) {
             let _ = app.emit_to(label(index), "castle-world-config", &payload);
             let _ = existing.show();
