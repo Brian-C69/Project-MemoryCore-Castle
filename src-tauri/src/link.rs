@@ -414,6 +414,9 @@ pub fn start(app: &tauri::AppHandle) {
             ];
             let room_in = settings.room_companion_key_id.is_some() && settings.room_companion_mode != "off" && settings.room_on("chat");
             tick(&link, &hosted, room_in, &mut state);
+            if room_in && !waiting(&link, "room").is_empty() {
+                crate::roomturn::workspace_waiting(&app);
+            }
         }
     });
 }
