@@ -10,7 +10,6 @@ use serde_json::Value;
 use std::time::Duration;
 use tauri::State;
 
-const ROOM_RULES: &str = include_str!("../resources/room-rules.md");
 const USER_AGENT: &str = concat!("MemoryCoreCastle/", env!("CARGO_PKG_VERSION"));
 
 /// What the page needs to know when a door says no - in words, with the kind of no.
@@ -372,13 +371,6 @@ pub async fn room_face_set(path: Option<String>, companion: bool, store: State<'
 pub async fn room_file(id: String, store: State<'_, SettingsStore>) -> Result<String, RoomRefusal> {
     let room = room_for(&store, "me")?;
     blocking(move || room.file(&id)).await
-}
-
-/// The rules the companion follows in the room, with the names filled in.
-#[tauri::command]
-pub fn room_rules(store: State<SettingsStore>) -> String {
-    let s = store.get();
-    ROOM_RULES.replace("{{AI_NAME}}", &s.companion_label()).replace("{{USER_NAME}}", s.member_name.as_deref().unwrap_or("the member"))
 }
 
 #[cfg(test)]

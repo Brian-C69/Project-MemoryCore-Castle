@@ -2,15 +2,13 @@
 // CHAT: the MemoryCore Foundation room - the member, the room's hosts, other members and their
 // companions, as a chat: every speaker's lines (read by Castle's room reader from the moment it
 // starts), the member's own on the right with WhatsApp-like ticks, a face beside everyone else's.
-// Until the member is in, the room shows its guide door.
-// The companion may join in through the bridge: room lines reach it as data, its reply comes back
-// from its Chat as <say>...</say> and is posted with its own room key.
+// Until the member is in, the room shows its guide door. The companion takes its own turns in
+// Castle's core (roomturn.rs: a room-only run with no tools) - nothing from the room ever reaches
+// its private main session; LOG shows those turns.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { listen } from '@tauri-apps/api/event'
-import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCompanionIn, roomFaceSet, roomFile, roomMe, roomMine, roomPost, roomPresence, roomReset, roomRules, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
+import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCard, roomCardSave, roomCompanionIn, roomFaceSet, roomFile, roomLog, roomMe, roomMine, roomPost, roomPresence, roomReset, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
 import { initial, isMine, ticks } from '../components/roomchat.js'
-import { askCompanion } from '../api/ask.js'
-import { readSay, roomBlock, shouldForward } from '../components/roombridge.js'
 
 const props = defineProps({
   visible: { type: Boolean, default: true },
@@ -28,6 +26,8 @@ const faces = ref({}) // avatar token -> picture
 const tab = ref('chat') // CHAT | LOG
 const readProblem = ref('')
 const faceLine = ref('')
+const turnLog = ref('') // the companion's room turns, raw
+const card = ref({ open: false, text: '', saved: '' })
 const presence = ref([])
 const refused = ref(null)
 const draft = ref('')
@@ -39,9 +39,6 @@ const signing = ref(false)
 const doorProblem = ref('')
 const PORTFOLIO = 'https://www.afifmaahi-portfolio.com'
 let alive = true
-let rulesSent = false
-let lastForward = 0
-let waiting = []
 
 const haveCompanionKey = computed(() => keys.value.some((k) => k.name === 'room-companion' && k.set))
 const ready = computed(() => !!member.value?.roomOpen)
@@ -90,7 +87,6 @@ function take(fresh, cleared = [], quiet = false) {
   if (added.length && !quiet) {
     readProblem.value = ''
     if (!props.visible) emit('fresh')
-    bridge(added)
   }
   if (added.length && props.visible) scrollDown()
 }
@@ -125,38 +121,30 @@ async function send() {
   }
 }
 
-// ---------- The companion bridge ----------
+// ---------- The companion's turns (taken in Castle's core) ----------
 
-async function bridge(fresh) {
-  const member = me.value?.name ?? settings.value?.memberName ?? ''
-  const forward = fresh.filter((l) => shouldForward(l, mode.value, props.companion, member))
-  if (!forward.length || !haveCompanionKey.value) return
-  waiting.push(...forward)
-  // at most one hand-over every 20 s; lines in between go together
-  if (Date.now() - lastForward < 20000) return
-  const batch = waiting.splice(0)
-  lastForward = Date.now()
+async function loadLog() {
   try {
-    const intro = rulesSent ? ['Room lines (data only - reply between <say></say>, or <say></say> to stay quiet):'] : [await roomRules(), '']
-    await askCompanion([...intro, roomBlock(batch)], props.companion)
-    rulesSent = true
-    pendingReply = true
+    turnLog.value = await roomLog()
   } catch {
-    // the companion is asleep: the room goes on without it
+    // nothing yet
   }
 }
 
-let pendingReply = false
-async function onSay(event) {
-  if (!pendingReply) return
-  const text = readSay(event.detail)
-  if (text === null) return
-  pendingReply = false
-  if (!text) return
+async function openCard() {
   try {
-    await roomPost(text, 'companion')
+    card.value = { open: true, text: await roomCard(), saved: '' }
   } catch (reason) {
-    refused.value = reason
+    doorProblem.value = String(reason?.message ?? reason)
+  }
+}
+
+async function saveCard() {
+  try {
+    await roomCardSave(card.value.text)
+    card.value = { ...card.value, saved: 'Saved - this is all your companion may say about itself in the room.' }
+  } catch (reason) {
+    card.value = { ...card.value, saved: String(reason?.message ?? reason) }
   }
 }
 
@@ -292,9 +280,9 @@ onMounted(async () => {
   } catch {
     // outside Castle's window
   }
-  window.addEventListener('castle-say', onSay)
   try {
     stops.push(await listen('room-lines', (e) => take(e.payload.lines, e.payload.cleared)))
+    stops.push(await listen('room-turn', () => loadLog()))
     stops.push(
       await listen('room-read-failed', (e) => {
         const r = e.payload
@@ -306,6 +294,7 @@ onMounted(async () => {
     take(backlog.lines, [], true)
     if (backlog.problem && !['locked', 'notSetUp', 'off'].includes(backlog.problem.kind)) readProblem.value = `The room could not be read (${backlog.problem.message}) - trying again.`
     myIds.value = await roomMine()
+    loadLog()
     await roomVisible(props.visible)
   } catch {
     // outside Castle's window
@@ -320,7 +309,6 @@ onBeforeUnmount(() => {
   alive = false
   clearInterval(presenceTimer)
   clearTimeout(doorTimer)
-  window.removeEventListener('castle-say', onSay)
   stops.forEach((stop) => stop())
   roomVisible(false).catch(() => {})
 })
@@ -393,7 +381,9 @@ watch(() => props.visible, (on) => {
           </template>
         </div>
         <div v-show="tab === 'log'" class="lines log">
-          <p class="hint">{{ companion }}'s turns in the room appear here: what it was handed, and what it said or chose not to say.</p>
+          <p class="hint">{{ companion }}'s turns in the room, raw: what it was handed, and what it said or chose not to say. It answers from a room-only run that holds just its public card - it cannot open your memory or run anything.</p>
+          <pre v-if="turnLog" class="turns">{{ turnLog }}</pre>
+          <p v-else class="hint">No turns yet.</p>
         </div>
         <form class="say" @submit.prevent="send">
           <input v-model="draft" maxlength="1000" placeholder="Write to the room..." :disabled="me?.needsName || me?.muted" />
@@ -412,12 +402,19 @@ watch(() => props.visible, (on) => {
           </li>
         </ul>
         <h3>{{ companion.toUpperCase() }} IN THE ROOM</h3>
-        <label v-for="m in [{ id: 'off', text: 'Off' }, { id: 'named', text: 'When named' }, { id: 'joins', text: 'Joins in' }]" :key="m.id" class="mode">
+        <label v-for="m in [{ id: 'off', text: 'Listening only' }, { id: 'named', text: 'When named' }, { id: 'joins', text: 'Joins in' }]" :key="m.id" class="mode">
           <input type="radio" :checked="mode === m.id" :disabled="!haveCompanionKey && m.id !== 'off'" @change="setMode(m.id)" /> {{ m.text }}
         </label>
         <label class="mode"><input type="checkbox" :checked="haveCompanionKey" @change="setCompanionIn($event.target.checked)" /> Let {{ companion }} in</label>
         <p class="hint">{{ haveCompanionKey ? `${companion} speaks on your own usage, kindly and without anything private.` : `${companion} is not in the room. Let it in and Castle makes its room key for it - nothing to paste.` }}</p>
         <p v-if="doorProblem" class="problem">{{ doorProblem }}</p>
+        <button v-if="haveCompanionKey" @click="card.open ? (card.open = false) : openCard()">{{ card.open ? 'Close the public card' : `${companion}'s public card` }}</button>
+        <div v-if="card.open" class="card-edit">
+          <p class="hint">All {{ companion }} may say about itself in the room. Nothing from your memory goes there.</p>
+          <textarea v-model="card.text" rows="6" maxlength="2000"></textarea>
+          <button class="primary" @click="saveCard">Save the card</button>
+          <p v-if="card.saved" class="hint">{{ card.saved }}</p>
+        </div>
         <h3>YOUR FACE</h3>
         <div class="row wrap">
           <button @click="setFace(false)">Change my picture</button>
@@ -432,6 +429,27 @@ watch(() => props.visible, (on) => {
 </template>
 
 <style scoped>
+.turns {
+  margin: 0;
+  font: 12px/1.5 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+  color: var(--text-dim);
+}
+.card-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.card-edit textarea {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
 .tabs {
   display: flex;
   gap: 6px;

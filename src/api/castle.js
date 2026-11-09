@@ -120,7 +120,6 @@ export const roomCompanionIn = (on) => invoke('room_companion_in', { on })
 export const roomMe = () => invoke('room_me')
 export const roomLines = (after, wait) => invoke('room_lines', { after, wait })
 export const roomPresence = () => invoke('room_presence')
-// who: undefined for the member, 'companion' for the companion's own room key
 export const roomPost = (text, who) => invoke('room_post', { text, who })
 export const roomFile = (id) => invoke('room_file', { id })
 export const roomSeen = () => invoke('room_seen')
@@ -132,7 +131,10 @@ export const roomFaceSet = (path, companion = false) => invoke('room_face_set', 
 export const roomBacklog = () => invoke('room_backlog')
 export const roomVisible = (on) => invoke('room_visible', { on })
 export const roomReset = () => invoke('room_reset')
-export const roomRules = () => invoke('room_rules')
+// the companion's room turns and its public card
+export const roomLog = () => invoke('room_log')
+export const roomCard = () => invoke('room_card')
+export const roomCardSave = (text) => invoke('room_card_save', { text })
 
 // Updates (official builds only). -> { official, version, available, notes, message }
 export const updateCheck = () => invoke('update_check')
