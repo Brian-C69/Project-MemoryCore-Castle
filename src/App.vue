@@ -19,6 +19,7 @@ import WorldView from './views/WorldView.vue'
 import ChatRoomView from './views/ChatRoomView.vue'
 import SettingsView from './views/SettingsView.vue'
 import UpdateChip from './components/UpdateChip.vue'
+import QuotaGlow from './components/QuotaGlow.vue'
 import NoticeToasts from './components/NoticeToasts.vue'
 import { avatarGet, backupNow, backupStatus, getSettings, hideCastle, memoryHome, onBackupDone, onStoryOutput, userThemes } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
@@ -115,6 +116,9 @@ async function loadSettingsAndTheme() {
   } catch {
     // Built-in themes only.
   }
+  // dev only: ?theme=<id> shows a theme in a browser check
+  const devTheme = import.meta.env.DEV ? new URLSearchParams(location.search).get('theme') : null
+  if (devTheme) wanted = devTheme
   const all = [...builtInThemes(), ...fromUserFolders(folders).themes]
   const chosen = chooseTheme(all, wanted)
   theme.value = chosen.theme
@@ -236,6 +240,7 @@ watch(settingsStamp, () => {
     />
     <main class="screen">
       <div v-show="active === 'home'" class="home" :class="theme?.widgetStyle ?? 'glass'">
+        <QuotaGlow v-if="theme?.quotaGlow" :theme="theme" :visible="active === 'home'" />
         <TerminalPanel
           :settings-stamp="settingsStamp"
           :companion="companion"
