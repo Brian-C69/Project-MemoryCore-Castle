@@ -361,9 +361,10 @@ Offer a picture at the start of a chapter, a boss entrance, a finisher, or any m
 The stage shows a face for each speaker. When the hero or an NPC first matters, offer a portrait (cost first, as always) with the style in `%CASTLE_STYLES%\story-cast.md`:
 
 ```
-& "$env:CASTLE_TOOLS\castle-image.ps1" -Prompt "<filled story-cast style>" -OutFile "<world>/cast/<name>.png" -Size 1024x1536 -Quality medium
+& "$env:CASTLE_TOOLS\castle-image.ps1" -Prompt "<filled story-cast style>" -OutFile "<world>/cast/<name>.png" -Size 1024x1536 -Quality medium -Transparent
 ```
 
+- With `CASTLE_IMAGE` = `codex`, draw it with your own image tool on a plain transparent (or flat light) background and save it to the same path.
 - `<name>` is the character's name as written in `setting.md`, lowercase with hyphens (`hero.png` for the hero, `old-mira.png`). Your own portrait is your standard appearance - Castle uses it without a new picture.
 - With no picture the stage shows the first letter in a circle, and the story goes on just the same.
 

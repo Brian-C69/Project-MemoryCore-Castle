@@ -18,6 +18,8 @@ param(
     [ValidateSet('1024x1024', '1024x1536', '1536x1024')][string]$Size = '1024x1024',
     [ValidateSet('low', 'medium', 'high')][string]$Quality = 'medium',
     [string]$Reference,
+    # a see-through background (cast portraits that stand over a scene); PNG only
+    [switch]$Transparent,
     [switch]$WhatIfCost
 )
 
@@ -73,13 +75,15 @@ if (-not $Reference) {
     # New picture: JSON body. gpt-image models always answer with b64_json, so
     # no response_format is sent (the endpoint rejects it for these models).
     $url = 'https://api.openai.com/v1/images/generations'
-    $body = ConvertTo-CastleJsonBytes @{
+    $request = @{
         model   = $Model
         prompt  = $Prompt
         size    = $Size
         quality = $Quality
         n       = 1
     }
+    if ($Transparent) { $request.background = 'transparent' }
+    $body = ConvertTo-CastleJsonBytes $request
     try {
         Assert-CastleNetworkAllowed $url
         $resp = Invoke-RestMethod -Uri $url -Method Post -Headers @{ Authorization = "Bearer $apiKey" } `
@@ -113,6 +117,7 @@ if (-not $Reference) {
         $form.Add((New-Object System.Net.Http.StringContent($Size)), 'size')
         $form.Add((New-Object System.Net.Http.StringContent($Quality)), 'quality')
         $form.Add((New-Object System.Net.Http.StringContent('1')), 'n')
+        if ($Transparent) { $form.Add((New-Object System.Net.Http.StringContent('transparent')), 'background') }
 
         $http = $client.PostAsync($url, $form).GetAwaiter().GetResult()
         $raw = $http.Content.ReadAsStringAsync().GetAwaiter().GetResult()
