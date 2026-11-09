@@ -1,0 +1,87 @@
+# The release: push a tag vX.Y.Z (after `npm run bump X.Y.Z` and a commit) and this builds the
+# official, signed Windows installer, publishes the GitHub release every installed Castle reads,
+# and tells the MemoryCore Foundation's site about it.
+#
+# Secrets (repository settings > Secrets and variables > Actions):
+#   TAURI_SIGNING_PRIVATE_KEY  the text of the private key made by `scripts/release.ps1 -Setup`
+#   PORTFOLIO_RELEASE_TOKEN    optional - the site's release token; without it that step is skipped
+# Variable (optional): PORTFOLIO_RELEASE_URL - where the release is sent (has a default)
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      PORTFOLIO_RELEASE_TOKEN: ${{ secrets.PORTFOLIO_RELEASE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag matches the version
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::The tag $GITHUB_REF_NAME does not match package.json ($version). Run npm run bump first."
+            exit 1
+          fi
+
+      - name: The signing key is there
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::The secret TAURI_SIGNING_PRIVATE_KEY is missing - add the private key's text in the repository settings."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+      - run: npm test
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Official build
+        env:
+          CASTLE_OFFICIAL: '1'
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        run: npm run tauri build -- --features official --config src-tauri/tauri.official.conf.json
+
+      - name: Release files
+        run: node scripts/latest-json.mjs
+
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release-out/*.exe release-out/*.sig release-out/latest.json \
+            --title "MemoryCore Castle ${GITHUB_REF_NAME#v}" --notes-file release-out/notes.md
+
+      - name: Tell the MemoryCore Foundation's site
+        if: env.PORTFOLIO_RELEASE_TOKEN != ''
+        continue-on-error: true
+        env:
+          PORTFOLIO_RELEASE_URL: ${{ vars.PORTFOLIO_RELEASE_URL }}
+        run: node scripts/tell-portfolio.mjs
