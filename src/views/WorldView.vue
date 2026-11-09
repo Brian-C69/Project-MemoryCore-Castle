@@ -1,144 +1,309 @@
 <script setup>
-// WORLD: the companion's world in 3D (floating isles, the crystal) or 2D (a slideshow of what the
-// companion made, with music), here and on the member's other screens.
-import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
-import { convertFileSrc } from '@tauri-apps/api/core'
-import Slideshow from '../world2d/Slideshow.vue'
-import MusicPlayer from '../world2d/MusicPlayer.vue'
-import { worldSignals } from '../world3d/signals.js'
-import { builtInWorlds } from '../world2d/worlds.js'
-import { getSettings, saveSettings, studioLibrary, worldApply, worldScreens } from '../api/castle.js'
-
-// three.js is large: it loads only when the 3D world is first shown
-const World3D = defineAsyncComponent(() => import('../world3d/World3D.vue'))
+// WORLD: a settings room. Each of the member's other screens can show a world - the isles, a
+// world made of model pieces, a slideshow - with its own camera, switched on or off here. No
+// world is drawn in this room unless the member asks for the preview.
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import WorldStage from '../worlds/WorldStage.vue'
+import { allWorlds, DEFAULT_WORLD, findWorld } from '../worlds/registry.js'
+import { readinessOf, statusLine } from '../worlds/readiness.js'
+import { CAMERAS } from '../world3d/director.js'
+import { getSettings, saveSettings, worldApply, worldIdentify, worldScreens, worldsMine } from '../api/castle.js'
 
 const props = defineProps({
   active: { type: Boolean, default: true },
-  wallpaper: { type: String, default: '' },
 })
+
+const VIEWS = [
+  { id: 'follow', title: 'Follow' },
+  { id: 'wide', title: 'Wide' },
+  { id: 'close', title: 'Close' },
+  { id: 'orbit', title: 'Orbit' },
+  { id: 'crane', title: 'Crane' },
+]
+const DEFAULTS = { world: DEFAULT_WORLD, camera: 'director', on: false, holdMin: 8, holdMax: 20, glide: 'mix', shots: VIEWS.map((v) => v.id), seconds: 15, shuffle: true }
+const REFRESH_MS = 10_000
 
 const settings = ref(null)
-const lib = ref({ images: [], songs: [] })
 const screens = ref([])
+const rows = ref([]) // { screen (ScreenInfo), entry (WorldScreen) }
+const mine = ref([])
+const states = ref({}) // world id -> { have, total, ready }
+const selected = ref(-1) // the row the cards pick for
+const previewId = ref('')
+const previewOpen = ref(false)
+const menu = ref(-1) // the row whose Settings menu is open
+const saved = ref('')
 const problem = ref('')
+let timer = 0
+let savedTimer = 0
 
-const mode = computed(() => settings.value?.world?.mode ?? '3d')
-const worlds = builtInWorlds()
-const scene = computed(() => settings.value?.world?.scene ?? 'isles-of-memory')
-// a built-in world's scenes, or the member's own: the theme wallpaper and what the companion drew
-const pictures = computed(() => {
-  const world = worlds.find((w) => w.id === scene.value)
-  if (world) return world.pictures
-  const made = lib.value.images.map((m) => convertFileSrc(m.path))
-  return props.wallpaper ? [props.wallpaper, ...made] : made
-})
-// Castle's own music first (Castle Theme for the 2D world, Floating Isles for the 3D world), then
-// the songs the companion made
-const AMBIENCE = {
-  '2d': [
-    { title: 'Castle Theme', url: '/ambience/castle-theme.mp3' },
-    { title: 'Castle Theme (second take)', url: '/ambience/castle-theme-v2.mp3' },
-  ],
-  '3d': [
-    { title: 'Floating Isles', url: '/ambience/floating-isles.mp3' },
-    { title: 'Floating Isles (second take)', url: '/ambience/floating-isles-v2.mp3' },
-  ],
+const worlds = computed(() => allWorlds(mine.value))
+const others = computed(() => rows.value.filter((r) => !r.screen.isMain))
+const pickRow = computed(() => rows.value[selected.value] ?? others.value[0] ?? null)
+const previewWorld = computed(() => findWorld(worlds.value, previewId.value) ?? findWorld(worlds.value, pickRow.value?.entry.world) ?? findWorld(worlds.value, DEFAULT_WORLD))
+const previewConfig = computed(() => ({ ...DEFAULTS, ...(pickRow.value?.entry ?? {}), world: previewWorld.value.id }))
+
+const shortName = (name) => String(name).replace(/^\\\\\.\\/, '')
+const ready = (w) => w.engine !== 'glb' || !!states.value[w.id]?.ready
+const optionLabel = (w) => (ready(w) ? w.title : `${w.title} (${states.value[w.id]?.have ?? 0}/${states.value[w.id]?.total ?? w.pieces.length})`)
+const kindOf = (id) => findWorld(worlds.value, id)?.kind ?? '3d'
+
+// The saved entry for a screen: the same name first, else the same size and place.
+function entryFor(screen, entries) {
+  return (
+    entries.find((e) => e.screen && e.screen === screen.name) ??
+    entries.find((e) => e.width === screen.width && e.height === screen.height && e.x === screen.x && e.y === screen.y)
+  )
 }
-const tracks = computed(() => [
-  ...AMBIENCE[mode.value],
-  ...lib.value.songs.map((m) => ({ title: m.name.replace(/\.[^.]+$/, '').replace(/^\d+-/, '').replace(/-/g, ' '), url: convertFileSrc(m.path) })),
-])
-const others = computed(() => screens.value.filter((s) => !s.isMain))
 
-async function load() {
+function buildRows(keepEdits = true) {
+  const entries = settings.value?.world?.screens ?? []
+  const before = keepEdits ? rows.value : []
+  rows.value = screens.value.map((screen) => {
+    const edited = before.find((r) => r.screen.name === screen.name)
+    const entry = edited?.entry ?? entryFor(screen, entries) ?? {}
+    return { screen, entry: { ...DEFAULTS, ...entry, screen: screen.name, width: screen.width, height: screen.height, x: screen.x, y: screen.y } }
+  })
+}
+
+async function checkWorlds(fresh = false) {
+  const next = { ...states.value }
+  await Promise.all(worlds.value.filter((w) => w.engine === 'glb').map(async (w) => (next[w.id] = await readinessOf(w, { fresh }))))
+  states.value = next
+}
+
+async function refresh({ fresh = false } = {}) {
   try {
     settings.value = (await getSettings()).settings
-    lib.value = await studioLibrary()
     screens.value = await worldScreens()
+    mine.value = await worldsMine().catch(() => [])
   } catch {
-    // outside Castle's window
+    return // outside Castle's window
+  }
+  buildRows(!fresh)
+  await checkWorlds(fresh)
+}
+
+// Every change goes out whole: the rows for the screens here, plus the saved ones for screens
+// that are unplugged right now (so they come back as they were).
+async function apply() {
+  problem.value = ''
+  const here = rows.value.map((r) => r.entry)
+  const away = (settings.value?.world?.screens ?? []).filter((e) => !rows.value.some((r) => r.screen.name === e.screen))
+  try {
+    const list = await worldApply([...here, ...away])
+    settings.value = { ...settings.value, world: { ...settings.value.world, screens: list } }
+    screens.value = await worldScreens()
+    buildRows(true)
+    saved.value = 'Saved'
+    clearTimeout(savedTimer)
+    savedTimer = setTimeout(() => (saved.value = ''), 4000)
+  } catch (reason) {
+    problem.value = String(reason)
   }
 }
 
-async function saveWorld(patch) {
+function change(row, patch) {
+  row.entry = { ...row.entry, ...patch }
+  if (row.entry.holdMin > row.entry.holdMax) [row.entry.holdMin, row.entry.holdMax] = [row.entry.holdMax, row.entry.holdMin]
+  apply()
+}
+
+function setWorld(row, id) {
+  const world = findWorld(worlds.value, id)
+  if (!world || !ready(world)) return
+  // a model world starts on its own camera (Crystal Isle: the slow orbit)
+  const camera = world.kind === '3d' && world.camera?.default ? world.camera.default : row.entry.camera
+  change(row, { world: id, camera })
+}
+
+function toggleView(row, id) {
+  const shots = row.entry.shots.includes(id) ? row.entry.shots.filter((s) => s !== id) : [...row.entry.shots, id]
+  if (shots.length) change(row, { shots })
+}
+
+function reset(row) {
+  change(row, { holdMin: DEFAULTS.holdMin, holdMax: DEFAULTS.holdMax, glide: DEFAULTS.glide, shots: [...DEFAULTS.shots], seconds: DEFAULTS.seconds, shuffle: true })
+}
+
+async function identify(row) {
+  problem.value = ''
+  try {
+    await worldIdentify(row.screen.index)
+  } catch (reason) {
+    problem.value = String(reason)
+  }
+}
+
+function pickCard(world) {
+  previewId.value = world.id
+  const row = pickRow.value
+  if (row && !row.screen.isMain && ready(world)) setWorld(row, world.id)
+}
+
+async function saveMusic(patch) {
   const next = { ...settings.value, world: { ...settings.value.world, ...patch } }
   try {
     settings.value = (await saveSettings(next)).settings
+    if (rows.value.some((r) => r.entry.on)) await apply() // the open screens hear it at once
   } catch (reason) {
     problem.value = String(reason)
   }
 }
 
-async function toggleScreen(screen) {
-  problem.value = ''
-  try {
-    const entry = { screen: screen.name, width: screen.width, height: screen.height, x: screen.x, y: screen.y, on: !screen.open, world: mode.value === '2d' ? `2d/${scene.value}` : '3d/floating-isles' }
-    await worldApply([entry])
-  } catch (reason) {
-    problem.value = String(reason)
-  }
-  screens.value = await worldScreens()
-}
-
-onMounted(load)
-watch(() => props.active, (on) => on && load())
+onMounted(() => {
+  refresh()
+  timer = setInterval(() => props.active && refresh(), REFRESH_MS)
+})
+onBeforeUnmount(() => {
+  clearInterval(timer)
+  clearTimeout(savedTimer)
+})
+watch(
+  () => props.active,
+  (on) => {
+    if (on) refresh()
+    else previewOpen.value = false
+  },
+)
 </script>
 
 <template>
-  <div class="world-room">
-    <div class="stage">
-      <World3D v-if="mode === '3d'" :signals="worldSignals" :active="active" />
-      <Slideshow v-else :pictures="pictures" :interval="12" />
+  <div class="world-room" @click="menu = -1">
+    <div class="panels">
+      <section class="widget screens">
+        <div class="bar">
+          <h2>YOUR SCREENS</h2>
+          <span class="spacer"></span>
+          <span v-if="saved" class="good">{{ saved }}</span>
+          <button @click="refresh({ fresh: true })">Look for screens</button>
+        </div>
+
+        <div v-for="(row, i) in rows" :key="row.screen.name" class="screen-row" :class="{ picked: pickRow === row && !row.screen.isMain }" @click="!row.screen.isMain && (selected = i)">
+          <span class="number">{{ row.screen.index + 1 }}</span>
+          <div class="who">
+            <strong>{{ shortName(row.screen.name) }}</strong>
+            <span class="hint">{{ row.screen.width }}×{{ row.screen.height }}{{ row.screen.primary ? ' · primary' : '' }}</span>
+          </div>
+          <template v-if="row.screen.isMain">
+            <span class="lives">Castle lives here</span>
+          </template>
+          <template v-else>
+            <label class="field">
+              <span>WORLD</span>
+              <select :value="row.entry.world" @change="setWorld(row, $event.target.value)">
+                <option v-for="w in worlds" :key="w.id" :value="w.id" :disabled="!ready(w)">{{ optionLabel(w) }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>CAMERA</span>
+              <select v-if="kindOf(row.entry.world) === '3d'" :value="row.entry.camera" @change="change(row, { camera: $event.target.value })">
+                <option v-for="c in CAMERAS" :key="c.id" :value="c.id">{{ c.title }}</option>
+              </select>
+              <select v-else disabled><option>Slideshow</option></select>
+            </label>
+            <button :class="{ primary: row.entry.on }" :title="row.entry.on ? 'Switch this screen off' : 'Show the world on this screen'" @click.stop="change(row, { on: !row.entry.on })">
+              {{ row.entry.on ? 'on' : 'off' }}
+            </button>
+            <button @click.stop="identify(row)">Identify</button>
+            <div class="menu-anchor">
+              <button @click.stop="menu = menu === i ? -1 : i">Settings ▾</button>
+              <div v-if="menu === i" class="menu widget" @click.stop>
+                <template v-if="kindOf(row.entry.world) === '3d'">
+                  <p class="menu-title">Each view holds</p>
+                  <div class="row">
+                    <input type="number" min="3" max="120" :value="row.entry.holdMin" @change="change(row, { holdMin: Math.max(3, Math.min(120, +$event.target.value || 8)) })" />
+                    <span>to</span>
+                    <input type="number" min="3" max="120" :value="row.entry.holdMax" @change="change(row, { holdMax: Math.max(3, Math.min(120, +$event.target.value || 20)) })" />
+                    <span>seconds</span>
+                  </div>
+                  <p class="menu-title">Between views</p>
+                  <div class="row">
+                    <label v-for="g in ['glide', 'cut', 'mix']" :key="g" class="choice"><input type="radio" :checked="row.entry.glide === g" @change="change(row, { glide: g })" /> {{ g }}</label>
+                  </div>
+                  <p class="menu-title">Views the director uses</p>
+                  <div class="row">
+                    <label v-for="v in VIEWS" :key="v.id" class="choice"><input type="checkbox" :checked="row.entry.shots.includes(v.id)" @change="toggleView(row, v.id)" /> {{ v.title }}</label>
+                  </div>
+                </template>
+                <template v-else>
+                  <p class="menu-title">Each picture stays</p>
+                  <div class="row">
+                    <input type="number" min="4" max="120" :value="row.entry.seconds" @change="change(row, { seconds: Math.max(4, Math.min(120, +$event.target.value || 15)) })" />
+                    <span>seconds</span>
+                  </div>
+                  <label class="choice"><input type="checkbox" :checked="row.entry.shuffle" @change="change(row, { shuffle: $event.target.checked })" /> Shuffle</label>
+                </template>
+                <div class="row end">
+                  <button @click="reset(row)">Reset to default</button>
+                  <button @click="menu = -1">Close</button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <p v-if="!others.length && rows.length" class="hint">Only one screen is connected. Plug in another screen to give it a world, or preview a world here.</p>
+        <p v-else-if="others.length" class="hint">Click a screen, then a world on the right to show it there.</p>
+        <p v-if="problem" class="problem">{{ problem }}</p>
+      </section>
+
+      <section class="widget worlds">
+        <div class="bar">
+          <h2>WORLDS</h2>
+        </div>
+        <div class="grid">
+          <article
+            v-for="w in worlds"
+            :key="w.id"
+            class="card"
+            :class="{ current: pickRow?.entry.world === w.id, waiting: !ready(w), chosen: previewWorld.id === w.id }"
+            @click="pickCard(w)"
+          >
+            <div class="preview" :style="w.preview ? { backgroundImage: `url(&quot;${w.preview}&quot;)` } : {}">
+              <span class="kind">{{ w.kind === '2d' ? '2D' : '3D' }}</span>
+            </div>
+            <strong>{{ w.title }}</strong>
+            <p class="desc">{{ w.line }}</p>
+            <p class="status">{{ statusLine(w, states[w.id]) }}</p>
+          </article>
+        </div>
+        <div class="row">
+          <button @click="previewOpen = !previewOpen">{{ previewOpen ? 'Close the preview' : 'Preview the picked world here' }}</button>
+        </div>
+      </section>
     </div>
 
-    <div class="controls widget">
-      <div class="row">
-        <button :class="{ primary: mode === '3d' }" @click="saveWorld({ mode: '3d' })">3D isles</button>
-        <button :class="{ primary: mode === '2d' }" @click="saveWorld({ mode: '2d' })">2D world</button>
-      </div>
-      <div v-if="mode === '2d'" class="row">
-        <button v-for="w in worlds" :key="w.id" :class="{ primary: scene === w.id }" @click="saveWorld({ scene: w.id })">{{ w.title }}</button>
-        <button :class="{ primary: scene === 'mine' }" @click="saveWorld({ scene: 'mine' })">My pictures</button>
-      </div>
-      <MusicPlayer
-        v-if="settings"
-        :tracks="tracks"
-        :enabled="settings.world.music && active"
-        :volume="settings.world.volume"
-        @update:enabled="saveWorld({ music: $event })"
-        @update:volume="saveWorld({ volume: $event })"
-      />
-      <p class="hint">Songs your companion makes play here too.</p>
-      <div v-if="others.length" class="row screens">
-        <span class="hint">Other screens:</span>
-        <button v-for="s in others" :key="s.index" :class="{ primary: s.open }" @click="toggleScreen(s)">
-          {{ s.open ? `Close on ${s.name}` : `Show on ${s.name}` }}
-        </button>
-      </div>
-      <p v-if="problem" class="problem">{{ problem }}</p>
-    </div>
+    <section class="widget music">
+      <h2>MUSIC</h2>
+      <template v-if="settings">
+        <button :class="{ primary: settings.world.music }" @click="saveMusic({ music: !settings.world.music })">{{ settings.world.music ? 'on' : 'off' }}</button>
+        <input type="range" min="0" max="1" step="0.05" :value="settings.world.volume" @change="saveMusic({ volume: +$event.target.value })" />
+        <span class="hint">Plays on the first screen showing a world: Castle's own music, then the songs your companion makes.</span>
+      </template>
+    </section>
+
+    <section v-if="previewOpen" class="widget preview-panel">
+      <WorldStage :config="previewConfig" :mine="mine" :active="active" />
+      <span class="preview-name">{{ previewWorld.title }}</span>
+    </section>
   </div>
 </template>
 
 <style scoped>
 .world-room {
   position: absolute;
-  inset: 0;
-}
-.stage {
-  position: absolute;
-  inset: 0;
-}
-.controls {
-  position: absolute;
-  left: 50%;
-  bottom: 22px;
+  inset: 24px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  align-items: center;
-  padding: 10px 16px;
-  transform: translateX(-50%);
+  gap: 16px;
+  overflow-y: auto;
+}
+.panels {
+  display: grid;
+  grid-template-columns: minmax(520px, 1fr) minmax(420px, 1fr);
+  gap: 16px;
+  align-items: start;
 }
 .widget {
   background: var(--panel-background);
@@ -146,21 +311,197 @@ watch(() => props.active, (on) => on && load())
   border-radius: 14px;
   backdrop-filter: blur(var(--glass-blur));
 }
+.screens,
+.worlds {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+}
+.bar,
 .row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
+.row.end {
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+.spacer {
+  flex: 1;
+}
+h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+}
+.screen-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.screen-row.picked {
+  border-color: var(--accent);
+}
+.number {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #07142e;
+  font-weight: 700;
+  align-self: center;
+}
+.who {
+  display: flex;
+  flex-direction: column;
+  min-width: 130px;
+  align-self: center;
+}
+.lives {
+  align-self: center;
+  font-style: italic;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+}
+select,
+input[type='number'] {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+select {
+  min-width: 170px;
+}
+input[type='number'] {
+  width: 64px;
+}
+.menu-anchor {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 5;
+  width: 300px;
+  padding: 12px 14px;
+  cursor: default;
+}
+.menu-title {
+  margin: 8px 0 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.choice {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 13px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.card.chosen {
+  border-color: var(--text-dim);
+}
+.card.current {
+  border-color: var(--accent);
+}
+.card.waiting .preview {
+  filter: grayscale(0.85) brightness(0.7);
+}
+.preview {
+  position: relative;
+  height: 110px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1b2050, #3a2a6a);
+  background-size: cover;
+  background-position: center;
+}
+.kind {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(4, 8, 23, 0.7);
+  font-size: 11px;
+}
+.desc,
+.status,
 .hint {
   margin: 0;
   font-size: 12px;
   color: var(--text-dim);
 }
+.status {
+  color: var(--accent);
+}
+.good {
+  font-size: 12px;
+  color: var(--good);
+}
 .problem {
   margin: 0;
   font-size: 12px;
   color: var(--warn);
+}
+.music {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 18px;
+}
+.preview-panel {
+  position: relative;
+  flex: 0 0 auto;
+  height: 460px;
+  overflow: hidden;
+}
+.preview-name {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: rgba(4, 8, 23, 0.6);
+  font-size: 12px;
 }
 button {
   padding: 6px 14px;
@@ -177,5 +518,10 @@ button.primary {
   border-color: var(--accent);
   color: #07142e;
   font-weight: 600;
+}
+@media (max-width: 1100px) {
+  .panels {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
