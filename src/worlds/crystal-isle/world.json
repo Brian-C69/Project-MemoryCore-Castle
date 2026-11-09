@@ -3,13 +3,18 @@
   "title": "Crystal Isle",
   "line": "One great isle above the clouds, its crystal glowing in a ring of stone, three islets drifting round it",
   "layout": "centrepiece",
-  "camera": { "default": "orbit", "scale": 3 },
+  "camera": {
+    "default": "orbit",
+    "scale": 2,
+    "orbit": { "radius": 62, "height": 17 },
+    "wide": { "radius": 105, "height": 38 }
+  },
   "glow": "#7fd8ff",
   "pieces": [
     { "file": "01-crystal-isle-base.glb", "role": "base", "size": 40, "at": [0, 0, 0] },
-    { "file": "02-great-crystal.glb", "role": "companion", "size": 9 },
-    { "file": "03-orbit-islet-tree.glb", "role": "islet", "size": 9, "orbit": { "radius": 38, "height": -4, "lap": 240, "phase": 0 } },
-    { "file": "04-orbit-islet-ruin.glb", "role": "islet", "size": 8, "orbit": { "radius": 54, "height": 2, "lap": 300, "phase": 2.1 } },
-    { "file": "05-orbit-islet-crystal.glb", "role": "islet", "size": 7, "orbit": { "radius": 46, "height": 8, "lap": 260, "phase": 4.2 } }
+    { "file": "02-great-crystal.glb", "role": "companion", "size": 13 },
+    { "file": "03-orbit-islet-tree.glb", "role": "islet", "size": 13, "orbit": { "radius": 36, "height": -6, "lap": 240, "phase": 0 } },
+    { "file": "04-orbit-islet-ruin.glb", "role": "islet", "size": 11, "orbit": { "radius": 48, "height": 5, "lap": 300, "phase": 2.1 } },
+    { "file": "05-orbit-islet-crystal.glb", "role": "islet", "size": 10, "orbit": { "radius": 42, "height": 13, "lap": 270, "phase": 4.2 } }
   ]
 }

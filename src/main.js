@@ -14,7 +14,12 @@ window.addEventListener('keydown', (event) => {
 
 // A window on another screen is told what it is before the page loads (world.rs):
 // { view: 'world', screen, lead, music, volume, config } or { view: 'identify', number }.
-const view = window.__CASTLE_VIEW__
+// Dev only: http://localhost:<port>/?world=3d/crystal-isle&camera=orbit draws one world in the
+// browser, for tuning a world.json by eye (MAKE-IT-YOURS, "A world of your own").
+const devWorld = import.meta.env.DEV ? new URLSearchParams(location.search).get('world') : null
+const view = devWorld
+  ? { view: 'world', screen: 0, lead: false, config: { world: devWorld, camera: new URLSearchParams(location.search).get('camera') || 'orbit', holdMin: 8, holdMax: 20, glide: 'mix', shots: ['follow', 'wide', 'close', 'orbit', 'crane'], seconds: 15, shuffle: true } }
+  : window.__CASTLE_VIEW__
 if (view?.view === 'world') {
   Object.assign(document.documentElement.style, { height: '100%', overflow: 'hidden' })
   Object.assign(document.body.style, { margin: '0', height: '100%', overflow: 'hidden', background: '#040817' })

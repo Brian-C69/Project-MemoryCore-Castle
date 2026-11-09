@@ -147,7 +147,7 @@ onMounted(async () => {
   if (gone) return
   if (!subject) buildWalkingIsles()
   applySignals()
-  rig = new CameraRig(world, subject, { scale: props.world?.camera?.scale ?? 1 })
+  rig = new CameraRig(world, subject, { scale: props.world?.camera?.scale ?? 1, framing: props.world?.camera ?? {} })
   rig.setSettings(props.camera)
   document.addEventListener('visibilitychange', syncRunning)
   syncRunning()

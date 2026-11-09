@@ -11,13 +11,15 @@ const GLIDE_S = 1.6
 export const onlyShot = (camera) => (camera && camera !== 'director' ? camera : null)
 
 export class CameraRig {
-  constructor(world, subject, { only = null, onShot, holdMin, holdMax, glide, shots, scale = 1, rand = Math.random } = {}) {
+  // `framing` lets a world set its own orbit and wide shots: { orbit: { radius, height }, wide: { radius, height } }
+  constructor(world, subject, { only = null, onShot, holdMin, holdMax, glide, shots, scale = 1, framing = {}, rand = Math.random } = {}) {
     this.world = world
     this.subject = subject
     this.only = only
     this.onShot = onShot
     this.hold = { holdMin, holdMax, glide, shots }
     this.scale = scale > 0 ? scale : 1
+    this.framing = framing ?? {}
     this.rand = rand
     this.shot = null
     this.left = 0
@@ -92,9 +94,11 @@ export class CameraRig {
         look.copy(centre)
         break
       case 'orbit': {
-        // a bigger world turns slower, so the edge never rushes past
-        const a = facing + (t * 0.16) / k
-        pos.set(at.x + Math.sin(a) * 9 * k, at.y + 3.2 * k, at.z + Math.cos(a) * 9 * k)
+        // the camera keeps one gentle walking pace, so a wider circle simply takes longer
+        const r = this.framing.orbit?.radius ?? 9 * k
+        const h = this.framing.orbit?.height ?? 3.2 * k
+        const a = facing + t * (1.44 / r)
+        pos.set(at.x + Math.sin(a) * r, at.y + h, at.z + Math.cos(a) * r)
         look.copy(centre)
         break
       }
@@ -105,7 +109,9 @@ export class CameraRig {
       case 'wide':
       default: {
         const a = this.wideAngle + t * 0.015
-        pos.set(at.x * 0.4 + Math.sin(a) * 62 * k, at.y + 22 * k, at.z * 0.4 + Math.cos(a) * 62 * k)
+        const r = this.framing.wide?.radius ?? 62 * k
+        const h = this.framing.wide?.height ?? 22 * k
+        pos.set(at.x * 0.4 + Math.sin(a) * r, at.y + h, at.z * 0.4 + Math.cos(a) * r)
         look.copy(at).multiplyScalar(0.5)
         look.y = at.y
         break
