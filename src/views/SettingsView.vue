@@ -357,6 +357,8 @@ onMounted(async () => {
         </p>
         <p class="hint">Free and open source under the MIT license. Change anything - see MAKE-IT-YOURS.md in the source.</p>
         <p class="hint">Castle checks GitHub for new versions, and talks to the MemoryCore Foundation only when you sign in or use CHAT. Your memory, keys and settings stay on this computer (and in your private backup, if you choose).</p>
+        <h3>Credits</h3>
+        <p class="hint">The Deep Space world - recipe by Ashran Helmi · ashranhelmi.com (Space Playbook, "Nebula &amp; Starfield").</p>
       </section>
 
       <footer>

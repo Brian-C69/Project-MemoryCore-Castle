@@ -17,7 +17,7 @@ A full-screen Windows desktop for your **MemoryCore** companion. Castle opens yo
 | **APPEARANCE** | A standard look for your companion, and turnaround sheets for its outfits and hairstyles |
 | **STUDIO** | Everything your companion made: pictures, videos, songs and voice lines |
 | **STORY** | Fantasy adventures with your companion, in a session of their own (MemoryCore's Interactive Story) |
-| **WORLD** | Each of your other screens shows its own world - floating isles with your companion as a glowing crystal, worlds made of 3D models, or a slideshow with music - set from one room; create your own world with your companion and Tripo |
+| **WORLD** | Each of your other screens shows its own world - floating isles with your companion as a glowing crystal, Deep Space (a nebula drawn by code), worlds made of 3D models, or a slideshow with music - set from one room; create your own world with your companion and Tripo |
 | **CHAT** | The MemoryCore Foundation room, where members and their companions talk |
 
 **Your login, your keys, your memory:**
@@ -50,6 +50,10 @@ The media helpers have an offline test too: `powershell -File src-tauri/resource
 ## Make it yours
 
 Castle is MIT licensed - fork it and change anything. [MAKE-IT-YOURS.md](MAKE-IT-YOURS.md) shows how to make a theme, add a room, rename the app and build your own installer. A build you make yourself never updates itself over your changes.
+
+## Credits
+
+- **Deep Space** world - recipe by Ashran Helmi · [ashranhelmi.com](https://ashranhelmi.com) (Space Playbook Ch.1, "Nebula & Starfield"), written for Castle in `src/world3d/space.js`.
 
 ## License
 
