@@ -57,6 +57,64 @@ pub struct World {
     pub summary: Option<String>,
     /// scene pictures (absolute paths), newest last
     pub scenes: Vec<String>,
+    /// the world folder (absolute) - a beat card's scene and voice paths are inside it
+    pub folder: String,
+    /// cast portraits: (name from the file, absolute path)
+    pub cast: Vec<CastMember>,
+    /// songs (absolute paths), an opening theme first
+    pub music: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CastMember {
+    /// "old-mira" -> "old mira"; matched to a speaker's name without case
+    pub name: String,
+    pub path: String,
+}
+
+fn pictures_in(dir: &Path) -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map(|e| {
+            e.flatten()
+                .map(|e| e.path())
+                .filter(|p| matches!(p.extension().and_then(|x| x.to_str()).map(|x| x.to_lowercase()).as_deref(), Some("png" | "jpg" | "jpeg" | "webp")))
+                .collect()
+        })
+        .unwrap_or_default();
+    found.sort();
+    found
+}
+
+fn songs_in(dir: &Path, found: &mut Vec<PathBuf>) {
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let p = entry.path();
+        if p.is_dir() {
+            songs_in(&p, found);
+        } else if p.extension().and_then(|x| x.to_str()).is_some_and(|x| x.eq_ignore_ascii_case("mp3")) {
+            found.push(p);
+        }
+    }
+}
+
+/// The newest beat card in <world>/stage/ that reads whole (a card still being written is skipped).
+pub fn newest_beat(world: &Path) -> Option<serde_json::Value> {
+    let mut cards: Vec<(u32, PathBuf)> = std::fs::read_dir(world.join("stage"))
+        .ok()?
+        .flatten()
+        .filter_map(|e| {
+            let p = e.path();
+            let stem = p.file_stem()?.to_str()?.to_string();
+            let n = stem.strip_prefix("beat-")?.parse::<u32>().ok()?;
+            (p.extension().and_then(|x| x.to_str()) == Some("json")).then_some((n, p))
+        })
+        .collect();
+    cards.sort_by(|a, b| b.0.cmp(&a.0));
+    cards.into_iter().find_map(|(_, p)| {
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(p).ok()?).ok()?;
+        v.get("lines").and_then(|l| l.as_array()).filter(|l| !l.is_empty())?;
+        Some(v)
+    })
 }
 
 fn field(text: &str, label: &str) -> Option<String> {
@@ -89,16 +147,19 @@ pub fn worlds(memory: &Path) -> Vec<World> {
                 let stem = p.file_stem().unwrap_or_default().to_string_lossy().to_string();
                 stem.rsplit('-').next().and_then(|n| n.parse::<u32>().ok()).unwrap_or(0)
             });
-            let mut scenes: Vec<PathBuf> = std::fs::read_dir(dir.join("scenes"))
-                .map(|e| {
-                    e.flatten()
-                        .map(|e| e.path())
-                        .filter(|p| matches!(p.extension().and_then(|x| x.to_str()).map(|x| x.to_lowercase()).as_deref(), Some("png" | "jpg" | "jpeg" | "webp")))
-                        .collect()
-                })
-                .unwrap_or_default();
-            scenes.sort();
+            let scenes = pictures_in(&dir.join("scenes"));
+            let cast = pictures_in(&dir.join("cast"))
+                .into_iter()
+                .map(|p| CastMember { name: p.file_stem().unwrap_or_default().to_string_lossy().replace(['-', '_'], " "), path: p.display().to_string() })
+                .collect();
+            let mut music = Vec::new();
+            songs_in(&dir.join("music"), &mut music);
+            // an opening theme first, then the rest by name
+            music.sort_by_key(|p| (!p.to_string_lossy().to_lowercase().contains("opening"), p.clone()));
             World {
+                folder: dir.display().to_string(),
+                cast,
+                music: music.iter().map(|p| p.display().to_string()).collect(),
                 status: field(&setting, "Status").unwrap_or_else(|| "In Progress".into()),
                 chapter: field(&setting, "Current Chapter"),
                 summary: dir.join("summary.md").is_file().then(|| rel(&dir.join("summary.md"))),
@@ -121,6 +182,17 @@ pub fn story_prepare(store: State<SettingsStore>) -> Result<String, String> {
     let memory = s.memory_folder.clone().map(PathBuf::from).ok_or("No MemoryCore folder is chosen yet.")?;
     let member = s.member_name.clone().unwrap_or_else(|| "the member".into());
     prepare(&memory, &s.companion_label(), &member).map(|p| p.display().to_string())
+}
+
+/// The newest beat card of one world, for the stage (None while there is none yet).
+#[tauri::command]
+pub fn story_beat(world: String, store: State<SettingsStore>) -> Result<Option<serde_json::Value>, String> {
+    crate::rooms::need(&store, "story")?;
+    if world.is_empty() || !world.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("That is not one of your worlds.".into());
+    }
+    let memory = store.get().memory_folder.map(PathBuf::from).ok_or("No MemoryCore folder is chosen yet.")?;
+    Ok(newest_beat(&memory.join(STORY_FOLDER).join(world)))
 }
 
 #[tauri::command]
@@ -174,6 +246,31 @@ mod tests {
         assert_eq!(list[0].parts, ["adventures/sky-kingdom/story/story-1.md", "adventures/sky-kingdom/story/story-2.md", "adventures/sky-kingdom/story/story-10.md"]);
         assert_eq!(list[0].scenes.len(), 1);
         assert_eq!(list[1].status, "Completed");
+        let _ = std::fs::remove_dir_all(memory);
+    }
+
+    #[test]
+    fn the_stage_gets_the_newest_whole_card_the_cast_and_the_opening_first() {
+        let memory = std::env::temp_dir().join(format!("castle-stage-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&memory);
+        let world = memory.join("adventures").join("sky-kingdom");
+        for sub in ["stage", "cast", "music/opening", "music/calm"] {
+            std::fs::create_dir_all(world.join(sub)).unwrap();
+        }
+        std::fs::write(world.join("setting.md"), "# The Sky Kingdom\n").unwrap();
+        std::fs::write(world.join("stage/beat-0001.json"), r#"{"beat":1,"lines":[{"speaker":"","text":"first"}],"choices":[]}"#).unwrap();
+        std::fs::write(world.join("stage/beat-0002.json"), r#"{"beat":2,"lines":[{"speaker":"Nova","text":"second"}],"choices":["a","b"]}"#).unwrap();
+        // a card still being written is skipped
+        std::fs::write(world.join("stage/beat-0003.json"), r#"{"beat":3,"lines":[{"speak"#).unwrap();
+        assert_eq!(newest_beat(&world).unwrap()["beat"], 2);
+        std::fs::write(world.join("cast/old-mira.png"), b"png").unwrap();
+        std::fs::write(world.join("music/calm/rest.mp3"), b"mp3").unwrap();
+        std::fs::write(world.join("music/opening/theme.mp3"), b"mp3").unwrap();
+        let list = worlds(&memory);
+        assert_eq!(list[0].cast, vec![CastMember { name: "old mira".into(), path: world.join("cast").join("old-mira.png").display().to_string() }]);
+        assert!(list[0].music[0].contains("opening"));
+        assert_eq!(list[0].music.len(), 2);
+        assert!(newest_beat(&memory.join("nowhere")).is_none());
         let _ = std::fs::remove_dir_all(memory);
     }
 }

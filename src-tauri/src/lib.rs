@@ -202,6 +202,7 @@ pub fn run() {
             appearance::appearance_wear,
             story::story_prepare,
             story::story_worlds,
+            story::story_beat,
             world::world_screens,
             world::world_apply,
             world::world_identify,
