@@ -1,0 +1,63 @@
+{
+  "id": "crystal",
+  "name": "The Crystal",
+  "description": "A great faceted memory crystal floats over a still lake at twilight; inside it, tiny glowing memories turn slowly.",
+  "wallpaper": "wallpaper.jpg",
+  "wallpaperPosition": "center",
+  "widgetStyle": "glass",
+  "portrait": "panel",
+  "colors": {
+    "--background": "#1a2350",
+    "--bar-background": "rgba(36, 50, 108, 0.55)",
+    "--panel-background": "rgba(58, 76, 150, 0.42)",
+    "--widget-background": "rgba(66, 86, 162, 0.38)",
+    "--line": "rgba(220, 230, 255, 0.40)",
+    "--text": "#f5f8ff",
+    "--text-dim": "#cdd6f2",
+    "--accent": "#a9d2ff",
+    "--hover": "rgba(190, 210, 255, 0.16)",
+    "--glass-blur": "14px"
+  },
+  "panel": {
+    "left": "1.6%",
+    "top": "3%",
+    "bottom": "3%",
+    "width": "30%"
+  },
+  "widgets": {
+    "clock": {
+      "right": "7%",
+      "top": "4%",
+      "size": "l"
+    },
+    "gauges": {
+      "right": "6%",
+      "top": "21%"
+    },
+    "today": {
+      "right": "2%",
+      "top": "38%",
+      "width": "28%"
+    },
+    "projects": {
+      "right": "2%",
+      "top": "calc(38% + 175px)",
+      "width": "28%"
+    },
+    "diary": {
+      "right": "2%",
+      "top": "calc(38% + 380px)",
+      "width": "28%"
+    },
+    "growth": {
+      "right": "2%",
+      "bottom": "4%",
+      "width": "28%"
+    },
+    "backup": {
+      "right": "31%",
+      "bottom": "4%",
+      "width": "16%"
+    }
+  }
+}

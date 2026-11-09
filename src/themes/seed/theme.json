@@ -1,0 +1,63 @@
+{
+  "id": "seed",
+  "name": "The Seed of Evolution",
+  "description": "A glowing seed in cupped soil sends up a young tree of light at sunrise; roots are the core, branches the features, leaves the days.",
+  "wallpaper": "wallpaper.jpg",
+  "wallpaperPosition": "center",
+  "widgetStyle": "glass",
+  "portrait": "panel",
+  "colors": {
+    "--background": "#0f2620",
+    "--bar-background": "rgba(10, 42, 36, 0.60)",
+    "--panel-background": "rgba(22, 64, 58, 0.50)",
+    "--widget-background": "rgba(26, 72, 64, 0.45)",
+    "--line": "rgba(200, 240, 220, 0.36)",
+    "--text": "#f4fbf4",
+    "--text-dim": "#c4dccf",
+    "--accent": "#8fe6c6",
+    "--hover": "rgba(160, 235, 205, 0.16)",
+    "--glass-blur": "14px"
+  },
+  "panel": {
+    "left": "1.6%",
+    "top": "3%",
+    "bottom": "3%",
+    "width": "31%"
+  },
+  "widgets": {
+    "clock": {
+      "right": "21%",
+      "top": "4%",
+      "size": "l"
+    },
+    "gauges": {
+      "right": "2%",
+      "top": "4%"
+    },
+    "today": {
+      "right": "2%",
+      "top": "22%",
+      "width": "28%"
+    },
+    "projects": {
+      "right": "2%",
+      "top": "calc(22% + 190px)",
+      "width": "28%"
+    },
+    "diary": {
+      "right": "2%",
+      "top": "calc(22% + 395px)",
+      "width": "28%"
+    },
+    "growth": {
+      "right": "2%",
+      "bottom": "4%",
+      "width": "28%"
+    },
+    "backup": {
+      "right": "31%",
+      "bottom": "4%",
+      "width": "16%"
+    }
+  }
+}
