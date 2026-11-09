@@ -1,8 +1,10 @@
 # Ambience
 
-The WORLD room's bundled ambience track goes in this folder (for example `ambience.mp3`).
-Everything in `public/` is copied into the app as-is, so the track is served at `/ambience/<file>`.
+Castle's own music, played in the WORLD room before the songs the member's companion makes.
 
-The track must be **CC0 or royalty-free with a licence that allows redistribution** in an MIT
-open-source app. Keep a note of where it came from and its licence next to it (for example
-`ambience.LICENSE.txt`). Do not add music you do not have the right to share.
+| File | Plays in | About |
+|------|----------|-------|
+| `castle-theme.mp3`, `castle-theme-v2.mp3` | the 2D world | Castle Theme - calm crystalline piano and music box (instrumental) |
+| `floating-isles.mp3`, `floating-isles-v2.mp3` | the 3D world | Floating Isles - airy ambient pads, wind chimes and harp (instrumental) |
+
+Made for MemoryCore Castle with Suno. To use other music, replace these files (keep the names) or change the list in `src/views/WorldView.vue` (`AMBIENCE`). Anything you add here ships with your build, so use music you have the rights to share.

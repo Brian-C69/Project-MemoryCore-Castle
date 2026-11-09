@@ -32,7 +32,22 @@ const pictures = computed(() => {
   const made = lib.value.images.map((m) => convertFileSrc(m.path))
   return props.wallpaper ? [props.wallpaper, ...made] : made
 })
-const tracks = computed(() => lib.value.songs.map((m) => ({ title: m.name.replace(/\.[^.]+$/, '').replace(/^\d+-/, '').replace(/-/g, ' '), url: convertFileSrc(m.path) })))
+// Castle's own music first (Castle Theme for the 2D world, Floating Isles for the 3D world), then
+// the songs the companion made
+const AMBIENCE = {
+  '2d': [
+    { title: 'Castle Theme', url: '/ambience/castle-theme.mp3' },
+    { title: 'Castle Theme (second take)', url: '/ambience/castle-theme-v2.mp3' },
+  ],
+  '3d': [
+    { title: 'Floating Isles', url: '/ambience/floating-isles.mp3' },
+    { title: 'Floating Isles (second take)', url: '/ambience/floating-isles-v2.mp3' },
+  ],
+}
+const tracks = computed(() => [
+  ...AMBIENCE[mode.value],
+  ...lib.value.songs.map((m) => ({ title: m.name.replace(/\.[^.]+$/, '').replace(/^\d+-/, '').replace(/-/g, ' '), url: convertFileSrc(m.path) })),
+])
 const others = computed(() => screens.value.filter((s) => !s.isMain))
 
 async function load() {
@@ -91,14 +106,14 @@ watch(() => props.active, (on) => on && load())
         <button :class="{ primary: scene === 'mine' }" @click="saveWorld({ scene: 'mine' })">My pictures</button>
       </div>
       <MusicPlayer
-        v-if="mode === '2d' && settings"
+        v-if="settings"
         :tracks="tracks"
         :enabled="settings.world.music && active"
         :volume="settings.world.volume"
         @update:enabled="saveWorld({ music: $event })"
         @update:volume="saveWorld({ volume: $event })"
       />
-      <p v-if="mode === '2d' && !tracks.length" class="hint">Songs your companion makes play here.</p>
+      <p class="hint">Songs your companion makes play here too.</p>
       <div v-if="others.length" class="row screens">
         <span class="hint">Other screens:</span>
         <button v-for="s in others" :key="s.index" :class="{ primary: s.open }" @click="toggleScreen(s)">
