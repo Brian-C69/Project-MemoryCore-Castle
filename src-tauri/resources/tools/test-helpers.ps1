@@ -144,7 +144,23 @@ foreach ($c in $cases) {
 $r = Invoke-Helper -Script 'castle-image.ps1' -Arguments @('-Prompt', 'restyle', '-OutFile', (Join-Path $out 'ref.png'), '-Reference', (Join-Path $out 'missing.png')) -SetEnv @{ CASTLE_IMAGE = 'openai'; OPENAI_API_KEY = $fakeKey }
 Report ($r.Code -eq 2) 'image: missing -Reference file exits 2' "exit $($r.Code): $($r.Out)"
 
-# 6) Unit checks on the shared functions.
+# 6) The world prepare helper: a missing piece is named, and no Node leaves a notice.
+$worldDir = Join-Path $root 'world'
+$hd = Join-Path $worldDir 'hd'
+New-Item -ItemType Directory -Path $hd -Force | Out-Null
+$manifest = Join-Path $worldDir 'world.json'
+[System.IO.File]::WriteAllText($manifest, '{"slug":"t","pieces":[{"file":"01-base.glb","role":"base","size":40},{"file":"02-crystal.glb","role":"companion","size":9}]}', (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllBytes((Join-Path $hd '01 my base export.glb'), [byte[]](0x67, 0x6C, 0x54, 0x46))
+$r = Invoke-Helper -Script 'castle-world.ps1' -Arguments @('-Prepare', '-Manifest', $manifest, '-In', $hd, '-Out', (Join-Path $worldDir 'pieces'))
+Report ($r.Code -eq 2 -and $r.Out -match '02-crystal\.glb' -and $r.Out -notmatch '01-base') 'world: a missing piece is named (exit 2)' "exit $($r.Code): $($r.Out)"
+[System.IO.File]::WriteAllBytes((Join-Path $hd '2.glb'), [byte[]](0x67, 0x6C, 0x54, 0x46))
+$before = Get-NoticeCount
+$r = Invoke-Helper -Script 'castle-world.ps1' -Arguments @('-Prepare', '-Manifest', $manifest, '-In', $hd, '-Out', (Join-Path $worldDir 'pieces')) -SetEnv @{ PATH = (Join-Path $env:SystemRoot 'System32') }
+$noticeOk = ((Get-NoticeCount) -eq $before + 1) -and ((Get-LastNotice).kind -eq 'world')
+Report ($r.Code -eq 3 -and $r.Out -match 'Node is not installed' -and $noticeOk) 'world: no Node exits 3 with a notice' "exit $($r.Code): $($r.Out)"
+Report (-not (Test-Path -LiteralPath (Join-Path $worldDir 'pieces'))) 'world: nothing written without Node'
+
+# 7) Unit checks on the shared functions.
 . (Join-Path $here 'castle-common.ps1')
 $leak = Protect-Secret 'HTTP 401 - Incorrect API key provided: sk-proj-AbCdEf1234567890XyZ. Authorization: Bearer abc.def.ghi xi-api-key: 0123456789abcdef'
 Report ($leak -notmatch 'sk-proj-AbCd' -and $leak -notmatch 'abc\.def\.ghi' -and $leak -notmatch '0123456789abcdef' -and $leak -match 'HTTP 401') 'common: Protect-Secret strips key-like text' $leak
