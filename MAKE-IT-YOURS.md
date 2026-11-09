@@ -61,6 +61,26 @@ To ship a theme **inside** your build, put its folder in `src/themes/<id>/` inst
 3. If it needs the computer (files, programs), add a Rust command in `src-tauri/src/` (see `memory.rs` for reading the memory folder safely with `files::fenced`), register it in `src-tauri/src/lib.rs` (`generate_handler!`), and call it from `src/api/castle.js`.
 4. A room that needs a MemoryCore feature can hide until it is installed: give its tab `needs: '<feature>'` and add the check to `src-tauri/src/memory.rs` (`features`).
 
+## 2b. A world of your own
+
+Members can create worlds from the WORLD room (see the user guide). To ship a 3D world **inside** your build:
+
+1. Make `src/worlds/<id>/world.json`:
+   ```json
+   {
+     "slug": "my-world", "title": "My World", "line": "One sentence for its card",
+     "layout": "centrepiece", "camera": { "default": "orbit", "scale": 3 }, "glow": "#8fe6ff",
+     "pieces": [
+       { "file": "01-base.glb", "role": "base", "size": 40 },
+       { "file": "02-heart.glb", "role": "companion", "size": 9 },
+       { "file": "03-islet.glb", "role": "islet", "size": 8, "orbit": { "radius": 40, "height": 2, "lap": 260, "phase": 0 } }
+     ]
+   }
+   ```
+   Roles: `base` (the great isle, its top at the world's floor), `companion` (stands at the heart and glows), `islet` (circles on its `orbit`), `isle` (an archipelago island standing in for one of the built-in isles: `"isle": "heart" | "north" | "east" | "west" | "south"`) and `prop` (at a fixed `at`). `size` is the piece's largest side in metres - pieces are sized by their bounding box, so any export scale works.
+2. Put your GLB exports, named by number, in a folder and run `npm run world:lighten -- <id> <folder>` (default folder: `Project Resources/Design/<id>/hd`). The prepared pieces land in `public/worlds/<id>/`; add a `preview.jpg` there for the card.
+3. The card turns *ready* when every piece is there. Anything you add here ships with your build, so use models you have the rights to share (Tripo's free plan publishes under CC BY 4.0; a paid plan owns its output).
+
 ## 3. Teach the companion something
 
 - Everything your companion is told about Castle lives in `src-tauri/resources/castle-block.md` (written into the memory's `CLAUDE.md` and `AGENTS.md` between `castle` markers).

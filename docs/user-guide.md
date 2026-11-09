@@ -317,18 +317,53 @@ When the story speaks while you are in another room, the **STORY** tab glows.
 
 ## 12. World
 
-**WORLD** is a little world for your companion, to watch while you work or rest.
+**WORLD** gives your other screens a world to show while you work or rest. The room itself is a settings page: no world is drawn in Castle's own window unless you ask for a preview.
 
-- **3D isles** - floating islands joined by bridges of light, under a sky that follows the real time and moon. Your companion is the glowing crystal: it brightens while it is working, dims while it rests, gives a small spin when you send it a message, and wanders between the isles when it is idle.
-- **2D slideshow** - your theme's wallpaper and every picture your companion has drawn, slowly drifting one into the next. Move the mouse for **Prev**, **Pause** and **Next**.
+### Your screens
 
-### Music (2D)
+Every screen connected to your computer has a row:
 
-The slideshow plays the songs your companion has made. Turn the music on or off and set the volume with the small player; Castle remembers your choice.
+- **WORLD** - which world this screen shows. A world still waiting for its pieces is greyed out and shows its count, for example *Crystal Isle (0/5)*.
+- **CAMERA** - how a 3D world is filmed: **Director - random views** (the camera picks a new view every few seconds), **Follow the crystal**, **Wide only** or **Slow orbit**. A 2D world simply says *Slideshow*.
+- **on / off** - show the world on that screen, or take it away. Every screen starts **off**.
+- **Identify** - shows a big number on that screen for a moment, so you know which row is which.
+- **Settings** - for a 3D world: how long each view holds (for example 8 to 20 seconds), whether the camera glides, cuts or mixes both between views, and which views the director may use. For a 2D world: how long each picture stays, and shuffle. **Reset to default** puts them back.
 
-### On your other screens
+The screen Castle itself is on says *Castle lives here*: it never gets a world window. Press **Look for screens** after plugging a screen in. Castle remembers each screen's world and brings it back the next time it opens, even if Windows renames the screen.
 
-If you have more than one screen, press **Show on <screen>** to fill that screen with the world (in the mode you chose). **Close on <screen>** takes it away. The world windows hide and come back together with Castle, and they rest while hidden so your computer stays cool.
+### The worlds
+
+The cards on the right are every world you can choose. Click a screen's row, then a card, to show that world there.
+
+- **Floating Isles** (3D, built in, always ready) - five little isles joined by bridges of light, under a sky that follows the real time and moon. Your companion is the glowing crystal: it brightens while it is working, dims while it rests, gives a small spin when you send it a message, and wanders between the isles when it is idle.
+- **Crystal Isle** and **Isles of Memory** (3D) - worlds made of 3D models. Until their pieces are in, their card says *waiting · 0/5 · make in Tripo*, and a screen set to them shows Floating Isles meanwhile.
+- **Isles of Memory** (2D) - six painted scenes as a slideshow.
+- **My pictures** (2D) - your theme's wallpaper and every picture your companion has drawn, slowly drifting one into the next.
+
+**Preview the picked world here** opens the world inside the room, so you can look before choosing - handy if you have only one screen. It closes when you leave the room.
+
+### Music
+
+The first screen showing a world plays the music: Castle's own (*Floating Isles* for 3D worlds, *Castle Theme* for 2D ones), then the songs your companion has made. Turn it on or off and set the volume in the **MUSIC** strip.
+
+### Resting
+
+The world windows hide and come back together with Castle. A world that is covered by another window stops drawing (and its music pauses) so your computer stays cool, and after ten minutes covered it lets go of its memory until you can see it again.
+
+### Create your own world
+
+You can describe a world and have your companion help you build it.
+
+1. Press **+ Create world**. Give it a name, say what it is like, and choose a layout:
+   - **One centrepiece** - a great floating isle with something glowing at its heart (your companion) and three islets circling slowly round it.
+   - **An archipelago** - five isles joined by bridges of light and a few small islets, with the crystal walking between them.
+
+   You can add a picture for the look.
+2. Press **Create and ask <companion>**. Castle makes the world's folder in your memory (`worlds/<name>/`) and asks your companion, through Chat, to polish the world's words and paint a concept picture and one picture of each piece. It tells you the cost first. Without an image key it writes one prompt per piece instead (`design/prompts.md`) so you can make the pictures anywhere.
+3. Make each picture into a 3D model in **Tripo** (tripo3d.ai) or any image-to-3D tool, and export it as a **GLB**. Name each export with its picture's number (`01.glb`, `02 my centrepiece.glb` ...) and put it in the world's **Tripo folder** - the button on its card opens it.
+4. When every piece is in, press **Prepare pieces**. Castle makes them light enough for your screens (fewer triangles, smaller textures) by itself - this needs **Node** (nodejs.org), which Claude Code and Codex already bring. Its card then says *ready*, and you can choose it for any screen.
+
+**Pictures** opens the companion's drawings, **Paint again** asks for new ones, and **Delete** (press twice) removes the world and its folder.
 
 ---
 

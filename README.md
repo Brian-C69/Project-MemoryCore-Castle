@@ -17,7 +17,7 @@ A full-screen Windows desktop for your **MemoryCore** companion. Castle opens yo
 | **APPEARANCE** | A standard look for your companion, and turnaround sheets for its outfits and hairstyles |
 | **STUDIO** | Everything your companion made: pictures, videos, songs and voice lines |
 | **STORY** | Fantasy adventures with your companion, in a session of their own (MemoryCore's Interactive Story) |
-| **WORLD** | Floating isles with your companion as a glowing crystal, or a slideshow with music - on any screen |
+| **WORLD** | Each of your other screens shows its own world - floating isles with your companion as a glowing crystal, worlds made of 3D models, or a slideshow with music - set from one room; create your own world with your companion and Tripo |
 | **CHAT** | The MemoryCore Foundation room, where members and their companions talk |
 
 **Your login, your keys, your memory:**
