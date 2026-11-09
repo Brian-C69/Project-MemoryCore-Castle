@@ -41,7 +41,7 @@ fn modified(path: &Path) -> Option<SystemTime> {
 
 /// Rollout files under `root` written since `floor`. A day folder that has not changed since
 /// `floor` cannot hold a new file, so older days are never opened.
-fn recent_rollouts(root: &Path, floor: SystemTime) -> Vec<(SystemTime, PathBuf)> {
+pub(crate) fn recent_rollouts(root: &Path, floor: SystemTime) -> Vec<(SystemTime, PathBuf)> {
     let mut found = Vec::new();
     let dirs = |p: &Path| -> Vec<PathBuf> {
         std::fs::read_dir(p).map(|e| e.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect()).unwrap_or_default()

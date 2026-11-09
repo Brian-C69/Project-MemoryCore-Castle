@@ -3,11 +3,11 @@
 // slideshow, or the member's own pictures. A model world that is still waiting for its pieces
 // shows the built-in isles with a small line saying so. Used by the world windows and by the
 // WORLD room's preview.
-import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import Slideshow from '../world2d/Slideshow.vue'
 import MusicPlayer from '../world2d/MusicPlayer.vue'
-import { studioLibrary } from '../api/castle.js'
+import { cliQuota, studioLibrary } from '../api/castle.js'
 import { DEFAULT_WORLD, allWorlds, builtIn2d, findWorld } from './registry.js'
 import { readinessOf } from './readiness.js'
 import { ambienceFor, songTitle } from './ambience.js'
@@ -31,6 +31,20 @@ const props = defineProps({
 
 const lib = ref({ images: [], songs: [] })
 const state = ref(null) // readiness of a model world
+// the weekly limit left on the member's CLI, 0..1 (null = unknown) - the crystal shines with it;
+// a dev page may try a level with ?energy=0.13
+const devEnergy = import.meta.env.DEV ? new URLSearchParams(location.search).get('energy') : null
+const energy = ref(devEnergy !== null ? Number(devEnergy) : null)
+let quotaTimer = 0
+async function readQuota() {
+  if (devEnergy !== null) return
+  try {
+    const q = await cliQuota()
+    energy.value = q ? q.leftPercent / 100 : null
+  } catch {
+    energy.value = null
+  }
+}
 
 const world = computed(() => findWorld(allWorlds(props.mine), props.config.world) ?? findWorld(allWorlds(), DEFAULT_WORLD))
 const showing = computed(() => {
@@ -62,8 +76,12 @@ async function check() {
   state.value = world.value.engine === 'glb' ? await readinessOf(world.value) : null
 }
 
+onBeforeUnmount(() => clearInterval(quotaTimer))
+
 onMounted(async () => {
   check()
+  readQuota()
+  quotaTimer = setInterval(readQuota, 5 * 60 * 1000)
   try {
     lib.value = await studioLibrary()
   } catch {
@@ -83,6 +101,7 @@ watch(() => props.mine, check, { deep: true })
       :signals="signals"
       :active="active"
       :camera="camera"
+      :energy="energy"
     />
     <Slideshow v-else :pictures="pictures" :interval="config.seconds || 15" :shuffled="config.shuffle !== false" />
     <p v-if="waiting" class="waiting">{{ waiting }}</p>

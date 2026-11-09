@@ -24,6 +24,8 @@ const props = defineProps({
   camera: { type: Object, default: () => ({ camera: 'director' }) },
   // a world made of model pieces (a registry entry with engine 'glb'), or null for the built-in isles
   world: { type: Object, default: null },
+  // the weekly limit left on the member's CLI, 0..1 (null = unknown): the crystal shines with it
+  energy: { type: Number, default: null },
 })
 const emit = defineEmits(['ready', 'unsupported'])
 
@@ -88,6 +90,7 @@ function applySignals() {
   if (!subject) return
   subject.setSpeaking(!!props.signals?.busy)
   subject.setResting(!!props.signals?.asleep)
+  subject.setEnergy?.(props.energy)
 }
 
 // The isles with the walking crystal; `models` / `extras` stand model pieces in for drawn isles.
@@ -154,7 +157,7 @@ onMounted(async () => {
   emit('ready')
 })
 
-watch(() => [props.signals?.busy, props.signals?.asleep], applySignals)
+watch(() => [props.signals?.busy, props.signals?.asleep, props.energy], applySignals)
 watch(
   () => props.signals?.sentAt,
   (value, old) => {

@@ -2,7 +2,9 @@
 // like a character - `play('idle' | 'walk' | 'wave')` - only faked by motion: a gentle bob, a lean
 // with a quicker bob, a spinning pulse. It brightens while speaking and dims while resting.
 import * as THREE from 'three'
+import { WARM, energyLook } from './energy.js'
 
+const WARM_COLOUR = new THREE.Color(WARM)
 const HOVER = 1.35 // metres above the ground the crystal floats
 const WAVE_S = 1.8
 
@@ -86,6 +88,16 @@ export class Crystal {
     this.now = { ...POSES.idle, glow: 0.6, hover: HOVER }
     this.phase = 0
     this.spinAngle = 0
+    this.energy = null
+    this.tint = this.colour.clone()
+  }
+
+  // The weekly limit left on the member's CLI (0..1, or null when unknown) - see energy.js.
+  setEnergy(value) {
+    this.energy = value
+  }
+  get energyFactor() {
+    return energyLook(this.energy).factor
   }
 
   get position() {
@@ -153,7 +165,13 @@ export class Crystal {
 
     // speaking flickers softly, like a voice
     const flicker = this.speaking ? 0.25 * Math.sin(t * 11) + 0.15 * Math.sin(t * 17.3) : 0
-    const glow = Math.max(0.05, now.glow + flicker + (pulse - 1) * 3)
+    const look = energyLook(this.energy)
+    const breath = look.pulse ? Math.sin(t * 1.2) * look.pulse : 0
+    const glow = Math.max(0.05, (now.glow + flicker + (pulse - 1) * 3 + breath) * look.factor)
+    this.tint.copy(this.colour).lerp(WARM_COLOUR, look.warm)
+    this.coreMaterial.emissive.copy(this.tint)
+    this.haloMaterial.color.copy(this.tint)
+    this.light.color.copy(this.tint)
     this.coreMaterial.emissiveIntensity = glow
     this.heartMaterial.opacity = Math.min(1, 0.35 + glow * 0.4)
     this.haloMaterial.opacity = Math.min(0.9, 0.15 + glow * 0.35)

@@ -6,6 +6,9 @@
 import * as THREE from 'three'
 import { cloudSea, motes, softDot } from './effects.js'
 import { orbitAt, surfaceY } from './glb.js'
+import { WARM, energyLook } from './energy.js'
+
+const WARM_COLOUR = new THREE.Color(WARM)
 
 const approach = (from, to, rate, dt) => from + (to - from) * Math.min(1, rate * dt)
 
@@ -44,6 +47,16 @@ export class GlowingPiece {
     this.waveLeft = 0
     this.glow = 0.6
     this.phase = 0
+    this.energy = null
+    this.tint = this.colour.clone()
+  }
+
+  // The weekly limit left on the member's CLI (0..1, or null when unknown) - see energy.js.
+  setEnergy(value) {
+    this.energy = value
+  }
+  get energyFactor() {
+    return energyLook(this.energy).factor
   }
 
   get position() {
@@ -78,8 +91,16 @@ export class GlowingPiece {
       pulse = Math.sin((1 - this.waveLeft / 2) * Math.PI) * 0.8
     }
     const flicker = this.speaking ? 0.25 * Math.sin(t * 11) + 0.15 * Math.sin(t * 17.3) : 0.08 * Math.sin(t * 1.3)
-    const glow = Math.max(0.05, this.glow + flicker + pulse)
-    for (const m of this.materials) if ('emissiveIntensity' in m) m.emissiveIntensity = glow
+    const look = energyLook(this.energy)
+    const breath = look.pulse ? Math.sin(t * 1.2) * look.pulse : 0
+    const glow = Math.max(0.05, (this.glow + flicker + pulse + breath) * look.factor)
+    this.tint.copy(this.colour).lerp(WARM_COLOUR, look.warm)
+    for (const m of this.materials) {
+      if ('emissiveIntensity' in m) m.emissiveIntensity = glow
+      if (m.emissive) m.emissive.copy(this.tint)
+    }
+    this.haloMaterial.color.copy(this.tint)
+    this.light.color.copy(this.tint)
     this.haloMaterial.opacity = Math.min(0.85, 0.2 + glow * 0.35)
     this.halo.scale.setScalar(this.height * (0.9 + glow * 0.35))
     this.light.intensity = 1 + glow * 4
@@ -169,7 +190,7 @@ export function buildCentrepiece(world, pieces, { glow = '#8fe6ff', seed = 7 } =
     })
     sea.update(t, sky)
     dust.update(t, g)
-    rising.update(t, 0.5 + g * 0.5)
+    rising.update(t, (0.5 + g * 0.5) * (subject.energyFactor ?? 1))
   })
 
   return {

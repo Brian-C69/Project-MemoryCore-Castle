@@ -13,6 +13,7 @@ mod files;
 mod key;
 mod memory;
 mod pty;
+mod quota;
 mod screen;
 mod session;
 mod settings;
@@ -202,6 +203,7 @@ pub fn run() {
             world::world_screens,
             world::world_apply,
             world::world_identify,
+            quota::cli_quota,
             worlds::worlds_mine,
             worlds::world_new,
             worlds::world_delete,

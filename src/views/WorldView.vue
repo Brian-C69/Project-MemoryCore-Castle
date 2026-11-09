@@ -10,7 +10,8 @@ import { CAMERAS } from '../world3d/director.js'
 import { loadMine } from '../worlds/mine.js'
 import { askCompanion } from '../api/ask.js'
 import { listen } from '@tauri-apps/api/event'
-import { chatMediaOpen, choosePicture, getSettings, saveSettings, worldApply, worldDelete, worldIdentify, worldNew, worldPrepare, worldScreens } from '../api/castle.js'
+import { quotaWords } from '../world3d/energy.js'
+import { chatMediaOpen, choosePicture, cliQuota, getSettings, saveSettings, worldApply, worldDelete, worldIdentify, worldNew, worldPrepare, worldScreens } from '../api/castle.js'
 
 const props = defineProps({
   active: { type: Boolean, default: true },
@@ -44,6 +45,13 @@ const told = ref('') // what happened after Create / Ask
 const progress = ref({}) // slug -> the prepare helper's last line
 const preparing = ref({}) // slug -> true while it runs
 const confirmDelete = ref('') // slug waiting for a second press
+const quota = ref(undefined) // undefined = not asked yet, null = unknown
+const cliName = computed(() => (settings.value?.cli === 'codex' ? 'Codex' : 'Claude Code'))
+const quotaLine = computed(() => {
+  if (quota.value === undefined) return ''
+  if (!quota.value) return `The crystal can't read your ${cliName.value} limit right now, so it keeps its normal glow.`
+  return `The crystal shines with your ${cliName.value} weekly limit: ${quotaWords(quota.value)}.`
+})
 let timer = 0
 let savedTimer = 0
 let stopProgress = null
@@ -93,6 +101,7 @@ async function refresh({ fresh = false } = {}) {
   }
   buildRows(!fresh)
   await checkWorlds(fresh)
+  quota.value = await cliQuota().catch(() => null)
 }
 
 // Every change goes out whole: the rows for the screens here, plus the saved ones for screens
@@ -421,6 +430,7 @@ watch(
         <input type="range" min="0" max="1" step="0.05" :value="settings.world.volume" @change="saveMusic({ volume: +$event.target.value })" />
         <span class="hint">Plays on the first screen showing a world: Castle's own music, then the songs your companion makes.</span>
       </template>
+      <p v-if="quotaLine" class="hint quota">{{ quotaLine }}</p>
     </section>
 
     <section v-if="previewOpen" class="widget preview-panel">
@@ -664,6 +674,9 @@ button.danger {
   gap: 12px;
   align-items: center;
   padding: 12px 18px;
+}
+.quota {
+  flex-basis: 100%;
 }
 .preview-panel {
   position: relative;
