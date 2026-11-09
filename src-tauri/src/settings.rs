@@ -183,6 +183,8 @@ pub struct Settings {
     pub rooms: std::collections::BTreeMap<String, bool>,
     /// How the STORY stage looks: one of STORY_LOOKS.
     pub story_look: String,
+    /// The last Castle version whose "What's new" the member was shown (None before the first launch).
+    pub last_seen_version: Option<String>,
 }
 
 pub const STORY_LOOKS: [&str; 5] = ["classic", "cinema", "book", "messenger", "jrpg"];
@@ -210,6 +212,7 @@ impl Default for Settings {
             room_companion_mode: "off".into(),
             rooms: all_rooms_on(),
             story_look: "classic".into(),
+            last_seen_version: None,
         }
     }
 }
@@ -226,6 +229,7 @@ impl Settings {
         self.relationship_style = clean(self.relationship_style);
         self.theme = clean(self.theme);
         self.room_companion_key_id = clean(self.room_companion_key_id);
+        self.last_seen_version = clean(self.last_seen_version);
         self.world.volume = self.world.volume.clamp(0.0, 1.0);
         self.quick_actions.retain(|a| !a.label.trim().is_empty() && !a.command.trim().is_empty());
         for action in &mut self.quick_actions {
@@ -376,6 +380,7 @@ mod tests {
             room_companion_mode: "named".into(),
             rooms: { let mut r = all_rooms_on(); r.insert("story".into(), false); r },
             story_look: "jrpg".into(),
+            last_seen_version: Some("0.2.0".into()),
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));
@@ -476,6 +481,13 @@ mod tests {
         assert!(s.room_on("world"), "a room missing from the file is on");
         assert!(!s.rooms.contains_key("spaceship") && !s.rooms.contains_key("home"));
         assert_eq!(s.rooms.len(), ROOMS.len());
+    }
+
+    #[test]
+    fn the_last_seen_version_is_trimmed_and_starts_unset() {
+        assert_eq!(Settings::default().last_seen_version, None);
+        assert_eq!(Settings { last_seen_version: Some(" 0.2.0 ".into()), ..Settings::default() }.normalized().last_seen_version.as_deref(), Some("0.2.0"));
+        assert_eq!(Settings { last_seen_version: Some("  ".into()), ..Settings::default() }.normalized().last_seen_version, None);
     }
 
     #[test]

@@ -233,6 +233,7 @@ pub fn run() {
             chatroom::room_file,
             update::update_check,
             update::update_install,
+            update::version_seen,
             update::diary_stamp,
             commands::choose_picture,
             commands::avatar_set,

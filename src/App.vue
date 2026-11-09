@@ -20,8 +20,12 @@ import ChatRoomView from './views/ChatRoomView.vue'
 import SettingsView from './views/SettingsView.vue'
 import UpdateChip from './components/UpdateChip.vue'
 import QuotaGlow from './components/QuotaGlow.vue'
+import WhatsNew from './components/WhatsNew.vue'
+import { sectionFor, unseenSections } from './components/changelog.js'
+import changelog from '../CHANGELOG.md?raw'
+import { version as appVersion } from '../package.json'
 import NoticeToasts from './components/NoticeToasts.vue'
-import { avatarGet, backupNow, backupStatus, getSettings, hideCastle, memoryHome, onBackupDone, onStoryOutput, userThemes } from './api/castle.js'
+import { avatarGet, backupNow, backupStatus, getSettings, hideCastle, memoryHome, onBackupDone, onStoryOutput, userThemes, versionSeen } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
 
 // The rooms across the top. A room whose MemoryCore feature is not installed stays hidden
@@ -92,10 +96,40 @@ const themeNotice = ref('')
 const activeLabel = computed(() => allTabs.find((t) => t.id === active.value)?.label ?? '')
 const widgets = computed(() => theme.value?.widgets ?? {})
 
+// "What's new" after an update: the sections since the version last seen, once. The very first
+// launch only records the version. dev only: ?whatsnew=<version> shows that version's notes.
+const whatsNew = ref(null)
+let whatsNewChecked = false
+async function checkWhatsNew(lastSeen) {
+  if (whatsNewChecked) return
+  whatsNewChecked = true
+  const devWhatsNew = import.meta.env.DEV ? new URLSearchParams(location.search).get('whatsnew') : null
+  if (devWhatsNew) {
+    const s = sectionFor(changelog, devWhatsNew)
+    whatsNew.value = { version: devWhatsNew, sections: s ? [s] : [] }
+    return
+  }
+  if (lastSeen === appVersion) return
+  const sections = unseenSections(changelog, lastSeen, appVersion)
+  try {
+    await versionSeen(appVersion)
+  } catch {
+    return // outside Castle's window
+  }
+  if (sections.length) whatsNew.value = { version: appVersion, sections }
+}
+
+function showWhatsNew() {
+  const s = sectionFor(changelog, appVersion)
+  whatsNew.value = { version: appVersion, sections: s ? [s] : [] }
+}
+
 async function loadSettingsAndTheme() {
   let wanted = DEFAULT_THEME_ID
+  let lastSeen = null
   try {
     const view = await getSettings()
+    lastSeen = view.settings.lastSeenVersion ?? null
     companion.value = view.companionLabel
     cli.value = view.settings.cli
     cliLabel.value = view.cliLabel
@@ -124,6 +158,7 @@ async function loadSettingsAndTheme() {
   theme.value = chosen.theme
   themeNotice.value = chosen.notice
   applyTheme(chosen.theme)
+  if (!setupOpen.value) checkWhatsNew(lastSeen)
 }
 
 function openSettings(section = 'companion') {
@@ -276,12 +311,14 @@ watch(settingsStamp, () => {
         @close="settingsOpen = false"
         @saved="settingsSaved"
         @setup="settingsOpen = false; openSetup()"
+        @whatsnew="showWhatsNew"
       />
+      <WhatsNew v-if="whatsNew" :version="whatsNew.version" :sections="whatsNew.sections" @close="whatsNew = null" />
       <ModalSheet v-if="backupOpen" tag="BACKUP" title="Keep the memory safe" @close="backupOpen = false; loadBackup()">
         <BackupPanel :companion="companion" />
       </ModalSheet>
       <NoticeToasts @keys="openKeys" />
-      <UpdateChip @status="updateInfo = $event" />
+      <UpdateChip @status="updateInfo = $event" @about="openSettings('about')" />
       <SetupView v-if="setupOpen" :reopened="setupReopened" @done="setupDone" @close="setupOpen = false" />
     </main>
   </div>

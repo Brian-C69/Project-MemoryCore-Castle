@@ -18,6 +18,7 @@ import {
   keySave,
   keyStatus,
   keyTest,
+  openUrl,
   saveSettings,
   setupApply,
   setupCheckCli,
@@ -30,7 +31,7 @@ const props = defineProps({
   version: { type: String, default: '' },
   updateLine: { type: String, default: '' },
 })
-const emit = defineEmits(['close', 'saved', 'setup'])
+const emit = defineEmits(['close', 'saved', 'setup', 'whatsnew'])
 
 const SECTIONS = [
   { id: 'companion', label: 'Companion' },
@@ -309,9 +310,13 @@ onMounted(async () => {
 
       <section v-else class="pane">
         <h3>MemoryCore Castle {{ version }}</h3>
-        <p class="hint">{{ updateLine || 'Updates: checked automatically in official builds.' }}</p>
+        <p class="hint">{{ updateLine || 'Castle looks for a new version every few hours.' }}</p>
+        <p class="about-links">
+          <button @click="emit('whatsnew')">What's new</button>
+          <button @click="openUrl('https://github.com/Kiyoraka/Project-MemoryCore-Castle/releases').catch(() => {})">All releases</button>
+        </p>
         <p class="hint">Free and open source under the MIT license. Change anything - see MAKE-IT-YOURS.md in the source.</p>
-        <p class="hint">Castle keeps no account and talks to no server of its own. Your memory, keys and settings stay on this computer (and in your private backup, if you choose).</p>
+        <p class="hint">Castle checks GitHub for new versions, and talks to the MemoryCore Foundation only when you sign in or use CHAT. Your memory, keys and settings stay on this computer (and in your private backup, if you choose).</p>
       </section>
 
       <footer>
@@ -470,6 +475,11 @@ code {
 }
 footer {
   min-height: 20px;
+}
+/* Settings > About: What's new and All releases */
+.about-links {
+  display: flex;
+  gap: 8px;
 }
 button {
   padding: 6px 12px;

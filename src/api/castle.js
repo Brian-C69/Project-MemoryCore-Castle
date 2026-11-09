@@ -140,6 +140,8 @@ export const roomCardSave = (text) => invoke('room_card_save', { text })
 // Updates (official builds only). -> { official, version, available, notes, message }
 export const updateCheck = () => invoke('update_check')
 export const updateInstall = () => invoke('update_install')
+// remembers the version whose "What's new" was shown; answers the one seen before
+export const versionSeen = (version) => invoke('version_seen', { version })
 // The diary's newest change (seconds), to wait for Save diary before an update.
 export const diaryStamp = () => invoke('diary_stamp')
 

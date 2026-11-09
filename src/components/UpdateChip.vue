@@ -1,13 +1,17 @@
 <script setup>
-// "Update ready" on the top bar (official builds only). Update now saves the diary first: the
-// companion is asked to save it, and Castle waits until the diary changes (three minutes at most,
-// or Skip). Then the update downloads, its signature is checked, it installs and Castle restarts.
+// On the top bar when a newer Castle is out. Official builds: "Update ready" - the notes can be
+// read first, and Update now saves the diary first: the companion is asked to save it, and Castle
+// waits until the diary changes (three minutes at most, or Skip). Then the update downloads, its
+// signature is checked, it installs and Castle restarts. A member's own build: a quiet "X is out"
+// that opens Settings > About (it updates with git pull, never by itself).
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { diaryStamp, terminalState, terminalWrite, updateCheck, updateInstall } from '../api/castle.js'
+import MarkdownText from './MarkdownText.vue'
 
-const emit = defineEmits(['status'])
+const emit = defineEmits(['status', 'about'])
 const status = ref(null)
 const step = ref('')
+const notesOpen = ref(false)
 let skip = false
 let timer
 
@@ -58,16 +62,22 @@ onBeforeUnmount(() => clearInterval(timer))
 </script>
 
 <template>
-  <div v-if="status?.available" class="update">
+  <div v-if="status?.available && status.canInstall" class="update">
     <template v-if="!step">
       <span>Update ready: {{ status.available }}</span>
+      <button v-if="status.notes" class="quiet" @click="notesOpen = !notesOpen">What's new</button>
       <button @click="updateNow">Update now</button>
     </template>
     <template v-else>
       <span>{{ step }}</span>
       <button v-if="step.startsWith('Saving')" @click="skip = true">Skip</button>
     </template>
+    <div v-if="notesOpen && !step" class="notes">
+      <MarkdownText :text="status.notes" />
+      <p class="hint">The diary is saved first, then Castle restarts on the new version. Your memory, settings and keys stay as they are.</p>
+    </div>
   </div>
+  <button v-else-if="status?.available" class="update own" :title="status.message" @click="emit('about')">Castle {{ status.available }} is out</button>
 </template>
 
 <style scoped>
@@ -84,6 +94,35 @@ onBeforeUnmount(() => clearInterval(timer))
   border-radius: 999px;
   background: var(--panel-background);
   font-size: 12px;
+}
+.update.own {
+  border-color: var(--line);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.update.own:hover {
+  color: var(--text);
+}
+.notes {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(420px, 80vw);
+  max-height: 60vh;
+  overflow: auto;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-background);
+  backdrop-filter: blur(var(--glass-blur));
+}
+.notes .hint {
+  margin: 10px 0 0;
+  color: var(--text-dim);
+}
+button.quiet {
+  background: transparent;
+  color: var(--text);
 }
 button {
   padding: 2px 10px;
