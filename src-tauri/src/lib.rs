@@ -199,8 +199,8 @@ pub fn run() {
             story::story_prepare,
             story::story_worlds,
             world::world_screens,
-            world::world_open,
-            world::world_close,
+            world::world_apply,
+            world::world_identify,
             chatroom::room_me,
             chatroom::room_lines,
             chatroom::room_presence,
@@ -273,6 +273,7 @@ pub fn run() {
                 screen::fill_desktop(&window)?;
                 window.show()?;
             }
+            world::restore(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {

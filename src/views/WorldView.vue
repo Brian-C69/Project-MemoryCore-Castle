@@ -7,7 +7,7 @@ import Slideshow from '../world2d/Slideshow.vue'
 import MusicPlayer from '../world2d/MusicPlayer.vue'
 import { worldSignals } from '../world3d/signals.js'
 import { builtInWorlds } from '../world2d/worlds.js'
-import { getSettings, saveSettings, studioLibrary, worldClose, worldOpen, worldScreens } from '../api/castle.js'
+import { getSettings, saveSettings, studioLibrary, worldApply, worldScreens } from '../api/castle.js'
 
 // three.js is large: it loads only when the 3D world is first shown
 const World3D = defineAsyncComponent(() => import('../world3d/World3D.vue'))
@@ -72,18 +72,13 @@ async function saveWorld(patch) {
 async function toggleScreen(screen) {
   problem.value = ''
   try {
-    if (screen.open) await worldClose(screen.index)
-    else await worldOpen(screen.index, mode.value)
+    const entry = { screen: screen.name, width: screen.width, height: screen.height, x: screen.x, y: screen.y, on: !screen.open, world: mode.value === '2d' ? `2d/${scene.value}` : '3d/floating-isles' }
+    await worldApply([entry])
   } catch (reason) {
     problem.value = String(reason)
   }
   screens.value = await worldScreens()
 }
-
-// an open world on another screen follows the mode and the chosen 2D world
-watch([mode, scene], async ([m]) => {
-  for (const s of screens.value.filter((x) => x.open)) await worldOpen(s.index, m).catch(() => {})
-})
 
 onMounted(load)
 watch(() => props.active, (on) => on && load())

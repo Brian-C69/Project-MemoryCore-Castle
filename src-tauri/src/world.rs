@@ -1,12 +1,17 @@
-//! WORLD on the other screens: one frameless window per chosen monitor, filling it, showing the
-//! 3D isles or the 2D slideshow. Windows are created only from async commands (a window built
-//! from a sync command deadlocks on Windows), and they hide and show with Castle.
+//! WORLD on the other screens: one frameless window per screen the member switched on, filling
+//! it, showing that screen's world with that screen's camera. The WORLD room sends the whole list
+//! (world_apply); open windows are told their new settings without a reload. Windows are created
+//! only from async commands (a window built from a sync command deadlocks on Windows), and they
+//! hide and show with Castle. Castle's own screen never gets a world window.
 
 use crate::screen;
+use crate::settings::{self, SettingsStore, WorldScreen};
 use serde::Serialize;
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, Monitor, State, WebviewUrl, WebviewWindowBuilder};
 
 const PREFIX: &str = "world-";
+const IDENTIFY: &str = "identify-";
+const IDENTIFY_MS: u64 = 2200;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,66 +20,190 @@ pub struct ScreenInfo {
     pub name: String,
     pub width: u32,
     pub height: u32,
+    pub x: i32,
+    pub y: i32,
+    pub primary: bool,
     /// the screen Castle itself is on
     pub is_main: bool,
     /// a WORLD window is open on it
     pub open: bool,
 }
 
+/// A screen as the matching sees it (pure, so it can be tested without monitors).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScreenBox {
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub x: i32,
+    pub y: i32,
+}
+
+/// What a world window is told: its settings and whether it plays the music.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorldConfig {
+    pub view: &'static str,
+    pub screen: usize,
+    pub lead: bool,
+    pub config: WorldScreen,
+}
+
 fn label(index: usize) -> String {
     format!("{PREFIX}{index}")
 }
 
-#[tauri::command]
-pub fn world_screens(app: AppHandle) -> Vec<ScreenInfo> {
-    let main_monitor = app.get_webview_window("main").and_then(|w| w.current_monitor().ok().flatten()).map(|m| m.position().clone());
-    app.available_monitors()
-        .unwrap_or_default()
+/// The saved entry for a screen: the same name first, else the same size and place.
+pub fn matches<'a>(entries: &'a [WorldScreen], screen: &ScreenBox) -> Option<&'a WorldScreen> {
+    entries
+        .iter()
+        .find(|e| !e.screen.is_empty() && e.screen == screen.name)
+        .or_else(|| entries.iter().find(|e| e.width == screen.width && e.height == screen.height && e.x == screen.x && e.y == screen.y))
+}
+
+/// Which screens get a world window, and with what: (screen index, entry). Castle's own screen
+/// (`main`) never does; a screen with no entry, or one switched off, stays empty.
+pub fn wanted(entries: &[WorldScreen], screens: &[ScreenBox], main: Option<usize>) -> Vec<(usize, WorldScreen)> {
+    screens
         .iter()
         .enumerate()
-        .map(|(index, m)| ScreenInfo {
-            index,
-            name: m.name().cloned().unwrap_or_else(|| format!("Screen {}", index + 1)),
+        .filter(|(i, _)| Some(*i) != main)
+        .filter_map(|(i, s)| matches(entries, s).filter(|e| e.on).map(|e| (i, e.clone())))
+        .collect()
+}
+
+fn boxes(monitors: &[Monitor]) -> Vec<ScreenBox> {
+    monitors
+        .iter()
+        .enumerate()
+        .map(|(i, m)| ScreenBox {
+            name: m.name().cloned().unwrap_or_else(|| format!("Screen {}", i + 1)),
             width: m.size().width,
             height: m.size().height,
-            is_main: main_monitor.as_ref().is_some_and(|p| p == m.position()),
-            open: app.get_webview_window(&label(index)).is_some(),
+            x: m.position().x,
+            y: m.position().y,
         })
         .collect()
 }
 
-/// Opens (or brings back) the WORLD on one screen. `mode` is "3d" or "2d".
-#[tauri::command]
-pub async fn world_open(app: AppHandle, index: usize, mode: String) -> Result<(), String> {
-    let monitors = app.available_monitors().map_err(|_| "The screens could not be read.".to_string())?;
-    let monitor = monitors.get(index).ok_or("That screen is not connected.")?.clone();
-    let name = label(index);
-    if let Some(existing) = app.get_webview_window(&name) {
-        let _ = existing.eval(&format!("window.dispatchEvent(new CustomEvent('castle-world-mode', {{ detail: {:?} }}))", mode));
-        let _ = existing.show();
-        return Ok(());
-    }
-    let mode = if mode == "2d" { "2d" } else { "3d" };
-    let window = WebviewWindowBuilder::new(&app, &name, WebviewUrl::App("index.html".into()))
-        .title("MemoryCore Castle - World")
-        .decorations(false)
-        .skip_taskbar(true)
-        .visible(false)
-        .initialization_script(&format!("window.__CASTLE_VIEW__ = {{ view: 'world', mode: '{mode}', screen: {index} }};"))
-        .build()
-        .map_err(|_| "The world window could not be opened.".to_string())?;
-    screen::fill_monitor(&window, &monitor).map_err(|_| "The world window could not be placed.".to_string())?;
-    window.show().map_err(|_| "The world window could not be shown.".to_string())?;
-    Ok(())
+fn main_index(app: &AppHandle, monitors: &[Monitor]) -> Option<usize> {
+    let main = app.get_webview_window("main")?.current_monitor().ok().flatten()?;
+    monitors.iter().position(|m| m.position() == main.position())
 }
 
 #[tauri::command]
-pub async fn world_close(app: AppHandle, index: Option<usize>) {
+pub fn world_screens(app: AppHandle) -> Vec<ScreenInfo> {
+    let monitors = app.available_monitors().unwrap_or_default();
+    let primary = app.primary_monitor().ok().flatten().map(|m| *m.position());
+    let main = main_index(&app, &monitors);
+    boxes(&monitors)
+        .into_iter()
+        .enumerate()
+        .map(|(index, b)| ScreenInfo {
+            index,
+            primary: primary.is_some_and(|p| p.x == b.x && p.y == b.y),
+            is_main: Some(index) == main,
+            open: app.get_webview_window(&label(index)).is_some(),
+            name: b.name,
+            width: b.width,
+            height: b.height,
+            x: b.x,
+            y: b.y,
+        })
+        .collect()
+}
+
+/// Opens, retunes or closes every world window to match the saved screens.
+async fn apply(app: &AppHandle, entries: &[WorldScreen]) -> Result<(), String> {
+    let monitors = app.available_monitors().map_err(|_| "The screens could not be read.".to_string())?;
+    let want = wanted(entries, &boxes(&monitors), main_index(app, &monitors));
+    let lead = want.first().map(|(i, _)| *i);
     for (name, window) in app.webview_windows() {
-        if name.starts_with(PREFIX) && index.is_none_or(|i| name == label(i)) {
+        let Some(index) = name.strip_prefix(PREFIX).and_then(|n| n.parse::<usize>().ok()) else { continue };
+        if !want.iter().any(|(i, _)| *i == index) {
             let _ = window.close();
         }
     }
+    for (index, entry) in want {
+        let payload = WorldConfig { view: "world", screen: index, lead: Some(index) == lead, config: entry };
+        if let Some(existing) = app.get_webview_window(&label(index)) {
+            let _ = app.emit_to(label(index), "castle-world-config", &payload);
+            let _ = existing.show();
+            continue;
+        }
+        let init = serde_json::to_string(&payload).map_err(|_| "The world settings could not be read.".to_string())?;
+        let window = WebviewWindowBuilder::new(app, label(index), WebviewUrl::App("index.html".into()))
+            .title("MemoryCore Castle - World")
+            .decorations(false)
+            .skip_taskbar(true)
+            .visible(false)
+            .initialization_script(&format!("window.__CASTLE_VIEW__ = {init};"))
+            .build()
+            .map_err(|_| "The world window could not be opened.".to_string())?;
+        screen::fill_monitor(&window, &monitors[index]).map_err(|_| "The world window could not be placed.".to_string())?;
+        window.show().map_err(|_| "The world window could not be shown.".to_string())?;
+    }
+    Ok(())
+}
+
+/// The WORLD room's whole list of screens: saved, then every window made to match.
+#[tauri::command]
+pub async fn world_apply(app: AppHandle, screens: Vec<WorldScreen>, store: State<'_, SettingsStore>) -> Result<Vec<WorldScreen>, String> {
+    let mut next = store.get();
+    next.world.screens = screens;
+    let next = next.normalized();
+    settings::save(&store.path, &next).map_err(|_| "The screens could not be saved.".to_string())?;
+    let saved = next.world.screens.clone();
+    *store.current.lock().unwrap() = next;
+    apply(&app, &saved).await?;
+    Ok(saved)
+}
+
+/// Shows a big number on one screen for a moment, so the member knows which is which.
+#[tauri::command]
+pub async fn world_identify(app: AppHandle, index: usize) -> Result<(), String> {
+    let monitors = app.available_monitors().map_err(|_| "The screens could not be read.".to_string())?;
+    let monitor = monitors.get(index).ok_or("That screen is not connected.")?.clone();
+    let name = format!("{IDENTIFY}{index}");
+    if let Some(old) = app.get_webview_window(&name) {
+        let _ = old.close();
+    }
+    let init = format!("window.__CASTLE_VIEW__ = {{ \"view\": \"identify\", \"number\": {} }};", index + 1);
+    let builder = WebviewWindowBuilder::new(&app, &name, WebviewUrl::App("index.html".into()));
+    // see-through needs the private API on macOS; there the number sits on a dark sheet instead
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.transparent(true);
+    let window = builder
+        .title("MemoryCore Castle - Identify")
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .focused(false)
+        .visible(false)
+        .initialization_script(&init)
+        .build()
+        .map_err(|_| "The screen number could not be shown.".to_string())?;
+    screen::fill_monitor(&window, &monitor).map_err(|_| "The screen number could not be placed.".to_string())?;
+    let _ = window.set_ignore_cursor_events(true);
+    window.show().map_err(|_| "The screen number could not be shown.".to_string())?;
+    tauri::async_runtime::spawn(async move {
+        let _ = tauri::async_runtime::spawn_blocking(|| std::thread::sleep(std::time::Duration::from_millis(IDENTIFY_MS))).await;
+        let _ = window.close();
+    });
+    Ok(())
+}
+
+/// At start: the screens the member left on come back.
+pub fn restore(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let entries = app.state::<SettingsStore>().get().world.screens;
+        if entries.iter().any(|e| e.on) {
+            if let Err(error) = apply(&app, &entries).await {
+                eprintln!("MemoryCore Castle: the world screens could not be restored: {error}");
+            }
+        }
+    });
 }
 
 /// The world windows hide and show with Castle (the tray, the hotkey, the hide button).
@@ -83,5 +212,42 @@ pub fn set_visible(app: &AppHandle, visible: bool) {
         if name.starts_with(PREFIX) {
             let _ = if visible { window.show() } else { window.hide() };
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn screen(name: &str, x: i32) -> ScreenBox {
+        ScreenBox { name: name.into(), width: 1920, height: 1080, x, y: 0 }
+    }
+
+    fn entry(name: &str, x: i32, on: bool, world: &str) -> WorldScreen {
+        WorldScreen { screen: name.into(), width: 1920, height: 1080, x, y: 0, on, world: world.into(), ..WorldScreen::default() }
+    }
+
+    #[test]
+    fn a_screen_is_found_by_name_first_then_by_size_and_place() {
+        let entries = vec![entry("\\\\.\\DISPLAY9", 1920, true, "3d/crystal-isle"), entry("\\\\.\\DISPLAY5", 0, true, "2d/mine")];
+        // the same name wins even after the screen moved
+        assert_eq!(matches(&entries, &screen("\\\\.\\DISPLAY5", 3840)).unwrap().world, "2d/mine");
+        // a renamed screen in the same place keeps its world
+        assert_eq!(matches(&entries, &screen("\\\\.\\DISPLAY2", 1920)).unwrap().world, "3d/crystal-isle");
+        assert!(matches(&entries, &screen("\\\\.\\DISPLAY3", 7680)).is_none());
+    }
+
+    #[test]
+    fn only_switched_on_screens_get_a_window_and_never_castles_own() {
+        let screens = vec![screen("A", 0), screen("B", 1920), screen("C", 3840)];
+        let entries = vec![entry("A", 0, true, "3d/floating-isles"), entry("B", 1920, false, "2d/mine"), entry("C", 3840, true, "2d/mine")];
+        let want = wanted(&entries, &screens, Some(0));
+        assert_eq!(want.iter().map(|(i, _)| *i).collect::<Vec<_>>(), vec![2]);
+    }
+
+    #[test]
+    fn nothing_saved_means_every_screen_stays_off() {
+        let screens = vec![screen("A", 0), screen("B", 1920)];
+        assert!(wanted(&[], &screens, Some(0)).is_empty());
     }
 }

@@ -205,6 +205,8 @@ mod tests {
 
     fn folder(name: &str) -> PathBuf {
         let folder = std::env::temp_dir().join(format!("castle-session-{name}-{}", std::process::id()));
+        // an old run with the same process id may have left it behind
+        let _ = std::fs::remove_dir_all(&folder);
         std::fs::create_dir_all(&folder).unwrap();
         folder
     }

@@ -101,8 +101,8 @@ export const storyWorlds = () => invoke('story_worlds')
 
 // WORLD on the other screens. -> [{ index, name, width, height, isMain, open }]
 export const worldScreens = () => invoke('world_screens')
-export const worldOpen = (index, mode) => invoke('world_open', { index, mode })
-export const worldClose = (index) => invoke('world_close', { index })
+export const worldApply = (screens) => invoke('world_apply', { screens })
+export const worldIdentify = (index) => invoke('world_identify', { index })
 
 // The MemoryCore Foundation room (keys stay in the core). Refusals come back as { kind, message }.
 export const roomMe = () => invoke('room_me')

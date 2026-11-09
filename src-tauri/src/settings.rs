@@ -44,25 +44,108 @@ pub struct QuickAction {
     pub command: String,
 }
 
-/// The WORLD room: 3D isles or the 2D slideshow, and its music.
+pub const DEFAULT_WORLD: &str = "3d/floating-isles";
+pub const CAMERAS: [&str; 4] = ["director", "follow", "wide", "orbit"];
+pub const SHOTS: [&str; 5] = ["follow", "wide", "close", "orbit", "crane"];
+pub const GLIDES: [&str; 3] = ["glide", "cut", "mix"];
+
+/// A world id: "3d/<slug>", "2d/<slug>" or "my/<slug>" - lowercase letters, digits and dashes.
+pub fn is_world_id(id: &str) -> bool {
+    let Some((kind, slug)) = id.split_once('/') else { return false };
+    ["3d", "2d", "my"].contains(&kind)
+        && (1..=48).contains(&slug.len())
+        && slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && !slug.starts_with('-')
+}
+
+/// One screen's WORLD: which world, how the camera films it, and whether it is on. The screen is
+/// found again by its name, then by its size and place.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WorldScreen {
+    pub screen: String,
+    pub width: u32,
+    pub height: u32,
+    pub x: i32,
+    pub y: i32,
+    pub world: String,
+    pub camera: String,
+    pub on: bool,
+    /// Each camera view holds hold_min..hold_max seconds.
+    pub hold_min: u32,
+    pub hold_max: u32,
+    /// "glide", "cut" or "mix".
+    pub glide: String,
+    /// The views the director may use.
+    pub shots: Vec<String>,
+    /// 2D: seconds per picture.
+    pub seconds: u32,
+    pub shuffle: bool,
+}
+
+impl Default for WorldScreen {
+    fn default() -> Self {
+        Self {
+            screen: String::new(),
+            width: 0,
+            height: 0,
+            x: 0,
+            y: 0,
+            world: DEFAULT_WORLD.into(),
+            camera: "director".into(),
+            on: false,
+            hold_min: 8,
+            hold_max: 20,
+            glide: "mix".into(),
+            shots: SHOTS.iter().map(|s| s.to_string()).collect(),
+            seconds: 15,
+            shuffle: true,
+        }
+    }
+}
+
+impl WorldScreen {
+    pub fn normalized(mut self) -> Self {
+        if !is_world_id(&self.world) {
+            self.world = DEFAULT_WORLD.into();
+        }
+        if !CAMERAS.contains(&self.camera.as_str()) {
+            self.camera = "director".into();
+        }
+        if !GLIDES.contains(&self.glide.as_str()) {
+            self.glide = "mix".into();
+        }
+        self.hold_min = self.hold_min.clamp(3, 120);
+        self.hold_max = self.hold_max.clamp(3, 120);
+        if self.hold_min > self.hold_max {
+            std::mem::swap(&mut self.hold_min, &mut self.hold_max);
+        }
+        let mut shots: Vec<String> = SHOTS.iter().filter(|s| self.shots.iter().any(|t| t == *s)).map(|s| s.to_string()).collect();
+        if shots.is_empty() {
+            shots = SHOTS.iter().map(|s| s.to_string()).collect();
+        }
+        self.shots = shots;
+        self.seconds = self.seconds.clamp(4, 120);
+        self
+    }
+}
+
+/// The WORLD room: each screen's world, and the music.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct WorldSettings {
-    /// "3d" or "2d".
-    pub mode: String,
     pub music: bool,
     /// 0.0 to 1.0.
     pub volume: f32,
     /// Extra picture folders for the 2D slideshow, beside the memory folder's own pictures.
     pub folders: Vec<String>,
-    /// What the 2D world shows: a built-in world's folder name (e.g. "isles-of-memory") or
-    /// "mine" for the pictures the companion made.
-    pub scene: String,
+    /// One entry per screen the member has set; a screen with no entry stays off.
+    pub screens: Vec<WorldScreen>,
 }
 
 impl Default for WorldSettings {
     fn default() -> Self {
-        Self { mode: "3d".into(), music: true, volume: 0.5, folders: Vec::new(), scene: "isles-of-memory".into() }
+        Self { music: true, volume: 0.5, folders: Vec::new(), screens: Vec::new() }
     }
 }
 
@@ -137,12 +220,7 @@ impl Settings {
         if !["off", "named", "joins"].contains(&self.room_companion_mode.as_str()) {
             self.room_companion_mode = "off".into();
         }
-        if self.world.scene.trim().is_empty() || self.world.scene.contains(['/', '\\', '.']) {
-            self.world.scene = "isles-of-memory".into();
-        }
-        if self.world.mode != "2d" {
-            self.world.mode = "3d".into();
-        }
+        self.world.screens = std::mem::take(&mut self.world.screens).into_iter().map(WorldScreen::normalized).collect();
         self
     }
 
@@ -270,7 +348,12 @@ mod tests {
             start_with_windows: true,
             start_session_on_launch: false,
             room_base_url: Some("https://example.test".into()),
-            world: WorldSettings { mode: "2d".into(), music: false, volume: 0.25, folders: vec!["D:\\Pictures".into()], scene: "mine".into() },
+            world: WorldSettings {
+                music: false,
+                volume: 0.25,
+                folders: vec!["D:\\Pictures".into()],
+                screens: vec![WorldScreen { screen: "\\\\.\\DISPLAY5".into(), world: "3d/crystal-isle".into(), camera: "orbit".into(), on: true, ..WorldScreen::default() }],
+            },
             setup_done: true,
             quick_actions: vec![QuickAction { label: "Plan my day".into(), command: "plan my day".into() }],
             backup_after_diary: true,
@@ -315,15 +398,56 @@ mod tests {
         let settings = Settings {
             room_base_url: Some("  https://example.test/ ".into()),
             companion_name: Some("   ".into()),
-            world: WorldSettings { mode: "4d".into(), volume: 3.0, ..WorldSettings::default() },
+            world: WorldSettings { volume: 3.0, ..WorldSettings::default() },
             ..Settings::default()
         }
         .normalized();
         assert_eq!(settings.room_base_url.as_deref(), Some("https://example.test"));
         assert_eq!(settings.companion_name, None);
-        assert_eq!(settings.world.mode, "3d");
         assert_eq!(settings.world.volume, 1.0);
         assert_eq!(settings.companion_label(), "Your companion");
+    }
+
+    #[test]
+    fn a_screen_with_odd_world_settings_is_brought_back_in_range() {
+        let screen = WorldScreen {
+            world: "3d/../secrets".into(),
+            camera: "drone".into(),
+            glide: "teleport".into(),
+            hold_min: 500,
+            hold_max: 1,
+            shots: vec!["selfie".into()],
+            seconds: 0,
+            ..WorldScreen::default()
+        }
+        .normalized();
+        assert_eq!(screen.world, DEFAULT_WORLD);
+        assert_eq!(screen.camera, "director");
+        assert_eq!(screen.glide, "mix");
+        assert_eq!((screen.hold_min, screen.hold_max), (3, 120));
+        assert_eq!(screen.shots.len(), SHOTS.len());
+        assert_eq!(screen.seconds, 4);
+        let kept = WorldScreen { shots: vec!["crane".into(), "close".into(), "close".into()], ..WorldScreen::default() }.normalized();
+        assert_eq!(kept.shots, vec!["close".to_string(), "crane".to_string()]);
+    }
+
+    #[test]
+    fn world_ids_are_a_kind_and_a_plain_slug() {
+        assert!(is_world_id("3d/crystal-isle"));
+        assert!(is_world_id("my/star-garden-2"));
+        assert!(is_world_id("2d/mine"));
+        assert!(!is_world_id("3d/Crystal"));
+        assert!(!is_world_id("my/a\\b"));
+        assert!(!is_world_id("my/"));
+        assert!(!is_world_id("my/-x"));
+        assert!(!is_world_id("5d/x"));
+        assert!(!is_world_id("crystal-isle"));
+    }
+
+    #[test]
+    fn a_new_member_has_every_screen_off() {
+        assert!(Settings::default().world.screens.is_empty());
+        assert!(!WorldScreen::default().on);
     }
 
     #[test]
