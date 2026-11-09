@@ -16,8 +16,8 @@ const props = defineProps({
   active: { type: Boolean, default: true },
   // the same seed always builds the same isles
   seed: { type: Number, default: 7 },
-  // one camera shot kept ('follow' | 'wide' | 'close' | 'orbit' | 'crane'), or null for the director
-  shot: { type: String, default: null },
+  // the screen's camera: { camera: 'director'|'follow'|'wide'|'orbit', holdMin, holdMax, glide, shots }
+  camera: { type: Object, default: () => ({ camera: 'director' }) },
 })
 const emit = defineEmits(['ready', 'unsupported'])
 
@@ -101,7 +101,8 @@ onMounted(() => {
     wander(dt)
     crystal.update(dt, t)
   })
-  rig = new CameraRig(world, crystal, { only: props.shot })
+  rig = new CameraRig(world, crystal)
+  rig.setSettings(props.camera)
   document.addEventListener('visibilitychange', syncRunning)
   syncRunning()
   emit('ready')
@@ -115,7 +116,7 @@ watch(
   },
 )
 watch(() => props.active, syncRunning)
-watch(() => props.shot, (value) => rig?.setOnly(value))
+watch(() => props.camera, (value) => rig?.setSettings(value), { deep: true })
 
 onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', syncRunning)

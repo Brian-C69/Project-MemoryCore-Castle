@@ -1,19 +1,23 @@
 // The camera rig: films the director's shots around the crystal - gliding or cutting between
 // them, always keeping it in frame. `subject` is anything with { position, heading, walking,
-// resting } (the Crystal).
+// resting } (the Crystal). `scale` widens every shot for a bigger world (1 = the built-in isles).
 import * as THREE from 'three'
 import { nextShot } from './director.js'
 
 const CENTRE_Y = 1.35
 const GLIDE_S = 1.6
 
+// A screen's camera choice ('director' | 'follow' | 'wide' | 'orbit') as the shot to keep.
+export const onlyShot = (camera) => (camera && camera !== 'director' ? camera : null)
+
 export class CameraRig {
-  constructor(world, subject, { only = null, onShot, holdMin, holdMax, rand = Math.random } = {}) {
+  constructor(world, subject, { only = null, onShot, holdMin, holdMax, glide, shots, scale = 1, rand = Math.random } = {}) {
     this.world = world
     this.subject = subject
     this.only = only
     this.onShot = onShot
-    this.hold = { holdMin, holdMax }
+    this.hold = { holdMin, holdMax, glide, shots }
+    this.scale = scale > 0 ? scale : 1
     this.rand = rand
     this.shot = null
     this.left = 0
@@ -34,6 +38,13 @@ export class CameraRig {
   // One shot kept ('follow' | 'wide' | 'close' | 'orbit' | 'crane'), or null for the director.
   setOnly(shot) {
     this.only = shot
+    this.left = 0
+  }
+
+  // A screen's settings changed while it runs: { camera, holdMin, holdMax, glide, shots }.
+  setSettings({ camera, holdMin, holdMax, glide, shots } = {}) {
+    this.only = onlyShot(camera)
+    this.hold = { holdMin, holdMax, glide, shots }
     this.left = 0
   }
 
@@ -68,31 +79,33 @@ export class CameraRig {
     const facing = this.subject?.heading ?? 0
     const ahead = this._ahead.set(Math.sin(facing), 0, Math.cos(facing))
     const right = this._right.set(ahead.z, 0, -ahead.x)
-    const centre = this._centre.copy(at).setY(at.y + CENTRE_Y)
+    const k = this.scale
+    const centre = this._centre.copy(at).setY(at.y + CENTRE_Y * k)
     const t = this.t
     switch (this.shot) {
       case 'follow':
-        pos.copy(at).addScaledVector(ahead, -6.5).addScaledVector(right, 1.4).setY(at.y + 2.8)
-        look.copy(centre).addScaledVector(ahead, 2.5)
+        pos.copy(at).addScaledVector(ahead, -6.5 * k).addScaledVector(right, 1.4 * k).setY(at.y + 2.8 * k)
+        look.copy(centre).addScaledVector(ahead, 2.5 * k)
         break
       case 'close':
-        pos.copy(at).addScaledVector(ahead, 4.2).addScaledVector(right, 1.1).setY(at.y + CENTRE_Y + 0.35)
+        pos.copy(at).addScaledVector(ahead, 4.2 * k).addScaledVector(right, 1.1 * k).setY(at.y + (CENTRE_Y + 0.35) * k)
         look.copy(centre)
         break
       case 'orbit': {
-        const a = facing + t * 0.16
-        pos.set(at.x + Math.sin(a) * 9, at.y + 3.2, at.z + Math.cos(a) * 9)
+        // a bigger world turns slower, so the edge never rushes past
+        const a = facing + (t * 0.16) / k
+        pos.set(at.x + Math.sin(a) * 9 * k, at.y + 3.2 * k, at.z + Math.cos(a) * 9 * k)
         look.copy(centre)
         break
       }
       case 'crane':
-        pos.copy(at).addScaledVector(right, 7).setY(at.y + 24 - Math.min(11, t * 0.6))
+        pos.copy(at).addScaledVector(right, 7 * k).setY(at.y + (24 - Math.min(11, t * 0.6)) * k)
         look.copy(centre)
         break
       case 'wide':
       default: {
         const a = this.wideAngle + t * 0.015
-        pos.set(at.x * 0.4 + Math.sin(a) * 62, at.y + 22, at.z * 0.4 + Math.cos(a) * 62)
+        pos.set(at.x * 0.4 + Math.sin(a) * 62 * k, at.y + 22 * k, at.z * 0.4 + Math.cos(a) * 62 * k)
         look.copy(at).multiplyScalar(0.5)
         look.y = at.y
         break
@@ -105,7 +118,9 @@ export class CameraRig {
     this.left -= dt
     if (!this.shot || this.left <= 0) this.choose()
     // the crystal set off: the director looks for a walking shot early
-    if (this.subject?.walking && !this.only && !['follow', 'wide', 'crane'].includes(this.shot) && this.t > 2) this.choose()
+    const walkingViews = ['follow', 'wide', 'crane']
+    const canFollow = !this.hold.shots?.length || walkingViews.some((s) => this.hold.shots.includes(s))
+    if (this.subject?.walking && !this.only && canFollow && !walkingViews.includes(this.shot) && this.t > 2) this.choose()
     const pos = this._pos
     const look = this._look
     this.aim(pos, look)

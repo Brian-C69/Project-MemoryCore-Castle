@@ -84,6 +84,32 @@ describe('the camera director', () => {
     expect(glides).toContain(false)
   })
 
+  it('uses only the views the member ticked, falling back to calm ones, then wide', () => {
+    const rand = seeded(6)
+    let previous = null
+    for (let i = 0; i < 200; i++) {
+      const next = nextShot({ previous, shots: ['close', 'crane'], rand })
+      expect(['close', 'crane']).toContain(next.shot)
+      previous = next.shot
+    }
+    // no walking view ticked: the walking crystal is filmed with the ticked calm views
+    for (let i = 0; i < 50; i++) expect(nextShot({ walking: true, shots: ['close', 'orbit'], rand }).shot).toMatch(/close|orbit/)
+    expect(nextShot({ shots: ['nothing-real'], rand }).shot).toBe('wide')
+  })
+
+  it('always glides, always cuts, or mixes as the member chose', () => {
+    const rand = seeded(8)
+    expect(Array.from({ length: 50 }, () => nextShot({ glide: 'glide', rand }).glide).every(Boolean)).toBe(true)
+    expect(Array.from({ length: 50 }, () => nextShot({ glide: 'cut', rand }).glide).some(Boolean)).toBe(false)
+  })
+
+  it('spreads the hold over the whole range given the wrong way round', () => {
+    const rand = seeded(12)
+    const seconds = Array.from({ length: 200 }, () => nextShot({ holdMin: 15, holdMax: 4, rand }).seconds)
+    expect(Math.max(...seconds)).toBeGreaterThan(12)
+    expect(Math.min(...seconds)).toBeLessThan(7)
+  })
+
   it('returns the only shot left when a single weight remains', () => {
     expect(pickWeighted({ wide: 1 }, 'wide', seeded(1))).toBe('wide')
   })
