@@ -78,7 +78,8 @@ async function switchRoom(id, on) {
   })
 }
 
-const shownKeys = computed(() => keys.value.filter((k) => !k.name.startsWith('room') && !(k.name === 'openai' && settings.value?.cli === 'codex')))
+// the room sign-in and the companion's room key are made by CHAT itself, never shown or pasted here
+const shownKeys = computed(() => keys.value.filter((k) => k.name !== 'member' && !k.name.startsWith('room') && !(k.name === 'openai' && settings.value?.cli === 'codex')))
 
 async function attempt(label, work) {
   problem.value = ''

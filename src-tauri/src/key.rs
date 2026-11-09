@@ -13,7 +13,9 @@ pub const KEYS: [(&str, &str); 6] = [
     ("seedance", "Seedance"),
     ("suno", "Suno"),
     ("elevenlabs", "ElevenLabs"),
-    ("room", "MemoryCore room key"),
+    // the member's sign-in to the MemoryCore Foundation room (made by Sign in, never pasted)
+    ("member", "MemoryCore sign-in"),
+    // the companion's own room key (made by Castle with the member's sign-in, never shown)
     ("room-companion", "Companion room key"),
 ];
 
@@ -120,7 +122,7 @@ pub fn test(account: &str) -> KeyTest {
         "suno" => ("https://api.sunoapi.org/api/v1/generate/credit", "bearer"),
         "elevenlabs" => ("https://api.elevenlabs.io/v1/user", "xi-api-key"),
         "seedance" => return said(true, "Kept. Seedance has no free check, so Castle cannot test it without spending."),
-        _ => return said(true, "Kept. This key is checked when the room is used."),
+        _ => return said(true, "Kept. The room checks it each time it is used."),
     };
     let client = match reqwest::blocking::Client::builder()
         .user_agent(concat!("MemoryCoreCastle/", env!("CARGO_PKG_VERSION")))

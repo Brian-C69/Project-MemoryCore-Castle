@@ -15,6 +15,7 @@ mod memory;
 mod pty;
 mod quota;
 mod rooms;
+mod signin;
 mod screen;
 mod session;
 mod settings;
@@ -206,6 +207,9 @@ pub fn run() {
             world::world_identify,
             quota::cli_quota,
             rooms::rooms_apply,
+            signin::member_sign_in,
+            signin::member_status,
+            signin::member_sign_out,
             worlds::worlds_mine,
             worlds::world_new,
             worlds::world_delete,
