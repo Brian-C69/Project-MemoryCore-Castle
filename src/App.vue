@@ -38,7 +38,9 @@ const allTabs = [
   { id: 'world', label: 'WORLD' },
   { id: 'chat', label: 'CHAT' },
 ]
-const active = ref('home')
+// dev only: ?tab=<room> opens a room straight away (for checking a room in a browser)
+const devTab = import.meta.env.DEV ? new URLSearchParams(location.search).get('tab') : null
+const active = ref(devTab || 'home')
 // What HOME shows (memory_home), the backup card, the portrait and the CLI chip.
 const home = ref(null)
 const backup = ref(null)
@@ -56,8 +58,8 @@ const BUILT = new Set(['home', 'theme', 'apps', 'diary', 'projects', 'library', 
 // Tabs with something new waiting (the story speaking while the member is elsewhere).
 const marks = ref([])
 const memberName = ref('')
-const storyOpened = ref(false)
-const chatOpened = ref(false)
+const storyOpened = ref(active.value === 'story')
+const chatOpened = ref(active.value === 'chat')
 watch(active, (room) => {
   if (room === 'story') storyOpened.value = true
   if (room === 'chat') chatOpened.value = true
@@ -252,7 +254,7 @@ watch(settingsStamp, () => {
       <AppsView v-if="active === 'apps'" class="room" />
       <ChatRoomView v-show="active === 'chat'" v-if="chatOpened" :visible="active === 'chat'" :companion="companion" @fresh="!marks.includes('chat') && (marks = [...marks, 'chat'])" />
       <WorldView v-if="active === 'world'" :active="active === 'world'" :companion="companion" @show-chat="active = 'home'" />
-      <StoryView v-show="active === 'story'" v-if="storyOpened" :companion="companion" :member="memberName" :cli="cli" />
+      <StoryView v-show="active === 'story'" v-if="storyOpened" :companion="companion" :member="memberName" :cli="cli" :visible="active === 'story'" />
       <AppearanceView v-if="active === 'appearance'" :companion="companion" :stamp="memoryStamp" @keys="openKeys" @show-chat="active = 'home'" />
       <StudioView v-if="active === 'studio'" :companion="companion" :stamp="memoryStamp" @keys="openKeys" />
       <ThemeView v-if="active === 'theme'" :companion="companion" @changed="loadSettingsAndTheme" @show-chat="active = 'home'" />
