@@ -169,6 +169,8 @@ pub struct Settings {
     pub start_session_on_launch: bool,
     /// The id of the companion's room key Castle made on the Portfolio (so it can be removed again).
     pub room_companion_key_id: Option<String>,
+    /// The name that key carries in the room (a rename in Settings remakes the key).
+    pub room_companion_name: Option<String>,
     pub world: WorldSettings,
     /// True once the first-run setup has finished.
     pub setup_done: bool,
@@ -205,6 +207,7 @@ impl Default for Settings {
             start_with_windows: false,
             start_session_on_launch: true,
             room_companion_key_id: None,
+            room_companion_name: None,
             world: WorldSettings::default(),
             setup_done: false,
             quick_actions: Vec::new(),
@@ -229,6 +232,7 @@ impl Settings {
         self.relationship_style = clean(self.relationship_style);
         self.theme = clean(self.theme);
         self.room_companion_key_id = clean(self.room_companion_key_id);
+        self.room_companion_name = clean(self.room_companion_name);
         self.last_seen_version = clean(self.last_seen_version);
         self.world.volume = self.world.volume.clamp(0.0, 1.0);
         self.quick_actions.retain(|a| !a.label.trim().is_empty() && !a.command.trim().is_empty());
@@ -368,6 +372,7 @@ mod tests {
             start_with_windows: true,
             start_session_on_launch: false,
             room_companion_key_id: Some("17".into()),
+            room_companion_name: Some("Lyra".into()),
             world: WorldSettings {
                 music: false,
                 volume: 0.25,

@@ -156,27 +156,136 @@ impl Room {
     }
 }
 
-/// Sends a picture (png, jpeg or webp, at most 512 KB) to a Portfolio door as multipart "file".
-fn upload_picture(base: &str, token: &str, path: &str, picture: &std::path::Path) -> Result<(), String> {
-    let kind = match picture.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).as_deref() {
-        Some("png") => "image/png",
-        Some("jpg") | Some("jpeg") => "image/jpeg",
-        Some("webp") => "image/webp",
-        _ => return Err("Choose a PNG, JPEG or WebP picture.".into()),
-    };
-    let bytes = std::fs::read(picture).map_err(|_| "The picture could not be read.".to_string())?;
-    if bytes.len() > 512 * 1024 {
-        return Err("That picture is larger than 512 KB - choose a smaller one.".into());
+/// The most a room face door takes, and the side a larger picture is shrunk to.
+pub const ROOM_PICTURE_MAX: usize = 512 * 1024;
+const ROOM_PICTURE_SIDE: u32 = 512;
+
+/// The picture's kind from its file name (png, jpeg or webp - what the face doors take).
+pub fn picture_kind(picture: &std::path::Path) -> Option<&'static str> {
+    match picture.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).as_deref() {
+        Some("png") => Some("image/png"),
+        Some("jpg") | Some("jpeg") => Some("image/jpeg"),
+        Some("webp") => Some("image/webp"),
+        _ => None,
     }
+}
+
+/// A picture made ready for a room face door (pure, tested): one within the limit goes as it is;
+/// a larger one (a drawn portrait is about 2 MB) is shrunk to 512 px - PNG when it has see-through
+/// parts and still fits, otherwise JPEG.
+pub fn fit_for_room(bytes: Vec<u8>, kind: &'static str) -> Result<(Vec<u8>, &'static str), String> {
+    if bytes.len() <= ROOM_PICTURE_MAX {
+        return Ok((bytes, kind));
+    }
+    let unreadable = || "That picture could not be read (png, jpg or webp).".to_string();
+    let picture = image::load_from_memory(&bytes).map_err(|_| unreadable())?;
+    let small = picture.resize(ROOM_PICTURE_SIDE, ROOM_PICTURE_SIDE, image::imageops::FilterType::Lanczos3);
+    if small.color().has_alpha() {
+        let mut png = Vec::new();
+        small.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|_| unreadable())?;
+        if png.len() <= ROOM_PICTURE_MAX {
+            return Ok((png, "image/png"));
+        }
+    }
+    let mut jpeg = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 85).encode_image(&small.to_rgb8()).map_err(|_| unreadable())?;
+    if jpeg.len() > ROOM_PICTURE_MAX {
+        return Err("That picture is too large even when shrunk - choose a smaller one.".into());
+    }
+    Ok((jpeg, "image/jpeg"))
+}
+
+fn http_client(timeout: Duration) -> Result<reqwest::blocking::Client, String> {
+    reqwest::blocking::Client::builder().user_agent(USER_AGENT).timeout(timeout).build().map_err(|_| "Castle could not reach the internet.".to_string())
+}
+
+/// Sends a picture (png, jpeg or webp; shrunk when larger than the door takes) to a Portfolio
+/// door as multipart "file".
+fn upload_picture(base: &str, token: &str, path: &str, picture: &std::path::Path) -> Result<(), String> {
+    let kind = picture_kind(picture).ok_or("Choose a PNG, JPEG or WebP picture.")?;
+    let bytes = std::fs::read(picture).map_err(|_| "The picture could not be read.".to_string())?;
+    let (bytes, kind) = fit_for_room(bytes, kind)?;
     let part = reqwest::blocking::multipart::Part::bytes(bytes).file_name("face").mime_str(kind).map_err(|_| "The picture could not be sent.".to_string())?;
     let form = reqwest::blocking::multipart::Form::new().part("file", part);
-    let http = reqwest::blocking::Client::builder().user_agent(USER_AGENT).timeout(Duration::from_secs(30)).build().map_err(|_| "Castle could not reach the internet.".to_string())?;
-    let answer = http.post(format!("{base}{path}")).bearer_auth(token).multipart(form).send().map_err(|_| "The Portfolio could not be reached.".to_string())?;
+    let answer = http_client(Duration::from_secs(30))?.post(format!("{base}{path}")).bearer_auth(token).multipart(form).send().map_err(|_| "The Portfolio could not be reached.".to_string())?;
     let status = answer.status().as_u16();
     if (200..300).contains(&status) {
         return Ok(());
     }
     Err(refusal_for(status, &answer.text().unwrap_or_default()).message)
+}
+
+/// Takes a face off a door (back to the letter circle, or the member's Google picture).
+fn clear_picture(base: &str, token: &str, path: &str) -> Result<(), String> {
+    let answer = http_client(Duration::from_secs(20))?.delete(format!("{base}{path}")).bearer_auth(token).send().map_err(|_| "The Portfolio could not be reached.".to_string())?;
+    if answer.status().is_success() {
+        Ok(())
+    } else {
+        Err(refusal_for(answer.status().as_u16(), &answer.text().unwrap_or_default()).message)
+    }
+}
+
+/// A room key id is only ever used in a path when it is plain (letters, digits, dashes).
+fn plain_id(id: Option<String>) -> Option<String> {
+    id.filter(|i| !i.is_empty() && i.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
+}
+
+/// The door for the companion's face.
+fn companion_face_door(id: &str) -> String {
+    format!("/api/member/room-keys/{id}/avatar")
+}
+
+/// Makes the companion's room key with the member's sign-in: (its id, the key itself).
+fn make_companion_key(base: &str, token: &str, companion: &str) -> Result<(Option<String>, String), String> {
+    let answer = http_client(Duration::from_secs(20))?
+        .post(format!("{base}/api/member/room-keys"))
+        .bearer_auth(token)
+        .json(&serde_json::json!({ "label": "MemoryCore Castle", "speaksAs": "ASSISTANT", "assistantName": companion }))
+        .send()
+        .map_err(|_| "The Portfolio could not be reached.".to_string())?;
+    let status = answer.status().as_u16();
+    let body = answer.text().unwrap_or_default();
+    if !(200..300).contains(&status) {
+        return Err(key_refusal(status, &body));
+    }
+    let v: Value = serde_json::from_str(&body).map_err(|_| "The Portfolio's answer could not be read.".to_string())?;
+    let new_key = v.get("key").and_then(Value::as_str).ok_or("The Portfolio's answer had no key.")?.to_string();
+    Ok((v.get("id").map(|id| id.to_string().trim_matches('"').to_string()), new_key))
+}
+
+/// Does the companion's room key need remaking? Yes when the name it carries is not the name in
+/// Settings (pure, tested). A key made before Castle remembered the name is remade once.
+pub fn needs_rename(carried: Option<&str>, current: &str) -> bool {
+    carried.map(str::trim) != Some(current.trim())
+}
+
+/// What a refresh did: the new key when the name changed, and how the picture went.
+pub struct Refreshed {
+    pub new_key: Option<(Option<String>, String)>,
+    pub face: Result<(), String>,
+}
+
+/// Brings the room up to date with Settings: a new name remakes the key (a new one first, then the
+/// old one removed - the Portfolio has no rename door, and a failed make leaves the old key as it
+/// was), then the picture goes to the key's face door, or the face is cleared when there is none.
+pub fn refresh_companion(base: &str, token: &str, key_id: &str, rename_to: Option<&str>, picture: Option<&std::path::Path>) -> Result<Refreshed, String> {
+    let mut id = key_id.to_string();
+    let mut new_key = None;
+    if let Some(name) = rename_to {
+        let (made_id, made_key) = make_companion_key(base, token, name)?;
+        // a key already gone on the Portfolio is fine
+        let _ = http_client(Duration::from_secs(20))?.delete(format!("{base}/api/member/room-keys/{key_id}")).bearer_auth(token).send();
+        if let Some(fresh) = plain_id(made_id.clone()) {
+            id = fresh;
+        }
+        new_key = Some((made_id, made_key));
+    }
+    let door = companion_face_door(&id);
+    let face = match picture {
+        Some(p) => upload_picture(base, token, &door, p),
+        None => clear_picture(base, token, &door),
+    };
+    Ok(Refreshed { new_key, face })
 }
 
 /// The member's own posted line ids (their lines are known by id, never by a display name).
@@ -237,31 +346,23 @@ pub async fn room_companion_in(on: bool, store: State<'_, SettingsStore>) -> Res
     let base = crate::signin::portfolio();
     let companion = settings.companion_label();
     let had_id = settings.room_companion_key_id.clone();
+    let picture = crate::commands::companion_picture(&store);
     let made = tauri::async_runtime::spawn_blocking(move || -> Result<Option<String>, String> {
-        let http = reqwest::blocking::Client::builder().user_agent(USER_AGENT).timeout(Duration::from_secs(20)).build().map_err(|_| "Castle could not reach the internet.".to_string())?;
         if on {
             if key::load("room-companion").is_some() {
                 return Ok(had_id);
             }
-            let answer = http
-                .post(format!("{base}/api/member/room-keys"))
-                .bearer_auth(&token)
-                .json(&serde_json::json!({ "label": "MemoryCore Castle", "speaksAs": "ASSISTANT", "assistantName": companion }))
-                .send()
-                .map_err(|_| "The Portfolio could not be reached.".to_string())?;
-            let status = answer.status().as_u16();
-            let body = answer.text().unwrap_or_default();
-            if !(200..300).contains(&status) {
-                return Err(key_refusal(status, &body));
+            let (id, new_key) = make_companion_key(&base, &token, &companion)?;
+            key::save("room-companion", &new_key)?;
+            // the picture chosen in Settings goes with it; a failed upload never undoes the "Let in"
+            if let (Some(door_id), Some(p)) = (plain_id(id.clone()), picture) {
+                let _ = upload_picture(&base, &token, &companion_face_door(&door_id), &p);
             }
-            let v: Value = serde_json::from_str(&body).map_err(|_| "The Portfolio's answer could not be read.".to_string())?;
-            let new_key = v.get("key").and_then(Value::as_str).ok_or("The Portfolio's answer had no key.")?;
-            key::save("room-companion", new_key)?;
-            Ok(v.get("id").map(|id| id.to_string().trim_matches('"').to_string()))
+            Ok(id)
         } else {
-            if let Some(id) = had_id.filter(|i| i.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')) {
+            if let Some(id) = plain_id(had_id) {
                 // a key already gone on the Portfolio is fine
-                let _ = http.delete(format!("{base}/api/member/room-keys/{id}")).bearer_auth(&token).send();
+                let _ = http_client(Duration::from_secs(20))?.delete(format!("{base}/api/member/room-keys/{id}")).bearer_auth(&token).send();
             }
             let _ = key::forget("room-companion");
             Ok(None)
@@ -270,10 +371,64 @@ pub async fn room_companion_in(on: bool, store: State<'_, SettingsStore>) -> Res
     .await
     .map_err(|_| "The room call stopped.".to_string())??;
     let mut next = store.get();
+    let made_now = made.is_some() && next.room_companion_key_id != made;
+    if made.is_none() {
+        next.room_companion_name = None;
+    } else if made_now {
+        next.room_companion_name = Some(next.companion_label());
+    }
     next.room_companion_key_id = made;
     crate::settings::save(&store.path, &next).map_err(|_| "The settings could not be saved.".to_string())?;
     *store.current.lock().unwrap() = next;
     Ok(on)
+}
+
+/// What a refresh tells the page.
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompanionRefresh {
+    /// false when the companion is not in the room (nothing to bring up to date)
+    pub in_room: bool,
+    pub renamed: bool,
+    /// the picture went (or the face was cleared)
+    pub face: bool,
+}
+
+/// After the companion's name or picture changes in Settings: brings the room up to date (a new
+/// name remakes its room key; the picture goes to its face door). Nothing happens while it is out
+/// of the room. A failed picture is said in words; a rename that worked is kept either way.
+#[tauri::command]
+pub async fn room_companion_refresh(store: State<'_, SettingsStore>) -> Result<CompanionRefresh, String> {
+    let settings = store.get();
+    let Some(key_id) = plain_id(settings.room_companion_key_id.clone()) else {
+        return Ok(CompanionRefresh::default());
+    };
+    if !settings.room_on("chat") {
+        return Ok(CompanionRefresh::default());
+    }
+    let token = key::load("member").ok_or("Sign in to the room first.")?;
+    let base = crate::signin::portfolio();
+    let name = settings.companion_label();
+    let rename_to = needs_rename(settings.room_companion_name.as_deref(), &name).then(|| name.clone());
+    let picture = crate::commands::companion_picture(&store);
+    let done = tauri::async_runtime::spawn_blocking(move || refresh_companion(&base, &token, &key_id, rename_to.as_deref(), picture.as_deref()))
+        .await
+        .map_err(|_| "The room call stopped.".to_string())??;
+    let renamed = done.new_key.is_some();
+    if let Some((id, new_key)) = done.new_key {
+        key::save("room-companion", &new_key)?;
+        let mut next = store.get();
+        if let Some(id) = plain_id(id) {
+            next.room_companion_key_id = Some(id);
+        }
+        next.room_companion_name = Some(name);
+        crate::settings::save(&store.path, &next).map_err(|_| "The settings could not be saved.".to_string())?;
+        *store.current.lock().unwrap() = next;
+    }
+    match done.face {
+        Ok(()) => Ok(CompanionRefresh { in_room: true, renamed, face: true }),
+        Err(why) => Err(format!("The room did not take the picture: {why}")),
+    }
 }
 
 async fn blocking<T: Send + 'static>(work: impl FnOnce() -> Result<T, RoomRefusal> + Send + 'static) -> Result<T, RoomRefusal> {
@@ -349,18 +504,13 @@ pub async fn room_face_set(path: Option<String>, companion: bool, store: State<'
     let key_id = store.get().room_companion_key_id.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
         let door = if companion {
-            let id = key_id.filter(|i| i.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')).ok_or("Let your companion in first.")?;
-            format!("/api/member/room-keys/{id}/avatar")
+            companion_face_door(&plain_id(key_id).ok_or("Let your companion in first.")?)
         } else {
             "/api/member/avatar".to_string()
         };
         match path {
             Some(p) => upload_picture(&base, &token, &door, std::path::Path::new(&p)),
-            None => {
-                let http = reqwest::blocking::Client::builder().user_agent(USER_AGENT).timeout(Duration::from_secs(20)).build().map_err(|_| "Castle could not reach the internet.".to_string())?;
-                let answer = http.delete(format!("{base}{door}")).bearer_auth(&token).send().map_err(|_| "The Portfolio could not be reached.".to_string())?;
-                if answer.status().is_success() { Ok(()) } else { Err(refusal_for(answer.status().as_u16(), &answer.text().unwrap_or_default()).message) }
-            }
+            None => clear_picture(&base, &token, &door),
         }
     })
     .await

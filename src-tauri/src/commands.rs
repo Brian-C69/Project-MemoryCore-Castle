@@ -144,17 +144,22 @@ pub fn avatar_set(path: String, store: State<SettingsStore>) -> Result<String, S
     files::data_url(&folder.join(name))
 }
 
-/// The companion's avatar as a data URL, or None for the default crystal.
-#[tauri::command]
-pub fn avatar_get(store: State<SettingsStore>) -> Option<String> {
+/// The companion's picture file: the one chosen in Settings, else the standard appearance drawn in
+/// APPEARANCE, else None (the default crystal). The header and the room both use it.
+pub fn companion_picture(store: &SettingsStore) -> Option<PathBuf> {
     let folder = store.folder();
     let chosen = AVATAR_NAMES.iter().map(|n| folder.join(n)).find(|p| p.is_file());
-    // without a chosen picture, the standard appearance drawn in APPEARANCE is the avatar
     let drawn = || {
         let memory = PathBuf::from(store.get().memory_folder?);
         ["portrait.png", "portrait.jpg", "portrait.webp"].iter().map(|n| memory.join("appearance").join(n)).find(|p| p.is_file())
     };
-    chosen.or_else(drawn).and_then(|p| files::data_url(&p).ok())
+    chosen.or_else(drawn)
+}
+
+/// The companion's avatar as a data URL, or None for the default crystal.
+#[tauri::command]
+pub fn avatar_get(store: State<SettingsStore>) -> Option<String> {
+    companion_picture(&store).and_then(|p| files::data_url(&p).ok())
 }
 
 /// Puts the default crystal back.

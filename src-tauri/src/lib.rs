@@ -216,6 +216,7 @@ pub fn run() {
             chatroom::room_seen,
             chatroom::room_avatar,
             chatroom::room_face_set,
+            chatroom::room_companion_refresh,
             roomread::room_visible,
             roomread::room_backlog,
             roomread::room_reset,
