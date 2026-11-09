@@ -67,7 +67,7 @@ $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ''
 Push-Location $root
 $ErrorActionPreference = 'Continue'
 try {
-    npm run tauri build -- --features official --config src-tauri/tauri.official.conf.json
+    npx tauri build --features official --config src-tauri/tauri.official.conf.json
     if ($LASTEXITCODE -ne 0) { throw "The build failed." }
     node scripts/latest-json.mjs
     if ($LASTEXITCODE -ne 0) { throw "The release files could not be written." }
