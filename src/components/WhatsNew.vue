@@ -2,14 +2,16 @@
 // "What's new in Castle X": shown once after an update, and from Settings > About any time.
 import ModalSheet from './ModalSheet.vue'
 import MarkdownText from './MarkdownText.vue'
-import { openUrl } from '../api/castle.js'
+import { openUrl, releasesPage } from '../api/castle.js'
 
 defineProps({
   version: { type: String, default: '' },
   sections: { type: Array, default: () => [] }, // [{ version, date, body }], newest first
 })
 const emit = defineEmits(['close'])
+// the Foundation's releases page once it answers, else GitHub's
 const RELEASES = 'https://github.com/Kiyoraka/Project-MemoryCore-Castle/releases'
+const allReleases = () => releasesPage().catch(() => RELEASES).then(openUrl).catch(() => {})
 </script>
 
 <template>
@@ -21,7 +23,7 @@ const RELEASES = 'https://github.com/Kiyoraka/Project-MemoryCore-Castle/releases
       </section>
       <p v-if="!sections.length" class="hint">No notes for this version.</p>
       <footer>
-        <button class="link" @click="openUrl(RELEASES).catch(() => {})">All releases</button>
+        <button class="link" @click="allReleases">All releases</button>
         <button class="close" @click="emit('close')">Got it</button>
       </footer>
     </div>

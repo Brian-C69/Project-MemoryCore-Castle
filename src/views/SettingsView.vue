@@ -19,6 +19,7 @@ import {
   keyStatus,
   keyTest,
   openUrl,
+  releasesPage,
   saveSettings,
   setupApply,
   setupCheckCli,
@@ -313,7 +314,7 @@ onMounted(async () => {
         <p class="hint">{{ updateLine || 'Castle looks for a new version every few hours.' }}</p>
         <p class="about-links">
           <button @click="emit('whatsnew')">What's new</button>
-          <button @click="openUrl('https://github.com/Kiyoraka/Project-MemoryCore-Castle/releases').catch(() => {})">All releases</button>
+          <button @click="releasesPage().then(openUrl).catch(() => {})">All releases</button>
         </p>
         <p class="hint">Free and open source under the MIT license. Change anything - see MAKE-IT-YOURS.md in the source.</p>
         <p class="hint">Castle checks GitHub for new versions, and talks to the MemoryCore Foundation only when you sign in or use CHAT. Your memory, keys and settings stay on this computer (and in your private backup, if you choose).</p>

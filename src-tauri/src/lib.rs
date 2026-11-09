@@ -234,6 +234,7 @@ pub fn run() {
             update::update_check,
             update::update_install,
             update::version_seen,
+            update::releases_page,
             update::diary_stamp,
             commands::choose_picture,
             commands::avatar_set,

@@ -142,6 +142,8 @@ export const updateCheck = () => invoke('update_check')
 export const updateInstall = () => invoke('update_install')
 // remembers the version whose "What's new" was shown; answers the one seen before
 export const versionSeen = (version) => invoke('version_seen', { version })
+// where "All releases" opens (the Foundation's page once it answers, else GitHub's)
+export const releasesPage = () => invoke('releases_page')
 // The diary's newest change (seconds), to wait for Save diary before an update.
 export const diaryStamp = () => invoke('diary_stamp')
 

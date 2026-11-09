@@ -181,6 +181,41 @@ async fn install(_app: &AppHandle) -> Result<(), String> {
     Err("This build was made without the updater.".into())
 }
 
+/// The public releases page on the MemoryCore Foundation's site, from its latest-release answer
+/// (an absolute https pageUrl), or None.
+pub fn page_from(answer: &Value) -> Option<String> {
+    answer.get("pageUrl")?.as_str().filter(|u| u.starts_with("https://") && !u.contains(char::is_whitespace)).map(String::from)
+}
+
+static RELEASES_PAGE_FOUND: Mutex<Option<String>> = Mutex::new(None);
+
+/// Where "All releases" opens: the Foundation's releases page once it answers, else GitHub's.
+/// Asked once per launch.
+#[tauri::command]
+pub async fn releases_page() -> String {
+    if let Some(found) = RELEASES_PAGE_FOUND.lock().unwrap().clone() {
+        return found;
+    }
+    let found = tauri::async_runtime::spawn_blocking(|| -> Option<String> {
+        let client = reqwest::blocking::Client::builder().timeout(Duration::from_secs(8)).build().ok()?;
+        let answer = client
+            .get(format!("{}/api/castle/releases/latest", crate::signin::PORTFOLIO))
+            .header("User-Agent", format!("MemoryCoreCastle/{}", env!("CARGO_PKG_VERSION")))
+            .send()
+            .ok()?;
+        if !answer.status().is_success() {
+            return None;
+        }
+        page_from(&answer.json::<Value>().ok()?)
+    })
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or_else(|| RELEASES_PAGE.to_string());
+    *RELEASES_PAGE_FOUND.lock().unwrap() = Some(found.clone());
+    found
+}
+
 /// Remembers the version whose "What's new" the member has seen; gives back the one before.
 #[tauri::command]
 pub fn version_seen(version: String, store: tauri::State<crate::settings::SettingsStore>) -> Result<Option<String>, String> {
@@ -237,6 +272,14 @@ mod tests {
         assert_eq!(parse_release(&json!({ "message": "Not Found" })), None);
         let bare = parse_release(&json!({ "tag_name": "0.2.1", "body": "", "html_url": "javascript:x" })).unwrap();
         assert_eq!((bare.notes, bare.url), (None, None));
+    }
+
+    #[test]
+    fn the_foundation_page_is_used_only_when_it_is_a_safe_address() {
+        assert_eq!(page_from(&json!({ "version": "0.2.0", "pageUrl": "https://example.org/castle" })).as_deref(), Some("https://example.org/castle"));
+        assert_eq!(page_from(&json!({ "pageUrl": "http://example.org/castle" })), None);
+        assert_eq!(page_from(&json!({ "pageUrl": "https://x.org/a b" })), None);
+        assert_eq!(page_from(&json!({ "version": "0.2.0" })), None);
     }
 
     #[test]
