@@ -123,6 +123,15 @@ export const roomPresence = () => invoke('room_presence')
 // who: undefined for the member, 'companion' for the companion's own room key
 export const roomPost = (text, who) => invoke('room_post', { text, who })
 export const roomFile = (id) => invoke('room_file', { id })
+export const roomSeen = () => invoke('room_seen')
+export const roomAvatar = (token) => invoke('room_avatar', { token })
+export const roomMine = () => invoke('room_mine')
+// path = a picture the member chose, or null for back to their Google picture; companion = its picture
+export const roomFaceSet = (path, companion = false) => invoke('room_face_set', { path, companion })
+// Castle's room reader (it reads from the moment Castle starts)
+export const roomBacklog = () => invoke('room_backlog')
+export const roomVisible = (on) => invoke('room_visible', { on })
+export const roomReset = () => invoke('room_reset')
 export const roomRules = () => invoke('room_rules')
 
 // Updates (official builds only). -> { official, version, available, notes, message }

@@ -14,7 +14,9 @@ mod key;
 mod memory;
 mod pty;
 mod quota;
+mod roomread;
 mod rooms;
+mod roomturn;
 mod signin;
 mod screen;
 mod session;
@@ -162,6 +164,7 @@ pub fn run() {
         .manage(chat::MainChat::default())
         .manage(chat::StoryChat::default())
         .manage(chat::MemberPictures::default())
+        .manage(roomread::RoomReader::default())
         .invoke_handler(tauri::generate_handler![
             get_settings,
             save_settings,
@@ -208,6 +211,13 @@ pub fn run() {
             signin::member_status,
             signin::member_sign_out,
             chatroom::room_companion_in,
+            chatroom::room_mine,
+            chatroom::room_seen,
+            chatroom::room_avatar,
+            chatroom::room_face_set,
+            roomread::room_visible,
+            roomread::room_backlog,
+            roomread::room_reset,
             worlds::worlds_mine,
             worlds::world_new,
             worlds::world_delete,
@@ -286,6 +296,7 @@ pub fn run() {
             }
             world::restore(app.handle());
             world::watch_covered(app.handle());
+            roomread::start(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {

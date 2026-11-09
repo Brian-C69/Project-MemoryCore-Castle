@@ -1,10 +1,14 @@
 <script setup>
 // CHAT: the MemoryCore Foundation room - the member, the room's hosts, other members and their
-// companions. Without a room key (or with one the door refuses) the room shows its locked door.
+// companions, as a chat: every speaker's lines (read by Castle's room reader from the moment it
+// starts), the member's own on the right with WhatsApp-like ticks, a face beside everyone else's.
+// Until the member is in, the room shows its guide door.
 // The companion may join in through the bridge: room lines reach it as data, its reply comes back
 // from its Chat as <say>...</say> and is posted with its own room key.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getSettings, keyStatus, memberSignIn, memberSignOut, memberStatus, openUrl, roomCompanionIn, roomFile, roomLines, roomMe, roomPost, roomPresence, roomRules, saveSettings } from '../api/castle.js'
+import { listen } from '@tauri-apps/api/event'
+import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCompanionIn, roomFaceSet, roomFile, roomMe, roomMine, roomPost, roomPresence, roomReset, roomRules, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
+import { initial, isMine, ticks } from '../components/roomchat.js'
 import { askCompanion } from '../api/ask.js'
 import { readSay, roomBlock, shouldForward } from '../components/roombridge.js'
 
@@ -18,7 +22,12 @@ const settings = ref(null)
 const keys = ref([])
 const me = ref(null)
 const lines = ref([])
-const cursor = ref(null)
+const seen = ref([]) // who has read how far (the ticks)
+const myIds = ref([]) // the lines Castle posted for the member
+const faces = ref({}) // avatar token -> picture
+const tab = ref('chat') // CHAT | LOG
+const readProblem = ref('')
+const faceLine = ref('')
 const presence = ref([])
 const refused = ref(null)
 const draft = ref('')
@@ -40,8 +49,8 @@ const locked = computed(() => !ready.value || refused.value?.kind === 'locked' |
 const mode = computed(() => settings.value?.roomCompanionMode ?? 'off')
 const shown = computed(() => lines.value)
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const isAi = (l) => ['assistant', 'member_assistant'].includes(l.author?.kind)
+const mine = (l) => isMine(l, myIds.value, me.value)
 
 function clock(at) {
   const d = new Date(at)
@@ -58,43 +67,32 @@ async function loadFile(id) {
   }
 }
 
-function merge(answer, first) {
-  const cleared = new Set(answer.cleared ?? [])
-  const fresh = (answer.lines ?? []).filter((l) => !lines.value.some((x) => x.id === l.id))
-  lines.value = [...lines.value.filter((l) => !cleared.has(l.id)), ...fresh].slice(-500)
-  cursor.value = answer.cursor ?? cursor.value
-  fresh.forEach((l) => {
-    loadFile(l.voice?.fileId)
-    loadFile(l.picture?.fileId)
-  })
-  if (fresh.length && !first) {
-    if (!props.visible) emit('fresh')
-    bridge(fresh)
+async function loadFace(token) {
+  if (!token || faces.value[token] !== undefined) return
+  faces.value = { ...faces.value, [token]: null }
+  try {
+    faces.value = { ...faces.value, [token]: await roomAvatar(token) }
+  } catch {
+    // the letter stays
   }
-  return fresh.length
 }
 
-// The long read: held up to 20 s while CHAT is open, a quiet look once a minute while hidden.
-async function loop() {
-  let first = true
-  while (alive) {
-    if (!ready.value) {
-      await sleep(3000)
-      continue
-    }
-    try {
-      const answer = await roomLines(cursor.value, props.visible && !first ? 20 : 0)
-      refused.value = null
-      const fresh = merge(answer, first)
-      first = false
-      if (fresh && props.visible) scrollDown()
-      if (answer.more) continue
-      if (!props.visible) await sleep(60000)
-    } catch (reason) {
-      refused.value = typeof reason === 'object' ? reason : { kind: 'other', message: String(reason) }
-      await sleep(refused.value.kind === 'locked' ? 30000 : 10000)
-    }
+// Lines from the room reader (or a line just sent): kept once each, in order; cleared ones go.
+function take(fresh, cleared = [], quiet = false) {
+  const gone = new Set(cleared)
+  const added = (fresh ?? []).filter((l) => !lines.value.some((x) => x.id === l.id))
+  lines.value = [...lines.value.filter((l) => !gone.has(l.id)), ...added].sort((x, y) => x.id - y.id).slice(-500)
+  added.forEach((l) => {
+    loadFile(l.voice?.fileId)
+    loadFile(l.picture?.fileId)
+    loadFace(l.author?.avatar)
+  })
+  if (added.length && !quiet) {
+    readProblem.value = ''
+    if (!props.visible) emit('fresh')
+    bridge(added)
   }
+  if (added.length && props.visible) scrollDown()
 }
 
 async function refreshPresence() {
@@ -102,6 +100,8 @@ async function refreshPresence() {
   try {
     presence.value = await roomPresence()
     me.value = await roomMe()
+    seen.value = await roomSeen()
+    presence.value.forEach((x) => loadFace(x.avatar))
   } catch {
     // the read loop reports refusals
   }
@@ -117,7 +117,8 @@ async function send() {
   try {
     const line = await roomPost(text)
     draft.value = ''
-    merge({ lines: [line], cursor: cursor.value }, true)
+    if (line?.id) myIds.value = [...myIds.value, line.id]
+    take([line], [], true)
     scrollDown()
   } catch (reason) {
     refused.value = reason
@@ -207,9 +208,9 @@ async function checkDoor() {
     member.value = await memberStatus()
     if (member.value?.roomOpen && was === false) {
       emit('fresh') // the door just opened: the tab glows
-      lines.value = []
-      cursor.value = null
       refused.value = null
+      await roomReset().catch(() => {})
+      lines.value = []
     }
   } catch {
     // outside Castle's window
@@ -222,6 +223,7 @@ async function signIn() {
   try {
     member.value = await memberSignIn()
     refused.value = null
+    await roomReset().catch(() => {})
   } catch (reason) {
     doorProblem.value = String(reason?.message ?? reason)
   } finally {
@@ -236,7 +238,7 @@ async function signOut() {
   } finally {
     member.value = null
     lines.value = []
-    cursor.value = null
+    await roomReset().catch(() => {})
     await checkDoor()
     keys.value = await keyStatus().catch(() => keys.value)
   }
@@ -255,6 +257,20 @@ async function setCompanionIn(on) {
 
 const openLibrary = () => openUrl(`${PORTFOLIO}/alice/library`).catch(() => {})
 
+// The member's face in the room (their Google picture by default), and their companion's.
+async function setFace(companion, reset = false) {
+  faceLine.value = ''
+  try {
+    const path = reset ? null : await choosePicture(companion ? `A picture for ${props.companion}` : 'Your picture in the room')
+    if (!reset && !path) return
+    await roomFaceSet(path, companion)
+    faceLine.value = reset ? 'Back to your Google picture.' : 'Your new picture is in the room.'
+    refreshPresence()
+  } catch (reason) {
+    faceLine.value = String(reason?.message ?? reason)
+  }
+}
+
 // While the door is shut, Castle looks again by itself: every 30 s while CHAT is shown, every
 // five minutes while hidden.
 let doorTimer = 0
@@ -268,6 +284,7 @@ function scheduleDoor() {
 }
 
 let presenceTimer
+const stops = []
 onMounted(async () => {
   try {
     settings.value = (await getSettings()).settings
@@ -276,19 +293,39 @@ onMounted(async () => {
     // outside Castle's window
   }
   window.addEventListener('castle-say', onSay)
+  try {
+    stops.push(await listen('room-lines', (e) => take(e.payload.lines, e.payload.cleared)))
+    stops.push(
+      await listen('room-read-failed', (e) => {
+        const r = e.payload
+        if (['locked', 'notSetUp', 'off'].includes(r.kind)) refused.value = r
+        else readProblem.value = `The room could not be read (${r.message}) - trying again.`
+      }),
+    )
+    const backlog = await roomBacklog()
+    take(backlog.lines, [], true)
+    if (backlog.problem && !['locked', 'notSetUp', 'off'].includes(backlog.problem.kind)) readProblem.value = `The room could not be read (${backlog.problem.message}) - trying again.`
+    myIds.value = await roomMine()
+    await roomVisible(props.visible)
+  } catch {
+    // outside Castle's window
+  }
   await checkDoor()
   scheduleDoor()
-  presenceTimer = setInterval(refreshPresence, 30000)
+  presenceTimer = setInterval(refreshPresence, 10000)
   refreshPresence()
-  loop()
+  scrollDown()
 })
 onBeforeUnmount(() => {
   alive = false
   clearInterval(presenceTimer)
   clearTimeout(doorTimer)
   window.removeEventListener('castle-say', onSay)
+  stops.forEach((stop) => stop())
+  roomVisible(false).catch(() => {})
 })
 watch(() => props.visible, (on) => {
+  roomVisible(on).catch(() => {})
   if (on) {
     refreshPresence()
     scrollDown()
@@ -330,18 +367,33 @@ watch(() => props.visible, (on) => {
         <div v-if="me?.needsName" class="banner">Set your Foundation display name on the Portfolio to speak here. You can read already.</div>
         <div v-else-if="me?.muted || refused?.kind === 'muted'" class="banner">You are muted in this room for now. You can still read.</div>
         <div v-else-if="refused && !['locked', 'notSetUp'].includes(refused.kind)" class="banner">{{ refused.message }}</div>
-        <div ref="scroller" class="lines">
+        <div class="tabs">
+          <button :class="{ on: tab === 'chat' }" @click="tab = 'chat'">CHAT</button>
+          <button :class="{ on: tab === 'log' }" @click="tab = 'log'">LOG</button>
+        </div>
+        <p v-if="readProblem" class="problem">{{ readProblem }}</p>
+        <div v-show="tab === 'chat'" ref="scroller" class="lines">
           <p v-if="!shown.length" class="hint">The room is quiet. Say hello.</p>
-          <div v-for="l in shown" :key="l.id" class="line" :class="[l.author?.kind, { ai: isAi(l) }]">
-            <template v-if="l.author?.kind === 'system'"><em>{{ l.text }}</em></template>
-            <template v-else>
-              <span class="who">{{ l.author?.name }}<span v-if="isAi(l)" class="spark"> ✦</span></span>
+          <template v-for="l in shown" :key="l.id">
+            <p v-if="l.author?.kind === 'system'" class="system"><em>{{ l.text }}</em></p>
+            <div v-else-if="mine(l)" class="bubble mine">
               <span class="text">{{ l.text }}</span>
-              <audio v-if="l.voice && files[l.voice.fileId]" :src="files[l.voice.fileId]" controls preload="none"></audio>
-              <img v-if="l.picture && files[l.picture.fileId]" :src="files[l.picture.fileId]" alt="" class="picture" />
-              <span class="at">{{ clock(l.at) }}</span>
-            </template>
-          </div>
+              <span class="meta">{{ clock(l.at) }} <span class="tick" :class="{ read: ticks(l, seen, me).read }" :title="ticks(l, seen, me).title">{{ ticks(l, seen, me).mark }}</span></span>
+            </div>
+            <div v-else class="bubble theirs" :class="[l.author?.kind, { ai: isAi(l) }]">
+              <span class="face"><img v-if="faces[l.author?.avatar]" :src="faces[l.author.avatar]" alt="" /><template v-else>{{ initial(l.author) }}</template></span>
+              <div class="body">
+                <span class="who">{{ l.author?.name }}<span v-if="isAi(l)" class="spark"> ✦</span></span>
+                <span class="text">{{ l.text }}</span>
+                <audio v-if="l.voice && files[l.voice.fileId]" :src="files[l.voice.fileId]" controls preload="none"></audio>
+                <img v-if="l.picture && files[l.picture.fileId]" :src="files[l.picture.fileId]" alt="" class="picture" />
+              </div>
+              <span class="meta">{{ clock(l.at) }}</span>
+            </div>
+          </template>
+        </div>
+        <div v-show="tab === 'log'" class="lines log">
+          <p class="hint">{{ companion }}'s turns in the room appear here: what it was handed, and what it said or chose not to say.</p>
         </div>
         <form class="say" @submit.prevent="send">
           <input v-model="draft" maxlength="1000" placeholder="Write to the room..." :disabled="me?.needsName || me?.muted" />
@@ -353,6 +405,7 @@ watch(() => props.visible, (on) => {
         <h3>IN THE ROOM</h3>
         <ul>
           <li v-for="p in presence" :key="p.name + p.kind" :class="p.status">
+            <span class="face small"><img v-if="faces[p.avatar]" :src="faces[p.avatar]" alt="" /><template v-else>{{ initial(p) }}</template></span>
             <span class="dot">●</span> {{ p.name }}<span v-if="['assistant', 'member_assistant'].includes(p.kind)"> ✦</span>
             <span v-if="p.kind === 'host'" class="tag">host</span>
             <span v-else-if="p.foundation" class="tag">Foundation</span>
@@ -365,6 +418,13 @@ watch(() => props.visible, (on) => {
         <label class="mode"><input type="checkbox" :checked="haveCompanionKey" @change="setCompanionIn($event.target.checked)" /> Let {{ companion }} in</label>
         <p class="hint">{{ haveCompanionKey ? `${companion} speaks on your own usage, kindly and without anything private.` : `${companion} is not in the room. Let it in and Castle makes its room key for it - nothing to paste.` }}</p>
         <p v-if="doorProblem" class="problem">{{ doorProblem }}</p>
+        <h3>YOUR FACE</h3>
+        <div class="row wrap">
+          <button @click="setFace(false)">Change my picture</button>
+          <button @click="setFace(false, true)">Use my Google picture</button>
+          <button v-if="haveCompanionKey" @click="setFace(true)">{{ companion }}'s picture</button>
+        </div>
+        <p v-if="faceLine" class="hint">{{ faceLine }}</p>
         <button @click="signOut">Sign out</button>
       </aside>
     </template>
@@ -372,6 +432,83 @@ watch(() => props.visible, (on) => {
 </template>
 
 <style scoped>
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.tabs button.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.bubble {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  max-width: 78%;
+  font-size: 14px;
+}
+.bubble.mine {
+  align-self: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 12px 12px 2px 12px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.bubble.theirs .body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 12px 12px 12px 2px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.face {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 14px;
+  font-weight: 600;
+}
+.face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.face.small {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  font-size: 11px;
+  vertical-align: middle;
+}
+.meta {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.tick {
+  letter-spacing: -2px;
+}
+.tick.read {
+  color: #53bdeb;
+}
+.system {
+  align-self: center;
+  margin: 0;
+  color: var(--good);
+  font-size: 13px;
+}
+.row.wrap {
+  flex-wrap: wrap;
+}
 .steps {
   display: grid;
   gap: 12px;

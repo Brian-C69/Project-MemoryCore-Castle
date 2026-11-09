@@ -135,6 +135,67 @@ impl Room {
         let bytes = response.bytes().map_err(|_| refusal("offline", "The file could not be read."))?;
         Ok(format!("data:{kind};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
     }
+
+    /// Who has read how far: [{name, kind, seen, avatar}] - the ticks.
+    pub fn seen(&self) -> Result<Value, RoomRefusal> {
+        self.get_json("/seen", Duration::from_secs(15))
+    }
+
+    /// A speaker's face (by its avatar token) as a data URL.
+    pub fn avatar(&self, token: &str) -> Result<String, RoomRefusal> {
+        if token.is_empty() || !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            return Err(refusal("other", "That is not a face."));
+        }
+        let response = self.client(Duration::from_secs(20))?.get(room_url(&self.base, &format!("/avatars/{token}"))).bearer_auth(&self.key).send();
+        let response = Self::answer(response)?;
+        let kind = response.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+        if !kind.starts_with("image/") {
+            return Err(refusal("wrongType", "That face is not a picture."));
+        }
+        let bytes = response.bytes().map_err(|_| refusal("offline", "The face could not be read."))?;
+        Ok(format!("data:{kind};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
+    }
+}
+
+/// Sends a picture (png, jpeg or webp, at most 512 KB) to a Portfolio door as multipart "file".
+fn upload_picture(base: &str, token: &str, path: &str, picture: &std::path::Path) -> Result<(), String> {
+    let kind = match picture.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).as_deref() {
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        _ => return Err("Choose a PNG, JPEG or WebP picture.".into()),
+    };
+    let bytes = std::fs::read(picture).map_err(|_| "The picture could not be read.".to_string())?;
+    if bytes.len() > 512 * 1024 {
+        return Err("That picture is larger than 512 KB - choose a smaller one.".into());
+    }
+    let part = reqwest::blocking::multipart::Part::bytes(bytes).file_name("face").mime_str(kind).map_err(|_| "The picture could not be sent.".to_string())?;
+    let form = reqwest::blocking::multipart::Form::new().part("file", part);
+    let http = reqwest::blocking::Client::builder().user_agent(USER_AGENT).timeout(Duration::from_secs(30)).build().map_err(|_| "Castle could not reach the internet.".to_string())?;
+    let answer = http.post(format!("{base}{path}")).bearer_auth(token).multipart(form).send().map_err(|_| "The Portfolio could not be reached.".to_string())?;
+    let status = answer.status().as_u16();
+    if (200..300).contains(&status) {
+        return Ok(());
+    }
+    Err(refusal_for(status, &answer.text().unwrap_or_default()).message)
+}
+
+/// The member's own posted line ids (their lines are known by id, never by a display name).
+fn mine_file(store: &SettingsStore) -> std::path::PathBuf {
+    store.folder().join("room-mine.json")
+}
+
+pub fn my_line_ids(store: &SettingsStore) -> Vec<u64> {
+    std::fs::read_to_string(mine_file(store)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+}
+
+fn remember_mine(store: &SettingsStore, id: u64) {
+    let mut ids = my_line_ids(store);
+    if !ids.contains(&id) {
+        ids.push(id);
+    }
+    let keep = ids.len().saturating_sub(300);
+    let _ = std::fs::write(mine_file(store), serde_json::to_string(&ids[keep..]).unwrap_or_default());
 }
 
 /// The member's room (who: "me" with their sign-in, "companion" with the key Castle made for it).
@@ -241,8 +302,70 @@ pub async fn room_presence(store: State<'_, SettingsStore>) -> Result<Value, Roo
 /// Posts a line as the member ("me") or as their companion ("companion", its own room key).
 #[tauri::command]
 pub async fn room_post(text: String, who: Option<String>, store: State<'_, SettingsStore>) -> Result<Value, RoomRefusal> {
+    let as_member = who.as_deref().unwrap_or("me") == "me";
     let room = room_for(&store, who.as_deref().unwrap_or("me"))?;
-    blocking(move || room.post(&text)).await
+    let line = blocking(move || room.post(&text)).await?;
+    if as_member {
+        if let Some(id) = line.get("id").and_then(Value::as_u64) {
+            remember_mine(&store, id);
+        }
+    }
+    Ok(line)
+}
+
+/// The ids of the lines this member posted from Castle.
+#[tauri::command]
+pub fn room_mine(store: State<SettingsStore>) -> Vec<u64> {
+    my_line_ids(&store)
+}
+
+#[tauri::command]
+pub async fn room_seen(store: State<'_, SettingsStore>) -> Result<Value, RoomRefusal> {
+    let room = room_for(&store, "me")?;
+    blocking(move || room.seen()).await
+}
+
+static FACES: std::sync::Mutex<Option<std::collections::HashMap<String, String>>> = std::sync::Mutex::new(None);
+
+/// A face by its avatar token, cached for good (a new picture comes with a new token).
+#[tauri::command]
+pub async fn room_avatar(token: String, store: State<'_, SettingsStore>) -> Result<String, RoomRefusal> {
+    if let Some(found) = FACES.lock().unwrap().as_ref().and_then(|m| m.get(&token).cloned()) {
+        return Ok(found);
+    }
+    let room = room_for(&store, "me")?;
+    let key = token.clone();
+    let face = blocking(move || room.avatar(&key)).await?;
+    FACES.lock().unwrap().get_or_insert_with(Default::default).insert(token, face.clone());
+    Ok(face)
+}
+
+/// The member's own face in the room: a picture they choose (`path`), or back to their Google
+/// picture (`path` = None). `companion` = true sets their companion's picture instead.
+#[tauri::command]
+pub async fn room_face_set(path: Option<String>, companion: bool, store: State<'_, SettingsStore>) -> Result<(), String> {
+    crate::rooms::need(&store, "chat")?;
+    let token = key::load("member").ok_or("Sign in to the room first.")?;
+    let base = crate::signin::portfolio();
+    let key_id = store.get().room_companion_key_id.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        let door = if companion {
+            let id = key_id.filter(|i| i.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')).ok_or("Let your companion in first.")?;
+            format!("/api/member/room-keys/{id}/avatar")
+        } else {
+            "/api/member/avatar".to_string()
+        };
+        match path {
+            Some(p) => upload_picture(&base, &token, &door, std::path::Path::new(&p)),
+            None => {
+                let http = reqwest::blocking::Client::builder().user_agent(USER_AGENT).timeout(Duration::from_secs(20)).build().map_err(|_| "Castle could not reach the internet.".to_string())?;
+                let answer = http.delete(format!("{base}{door}")).bearer_auth(&token).send().map_err(|_| "The Portfolio could not be reached.".to_string())?;
+                if answer.status().is_success() { Ok(()) } else { Err(refusal_for(answer.status().as_u16(), &answer.text().unwrap_or_default()).message) }
+            }
+        }
+    })
+    .await
+    .map_err(|_| "The picture could not be sent.".to_string())?
 }
 
 #[tauri::command]
