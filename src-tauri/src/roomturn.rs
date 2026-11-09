@@ -551,6 +551,48 @@ from the room</note>").as_deref(), Some("apply the picture fix from the room"));
     }
 
     #[test]
+    fn the_whole_loop_room_to_workspace_and_back() {
+        use crate::link::{self, Hosted, Idle, LinkState};
+        let memory = std::env::temp_dir().join(format!("castle-loop-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&memory);
+        std::fs::create_dir_all(&memory).unwrap();
+        let folder = link::link_folder(&memory);
+
+        // 1 the room: a guest describes the fix, the member asks the companion to pass it on
+        let lines = vec![line(96, "Kiyo", "host", "use the picture button until it is fixed"), line(97, "Rin", "member", "Mika, pass that to my workspace")];
+        let output = "<say>On it, Rin!</say><note>apply the picture fix described in the room</note>";
+        let note = workspace_note(&read_note(output).unwrap(), &lines, &[97], "now").unwrap();
+        link::send(&folder, &note).unwrap();
+
+        // 2 Castle knocks the quiet workspace, once
+        let typed = std::cell::RefCell::new(Vec::<String>::new());
+        let knock = |w: &str| {
+            typed.borrow_mut().push(w.to_string());
+            Ok(())
+        };
+        let idle = Idle { running: true, quiet: Duration::from_secs(30), typed: Duration::from_secs(60) };
+        let hosted = [Hosted { name: "main", idle, place: "the workspace", knock: &knock }];
+        let mut state = LinkState::default();
+        assert_eq!(link::tick(&folder, &hosted, true, &mut state), vec!["main"]);
+        assert_eq!(*typed.borrow(), vec!["link".to_string()]);
+
+        // 3 the workspace reads it, acts on the word, moves it to read and answers the room
+        let (name, got) = link::waiting(&folder, "main").remove(0);
+        assert_eq!(got.word.as_deref(), Some("Mika, pass that to my workspace"));
+        link::mark_read(&folder, "main", &name);
+        link::send(&folder, &link::Note { from: "main".into(), to: got.reply_to.clone().unwrap(), at: "now".into(), wake: true, about: "Done - the picture fix is in.".into(), ..Default::default() }).unwrap();
+
+        // 4 the room companion's next turn is handed the answer as data
+        let replies: Vec<String> = link::waiting(&folder, "room").into_iter().map(|(_, n)| n.about).collect();
+        let words = prompt("named", "Rin", &[], &[97], true, &replies);
+        assert!(words.contains("<workspace>
+Done - the picture fix is in.
+</workspace>"));
+        assert!(link::waiting(&folder, "main").is_empty());
+        let _ = std::fs::remove_dir_all(&memory);
+    }
+
+    #[test]
     fn the_answer_is_read_from_its_say() {
         assert_eq!(read_say("thinking...\n<say>Hi Kiyo!</say>"), Some("Hi Kiyo!".into()));
         assert_eq!(read_say("<say></say>"), Some(String::new()));
