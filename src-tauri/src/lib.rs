@@ -27,6 +27,7 @@ mod transcript;
 mod tray;
 mod update;
 mod world;
+mod worlds;
 
 use serde::Serialize;
 use settings::{Settings, SettingsStore};
@@ -201,6 +202,10 @@ pub fn run() {
             world::world_screens,
             world::world_apply,
             world::world_identify,
+            worlds::worlds_mine,
+            worlds::world_new,
+            worlds::world_delete,
+            worlds::world_prepare,
             chatroom::room_me,
             chatroom::room_lines,
             chatroom::room_presence,

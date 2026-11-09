@@ -18,5 +18,6 @@ Castle gives you PowerShell helpers in the folder named by the `CASTLE_TOOLS` en
 - Pictures: when `CASTLE_IMAGE` is `codex`, draw with your own image tool. When it is `openai`, run `castle-image.ps1`. When it is `none`, still run `castle-image.ps1` - it saves the prompt instead.
 - Video `castle-video.ps1`, songs `castle-song.ps1`, voice `castle-voice.ps1`.
 - The companion's look lives in `appearance/` (companion.md in words, portrait.png, wardrobe/<outfit>/, hairstyles/<style>/, current.json for today's outfit and hair). The drawing styles are in the folder named by `CASTLE_STYLES` (standard-appearance.md, outfit-turnaround.md, hair-turnaround.md, try-on.md): fill their slots and pass `-Reference appearance/portrait.png` when it exists, so the face stays the same.
+- 3D worlds {{USER_NAME}} creates live in `worlds/<name>/` (world.json, request.md, design/, hd/, pieces/). In `world.json` change only `title`, `line` and `glow` - never the pieces. Picture styles: world-concept.md and world-piece.md. Castle prepares the pieces itself; never edit `hd/` or `pieces/`.
 - A helper that exits with code **3** had no key: it has already saved the prompt, lyrics or line next to where the file would be. Tell {{USER_NAME}} kindly what was saved, and that adding the key in Castle's Settings makes the real thing next time.
 <!-- castle:end -->

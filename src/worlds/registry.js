@@ -38,7 +38,7 @@ export const MY_PICTURES = {
 }
 
 // A world.json made into a registry entry; `base` is where its files are served from.
-export function fromManifest(manifest, { idPrefix = '3d', base, source = 'built-in', previewUrl } = {}) {
+export function fromManifest(manifest, { idPrefix = '3d', base, source = 'built-in', previewUrl, urlOf = (file) => `${base}${file}` } = {}) {
   const slug = String(manifest.slug ?? '')
   const pieces = (manifest.pieces ?? []).filter((p) => p && ROLES.includes(p.role) && typeof p.file === 'string')
   return {
@@ -51,7 +51,7 @@ export function fromManifest(manifest, { idPrefix = '3d', base, source = 'built-
     camera: { default: 'director', scale: 1, ...(manifest.camera ?? {}) },
     glow: manifest.glow || '#8fe6ff',
     preview: previewUrl ?? `${base}preview.jpg`,
-    pieces: pieces.map((p) => ({ ...p, url: `${base}${p.file}` })),
+    pieces: pieces.map((p) => ({ ...p, url: urlOf(p.file) })),
     source,
   }
 }
@@ -76,7 +76,20 @@ export function builtIn2d() {
   }))
 }
 
-// `mine` = the member's own created worlds (already entries, from worlds_mine()).
+// One of the member's own worlds (from worlds_mine) as a registry entry; `convert` turns a file
+// path into a URL the page may load (convertFileSrc).
+export function fromMine(item, convert) {
+  const sep = item.folder.includes('\\') ? '\\' : '/'
+  const entry = fromManifest({ ...item.manifest, slug: item.slug }, {
+    idPrefix: 'my',
+    source: 'yours',
+    previewUrl: item.preview ? convert(item.preview) : '',
+    urlOf: (file) => convert(`${item.folder}${sep}pieces${sep}${file}`),
+  })
+  return { ...entry, have: item.have, exports: item.exports, painted: item.painted, folder: item.folder, slug: item.slug }
+}
+
+// `mine` = the member's own created worlds (already entries, see fromMine).
 export function allWorlds(mine = []) {
   return [...builtIn3d(), PROCEDURAL, ...mine, ...builtIn2d(), MY_PICTURES]
 }

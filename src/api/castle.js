@@ -104,6 +104,9 @@ export const worldScreens = () => invoke('world_screens')
 export const worldApply = (screens) => invoke('world_apply', { screens })
 export const worldIdentify = (index) => invoke('world_identify', { index })
 export const worldsMine = () => invoke('worlds_mine')
+export const worldNew = (name, description, layout, picture) => invoke('world_new', { name, description, layout, picture })
+export const worldDelete = (slug) => invoke('world_delete', { slug })
+export const worldPrepare = (slug) => invoke('world_prepare', { slug })
 
 // The MemoryCore Foundation room (keys stay in the core). Refusals come back as { kind, message }.
 export const roomMe = () => invoke('room_me')

@@ -6,7 +6,7 @@
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { listen } from '@tauri-apps/api/event'
 import WorldStage from './WorldStage.vue'
-import { worldsMine } from '../api/castle.js'
+import { loadMine } from './mine.js'
 
 const props = defineProps({ initial: { type: Object, required: true } })
 
@@ -40,7 +40,7 @@ function seen(on) {
 onMounted(async () => {
   stops.push(await listen('castle-world-config', (event) => take(event.payload)))
   stops.push(await listen('world-visible', (event) => seen(!!event.payload)))
-  mine.value = await worldsMine().catch(() => [])
+  mine.value = await loadMine()
 })
 onBeforeUnmount(() => {
   clearTimeout(unloadTimer)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_WORLD, allWorlds, findWorld, fromManifest, isWorldId } from './registry.js'
+import { DEFAULT_WORLD, allWorlds, findWorld, fromManifest, fromMine, isWorldId } from './registry.js'
 import { pieceThere, readiness, statusLine } from './readiness.js'
 
 const answer = (ok, type = 'model/gltf-binary') => async () => ({ ok, headers: { get: () => type } })
@@ -37,6 +37,23 @@ describe('the registry', () => {
     expect(crystal.pieces[0].url).toBe('/worlds/crystal-isle/01-crystal-isle-base.glb')
     expect(crystal.pieces.filter((p) => p.role === 'companion')).toHaveLength(1)
     expect(crystal.camera.default).toBe('orbit')
+  })
+
+  it('makes a member world from its folder, loading pieces from pieces/', () => {
+    const item = {
+      slug: 'star-garden',
+      folder: 'D:\\Memory\\worlds\\star-garden',
+      manifest: { title: 'Star Garden', layout: 'centrepiece', pieces: [{ file: '01-base-isle.glb', role: 'base', size: 40 }] },
+      have: 1,
+      exports: 1,
+      preview: 'D:\\Memory\\worlds\\star-garden\\design\\00-concept.png',
+      painted: true,
+    }
+    const w = fromMine(item, (p) => `asset://${p}`)
+    expect(w.id).toBe('my/star-garden')
+    expect(w.pieces[0].url).toBe('asset://D:\\Memory\\worlds\\star-garden\\pieces\\01-base-isle.glb')
+    expect(w.preview).toBe('asset://D:\\Memory\\worlds\\star-garden\\design\\00-concept.png')
+    expect(w.source).toBe('yours')
   })
 
   it('adds the member worlds and drops pieces with an unknown role', () => {

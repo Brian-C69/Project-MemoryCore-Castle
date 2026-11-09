@@ -236,7 +236,7 @@ watch(settingsStamp, () => {
       </div>
       <AppsView v-if="active === 'apps'" class="room" />
       <ChatRoomView v-show="active === 'chat'" v-if="chatOpened" :visible="active === 'chat'" :companion="companion" @fresh="!marks.includes('chat') && (marks = [...marks, 'chat'])" />
-      <WorldView v-if="active === 'world'" :active="active === 'world'" />
+      <WorldView v-if="active === 'world'" :active="active === 'world'" :companion="companion" @show-chat="active = 'home'" />
       <StoryView v-show="active === 'story'" v-if="storyOpened" :companion="companion" :member="memberName" :cli="cli" />
       <AppearanceView v-if="active === 'appearance'" :companion="companion" :stamp="memoryStamp" @keys="openKeys" @show-chat="active = 'home'" />
       <StudioView v-if="active === 'studio'" :companion="companion" :stamp="memoryStamp" @keys="openKeys" />

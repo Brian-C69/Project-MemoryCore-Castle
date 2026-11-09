@@ -7,11 +7,16 @@ import WorldStage from '../worlds/WorldStage.vue'
 import { allWorlds, DEFAULT_WORLD, findWorld } from '../worlds/registry.js'
 import { readinessOf, statusLine } from '../worlds/readiness.js'
 import { CAMERAS } from '../world3d/director.js'
-import { getSettings, saveSettings, worldApply, worldIdentify, worldScreens, worldsMine } from '../api/castle.js'
+import { loadMine } from '../worlds/mine.js'
+import { askCompanion } from '../api/ask.js'
+import { listen } from '@tauri-apps/api/event'
+import { chatMediaOpen, choosePicture, getSettings, saveSettings, worldApply, worldDelete, worldIdentify, worldNew, worldPrepare, worldScreens } from '../api/castle.js'
 
 const props = defineProps({
   active: { type: Boolean, default: true },
+  companion: { type: String, default: 'your companion' },
 })
+const emit = defineEmits(['show-chat'])
 
 const VIEWS = [
   { id: 'follow', title: 'Follow' },
@@ -34,8 +39,14 @@ const previewOpen = ref(false)
 const menu = ref(-1) // the row whose Settings menu is open
 const saved = ref('')
 const problem = ref('')
+const form = ref({ open: false, name: '', description: '', layout: 'centrepiece', picture: '' })
+const told = ref('') // what happened after Create / Ask
+const progress = ref({}) // slug -> the prepare helper's last line
+const preparing = ref({}) // slug -> true while it runs
+const confirmDelete = ref('') // slug waiting for a second press
 let timer = 0
 let savedTimer = 0
+let stopProgress = null
 
 const worlds = computed(() => allWorlds(mine.value))
 const others = computed(() => rows.value.filter((r) => !r.screen.isMain))
@@ -76,7 +87,7 @@ async function refresh({ fresh = false } = {}) {
   try {
     settings.value = (await getSettings()).settings
     screens.value = await worldScreens()
-    mine.value = await worldsMine().catch(() => [])
+    mine.value = await loadMine()
   } catch {
     return // outside Castle's window
   }
@@ -151,13 +162,113 @@ async function saveMusic(patch) {
   }
 }
 
-onMounted(() => {
+// ---------- the member's own worlds ----------
+
+const pictureName = computed(() => form.value.picture.split(/[\\/]/).pop())
+
+async function pickPicture() {
+  const path = await choosePicture('A picture for the look of your world').catch(() => null)
+  if (path) form.value.picture = path
+}
+
+// The brief for the companion, sent through the session like typed words.
+function paintBrief(world) {
+  const f = world.folder
+  const picture = ` If there is a picture.* in ${f}, use it for the look.`
+  return [
+    `Please help me build my 3D world "${world.title}" for Castle's WORLD room.`,
+    `Read ${f}\\request.md (my words) and ${f}\\world.json (Castle's draft of the pieces).`,
+    '1. Polish world.json: change only "title", "line" (one sentence) and "glow" (a colour like #8fe6ff). Keep every piece exactly as it is.',
+    `2. Paint the concept with the style in %CASTLE_STYLES%\\world-concept.md as ${f}\\design\\00-concept.png, then one picture per piece with %CASTLE_STYLES%\\world-piece.md, each named like its piece file with .png instead of .glb (for example 01-base-isle.png), in ${f}\\design\\.${picture}`,
+    `3. Tell me the cost first and ask before you draw. If pictures cannot be made, write one prompt per piece into ${f}\\design\\prompts.md instead.`,
+    `When you are done, tell me to make each picture in Tripo, export it as a GLB named with the same number, put it in ${f}\\hd\\ and press Prepare pieces in the WORLD room.`,
+  ]
+}
+
+async function askToPaint(world) {
+  try {
+    await askCompanion(paintBrief(world), props.companion)
+    told.value = `Asked ${props.companion} to paint "${world.title}". Follow along in Chat.`
+    emit('show-chat')
+  } catch (reason) {
+    told.value = String(reason?.message ?? reason)
+  }
+}
+
+async function create() {
+  problem.value = ''
+  told.value = ''
+  const { name, description, layout, picture } = form.value
+  try {
+    const made = await worldNew(name, description, layout, picture || null)
+    form.value = { open: false, name: '', description: '', layout: 'centrepiece', picture: '' }
+    await refresh()
+    const entry = mine.value.find((w) => w.slug === made.slug)
+    if (entry) await askToPaint(entry)
+  } catch (reason) {
+    problem.value = String(reason?.message ?? reason)
+  }
+}
+
+function myStatus(w) {
+  if (w.have >= w.pieces.length && w.pieces.length) return 'ready'
+  if (preparing.value[w.slug]) return progress.value[w.slug] || 'preparing…'
+  if (w.exports >= w.pieces.length) return 'every piece is in - press Prepare pieces'
+  if (w.painted) return `pictures painted · ${w.exports}/${w.pieces.length} made in Tripo`
+  return `waiting for its pictures · ${w.exports}/${w.pieces.length} made in Tripo`
+}
+
+async function prepare(w) {
+  problem.value = ''
+  preparing.value = { ...preparing.value, [w.slug]: true }
+  progress.value = { ...progress.value, [w.slug]: 'starting…' }
+  try {
+    await worldPrepare(w.slug)
+  } catch (reason) {
+    preparing.value = { ...preparing.value, [w.slug]: false }
+    problem.value = String(reason?.message ?? reason)
+  }
+}
+
+async function remove(w) {
+  if (confirmDelete.value !== w.slug) {
+    confirmDelete.value = w.slug
+    return
+  }
+  confirmDelete.value = ''
+  try {
+    await worldDelete(w.slug)
+    // a screen showing it goes back to the built-in isles
+    for (const row of rows.value.filter((r) => r.entry.world === w.id)) row.entry = { ...row.entry, world: DEFAULT_WORLD }
+    await apply()
+    await refresh({ fresh: true })
+  } catch (reason) {
+    problem.value = String(reason?.message ?? reason)
+  }
+}
+
+const openFolder = (w, sub) => chatMediaOpen(sub ? `${w.folder}\\${sub}` : w.folder).catch((reason) => (problem.value = String(reason)))
+
+onMounted(async () => {
   refresh()
   timer = setInterval(() => props.active && refresh(), REFRESH_MS)
+  try {
+    stopProgress = await listen('world-prepare', async ({ payload }) => {
+      progress.value = { ...progress.value, [payload.slug]: payload.line }
+      if (payload.done) {
+        preparing.value = { ...preparing.value, [payload.slug]: false }
+        if (!payload.ok) problem.value = payload.line || 'The pieces could not be prepared.'
+        await refresh({ fresh: true })
+      }
+    })
+  } catch {
+    // outside Castle's window
+  }
 })
 onBeforeUnmount(() => {
   clearInterval(timer)
   clearTimeout(savedTimer)
+  stopProgress?.()
 })
 watch(
   () => props.active,
@@ -251,7 +362,29 @@ watch(
       <section class="widget worlds">
         <div class="bar">
           <h2>WORLDS</h2>
+          <span class="spacer"></span>
+          <button @click.stop="form.open = !form.open">{{ form.open ? 'Close' : '+ Create world' }}</button>
         </div>
+
+        <div v-if="form.open" class="create" @click.stop>
+          <p class="hint">Describe a world and {{ companion }} paints a picture of each piece. You make each picture into a 3D model in Tripo, and Castle prepares them for your screens.</p>
+          <label class="wide">Name <input v-model="form.name" maxlength="60" placeholder="Star Garden" /></label>
+          <label class="wide">What is it like? <textarea v-model="form.description" rows="3" maxlength="600" placeholder="A moonlit garden of glowing flowers on floating rocks, with a silver tree at its heart"></textarea></label>
+          <div class="row">
+            <label class="choice"><input v-model="form.layout" type="radio" value="centrepiece" /> One centrepiece - a great isle, the heart of it glowing, three islets circling</label>
+          </div>
+          <div class="row">
+            <label class="choice"><input v-model="form.layout" type="radio" value="archipelago" /> An archipelago - five isles joined by bridges of light, the crystal walking between them</label>
+          </div>
+          <div class="row">
+            <button @click="pickPicture">{{ form.picture ? 'Change picture' : 'Add a picture for the look' }}</button>
+            <span class="hint">{{ form.picture ? pictureName : 'optional' }}</span>
+            <span class="spacer"></span>
+            <button class="primary" :disabled="!form.name.trim()" @click="create">Create and ask {{ companion }}</button>
+          </div>
+        </div>
+        <p v-if="told" class="good">{{ told }}</p>
+
         <div class="grid">
           <article
             v-for="w in worlds"
@@ -265,7 +398,14 @@ watch(
             </div>
             <strong>{{ w.title }}</strong>
             <p class="desc">{{ w.line }}</p>
-            <p class="status">{{ statusLine(w, states[w.id]) }}</p>
+            <p class="status">{{ w.source === 'yours' && w.engine === 'glb' ? myStatus(w) : statusLine(w, states[w.id]) }}</p>
+            <div v-if="w.source === 'yours' && w.engine === 'glb'" class="row mine" @click.stop>
+              <button @click="askToPaint(w)">{{ w.painted ? 'Paint again' : 'Ask to paint' }}</button>
+              <button @click="openFolder(w, 'design')">Pictures</button>
+              <button @click="openFolder(w, 'hd')">Tripo folder</button>
+              <button :disabled="w.exports < w.pieces.length || preparing[w.slug]" :title="w.exports < w.pieces.length ? 'Put every piece from Tripo in the Tripo folder first' : ''" @click="prepare(w)">Prepare pieces</button>
+              <button :class="{ danger: confirmDelete === w.slug }" @click="remove(w)">{{ confirmDelete === w.slug ? 'Press again to delete' : 'Delete' }}</button>
+            </div>
           </article>
         </div>
         <div class="row">
@@ -479,6 +619,43 @@ input[type='number'] {
 .problem {
   margin: 0;
   font-size: 12px;
+  color: var(--warn);
+}
+.create {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+}
+.create label.wide {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.create input,
+.create textarea {
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.row.mine button {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button.danger {
+  border-color: var(--warn);
   color: var(--warn);
 }
 .music {
