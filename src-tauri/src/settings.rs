@@ -181,7 +181,11 @@ pub struct Settings {
     pub room_companion_mode: String,
     /// Which rooms are available (every one in ROOMS, on by default).
     pub rooms: std::collections::BTreeMap<String, bool>,
+    /// How the STORY stage looks: one of STORY_LOOKS.
+    pub story_look: String,
 }
+
+pub const STORY_LOOKS: [&str; 5] = ["classic", "cinema", "book", "messenger", "jrpg"];
 
 fn all_rooms_on() -> std::collections::BTreeMap<String, bool> {
     ROOMS.iter().map(|r| (r.to_string(), true)).collect()
@@ -205,6 +209,7 @@ impl Default for Settings {
             backup_after_diary: false,
             room_companion_mode: "off".into(),
             rooms: all_rooms_on(),
+            story_look: "classic".into(),
         }
     }
 }
@@ -232,6 +237,9 @@ impl Settings {
             self.room_companion_mode = "off".into();
         }
         self.world.screens = std::mem::take(&mut self.world.screens).into_iter().map(WorldScreen::normalized).collect();
+        if !STORY_LOOKS.contains(&self.story_look.as_str()) {
+            self.story_look = "classic".into();
+        }
         // every known room is listed (a missing one is on); unknown names go
         self.rooms = ROOMS.iter().map(|r| (r.to_string(), self.rooms.get(*r).copied().unwrap_or(true))).collect();
         self
@@ -367,6 +375,7 @@ mod tests {
             backup_after_diary: true,
             room_companion_mode: "named".into(),
             rooms: { let mut r = all_rooms_on(); r.insert("story".into(), false); r },
+            story_look: "jrpg".into(),
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));
@@ -467,6 +476,13 @@ mod tests {
         assert!(s.room_on("world"), "a room missing from the file is on");
         assert!(!s.rooms.contains_key("spaceship") && !s.rooms.contains_key("home"));
         assert_eq!(s.rooms.len(), ROOMS.len());
+    }
+
+    #[test]
+    fn the_story_look_is_one_of_the_five() {
+        assert_eq!(Settings::default().story_look, "classic");
+        assert_eq!(Settings { story_look: "messenger".into(), ..Settings::default() }.normalized().story_look, "messenger");
+        assert_eq!(Settings { story_look: "hologram".into(), ..Settings::default() }.normalized().story_look, "classic");
     }
 
     #[test]
