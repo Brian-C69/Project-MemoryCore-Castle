@@ -160,7 +160,42 @@ $noticeOk = ((Get-NoticeCount) -eq $before + 1) -and ((Get-LastNotice).kind -eq 
 Report ($r.Code -eq 3 -and $r.Out -match 'Node is not installed' -and $noticeOk) 'world: no Node exits 3 with a notice' "exit $($r.Code): $($r.Out)"
 Report (-not (Test-Path -LiteralPath (Join-Path $worldDir 'pieces'))) 'world: nothing written without Node'
 
-# 7) Unit checks on the shared functions.
+# 7) The story beat helper: a good card is numbered and written whole, a bad one is refused.
+$adventures = Join-Path $root 'adventures'
+New-Item -ItemType Directory -Path (Join-Path $adventures 'sky-kingdom') -Force | Out-Null
+function Invoke-Beat {
+    param([string[]]$Arguments)
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $psi.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + (Join-Path $here 'castle-beat.ps1') + '" ' + ($Arguments -join ' ')
+    $psi.WorkingDirectory = $adventures
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.CreateNoWindow = $true
+    $p = [System.Diagnostics.Process]::Start($psi)
+    $o = $p.StandardOutput.ReadToEnd()
+    $p.WaitForExit()
+    return [pscustomobject]@{ Code = $p.ExitCode; Out = $o.Trim() }
+}
+$goodCard = Join-Path $root 'good-card.json'
+[System.IO.File]::WriteAllText($goodCard, '{"chapter":"Chapter 1","scene":"scenes/01-gate.png","lines":[{"speaker":"","text":"Mist over the bridge."},{"speaker":"Nova","text":"Stay close."}],"choices":["Cross now","Wait","(Say something)"]}', (New-Object System.Text.UTF8Encoding($false)))
+$r = Invoke-Beat @('card', '-World', 'sky-kingdom', '-Json', ('"' + $goodCard + '"'))
+$beatFile = Join-Path $adventures 'sky-kingdom\stage\beat-0001.json'
+Report ($r.Code -eq 0 -and (Test-Path -LiteralPath $beatFile) -and -not (Test-Path -LiteralPath "$beatFile.partial")) 'beat: a good card is written whole as beat-0001' "exit $($r.Code): $($r.Out)"
+$written = if (Test-Path -LiteralPath $beatFile) { [System.IO.File]::ReadAllText($beatFile) | ConvertFrom-Json } else { $null }
+Report ($written -and $written.beat -eq 1 -and @($written.lines).Count -eq 2) 'beat: the card carries its number and lines'
+$r = Invoke-Beat @('next', '-World', 'sky-kingdom')
+Report ($r.Code -eq 0 -and $r.Out -eq '0002') 'beat: next gives the following number' "exit $($r.Code): $($r.Out)"
+$badCard = Join-Path $root 'bad-card.json'
+[System.IO.File]::WriteAllText($badCard, '{"lines":[{"speaker":"Nova","text":"hi","mood":"happy"}],"choices":["only one"]}', (New-Object System.Text.UTF8Encoding($false)))
+$r = Invoke-Beat @('card', '-World', 'sky-kingdom', '-Json', ('"' + $badCard + '"'))
+Report ($r.Code -eq 2 -and $r.Out -match 'mood' -and -not (Test-Path -LiteralPath (Join-Path $adventures 'sky-kingdom\stage\beat-0002.json'))) 'beat: an unknown key is refused and nothing written' "exit $($r.Code): $($r.Out)"
+$escape = Join-Path $root 'escape-card.json'
+[System.IO.File]::WriteAllText($escape, '{"scene":"../../secret.png","lines":[{"speaker":"","text":"x"}],"choices":[]}', (New-Object System.Text.UTF8Encoding($false)))
+$r = Invoke-Beat @('card', '-World', 'sky-kingdom', '-Json', ('"' + $escape + '"'))
+Report ($r.Code -eq 2) 'beat: a scene outside the world is refused' "exit $($r.Code): $($r.Out)"
+
+# 8) Unit checks on the shared functions.
 . (Join-Path $here 'castle-common.ps1')
 $leak = Protect-Secret 'HTTP 401 - Incorrect API key provided: sk-proj-AbCdEf1234567890XyZ. Authorization: Bearer abc.def.ghi xi-api-key: 0123456789abcdef'
 Report ($leak -notmatch 'sk-proj-AbCd' -and $leak -notmatch 'abc\.def\.ghi' -and $leak -notmatch '0123456789abcdef' -and $leak -match 'HTTP 401') 'common: Protect-Secret strips key-like text' $leak
