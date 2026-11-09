@@ -28,3 +28,9 @@ Thumbs.db
 
 # Project Resources (local working notes - never commit)
 Project Resources
+
+# the dev Castle may run on the test memory; what it writes there (worlds made, the story room's
+# notes, the appearance card) is never part of the fixture
+src-tauri/tests/fixtures/memory-existing/adventures/
+src-tauri/tests/fixtures/memory-existing/appearance/
+src-tauri/tests/fixtures/memory-existing/worlds/
