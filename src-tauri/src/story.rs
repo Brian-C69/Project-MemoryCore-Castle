@@ -36,7 +36,11 @@ pub fn prepare(memory: &Path, companion: &str, member: &str) -> Result<PathBuf, 
     for name in ["CLAUDE.md", "AGENTS.md"] {
         let path = folder.join(name);
         let text = std::fs::read_to_string(&path).unwrap_or_default();
-        std::fs::write(&path, with_rules(&text, &rules)).map_err(|_| format!("{name} could not be written in adventures."))?;
+        let next = with_rules(&text, &rules);
+        // only a real change is written, so opening STORY never touches a file for nothing
+        if next != text {
+            std::fs::write(&path, next).map_err(|_| format!("{name} could not be written in adventures."))?;
+        }
     }
     Ok(folder)
 }
@@ -134,7 +138,11 @@ mod tests {
         std::fs::create_dir_all(memory.join("adventures")).unwrap();
         std::fs::write(memory.join("adventures").join("CLAUDE.md"), "# my story notes\n").unwrap();
         prepare(&memory, "Lyra", "Rin").unwrap();
+        let written = std::fs::metadata(memory.join("adventures").join("CLAUDE.md")).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(30));
         prepare(&memory, "Lyra", "Rin").unwrap();
+        // opening STORY again changes nothing, so the file is not touched
+        assert_eq!(std::fs::metadata(memory.join("adventures").join("CLAUDE.md")).unwrap().modified().unwrap(), written);
         let claude = std::fs::read_to_string(memory.join("adventures").join("CLAUDE.md")).unwrap();
         assert!(claude.starts_with("# my story notes"));
         assert_eq!(claude.matches(BEGIN).count(), 1);

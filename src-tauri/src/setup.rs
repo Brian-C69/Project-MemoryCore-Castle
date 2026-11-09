@@ -169,7 +169,10 @@ pub fn write_blocks(folder: &Path, companion: &str, member: &str) -> Result<(), 
     for name in ["CLAUDE.md", "AGENTS.md"] {
         let path = folder.join(name);
         let text = std::fs::read_to_string(&path).unwrap_or_default();
-        std::fs::write(&path, with_block(&text, &block)).map_err(|_| format!("{name} could not be written."))?;
+        let next = with_block(&text, &block);
+        if next != text {
+            std::fs::write(&path, next).map_err(|_| format!("{name} could not be written."))?;
+        }
     }
     Ok(())
 }

@@ -201,6 +201,9 @@ fn plain(step: &str, ran: &Ran) -> String {
 /// Commits every change with Castle's message, setting a commit name from the GitHub account
 /// when the computer has none. Returns false when there was nothing to commit.
 fn commit_all(folder: &Path, message: &str) -> Result<bool, String> {
+    if !owns_repo(folder) {
+        return Err("This memory folder sits inside another project's repository, so Castle will not back it up there. Move the memory folder out of that project first.".into());
+    }
     ensure_safety_ignore(folder).map_err(|_| ".gitignore could not be written.".to_string())?;
     let add = git(folder, &["add", "-A"]);
     if !add.ok {
@@ -222,6 +225,20 @@ fn commit_all(folder: &Path, message: &str) -> Result<bool, String> {
     } else {
         Err(plain("Saving the changes", &commit))
     }
+}
+
+/// True when the repository git finds for `folder` is the memory folder's own (its top folder is
+/// the memory folder), so `git add -A` can never sweep up a project the memory happens to sit in.
+fn owns_repo(folder: &Path) -> bool {
+    let top = git(folder, &["rev-parse", "--show-toplevel"]);
+    if !top.ok {
+        return false;
+    }
+    let same = |a: &Path, b: &Path| match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    };
+    same(Path::new(top.out.trim()), folder)
 }
 
 /// Makes the member's own PRIVATE backup: a repository here (when there is none), the template
@@ -378,6 +395,27 @@ mod tests {
         assert_eq!(text.matches(".env\n").count(), 1);
         assert_eq!(text.matches("*.key").count(), 1);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_memory_inside_another_project_is_never_committed_there() {
+        if env::find_on_path("git").is_none() {
+            return;
+        }
+        let project = std::env::temp_dir().join(format!("castle-backup-outer-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&project);
+        let memory = project.join("fixtures").join("memory");
+        std::fs::create_dir_all(&memory).unwrap();
+        assert!(git(&project, &["init", "-b", "main"]).ok);
+        std::fs::write(memory.join("master-memory.md"), "# memory\n").unwrap();
+        std::fs::write(project.join("app.rs"), "fn main() {}\n").unwrap();
+        assert!(!owns_repo(&memory));
+        assert!(commit_all(&memory, "x").is_err());
+        assert!(git(&project, &["log", "--oneline"]).out.is_empty(), "the outer project got no commit");
+        // its own repository is fine
+        assert!(git(&memory, &["init", "-b", "main"]).ok);
+        assert!(owns_repo(&memory));
+        let _ = std::fs::remove_dir_all(project);
     }
 
     #[test]

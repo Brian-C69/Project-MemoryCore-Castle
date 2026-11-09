@@ -1,0 +1,3 @@
+# The test memories are a member's folder while testing: Castle writes into them (STORY's rules,
+# worlds, appearance), and `tauri dev` must not restart the app for that.
+tests/fixtures/
