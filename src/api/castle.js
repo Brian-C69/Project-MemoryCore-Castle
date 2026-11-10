@@ -166,6 +166,8 @@ export const dbMovePreview = () => invoke('db_move_preview')
 export const dbMoveIn = () => invoke('db_move_in')
 export const dbRestore = () => invoke('db_restore')
 export const dbExport = (to) => invoke('db_export', { to })
+// the way back: the memory becomes files in its folder again and the database is emptied
+export const dbMoveOut = () => invoke('db_move_out')
 // the memory's skills -> [{ plugin, name, description, stubbed }]; a stubbed skill keeps a small
 // SKILL.md on disk and its instructions are loaded from the database when it fires
 export const dbSkills = () => invoke('db_skills')

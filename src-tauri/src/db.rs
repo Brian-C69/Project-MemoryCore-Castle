@@ -572,6 +572,25 @@ pub async fn db_restore(app: AppHandle) -> Result<String, String> {
     .map_err(|_| "The restore stopped.".to_string())?
 }
 
+/// The way back: the memory becomes files in its folder again and the database is emptied.
+/// The companion's instructions go back to reading the files.
+#[tauri::command]
+pub async fn db_move_out(app: AppHandle) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = app.state::<SettingsStore>();
+        let folder = memory_folder(&store)?;
+        let mut conn = crate::memdb::open_for(&folder)?;
+        let line = crate::import::move_out(&mut conn, &folder)?;
+        let s = store.get();
+        if let (Some(companion), Some(member)) = (s.companion_name.as_deref(), s.member_name.as_deref()) {
+            let _ = crate::setup::write_blocks(&folder, companion, member);
+        }
+        Ok(line)
+    })
+    .await
+    .map_err(|_| "Moving out stopped.".to_string())?
+}
+
 /// Writes the whole memory out as markdown into a folder the member chose.
 #[tauri::command]
 pub async fn db_export(app: AppHandle, to: String) -> Result<String, String> {

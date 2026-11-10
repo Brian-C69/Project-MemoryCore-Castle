@@ -87,6 +87,22 @@ pub fn env_with(text: &str, access: &Access) -> String {
     lines.join("\n") + "\n"
 }
 
+/// The .env text with Castle's five lines taken out and every other line kept.
+pub fn env_without(text: &str) -> String {
+    let mut lines: Vec<&str> = text.lines().filter(|l| !ENV_KEYS.iter().any(|k| l.trim_start().starts_with(&format!("{k}=")))).collect();
+    while lines.last().is_some_and(|l| l.trim().is_empty()) {
+        lines.pop();
+    }
+    if lines.is_empty() { String::new() } else { lines.join("\n") + "\n" }
+}
+
+/// Takes the connection details out of <memory>/.env (the memory is back in its files).
+pub fn clear_env(memory: &Path) -> Result<(), String> {
+    let path = memory.join(".env");
+    let Ok(text) = std::fs::read_to_string(&path) else { return Ok(()) };
+    std::fs::write(&path, env_without(&text)).map_err(|_| "The .env could not be written.".to_string())
+}
+
 /// The connection details a .env holds, when all five are there.
 pub fn access_from_env(text: &str) -> Option<Access> {
     let get = |key: &str| {
@@ -261,6 +277,10 @@ mod tests {
         assert_eq!(env_with(&text, &access), text);
         assert_eq!(access_from_env("OPENAI_API_KEY=sk-1\n"), None);
         assert_eq!(env_with("", &access).lines().count(), 5);
+        // and out again: the member's own lines stay, Castle's five go
+        assert_eq!(env_without(&text), "OPENAI_API_KEY=sk-1\n# mine\n");
+        assert_eq!(env_without(&env_with("", &access)), "");
+        assert_eq!(access_from_env(&env_without(&text)), None);
     }
 
     #[test]

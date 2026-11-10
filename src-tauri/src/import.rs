@@ -445,6 +445,29 @@ pub fn move_in(conn: &mut Conn, folder: &Path, before_delete: impl FnOnce() -> R
     Ok(counts)
 }
 
+/// The way back: the whole memory written out into the memory folder as files again, every
+/// skill a whole file, the database emptied, and the folder no longer pointed at it. After
+/// this the memory is exactly a memory kept in files, and it can be moved in again.
+pub fn move_out(conn: &mut Conn, folder: &Path) -> Result<String, String> {
+    // every skill back to a whole SKILL.md before the database lets go of it
+    let stubbed: Vec<(String, String)> = conn.query("SELECT plugin, name FROM skills WHERE stubbed = 1").map_err(sql("Reading the skills"))?;
+    for (plugin, name) in stubbed {
+        crate::mirror::set_stub(conn, folder, &plugin, &name, false)?;
+    }
+    let ask = crate::door::parse(&["export".to_string(), "--to".to_string(), folder.display().to_string()])?;
+    let line = crate::door::run(conn, &ask, folder)?;
+    // only now, with the files written: the tables go, the .env lets go, the dump goes
+    let tables: Vec<String> = conn.query("SHOW TABLES").map_err(sql("Reading the database"))?;
+    conn.query_drop("SET FOREIGN_KEY_CHECKS=0").map_err(sql("Emptying the database"))?;
+    for table in tables {
+        conn.query_drop(format!("DROP TABLE IF EXISTS `{table}`")).map_err(sql("Emptying the database"))?;
+    }
+    crate::memdb::clear_env(folder)?;
+    let _ = std::fs::remove_file(folder.join(crate::backup::DUMP_FILE));
+    let _ = std::fs::remove_dir(folder.join("backup"));
+    Ok(line.replacen("EXPORT", "MOVED OUT", 1))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -696,6 +719,27 @@ mod tests {
         assert_eq!(memory::reminders(&out).len(), 2);
         assert_eq!(memory::projects(&out).iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), vec!["Portfolio site", "Study notes"]);
         assert!(std::fs::read_to_string(out.join("projects/project-list.md")).unwrap().contains("[Old blog](./archived/old-blog.md)"));
+
+        // the way back: the memory is files again, the database is empty, and it can move in again
+        crate::memdb::write_env(&root, &access).unwrap();
+        crate::mirror::sync_skills(&mut conn, &root).unwrap();
+        assert!(crate::setup::has_database(&root));
+        let line = move_out(&mut conn, &root).unwrap();
+        assert!(line.starts_with("MOVED OUT "), "{line}");
+        assert!(!crate::setup::has_database(&root) && !crate::setup::lives_in_database(&root));
+        assert!(!root.join("backup").exists());
+        assert_eq!(std::fs::read_to_string(root.join("master-memory.md")).unwrap(), before.body_of("master-memory.md").unwrap());
+        assert_eq!(std::fs::read_to_string(root.join("daily-diary/current/2026-11-10/diary-1.md")).unwrap(), "# Diary\r\n\r\n## Morning - The clinic moved\r\nRows now.\r\n");
+        assert_eq!(std::fs::read_to_string(root.join("main/relationship-memory.md")).unwrap(), "# Rin\nlikes coffee now\n");
+        assert!(crate::setup::inspect(&root).is_memorycore && crate::setup::inspect(&root).entry_file.is_some());
+        let left: Vec<String> = conn.query("SHOW TABLES").unwrap();
+        assert!(left.is_empty());
+        assert!(crate::store::source(&root).is_none());
+        // again from the start
+        crate::memdb::migrate(&mut conn).unwrap();
+        let again = move_in(&mut conn, &root, || Ok(())).unwrap();
+        assert_eq!(again.diary, 6);
+        assert!(!root.join("master-memory.md").exists());
 
         std::fs::remove_dir_all(&root).unwrap();
         let mut root_conn = mysql::Conn::new(mysql::Opts::from(

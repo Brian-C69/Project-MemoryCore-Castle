@@ -4,7 +4,7 @@
 // HOME card's sheet and setup's last step. Optional: a memory kept in files works as before.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
-  chooseFolder, dbCreate, dbExport, dbInstall, dbMemory, dbMoveIn, dbMovePreview, dbRestore, dbSkills, dbSkillStub, dbStart, dbStatus, dbStop, dbUseExisting,
+  chooseFolder, dbCreate, dbExport, dbInstall, dbMemory, dbMoveIn, dbMoveOut, dbMovePreview, dbRestore, dbSkills, dbSkillStub, dbStart, dbStatus, dbStop, dbUseExisting,
   getSettings, onDbInstall, saveSettings,
 } from '../api/castle.js'
 import { megabytes, moveLine, nextStep, progressLine, steps as stepsOf } from './database.js'
@@ -26,6 +26,7 @@ const adminPassword = ref('')
 const keepRunning = ref(false)
 const bootAtWake = ref(true)
 const sure = ref(false)
+const sureOut = ref(false)
 let settings = null
 let stopListening = null
 
@@ -102,6 +103,14 @@ async function moveIn() {
 async function restore() {
   const line = await attempt('Restoring from your backup…', dbRestore)
   if (line) done.value = 'Your memory is back from the backup.'
+  await check()
+}
+
+// The way back to files. The companion's session should be asleep: it loaded the memory from the database.
+async function moveOut() {
+  const line = await attempt('Moving your memory back to files…', dbMoveOut)
+  sureOut.value = false
+  if (line) done.value = 'Your memory is in files again. The database is empty and can be used again any time.'
   await check()
 }
 
@@ -232,6 +241,18 @@ onBeforeUnmount(() => stopListening?.())
         <input v-model="bootAtWake" type="checkbox" @change="toggleBoot" /> Load the memory when {{ companion }} wakes
       </label>
 
+      <details class="back">
+        <summary>Move my memory back to files</summary>
+        <p class="hint">
+          Castle writes everything out into your memory folder as files again, exactly as it was plus what was added since, then empties the database.
+          Do this while {{ companion }} is asleep.
+        </p>
+        <label class="toggle"><input v-model="sureOut" type="checkbox" /> Yes, put my memory back in files</label>
+        <div class="row">
+          <button :disabled="!!busy || !sureOut" @click="moveOut">Move back to files</button>
+        </div>
+      </details>
+
       <h4>Skills</h4>
       <p v-if="!skills.length" class="hint">No skills installed yet. Once {{ companion }} installs one, it shows here.</p>
       <template v-else>
@@ -319,6 +340,17 @@ h4 {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+.back {
+  font-size: 14px;
+}
+.back summary {
+  cursor: pointer;
+  color: var(--text-dim);
+}
+.back[open] {
+  display: grid;
+  gap: 8px;
 }
 .skill-name {
   min-width: 180px;
