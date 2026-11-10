@@ -540,6 +540,8 @@ mod tests {
         w("main/relationship-memory.md", "# Rin\nlikes tea\n");
         w("plugins/rin-skills/skills/save-diary/SKILL.md", "---\nname: save-diary\ndescription: Writes today into the diary\n---\n# Save diary\n");
         w("plugins/rin-skills/skills/save-diary/reference/flows.md", "flows\n");
+        // the appearance card is written by the dev Castle and kept out of git, so a clean checkout has none
+        w("appearance/companion.md", "# Rin\nsilver hair\n");
         std::fs::write(root.join("daily-diary/current/2026-11-09.md"), [0xff, 0xfe, 0x00, 0x41]).unwrap();
         root
     }
