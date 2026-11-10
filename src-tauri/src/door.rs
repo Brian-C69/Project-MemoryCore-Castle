@@ -590,7 +590,7 @@ pub fn dump(conn: &mut Conn, to: &Path) -> Result<String, String> {
     Ok(format!("DUMP {} table(s), {total} row(s) -> {}", tables.len(), to.display()))
 }
 
-fn restore(conn: &mut Conn, from: &Path) -> Result<String, String> {
+pub fn restore(conn: &mut Conn, from: &Path) -> Result<String, String> {
     let text = std::fs::read_to_string(from).map_err(|_| format!("{} could not be read.", from.display()))?;
     let mut done = 0usize;
     for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("--")) {

@@ -93,7 +93,7 @@ pub fn inspect(folder: &Path) -> FolderState {
     FolderState {
         exists: folder.is_dir(),
         // a memory moved into the database has no master-memory.md on disk and is still a MemoryCore
-        is_memorycore: entry.is_some() || has_database(folder),
+        is_memorycore: entry.is_some() || lives_in_database(folder),
         needs_names,
         entry_file: entry.map(str::to_string),
         companion_name,
@@ -194,10 +194,16 @@ pub fn has_database(folder: &Path) -> bool {
     std::fs::read_to_string(folder.join(".env")).is_ok_and(|text| crate::memdb::access_from_env(&text).is_some())
 }
 
+/// A memory folder whose memory is in a database: its .env names one, or - on a new PC, where
+/// the .env never travels with the backup - the dump the backup carried is there to restore.
+pub fn lives_in_database(folder: &Path) -> bool {
+    has_database(folder) || folder.join(crate::backup::DUMP_FILE).is_file()
+}
+
 /// Writes Castle's block into CLAUDE.md (Claude Code) and AGENTS.md (Codex).
 pub fn write_blocks(folder: &Path, companion: &str, member: &str) -> Result<(), String> {
     let entry = entry_file(folder);
-    if entry.is_none() && !has_database(folder) {
+    if entry.is_none() && !lives_in_database(folder) {
         return Err("This folder has no master-memory.md, so it is not a MemoryCore folder.".into());
     }
     let mut block = castle_block_for(companion, member, entry);

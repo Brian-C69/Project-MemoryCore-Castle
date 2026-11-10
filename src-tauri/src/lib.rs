@@ -286,7 +286,10 @@ pub fn run() {
             db::db_use_existing,
             db::db_create,
             db::db_move_preview,
-            db::db_move_in
+            db::db_move_in,
+            db::db_memory,
+            db::db_restore,
+            db::db_export
         ])
         .setup(|app| {
             let config = match settings::test_override(settings::TEST_CONFIG_VAR) {

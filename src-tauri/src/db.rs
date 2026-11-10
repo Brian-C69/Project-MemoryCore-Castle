@@ -516,6 +516,75 @@ pub async fn db_move_in(app: AppHandle) -> Result<crate::import::Counts, String>
     .map_err(|_| "Moving in stopped.".to_string())?
 }
 
+/// What Settings shows about this memory's own database.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryDb {
+    /// its name ("lyra_memorycoredb"), once created
+    pub name: Option<String>,
+    /// it answers right now
+    pub reachable: bool,
+    /// the memory lives in it (moved in, or written through the door)
+    pub moved_in: bool,
+    /// a dump waits in backup/memory.sql and the database is empty: Restore is offered
+    pub can_restore: bool,
+}
+
+#[tauri::command]
+pub async fn db_memory(app: AppHandle) -> MemoryDb {
+    tauri::async_runtime::spawn_blocking(move || {
+        let Ok(folder) = memory_folder(&app.state::<SettingsStore>()) else { return MemoryDb::default() };
+        let name = std::fs::read_to_string(folder.join(".env")).ok().and_then(|t| crate::memdb::access_from_env(&t)).map(|a| a.name);
+        let mut view = MemoryDb { name, ..MemoryDb::default() };
+        if let Ok(mut conn) = crate::memdb::open_for(&folder) {
+            view.reachable = true;
+            view.moved_in = crate::memdb::migrate(&mut conn).is_ok() && crate::store::moved_in(&mut conn);
+            view.can_restore = !view.moved_in && folder.join(crate::backup::DUMP_FILE).is_file();
+        }
+        view
+    })
+    .await
+    .unwrap_or_default()
+}
+
+/// A new PC, or a database made fresh: the memory comes back from the dump the backup carried.
+/// Only into an empty database - a memory already there is never overwritten.
+#[tauri::command]
+pub async fn db_restore(app: AppHandle) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = app.state::<SettingsStore>();
+        let folder = memory_folder(&store)?;
+        let mut conn = crate::memdb::open_for(&folder)?;
+        crate::memdb::migrate(&mut conn)?;
+        if crate::store::moved_in(&mut conn) {
+            return Err("This database already holds a memory, so nothing was restored over it.".into());
+        }
+        let line = crate::door::restore(&mut conn, &folder.join(crate::backup::DUMP_FILE))?;
+        crate::memdb::migrate(&mut conn)?;
+        let _ = crate::mirror::sync_skills(&mut conn, &folder);
+        let s = store.get();
+        if let (Some(companion), Some(member)) = (s.companion_name.as_deref(), s.member_name.as_deref()) {
+            let _ = crate::setup::write_blocks(&folder, companion, member);
+        }
+        Ok(line)
+    })
+    .await
+    .map_err(|_| "The restore stopped.".to_string())?
+}
+
+/// Writes the whole memory out as markdown into a folder the member chose.
+#[tauri::command]
+pub async fn db_export(app: AppHandle, to: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let folder = memory_folder(&app.state::<SettingsStore>())?;
+        let mut conn = crate::memdb::open_for(&folder)?;
+        let ask = crate::door::parse(&["export".to_string(), "--to".to_string(), to])?;
+        crate::door::run(&mut conn, &ask, &folder)
+    })
+    .await
+    .map_err(|_| "The export stopped.".to_string())?
+}
+
 /// Stops Castle's own engine: over SQL once root has a password, else with mariadb-admin.
 fn stop_own(home: &Path, port: u16) -> Result<(), String> {
     if probe_port(port) != PortUse::MySql {

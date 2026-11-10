@@ -274,8 +274,27 @@ pub fn create_private(folder: &Path, name: &str) -> Result<BackupStatus, String>
     Ok(status(folder))
 }
 
+/// Where the memory database's dump is kept inside the memory folder, so the backup carries it.
+pub const DUMP_FILE: &str = "backup/memory.sql";
+
+/// A memory that lives in the database is written out to `backup/memory.sql` before every
+/// backup - without it the backup would hold skills and pictures but not the memory itself.
+/// A stopped database stops the backup, said plainly.
+pub fn dump_for_backup(folder: &Path) -> Result<(), String> {
+    if !crate::setup::has_database(folder) {
+        return Ok(());
+    }
+    let mut conn = crate::memdb::open_for(folder)
+        .map_err(|_| "The database is stopped, so a backup now would not carry your memory. Start it in Settings > Database, then back up again.".to_string())?;
+    if !crate::store::moved_in(&mut conn) {
+        return Ok(());
+    }
+    crate::door::dump(&mut conn, &folder.join(DUMP_FILE)).map(|_| ())
+}
+
 /// Saves every change and sends it to the member's own private backup.
 pub fn back_up_now(folder: &Path, message: &str) -> Result<BackupStatus, String> {
+    dump_for_backup(folder)?;
     let before = status(folder);
     if !before.ready {
         return Err(before.next_step);
@@ -328,6 +347,12 @@ pub fn backup_sign_in() -> Result<(), String> {
 
 /// The newest change time of anything in daily-diary/ (two levels: files and day folders).
 fn diary_changed(folder: &Path) -> Option<SystemTime> {
+    // a memory in the database: the newest change among the diary's rows
+    if let Some(mut conn) = crate::store::source(folder) {
+        use mysql::prelude::Queryable;
+        let secs: Option<u64> = conn.query_first("SELECT UNIX_TIMESTAMP(MAX(updated_at)) FROM diary_entries").ok().flatten().flatten();
+        return secs.map(|s| std::time::UNIX_EPOCH + Duration::from_secs(s));
+    }
     let diary = folder.join("daily-diary");
     let mut newest: Option<SystemTime> = None;
     let mut look = |p: &Path| {
@@ -381,6 +406,23 @@ mod tests {
         assert_eq!(repo_slug("https://gitlab.com/rin/my-memory"), None);
         assert!(is_template("kiyoraka/poject-ai-memory-architecture"));
         assert!(!is_template("rin/my-memory"));
+    }
+
+    #[test]
+    fn a_memory_kept_in_files_needs_no_dump_and_a_restored_folder_is_still_a_memorycore() {
+        let root = std::env::temp_dir().join(format!("castle-backup-dump-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("backup")).unwrap();
+        assert!(dump_for_backup(&root).is_ok());
+        assert!(!root.join(DUMP_FILE).exists());
+        assert!(!crate::setup::inspect(&root).is_memorycore);
+        // a backup cloned onto a new PC: no master-memory.md, no .env, only the dump
+        std::fs::write(root.join(DUMP_FILE), "-- dump\n").unwrap();
+        assert!(crate::setup::lives_in_database(&root) && crate::setup::inspect(&root).is_memorycore);
+        // a .env that names a database nothing answers on: the backup stops and says why
+        std::fs::write(root.join(".env"), "MEMORY_DB_HOST=127.0.0.1\nMEMORY_DB_PORT=1\nMEMORY_DB_NAME=x_memorycoredb\nMEMORY_DB_USER=castle_x\nMEMORY_DB_PASSWORD=x\n").unwrap();
+        assert!(dump_for_backup(&root).unwrap_err().contains("Start it in Settings > Database"));
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
