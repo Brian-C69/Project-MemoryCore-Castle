@@ -17,13 +17,15 @@ import {
   userThemes,
 } from '../api/castle.js'
 import DiaryPage from '../components/DiaryPage.vue'
-import StoryMini from '../components/StoryMini.vue'
 import { lookOf } from '../components/diaryviews.js'
 import { DIARY_THEMES, indexOf, SAMPLE_PAGE, SAMPLE_PAGES, SAMPLE_TEXT, step, STORY_THEMES, wearingLine } from '../components/themeroom.js'
 import { builtInThemes, fromUserFolders, problemWith } from '../themes/loader.js'
 
 const props = defineProps({
   companion: { type: String, default: 'Your companion' },
+  // dev only (?theme-room=1&story=<id>&look=<id>): which stage and diary look to open at
+  devStory: { type: String, default: '' },
+  devDiary: { type: String, default: '' },
 })
 const emit = defineEmits(['changed', 'show-chat'])
 
@@ -62,6 +64,8 @@ async function load() {
     broken.value = yours.broken
   } catch {
     themes.value = builtInThemes()
+    if (props.devStory) storyLook.value = props.devStory
+    if (props.devDiary) diaryLook.value = lookOf(props.devDiary)
   }
   shownAt.value = indexOf(themes.value, currentId.value)
 }
@@ -255,7 +259,8 @@ onMounted(load)
         <h3>STORY THEME</h3>
         <div class="glass">
           <span class="lamp" aria-hidden="true" />
-          <div class="stage"><StoryMini :look="story.id" :scene="worn?.wallpaperUrl ?? ''" /></div>
+          <!-- the same picture of each stage that the STORY room's own Look uses -->
+          <div class="stage shot"><img :src="`/story-looks/${story.id}.jpg`" :alt="story.name" /></div>
         </div>
         <div class="pick">
           <button class="arrow" aria-label="Earlier story theme" @click="turnStory(-1)">‹</button>
@@ -346,12 +351,17 @@ input {
 /* ---------- the showroom ---------- */
 .showroom {
   flex: 1;
-  min-height: 420px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(18px, 4vw, 64px);
-  align-items: stretch;
-  padding: 6px clamp(8px, 3vw, 48px) 0;
+  gap: clamp(18px, 3.2vw, 56px);
+  /* the cases keep their own shape and sit in the upper middle, the sky around them */
+  align-content: center;
+  align-items: start;
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 6px clamp(8px, 2vw, 32px) 0;
+  box-sizing: border-box;
 }
 .case {
   display: flex;
@@ -367,14 +377,14 @@ input {
   font-weight: 400;
   letter-spacing: 0.34em;
   color: var(--text);
+  /* readable over a bright wallpaper too */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 14px rgba(0, 0, 0, 0.7);
 }
 /* a display case: a frame of glass lit from above, the look standing inside it */
 .glass {
   position: relative;
-  flex: 1;
-  min-height: 0;
   display: flex;
-  padding: 26px 18px 18px;
+  padding: 24px 14px 14px;
   border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
   border-radius: 10px;
   background:
@@ -401,7 +411,8 @@ input {
   position: relative;
   flex: 1;
   min-width: 0;
-  min-height: 0;
+  /* every case's window is the same wide shape, whatever stands in it */
+  aspect-ratio: 16 / 10;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -414,6 +425,29 @@ input {
 .stage.page {
   background: color-mix(in srgb, #04081c 55%, transparent);
   padding: 4px 6px;
+}
+/* the page is longer than the window: it fades out at the bottom edge, never cut mid-line */
+.stage.page::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 34%;
+  background: linear-gradient(to bottom, transparent, #060b22 88%);
+  pointer-events: none;
+}
+.stage.page :deep(.diary-page) {
+  overflow: hidden;
+}
+.stage.shot {
+  background: #04081c;
+}
+.stage.shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .swatch {
   position: absolute;

@@ -31,7 +31,8 @@ if (devThemeRoom) {
     loader.applyTheme(loader.chooseTheme(loader.builtInThemes(), new URLSearchParams(location.search).get('theme') || loader.DEFAULT_THEME_ID).theme)
     Object.assign(document.body.style, { margin: '0', background: 'var(--wallpaper) var(--wallpaper-position) / cover no-repeat fixed, #040817', color: 'var(--text)', fontFamily: "'Segoe UI', system-ui, sans-serif" })
     Object.assign(document.getElementById('app').style, { position: 'fixed', inset: '0' })
-    createApp(ThemeView, { companion: 'lyra' }).mount('#app')
+    const q = new URLSearchParams(location.search)
+    createApp(ThemeView, { companion: 'lyra', devStory: q.get('story') ?? '', devDiary: q.get('look') ?? '' }).mount('#app')
   })
 } else if (devDiary) {
   import('./components/DiaryDemo.vue').then(({ default: DiaryDemo }) =>

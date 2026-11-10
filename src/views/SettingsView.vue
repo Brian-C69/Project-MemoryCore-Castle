@@ -3,7 +3,6 @@
 // keys (masked, Show, Test, Remove), quick actions, the room, backup, startup and updates.
 import { computed, onMounted, ref } from 'vue'
 import ModalSheet from '../components/ModalSheet.vue'
-import { LOOKS } from '../components/stage/stage.js'
 import BackupPanel from '../components/BackupPanel.vue'
 import DatabasePanel from '../components/DatabasePanel.vue'
 import { DIARY_LOOKS, lookOf } from '../components/diaryviews.js'
@@ -43,7 +42,6 @@ const SECTIONS = [
   { id: 'keys', label: 'Keys' },
   { id: 'quick', label: 'Quick actions' },
   { id: 'rooms', label: 'Rooms' },
-  { id: 'story', label: 'Story' },
   { id: 'database', label: 'Database' },
   { id: 'backup', label: 'Backup' },
   { id: 'startup', label: 'Start-up' },
@@ -349,17 +347,6 @@ onMounted(async () => {
         </div>
       </section>
 
-      <section v-else-if="tab === 'story'" class="pane">
-        <p class="hint">How the STORY room shows your adventures. Change it any time - even in the middle of a story, with Look on the STORY bar. The THEME room shows it beside your main theme and your diary theme.</p>
-        <div class="looks">
-          <button v-for="l in LOOKS" :key="l.id" class="look" :class="{ chosen: (settings.storyLook ?? 'classic') === l.id }" @click="save({ storyLook: l.id })">
-            <img :src="`/story-looks/${l.id}.jpg`" alt="" />
-            <strong>{{ l.title }}</strong>
-            <span class="hint">{{ l.line }}</span>
-          </button>
-        </div>
-      </section>
-
       <section v-else-if="tab === 'startup'" class="pane">
         <label class="toggle"><input type="checkbox" :checked="settings.startWithWindows" @change="save({ startWithWindows: $event.target.checked })" /> Start Castle when Windows starts</label>
         <p v-if="view?.startupNote" class="hint">{{ view.startupNote }}</p>
@@ -402,34 +389,6 @@ onMounted(async () => {
   margin-top: 2px;
   font-size: 12px;
   color: var(--text-dim);
-}
-.looks {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 12px;
-}
-.look {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.look.chosen {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-.look img {
-  width: 100%;
-  aspect-ratio: 3 / 2;
-  border-radius: 6px;
-  object-fit: cover;
 }
 .rooms {
   display: grid;
