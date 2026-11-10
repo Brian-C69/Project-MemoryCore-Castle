@@ -12,6 +12,9 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 - Changed your mind? **Move my memory back to files** (Settings > Database) writes everything out as files again and empties the database.
 - The **backup** carries the database (a dump is written before every backup), and a new PC can **Restore from my backup**.
 - A new **DATABASE** card on HOME shows whether it is running, with one button for the next step.
+- **Three ways to read your diary.** The DIARY room can be a **List** (by month, as before), a **Calendar** (days with a page are marked) or a **Book** (two pages side by side, turned with the arrows). Choose at the top of the room or in Settings > Rooms; your choice is remembered.
+- Your companion now writes the diary **the way a person writes one**: in the first person, in paragraphs, about what happened and how it felt - not a report with headings and bullet points.
+- **Only your companion in Castle** (Settings > Companion): leaves your personal Claude Code setup out of Castle's session, for a PC where that setup is another companion. Off unless you turn it on.
 - A diary kept as a folder per day (`current/2026-11-10/diary-1.md`) now shows in the DIARY room and on the HOME card.
 
 ## 0.2.1 - 2026-11-09

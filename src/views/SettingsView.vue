@@ -6,6 +6,7 @@ import ModalSheet from '../components/ModalSheet.vue'
 import { LOOKS } from '../components/stage/stage.js'
 import BackupPanel from '../components/BackupPanel.vue'
 import DatabasePanel from '../components/DatabasePanel.vue'
+import { DIARY_LOOKS, lookOf } from '../components/diaryviews.js'
 import {
   roomsApply,
   roomCompanionRefresh,
@@ -330,6 +331,11 @@ onMounted(async () => {
         </div>
         <p class="hint">Turning STORY off ends the story session; turning WORLD off closes the world screens; CHAT stops reading the room. Their files stay.</p>
 
+        <h3>Diary</h3>
+        <p class="hint">How the DIARY room is read. The pages are the same; only the design changes.</p>
+        <div class="row">
+          <button v-for="l in DIARY_LOOKS" :key="l.id" :class="{ primary: lookOf(settings.diaryLook) === l.id }" :title="l.line" @click="save({ diaryLook: l.id })">{{ l.label }}</button>
+        </div>
         <h3>Neural Link</h3>
         <label class="toggle"><input type="checkbox" :checked="settings.linkOn !== false" :disabled="!!busy" @change="switchLink({ linkOn: $event.target.checked })" /> Neural Link - your terminals leave each other notes in the memory folder's <code>link</code> folder</label>
         <label class="toggle"><input type="checkbox" :checked="!!settings.roomMayPass" :disabled="!!busy || settings.linkOn === false" @change="switchLink({ roomMayPass: $event.target.checked })" /> {{ settings.companionName ?? 'Your companion' }} may pass my own words from the chat room to my workspace</label>

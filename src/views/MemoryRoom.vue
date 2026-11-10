@@ -1,10 +1,14 @@
 <script setup>
 // One reader for three rooms: DIARY (by month, newest first), PROJECTS (active, archived) and
 // LIBRARY (by section). The list is on the left, the page on the right. Read-only: only the
-// companion writes the memory.
+// companion writes the memory. The DIARY can also be read as a calendar or as a book - the
+// same pages, the member's choice, remembered.
 import { computed, onMounted, ref, watch } from 'vue'
 import MarkdownText from '../components/MarkdownText.vue'
-import { chatMediaOpen, getSettings, memoryRead, memoryShelves } from '../api/castle.js'
+import DiaryBook from '../components/DiaryBook.vue'
+import DiaryCalendar from '../components/DiaryCalendar.vue'
+import { DIARY_LOOKS, lookOf } from '../components/diaryviews.js'
+import { chatMediaOpen, getSettings, memoryRead, memoryShelves, saveSettings } from '../api/castle.js'
 
 const props = defineProps({
   room: { type: String, required: true }, // diary | projects | library
@@ -27,6 +31,19 @@ const current = ref(null)
 const text = ref('')
 const problem = ref('')
 const memoryFolder = ref('')
+// how the DIARY is read: list | calendar | book (the other rooms are always a list)
+const diaryLook = ref('list')
+const look = computed(() => (props.room === 'diary' ? diaryLook.value : 'list'))
+
+async function chooseLook(id) {
+  diaryLook.value = lookOf(id)
+  try {
+    const { settings } = await getSettings()
+    if (settings.diaryLook !== diaryLook.value) await saveSettings({ ...settings, diaryLook: diaryLook.value })
+  } catch {
+    // outside Castle's window: the choice lasts while the room is open
+  }
+}
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
@@ -67,7 +84,9 @@ function openOutside() {
 async function load() {
   try {
     shelves.value = await memoryShelves(props.room)
-    memoryFolder.value = (await getSettings()).settings.memoryFolder ?? ''
+    const settings = (await getSettings()).settings
+    memoryFolder.value = settings.memoryFolder ?? ''
+    diaryLook.value = lookOf(settings.diaryLook)
   } catch {
     shelves.value = []
   }
@@ -84,9 +103,22 @@ watch(() => [props.room, props.stamp, props.openFile], load)
 </script>
 
 <template>
-  <div class="memory-room">
+  <!-- the DIARY as a book: two pages across the whole room -->
+  <div v-if="look === 'book'" class="memory-room book-room">
+    <div class="looks top">
+      <h2>{{ TITLES[room] }}</h2>
+      <button v-for="l in DIARY_LOOKS" :key="l.id" :class="{ on: look === l.id }" :title="l.line" @click="chooseLook(l.id)">{{ l.label }}</button>
+    </div>
+    <DiaryBook :shelves="shelves" :open-file="openFile" @open="current = $event" />
+  </div>
+  <div v-else class="memory-room">
     <aside class="list widget">
       <h2>{{ TITLES[room] }}</h2>
+      <div v-if="room === 'diary'" class="looks">
+        <button v-for="l in DIARY_LOOKS" :key="l.id" :class="{ on: look === l.id }" :title="l.line" @click="chooseLook(l.id)">{{ l.label }}</button>
+      </div>
+      <DiaryCalendar v-if="look === 'calendar'" :shelves="shelves" :current="current" @open="open" />
+      <template v-else>
       <input v-model="query" type="search" placeholder="Search" aria-label="Search" />
       <p v-if="!shelves.length" class="empty">{{ EMPTY[room] }}</p>
       <div v-for="shelf in filtered" :key="shelf.name" class="shelf">
@@ -101,6 +133,7 @@ watch(() => [props.room, props.stamp, props.openFile], load)
           <span class="title">{{ page.title }}</span>
         </button>
       </div>
+      </template>
     </aside>
     <article class="page widget">
       <template v-if="current">
@@ -124,6 +157,34 @@ watch(() => [props.room, props.stamp, props.openFile], load)
   display: grid;
   grid-template-columns: minmax(260px, 30%) 1fr;
   gap: 18px;
+}
+.book-room {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+}
+.looks {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.looks.top h2 {
+  margin: 0 12px 0 4px;
+}
+.looks button {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-background);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.looks button.on {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--hover);
 }
 .widget {
   background: var(--panel-background);
