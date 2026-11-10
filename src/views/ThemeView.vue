@@ -225,7 +225,7 @@ onMounted(load)
           <button class="arrow" aria-label="Later theme" :disabled="themes.length < 2" @click="shownAt = step(shownAt, 1, themes.length)">›</button>
         </div>
         <p class="dots" aria-hidden="true"><i v-for="(t, i) in themes" :key="t.id" :class="{ on: i === shownAt, worn: t.id === currentId }" /></p>
-        <p class="line">{{ shown?.description }}</p>
+        <p class="line" :title="shown?.description">{{ shown?.description }}</p>
         <div v-if="shown" class="row centre">
           <button v-if="shown.id !== currentId" class="primary" @click="use(shown)">Use</button>
           <template v-if="shown.source === 'yours'">
@@ -251,7 +251,7 @@ onMounted(load)
           <button class="arrow" aria-label="Later diary theme" @click="turnDiary(1)">›</button>
         </div>
         <p class="dots" aria-hidden="true"><i v-for="(t, i) in DIARY_THEMES" :key="t.id" :class="{ on: i === diaryAt, worn: i === diaryAt }" /></p>
-        <p class="line">{{ diary.line }}</p>
+        <p class="line" :title="diary.line">{{ diary.line }}</p>
       </section>
 
       <!-- the story theme: the STORY stage -->
@@ -268,7 +268,7 @@ onMounted(load)
           <button class="arrow" aria-label="Later story theme" @click="turnStory(1)">›</button>
         </div>
         <p class="dots" aria-hidden="true"><i v-for="(t, i) in STORY_THEMES" :key="t.id" :class="{ on: i === storyAt, worn: i === storyAt }" /></p>
-        <p class="line">{{ story.line }}</p>
+        <p class="line" :title="story.line">{{ story.line }}</p>
       </section>
     </div>
 
@@ -309,6 +309,13 @@ onMounted(load)
 }
 .row.centre {
   justify-content: center;
+}
+/* Nothing under the cases may change their height as you step through the themes: the showroom is
+   centred on its tallest case, so any change would lift or drop all three at once. The main theme's
+   buttons (Use, and Polish / Paint / Delete for your own) come and go, so their row keeps its height
+   either way, and the one line under each case below is held at three lines. */
+.case .row.centre {
+  min-height: 32px;
 }
 h2 {
   margin: 0;
@@ -545,7 +552,12 @@ input {
   box-shadow: 0 0 8px var(--accent);
 }
 .line {
-  min-height: 2.9em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  min-height: 4.35em; /* three lines of 1.45, so a short line and a long one stand equally tall */
+  box-sizing: content-box;
   margin: -8px 0 0;
   padding: 2px 14px 10px;
   border: 1px solid var(--line);
