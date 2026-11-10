@@ -48,6 +48,18 @@ fn forget_as(account: &str) -> Result<(), String> {
     }
 }
 
+/// The password of Castle's own database engine: kept by Windows like the keys, but never
+/// listed in Settings and never shown.
+const DB_ROOT: &str = "db-root";
+
+pub fn db_root() -> Option<String> {
+    load_as(DB_ROOT)
+}
+
+pub fn keep_db_root(password: &str) -> Result<(), String> {
+    save_as(DB_ROOT, password)
+}
+
 /// Shows only the ends of a key: "sk-p…a9F2". Short keys show only the last two characters.
 pub fn mask(key: &str) -> String {
     let chars: Vec<char> = key.chars().collect();

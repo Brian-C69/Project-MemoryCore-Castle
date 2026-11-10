@@ -431,7 +431,7 @@ pub async fn db_stop(app: AppHandle) -> Result<DbView, String> {
         if s.db_external {
             return Err("This database belongs to another program on this PC. Stop it there.".into());
         }
-        stop(&home(), s.db_port.unwrap_or(PREFERRED_PORT))?;
+        stop_own(&home(), s.db_port.unwrap_or(PREFERRED_PORT))?;
         Ok(view_of(&store))
     })
     .await
@@ -446,6 +446,53 @@ pub fn db_use_existing(store: State<SettingsStore>) -> Result<DbView, String> {
     }
     remember(&store, Some(PREFERRED_PORT), true)?;
     Ok(view_of(&store))
+}
+
+/// Creates the companion's database, its own user and its tables, and writes the connection
+/// details into the memory folder's .env. Castle's own engine needs nothing from the member;
+/// an existing server (XAMPP) is asked for its admin login once, used here and never kept.
+#[tauri::command]
+pub async fn db_create(app: AppHandle, admin_user: Option<String>, admin_password: Option<String>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = app.state::<SettingsStore>();
+        let s = store.get();
+        let memory = s.memory_folder.clone().map(PathBuf::from).filter(|f| f.is_dir()).ok_or("Choose your MemoryCore folder first.")?;
+        let port = s.db_port.ok_or("Install the database first.")?;
+        if probe_port(port) != PortUse::MySql {
+            return Err("The database is not running. Press Start first.".into());
+        }
+        let companion = s.companion_name.clone().unwrap_or_default();
+        let access = if s.db_external {
+            crate::memdb::provision(port, admin_user.as_deref().unwrap_or("root"), admin_password.as_deref().unwrap_or(""), &companion)?
+        } else {
+            let root = crate::memdb::secure_root(port, crate::key::db_root())?;
+            crate::key::keep_db_root(&root)?;
+            crate::memdb::provision(port, "root", &root, &companion)?
+        };
+        crate::memdb::write_env(&memory, &access)?;
+        Ok(access.name)
+    })
+    .await
+    .map_err(|_| "Creating the database stopped.".to_string())?
+}
+
+/// Stops Castle's own engine: over SQL once root has a password, else with mariadb-admin.
+fn stop_own(home: &Path, port: u16) -> Result<(), String> {
+    if probe_port(port) != PortUse::MySql {
+        return Ok(());
+    }
+    if let Some(root) = crate::key::db_root() {
+        if crate::memdb::shutdown(port, &root).is_ok() {
+            let started = Instant::now();
+            while started.elapsed() < Duration::from_secs(15) {
+                if probe_port(port) == PortUse::Free {
+                    return Ok(());
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        }
+    }
+    stop(home, port)
 }
 
 /// When Castle opens: its own installed engine starts by itself, quietly, off the main thread.
@@ -469,7 +516,7 @@ pub fn stop_with_castle(app: &AppHandle) {
     if s.db_external || s.db_keep_running || !installed(&home()) {
         return;
     }
-    let _ = stop(&home(), s.db_port.unwrap_or(PREFERRED_PORT));
+    let _ = stop_own(&home(), s.db_port.unwrap_or(PREFERRED_PORT));
 }
 
 #[cfg(test)]

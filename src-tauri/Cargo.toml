@@ -38,6 +38,7 @@ tauri-plugin-updater = { version = "2", optional = true }
 # the browser sign-in (PKCE): a random secret and its SHA-256 fingerprint
 sha2 = "0.10"
 getrandom = "0.3"
+mysql = { version = "28.0.4", default-features = false, features = ["minimal-rust"] }
 
 [target.'cfg(windows)'.dependencies]
 # the world windows ask which window is on top at a few points, to rest when covered

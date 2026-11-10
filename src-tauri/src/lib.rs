@@ -13,6 +13,7 @@ mod env;
 mod files;
 mod key;
 mod link;
+mod memdb;
 mod memory;
 mod pty;
 mod quota;
@@ -272,7 +273,8 @@ pub fn run() {
             db::db_install,
             db::db_start,
             db::db_stop,
-            db::db_use_existing
+            db::db_use_existing,
+            db::db_create
         ])
         .setup(|app| {
             let config = match settings::test_override(settings::TEST_CONFIG_VAR) {
