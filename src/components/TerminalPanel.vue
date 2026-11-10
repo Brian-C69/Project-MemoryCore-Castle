@@ -329,7 +329,7 @@ defineExpose({ wake, screenLines, writeToSession })
     :aria-label="companion"
   >
     <div class="header">
-      <div v-if="$slots.header && !expanded" class="portrait"><slot name="header" /></div>
+      <div v-if="$slots.header && !expanded" class="portrait"><slot name="header" :write="writeToSession" :running="running" /></div>
       <div class="tabs" role="tablist" aria-label="Chat or log">
         <button role="tab" :aria-selected="view === 'chat'" :class="{ active: view === 'chat' }" @click="setView('chat')">CHAT</button>
         <button role="tab" :aria-selected="view === 'log'" :class="{ active: view === 'log' }" @click="setView('log')">LOG</button>
