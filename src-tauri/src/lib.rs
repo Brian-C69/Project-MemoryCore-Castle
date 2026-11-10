@@ -299,6 +299,7 @@ pub fn run() {
                 None => app.path().app_config_dir()?,
             };
             let store = SettingsStore::open(&config);
+            session::forget_boot_file(&store);
             let current = store.get();
             *store.startup_note.lock().unwrap() = startup::sync(app.handle(), current.start_with_windows);
             app.manage(store);

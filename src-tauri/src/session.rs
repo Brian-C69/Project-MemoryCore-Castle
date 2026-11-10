@@ -4,9 +4,9 @@
 use crate::env;
 use crate::key;
 use crate::pty::{self, PtyHost};
-use crate::settings::{Settings, SettingsStore};
+use crate::settings::{Cli, Settings, SettingsStore};
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 pub const TERMINAL_OUTPUT: &str = "terminal-output";
@@ -116,6 +116,41 @@ fn view(store: &SettingsStore, host: &PtyHost, room: Room) -> TerminalView {
     }
 }
 
+/// Where Castle keeps the memory it hands to the companion at wake: its own settings folder,
+/// never the memory folder (so no backup carries it). Removed when the session ends.
+pub fn boot_file(store: &SettingsStore) -> PathBuf {
+    store.folder().join("boot").join("main.md")
+}
+
+pub fn forget_boot_file(store: &SettingsStore) {
+    let _ = std::fs::remove_file(boot_file(store));
+}
+
+/// The CLI's own arguments at wake: Claude Code is given the memory as a system prompt file.
+/// Codex has no such option, so it gets none and loads the memory itself.
+pub fn wake_args(cli: Cli, boot: Option<&Path>) -> Vec<String> {
+    match (cli, boot) {
+        (Cli::Claude, Some(file)) => vec!["--append-system-prompt-file".to_string(), file.display().to_string()],
+        _ => Vec::new(),
+    }
+}
+
+/// Writes the memory to the boot file when this wake can carry it: the main room, Claude Code,
+/// the switch on, and a database that answers and holds the memory. Any miss is None - the
+/// companion then loads the memory herself, exactly as before.
+fn prepare_boot(store: &SettingsStore, settings: &Settings, room: Room, folder: &Path) -> Option<PathBuf> {
+    forget_boot_file(store);
+    if room != Room::Main || settings.cli != Cli::Claude || !settings.db_boot_at_wake {
+        return None;
+    }
+    let mut conn = crate::store::source(folder)?;
+    let text = crate::mirror::boot_prompt(&mut conn).ok().flatten()?;
+    let file = boot_file(store);
+    std::fs::create_dir_all(file.parent()?).ok()?;
+    std::fs::write(&file, text).ok()?;
+    Some(file)
+}
+
 /// Starts the room's session unless it is already running. The screen hears it through that
 /// room's output and exit events.
 fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols: u16, rows: u16) -> Result<(), String> {
@@ -132,16 +167,18 @@ fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols
     }
     // Castle's block in CLAUDE.md / AGENTS.md follows the Castle version (the Neural Link's lines
     // reach a member who set up before them); the member's own words outside it are untouched
+    // the memory, read from the database now and handed to the CLI as it starts
+    let boot = prepare_boot(store, &settings, room, &folder);
     if room == Room::Main {
         if let (Some(companion), Some(member)) = (settings.companion_name.as_deref(), settings.member_name.as_deref()) {
-            let _ = crate::setup::write_blocks(&folder, companion, member);
+            let _ = crate::setup::write_blocks_for(&folder, companion, member, boot.is_some());
         }
     }
     let (output_event, exit_event) = room.events();
     let output = app.clone();
     let ending = app.clone();
     host.start(
-        pty::launch_command(&program, &folder, &vars),
+        pty::launch_command(&program, &folder, &vars, &wake_args(settings.cli, boot.as_deref())),
         cols.max(20),
         rows.max(5),
         move |text| {
@@ -149,7 +186,10 @@ fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols
         },
         move |id, code| {
             match room {
-                Room::Main => ending.state::<MainHost>().0.finished(id),
+                Room::Main => {
+                    forget_boot_file(&ending.state::<SettingsStore>());
+                    ending.state::<MainHost>().0.finished(id)
+                }
                 Room::Story => ending.state::<StoryHost>().0.finished(id),
             }
             let _ = ending.emit(exit_event, code);
@@ -251,5 +291,41 @@ mod tests {
         assert_eq!(Room::named(Some("story")), Room::Story);
         assert_eq!(Room::named(None), Room::Main);
         assert_eq!(Room::named(Some("anything")), Room::Main);
+    }
+
+    #[test]
+    fn claude_code_is_given_the_memory_file_and_codex_loads_it_itself() {
+        let file = Path::new("C:\\Users\\Rin\\AppData\\Roaming\\com.memorycore.castle\\boot\\main.md");
+        assert_eq!(wake_args(Cli::Claude, Some(file)), vec!["--append-system-prompt-file".to_string(), file.display().to_string()]);
+        assert!(wake_args(Cli::Codex, Some(file)).is_empty());
+        assert!(wake_args(Cli::Claude, None).is_empty());
+    }
+
+    #[test]
+    fn the_boot_file_lives_with_castles_settings_never_in_the_memory_folder() {
+        let config = folder("boot-config");
+        let memory = folder("boot-memory");
+        let store = SettingsStore::open(&config);
+        let file = boot_file(&store);
+        assert!(file.starts_with(&config) && !file.starts_with(&memory));
+        assert!(file.ends_with("boot/main.md") || file.ends_with("boot\\main.md"));
+        // a memory kept in files, or a database that does not answer: nothing is written
+        let mut settings = Settings { memory_folder: Some(memory.display().to_string()), ..Settings::default() };
+        assert!(settings.db_boot_at_wake);
+        assert_eq!(prepare_boot(&store, &settings, Room::Main, &memory), None);
+        std::fs::write(memory.join(".env"), "MEMORY_DB_HOST=127.0.0.1
+MEMORY_DB_PORT=1
+MEMORY_DB_NAME=x_memorycoredb
+MEMORY_DB_USER=castle_x
+MEMORY_DB_PASSWORD=x
+").unwrap();
+        assert_eq!(prepare_boot(&store, &settings, Room::Main, &memory), None);
+        settings.cli = Cli::Codex;
+        assert_eq!(prepare_boot(&store, &settings, Room::Main, &memory), None);
+        // a file left by a run that ended badly is removed
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, "old").unwrap();
+        forget_boot_file(&store);
+        assert!(!file.exists());
     }
 }

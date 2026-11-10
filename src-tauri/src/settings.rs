@@ -198,6 +198,9 @@ pub struct Settings {
     pub db_external: bool,
     /// Leave Castle's database engine running after Castle closes (off: it stops with Castle).
     pub db_keep_running: bool,
+    /// Castle reads the memory from the database when it wakes the companion and starts her
+    /// with it already loaded (Claude Code). Off: she loads it herself with `castle-memory boot`.
+    pub db_boot_at_wake: bool,
 }
 
 pub const STORY_LOOKS: [&str; 5] = ["classic", "cinema", "book", "messenger", "jrpg"];
@@ -232,6 +235,7 @@ impl Default for Settings {
             db_port: None,
             db_external: false,
             db_keep_running: false,
+            db_boot_at_wake: true,
         }
     }
 }
@@ -407,6 +411,7 @@ mod tests {
             db_port: Some(3307),
             db_external: false,
             db_keep_running: true,
+            db_boot_at_wake: false,
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));

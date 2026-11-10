@@ -24,6 +24,7 @@ const done = ref('')
 const adminUser = ref('root')
 const adminPassword = ref('')
 const keepRunning = ref(false)
+const bootAtWake = ref(true)
 const sure = ref(false)
 let settings = null
 let stopListening = null
@@ -122,6 +123,16 @@ async function toggleStub(skill) {
   }
 }
 
+async function toggleBoot() {
+  if (!settings) return
+  settings = { ...settings, dbBootAtWake: bootAtWake.value }
+  const saved = await attempt('Saving…', () => saveSettings(settings))
+  if (saved) {
+    settings = saved.settings
+    done.value = bootAtWake.value ? `Castle loads the memory when ${props.companion} wakes.` : `${props.companion} loads the memory herself after waking.`
+  }
+}
+
 async function toggleKeep() {
   if (!settings) return
   settings = { ...settings, dbKeepRunning: keepRunning.value }
@@ -132,6 +143,7 @@ async function toggleKeep() {
 onMounted(async () => {
   try {
     settings = (await getSettings()).settings
+    bootAtWake.value = settings.dbBootAtWake
     stopListening = await onDbInstall(({ done: got, total }) => {
       if (busy.value) busy.value = progressLine(got, total)
     })
@@ -215,6 +227,10 @@ onBeforeUnmount(() => stopListening?.())
         <button :disabled="!!busy" @click="exportOut">Export to markdown…</button>
         <button v-if="own" :disabled="!!busy" @click="stop">Stop</button>
       </div>
+
+      <label class="toggle" title="Claude Code only. With Codex, or with this off, the companion loads the memory with one command after waking.">
+        <input v-model="bootAtWake" type="checkbox" @change="toggleBoot" /> Load the memory when {{ companion }} wakes
+      </label>
 
       <h4>Skills</h4>
       <p v-if="!skills.length" class="hint">No skills installed yet. Once {{ companion }} installs one, it shows here.</p>

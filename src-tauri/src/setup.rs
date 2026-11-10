@@ -143,6 +143,19 @@ pub fn sentence_case(style: &str) -> String {
 const BOOT_FROM_DATABASE: &str =
     "run `castle-memory boot` (in PowerShell: `& \"$env:CASTLE_TOOLS\\castle-memory.cmd\" boot`) and follow what it prints to load your memory";
 
+/// What the block says when Castle itself loaded the memory at wake (it is in the session's
+/// system prompt before the companion's first word).
+const ALREADY_LOADED: &str =
+    "your memory is already loaded - MemoryCore Castle read it from the memory database when it woke you, and it is in this session under \"Your memory\". Do not load it again. (Only if you find no memory in this session: run `castle-memory boot` and follow what it prints.)";
+
+/// Castle's block for a session Castle woke with the memory already loaded.
+pub fn castle_block_loaded(companion: &str, member: &str) -> String {
+    BLOCK_TEMPLATE
+        .replace("At the start of every session, before anything else, read `{{ENTRY_FILE}}` and follow it to load your memory.", &format!("At the start of this session {ALREADY_LOADED}"))
+        .replace("{{AI_NAME}}", companion.trim())
+        .replace("{{USER_NAME}}", member.trim())
+}
+
 /// Castle's block with the member's names in it. `entry` is the file the companion reads
 /// first; None when the memory files have moved into the database.
 pub fn castle_block_for(companion: &str, member: &str, entry: Option<&str>) -> String {
@@ -202,11 +215,17 @@ pub fn lives_in_database(folder: &Path) -> bool {
 
 /// Writes Castle's block into CLAUDE.md (Claude Code) and AGENTS.md (Codex).
 pub fn write_blocks(folder: &Path, companion: &str, member: &str) -> Result<(), String> {
+    write_blocks_for(folder, companion, member, false)
+}
+
+/// Writes Castle's block. `loaded` = Castle is waking the companion with the memory already in
+/// the session, so the block says so instead of telling her to load it.
+pub fn write_blocks_for(folder: &Path, companion: &str, member: &str, loaded: bool) -> Result<(), String> {
     let entry = entry_file(folder);
     if entry.is_none() && !lives_in_database(folder) {
         return Err("This folder has no master-memory.md, so it is not a MemoryCore folder.".into());
     }
-    let mut block = castle_block_for(companion, member, entry);
+    let mut block = if loaded { castle_block_loaded(companion, member) } else { castle_block_for(companion, member, entry) };
     if has_database(folder) {
         block = with_db_section(&block, member);
     }
@@ -548,6 +567,13 @@ mod tests {
         write_blocks(&root, "Lyra", "Rin").unwrap();
         let booted = std::fs::read_to_string(root.join("CLAUDE.md")).unwrap();
         assert!(booted.contains("run `castle-memory boot`") && !booted.contains("{{ENTRY_FILE}}") && !booted.contains("read `master-memory.md`"));
+        assert_eq!(inspect(&root).companion_name.as_deref(), Some("Lyra"));
+        // woken by Castle with the memory already loaded: the block says so and names the fallback
+        write_blocks_for(&root, "Lyra", "Rin", true).unwrap();
+        let loaded = std::fs::read_to_string(root.join("AGENTS.md")).unwrap();
+        assert!(loaded.contains("your memory is already loaded") && loaded.contains("Do not load it again."));
+        assert!(loaded.contains("Then greet Rin by name.") && !loaded.contains("{{") && !loaded.contains("before anything else, read"));
+        assert!(loaded.contains("### The memory database"));
         assert_eq!(inspect(&root).companion_name.as_deref(), Some("Lyra"));
         std::fs::write(root.join("master-memory.md"), "**I am Lyra**\n").unwrap();
         write_blocks(&root, "Lyra", "Rin").unwrap();

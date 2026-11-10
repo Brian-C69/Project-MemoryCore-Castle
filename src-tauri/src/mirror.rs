@@ -328,6 +328,34 @@ pub fn boot(conn: &mut impl Queryable) -> Result<String, String> {
     Ok(out)
 }
 
+/// The memory as Castle hands it to the companion when it wakes her: the same files in the same
+/// order as `boot`, with a header written for a system prompt. None when nothing has moved in.
+pub fn boot_prompt(conn: &mut impl Queryable) -> Result<Option<String>, String> {
+    let files: Vec<(String, String)> = conn
+        .query("SELECT path, body FROM memory_files WHERE boot_order IS NOT NULL ORDER BY boot_order, path")
+        .map_err(sql("Reading the memory"))?;
+    let session = session_text(conn)?;
+    if files.is_empty() && session.is_empty() {
+        return Ok(None);
+    }
+    let mut out = String::from(
+        "# Your memory\n\n\
+         This is your memory. MemoryCore Castle read it from the memory database when it woke you, so it is already complete and already loaded:\n\
+         do not run `castle-memory boot`, and never look for the files named below on disk or recreate them - they live in the database.\n\
+         It is a picture of the moment you woke. What you save during this session is kept at once and is here again the next time you wake.\n\
+         To read a file again: `castle-memory memory show --path <name>`. To change one: `castle-memory memory save --path <name> --file <text file>`.\n\
+         The session memory is kept by section: `castle-memory session set --section \"<heading>\" --file <text file>`.\n",
+    );
+    for (path, body) in files {
+        out.push_str(&format!("\n===== {path} =====\n{}\n", body.trim_end()));
+    }
+    if !session.is_empty() {
+        let file = session_file(conn)?.unwrap_or_default();
+        out.push_str(&format!("\n===== {file} (session memory) =====\n{}\n", session.trim_end()));
+    }
+    Ok(Some(out))
+}
+
 // ---------- skills: database = truth, disk = mirror ----------
 
 type SkillKey = (String, String, String);

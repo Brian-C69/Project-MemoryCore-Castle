@@ -599,6 +599,13 @@ mod tests {
         let at = |needle: &str| boot.find(needle).unwrap_or_else(|| panic!("missing {needle}"));
         assert!(at("===== master-memory.md =====") < at("===== main/identity-core.md =====") && at("===== main/identity-core.md =====") < at("===== main/relationship-memory.md ====="));
         assert!(at("===== main/relationship-memory.md =====") < at("===== main/current-session.md (session memory) ====="));
+        // the same memory as Castle hands it over at wake
+        let prompt = crate::mirror::boot_prompt(&mut conn).unwrap().unwrap();
+        assert!(prompt.starts_with("# Your memory
+") && prompt.contains("do not run `castle-memory boot`"));
+        let pat = |needle: &str| prompt.find(needle).unwrap_or_else(|| panic!("missing {needle}"));
+        assert!(pat("===== master-memory.md =====") < pat("===== main/identity-core.md =====") && pat("===== main/relationship-memory.md =====") < pat("(session memory) ====="));
+        assert!(prompt.contains("likes tea") && prompt.contains("- the garden"));
         assert_eq!(crate::mirror::session_text(&mut conn).unwrap(), "# Session\r\n\r\n## Now\r\n- planning\r\n\r\n## Open threads\n- the garden\n");
         assert!(!root.join("master-memory.md").exists() && !root.join("main").exists());
         // Castle still reads the master memory, from the database

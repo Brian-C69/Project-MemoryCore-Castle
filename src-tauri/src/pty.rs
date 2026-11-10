@@ -21,8 +21,8 @@ pub fn complete_utf8_len(bytes: &[u8]) -> usize {
 }
 
 /// The command that starts the CLI in `folder`. A .cmd or .bat shim (an npm install) runs
-/// through cmd.exe; a real program runs directly.
-pub fn launch_command(program: &Path, folder: &Path, vars: &[(String, String)]) -> CommandBuilder {
+/// through cmd.exe; a real program runs directly. `args` go to the CLI itself.
+pub fn launch_command(program: &Path, folder: &Path, vars: &[(String, String)], args: &[String]) -> CommandBuilder {
     let is_script = program
         .extension()
         .and_then(|e| e.to_str())
@@ -35,6 +35,9 @@ pub fn launch_command(program: &Path, folder: &Path, vars: &[(String, String)]) 
     } else {
         CommandBuilder::new(program.as_os_str())
     };
+    for arg in args {
+        command.arg(arg);
+    }
     command.cwd(folder);
     for name in NEVER_INHERITED {
         command.env_remove(name);
@@ -277,7 +280,7 @@ mod tests {
     #[test]
     fn inherited_keys_and_markers_are_dropped_and_chosen_ones_are_set() {
         let vars = vec![("SUNOAPI_ORG_KEY".to_string(), "chosen".to_string())];
-        let command = launch_command(Path::new("C:\\npm\\codex.cmd"), Path::new("C:\\"), &vars);
+        let command = launch_command(Path::new("C:\\npm\\codex.cmd"), Path::new("C:\\"), &vars, &[]);
         for name in ["CLAUDECODE", "OPENAI_API_KEY", "ARK_API_KEY"] {
             assert!(command.get_env(name).is_none(), "{name} leaked");
         }
@@ -287,10 +290,10 @@ mod tests {
 
     #[test]
     fn a_cmd_shim_runs_through_cmd_and_a_program_runs_directly() {
-        let shim = launch_command(Path::new("C:\\npm\\codex.cmd"), Path::new("C:\\"), &[]);
+        let shim = launch_command(Path::new("C:\\npm\\codex.cmd"), Path::new("C:\\"), &[], &[]);
         assert_eq!(shim.get_argv()[0].to_str(), Some("cmd.exe"));
         assert_eq!(shim.get_argv()[2].to_str(), Some("C:\\npm\\codex.cmd"));
-        let program = launch_command(Path::new("C:\\bin\\claude.exe"), Path::new("C:\\"), &[]);
+        let program = launch_command(Path::new("C:\\bin\\claude.exe"), Path::new("C:\\"), &[], &[]);
         assert_eq!(program.get_argv()[0].to_str(), Some("C:\\bin\\claude.exe"));
     }
 
@@ -337,5 +340,16 @@ mod tests {
         }
         assert!(seen.contains("castle-console-test-\u{65E5}\u{672C}"), "output was: {seen:?}");
         assert!(host.snapshot().contains("castle-console-test-"));
+    }
+
+    #[test]
+    fn the_clis_own_arguments_follow_the_program_through_a_shim_or_directly() {
+        let args = vec!["--append-system-prompt-file".to_string(), "C:\\boot\\main.md".to_string()];
+        let shim = launch_command(Path::new("C:\\npm\\claude.cmd"), Path::new("C:\\"), &[], &args);
+        let words: Vec<String> = shim.get_argv().iter().map(|a| a.to_string_lossy().to_string()).collect();
+        assert_eq!(words, vec!["cmd.exe", "/c", "C:\\npm\\claude.cmd", "--append-system-prompt-file", "C:\\boot\\main.md"]);
+        let program = launch_command(Path::new("C:\\bin\\claude.exe"), Path::new("C:\\"), &[], &args);
+        let words: Vec<String> = program.get_argv().iter().map(|a| a.to_string_lossy().to_string()).collect();
+        assert_eq!(words, vec!["C:\\bin\\claude.exe", "--append-system-prompt-file", "C:\\boot\\main.md"]);
     }
 }
