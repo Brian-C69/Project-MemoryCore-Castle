@@ -6,6 +6,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import ChatView from './ChatView.vue'
+import { isTerminalReply } from './terminalreply.js'
 import QuickActions from './QuickActions.vue'
 import {
   clipboardCopy,
@@ -237,7 +238,7 @@ onMounted(async () => {
   term.attachCustomKeyEventHandler(clipboardKeys)
   surface.value.addEventListener('contextmenu', onRightClick)
   term.onData((data) => {
-    if (running.value || starting) terminalWrite(data, props.room).catch(() => {})
+    if (running.value || starting || isTerminalReply(data)) terminalWrite(data, props.room).catch(() => {})
   })
 
   // Listen before anything starts: the console asks this screen a question before it runs.
