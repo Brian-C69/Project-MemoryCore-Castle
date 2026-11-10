@@ -228,6 +228,12 @@ impl PtyHost {
         self.write_quietly(data)
     }
 
+    /// The terminal's answer to the console's own question: not the member's input, so it does not
+    /// count as the last thing they typed.
+    pub fn reply(&self, data: &[u8]) -> Result<(), String> {
+        self.write_quietly(data)
+    }
+
     fn write_quietly(&self, data: &[u8]) -> Result<(), String> {
         match self.session.lock().unwrap().as_mut() {
             Some((_, session)) => session.write(data),

@@ -283,8 +283,20 @@ pub fn terminal_start(
     Ok(view(&store, host, room))
 }
 
+/// The terminal answering a question the console asked (where the cursor is, what it is, whether
+/// it is ready), not the member typing. Windows' console waits for the cursor answer before it
+/// starts the CLI, so these must never be held back.
+pub fn is_terminal_reply(data: &str) -> bool {
+    let Some(body) = data.strip_prefix("\x1b[") else { return false };
+    let Some(last) = body.chars().last() else { return false };
+    data.len() <= 32 && matches!(last, 'R' | 'c' | 'n') && body[..body.len() - 1].chars().all(|c| c.is_ascii_digit() || c == ';' || c == '?' || c == '>')
+}
+
 #[tauri::command]
 pub fn terminal_write(data: String, room: Option<String>, main: State<MainHost>, story: State<StoryHost>, images: State<crate::providers::Images>, control: State<crate::providers::Control>) -> Result<(), String> {
+    if is_terminal_reply(&data) {
+        return host(Room::named(room.as_deref()), &main, &story).reply(data.as_bytes());
+    }
     let switching = control.0.try_lock().map_err(|_| "Provider is changing. Your message has not been sent.")?;
     if Room::named(room.as_deref()) == Room::Main && switching.phase == "switching" { return Err("Provider is switching. Your message has not been sent.".into()); }
     if Room::named(room.as_deref()) == Room::Main && images.0.lock().unwrap().iter().any(|j| j.phase == "working") {
@@ -416,5 +428,15 @@ MEMORY_DB_PASSWORD=x
         std::fs::write(&file, "old").unwrap();
         forget_boot_file(&store);
         assert!(!file.exists());
+    }
+
+    #[test]
+    fn the_terminal_answering_the_console_is_told_apart_from_typing() {
+        for reply in ["\x1b[1;1R", "\x1b[24;80R", "\x1b[?1;2c", "\x1b[>0;10;1c", "\x1b[0n"] {
+            assert!(is_terminal_reply(reply), "{reply:?}");
+        }
+        for typed in ["hello", "\r", "\x1b[A", "\x1b[200~paste\x1b[201~", "\x1b[1;1Rmore", "\x1b[", "R", "\x1b[1;1H"] {
+            assert!(!is_terminal_reply(typed), "{typed:?}");
+        }
     }
 }

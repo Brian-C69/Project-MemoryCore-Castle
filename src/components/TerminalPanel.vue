@@ -42,6 +42,7 @@ const MAX_WIDTH = 75
 const surface = ref(null)
 const panel = ref(null)
 const running = ref(false)
+let starting = false
 const activeProvider = ref(null)
 const ended = ref(false)
 const status = ref({ ready: false, message: '', fix: null })
@@ -178,12 +179,17 @@ async function wake() {
   }
   problem.value = ''
   fitNow()
+  // The console asks this screen where its cursor is the moment it starts, before Castle has said
+  // the session is running; the answer must still reach it or the CLI never begins.
+  starting = true
   try {
     show(await terminalStart(term.cols, term.rows, props.room))
     ended.value = false
     term.focus()
   } catch (reason) {
     problem.value = String(reason)
+  } finally {
+    starting = false
   }
 }
 
@@ -231,7 +237,7 @@ onMounted(async () => {
   term.attachCustomKeyEventHandler(clipboardKeys)
   surface.value.addEventListener('contextmenu', onRightClick)
   term.onData((data) => {
-    if (running.value) terminalWrite(data, props.room).catch(() => {})
+    if (running.value || starting) terminalWrite(data, props.room).catch(() => {})
   })
 
   // Listen before anything starts: the console asks this screen a question before it runs.
