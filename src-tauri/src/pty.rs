@@ -228,6 +228,11 @@ impl PtyHost {
         self.write_quietly(data)
     }
 
+    /// Something was handed to the session as if typed (a provider handoff prompt).
+    pub fn mark_input(&self) {
+        *self.input_time.lock().unwrap() = Some(std::time::SystemTime::now());
+    }
+
     /// The terminal's answer to the console's own question: not the member's input, so it does not
     /// count as the last thing they typed.
     pub fn reply(&self, data: &[u8]) -> Result<(), String> {

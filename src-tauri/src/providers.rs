@@ -157,7 +157,10 @@ pub(crate) fn safe_boundary(store: &SettingsStore, host: &crate::pty::PtyHost) -
         return false;
     };
     let Some((record, _)) = chat::newest_record(cli, &folder, since) else {
-        return false;
+        // No conversation record yet. A session nobody has typed into since it started (a fresh
+        // wake) has no turn to finish, so it can be switched; one that was given something has not
+        // written its first turn yet, so wait for it.
+        return host.last_input_time().is_none_or(|input| input < since);
     };
     if let Some(input) = host.last_input_time() {
         if record

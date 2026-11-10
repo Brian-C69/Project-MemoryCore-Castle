@@ -246,6 +246,8 @@ pub(crate) fn wake_with_prompt(app: &AppHandle, store: &SettingsStore, host: &Pt
         },
     )?;
     if started { host.bind_provider(settings.cli); }
+    // A handoff prompt is a turn the new CLI is now working on: a later switch waits for it.
+    if started && prompt.is_some() { host.mark_input(); }
     Ok(())
 }
 
