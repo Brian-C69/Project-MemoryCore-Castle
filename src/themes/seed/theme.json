@@ -36,7 +36,7 @@
     },
     "usage": {
       "right": "31%",
-      "bottom": "calc(4% + 104px)",
+      "bottom": "calc(4% + 150px)",
       "width": "33%"
     },
     "today": {

@@ -38,7 +38,7 @@ By hand, a theme is a folder with a `theme.json` and a wallpaper:
   "widgets": {
     "clock": { "right": "21%", "top": "4%", "size": "l" },
     "gauges": { "right": "2%", "top": "4%" },
-    "usage": { "right": "31%", "bottom": "calc(4% + 104px)", "width": "33%" },
+    "usage": { "right": "31%", "bottom": "calc(4% + 150px)", "width": "33%" },
     "today": { "right": "2%", "top": "22%", "width": "28%" },
     "projects": { "right": "2%", "top": "calc(22% + 190px)", "width": "28%" },
     "diary": { "right": "2%", "top": "calc(22% + 395px)", "width": "28%" },
