@@ -8,7 +8,7 @@
 //!  castle-memory project add|update --name "Portfolio site" [--status ..] [--summary ..] [--file notes.md]
 //!  castle-memory project list | project show --name "Portfolio site"
 //!  castle-memory link send --from main --to story --about "..." [--word "..."] [--no-wake]
-//!  castle-memory link inbox --to main | link read --id 7 | link here --name main
+//!  castle-memory link inbox --to main | link read --to main --note <file name> | link here --name main
 //!  castle-memory boot                         the memory to read at the start of a session
 //!  castle-memory memory list | memory show --path master-memory.md | memory save --path .. --file ..
 //!  castle-memory session show [--section "Open threads"] | session set --section ".." --file .. | session clear --section ".."
@@ -120,10 +120,10 @@ pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> 
         ["project", "add"] | ["project", "update"] => project_save(conn, ask),
         ["project", "list"] => project_list(conn),
         ["project", "show"] => project_show(conn, ask),
-        ["link", "send"] => link_send(conn, ask),
-        ["link", "inbox"] => link_inbox(conn, ask),
-        ["link", "read"] => link_read(conn, ask),
-        ["link", "here"] => link_here(conn, ask),
+        ["link", "send"] => link_send(conn, ask, memory),
+        ["link", "inbox"] => link_inbox(ask, memory),
+        ["link", "read"] => link_read(conn, ask, memory),
+        ["link", "here"] => link_here(ask, memory),
         ["boot"] => mirror::boot(conn),
         ["memory", "list"] => memory_list(conn),
         ["memory", "show"] => mirror::memory_file(conn, ask.need("path")?)?.ok_or_else(|| "No memory file with that path.".to_string()),
@@ -285,46 +285,55 @@ fn project_show(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
 }
 
 // ---------- the Neural Link ----------
+//
+// The link's own files (link/notes/<to>/...) carry a note to its terminal - that is how a knock
+// finds it, and how a terminal outside Castle reads it. The database keeps the record.
 
 fn terminal(value: &str) -> Result<&str, String> {
-    let mut chars = value.chars();
-    let ok = matches!(chars.next(), Some(c) if c.is_ascii_lowercase() || c.is_ascii_digit())
-        && value.len() <= 40
-        && value.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
-    if ok { Ok(value) } else { Err(format!("{value} is not a terminal name (lowercase letters, digits and dashes).")) }
+    if crate::link::terminal_ok(value) { Ok(value) } else { Err(format!("{value} is not a terminal name (lowercase letters, digits and dashes).")) }
 }
 
-fn link_send(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+fn link_send(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> {
     let (from, to) = (terminal(ask.need("from")?)?, terminal(ask.need("to")?)?);
     let wake = ask.get("no-wake").is_none();
+    let note = crate::link::Note {
+        from: from.to_string(),
+        to: to.to_string(),
+        at: crate::link::utc_label(crate::link::now_secs()),
+        wake,
+        word: ask.get("word").map(str::to_string),
+        about: ask.need("about")?.to_string(),
+        reply_to: ask.get("reply-to").map(str::to_string),
+        context: Vec::new(),
+    };
+    let file = crate::link::send(&crate::link::link_folder(memory), &note)?;
+    let name = file.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     conn.exec_drop(
-        "INSERT INTO link_notes (from_terminal, to_terminal, wake, word, about, reply_to) VALUES (?, ?, ?, ?, ?, ?)",
-        (from, to, wake, ask.get("word"), ask.need("about")?, ask.get("reply-to")),
+        "INSERT INTO link_notes (from_terminal, to_terminal, wake, word, about, reply_to, context) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (from, to, wake, &note.word, &note.about, &note.reply_to, &name),
     )
-    .map_err(sql("Sending the note"))?;
-    Ok(format!("LINK note #{} {from} -> {to}{}", conn.last_insert_id(), if wake { "" } else { " (no knock)" }))
+    .map_err(sql("Recording the note"))?;
+    Ok(format!("LINK note {name} {from} -> {to}{}", if wake { "" } else { " (no knock)" }))
 }
 
-fn link_inbox(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+fn link_inbox(ask: &Ask, memory: &Path) -> Result<String, String> {
     let to = terminal(ask.need("to")?)?;
-    let rows: Vec<(u64, String, String, Option<String>, String, Option<String>)> = conn
-        .exec(
-            "SELECT id, from_terminal, DATE_FORMAT(sent_at, '%Y-%m-%d %H:%i'), word, about, reply_to FROM link_notes WHERE to_terminal = ? AND read_at IS NULL ORDER BY id",
-            (to,),
-        )
-        .map_err(sql("Reading the notes"))?;
-    if rows.is_empty() {
+    let notes = crate::link::waiting(&crate::link::link_folder(memory), to);
+    if notes.is_empty() {
         return Ok("LINK no notes waiting".into());
     }
-    Ok(rows
+    Ok(notes
         .into_iter()
-        .map(|(id, from, at, word, about, reply)| {
-            let mut out = format!("#{id} from {from} at {at}\nabout: {about}");
-            if let Some(word) = word {
+        .map(|(file, note)| {
+            let mut out = format!("note: {file}\nfrom: {} at {}\nabout: {}", note.from, note.at, note.about);
+            if let Some(word) = note.word {
                 out.push_str(&format!("\nword: {word}"));
             }
-            if let Some(reply) = reply {
+            if let Some(reply) = note.reply_to {
                 out.push_str(&format!("\nreply-to: {reply}"));
+            }
+            for line in note.context {
+                out.push_str(&format!("\ncontext: {line}"));
             }
             out
         })
@@ -332,22 +341,30 @@ fn link_inbox(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
         .join("\n\n"))
 }
 
-fn link_read(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
-    let id: u64 = ask.need("id")?.trim_start_matches('#').parse().map_err(|_| "--id is a number, like 7.".to_string())?;
-    conn.exec_drop("UPDATE link_notes SET read_at = NOW() WHERE id = ? AND read_at IS NULL", (id,)).map_err(sql("Marking the note"))?;
-    Ok(if conn.affected_rows() == 0 { format!("LINK note #{id} was already read") } else { format!("LINK note #{id} read") })
+fn link_read(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> {
+    let to = terminal(ask.need("to")?)?;
+    let name = ask.need("note")?;
+    let link = crate::link::link_folder(memory);
+    if name.contains(['/', '\\']) || !link.join("notes").join(to).join(name).is_file() {
+        return Err(format!("No waiting note called {name} for {to}."));
+    }
+    crate::link::mark_read(&link, to, name);
+    // the record: the note's file name was kept in `context` when it was sent through the door
+    conn.exec_drop("UPDATE link_notes SET read_at = NOW() WHERE to_terminal = ? AND context = ? AND read_at IS NULL", (to, name)).map_err(sql("Recording the note"))?;
+    Ok(format!("LINK note {name} read"))
 }
 
-fn link_here(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+fn link_here(ask: &Ask, memory: &Path) -> Result<String, String> {
     let name = terminal(ask.need("name")?)?;
-    conn.exec_drop(
-        "INSERT INTO link_terminals (name, detail, last_seen) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE detail = COALESCE(VALUES(detail), detail), last_seen = NOW()",
-        (name, ask.get("detail")),
-    )
-    .map_err(sql("Signing in to the link"))?;
-    let rows: Vec<(String, String)> =
-        conn.query("SELECT name, DATE_FORMAT(last_seen, '%Y-%m-%d %H:%i') FROM link_terminals ORDER BY last_seen DESC").map_err(sql("Reading the link"))?;
-    Ok(rows.into_iter().map(|(n, at)| format!("{n} · seen {at}")).collect::<Vec<_>>().join("\n"))
+    let here = crate::link::link_folder(memory).join("here");
+    std::fs::create_dir_all(&here).map_err(|_| "The link folder could not be written.".to_string())?;
+    let row = crate::link::Row { terminal: name.to_string(), place: ask.get("detail").unwrap_or("").to_string(), ..Default::default() };
+    std::fs::write(here.join(format!("{name}.json")), serde_json::to_string_pretty(&row).unwrap_or_default()).map_err(|_| "The link folder could not be written.".to_string())?;
+    let mut names: Vec<String> = std::fs::read_dir(&here)
+        .map(|e| e.flatten().filter_map(|e| e.path().file_stem().map(|s| s.to_string_lossy().to_string())).collect())
+        .unwrap_or_default();
+    names.sort();
+    Ok(format!("LINK here: {}", names.join(", ")))
 }
 
 // ---------- memory files, session memory, skills ----------
@@ -687,12 +704,20 @@ mod tests {
         assert!(shown.contains("Status: live") && shown.contains("Summary: My site"));
         assert!(go(&["project", "list"]).unwrap().starts_with("[active] Portfolio site · live · "));
 
-        assert_eq!(go(&["link", "send", "--from", "story", "--to", "main", "--about", "the tale paused", "--word", "save it"]).unwrap(), "LINK note #1 story -> main");
+        // the link: the note travels as a file (so a knock finds it) and the database records it
+        let sent = go(&["link", "send", "--from", "story", "--to", "main", "--about", "the tale paused", "--word", "save it"]).unwrap();
+        assert!(sent.starts_with("LINK note ") && sent.ends_with("-story.md story -> main"), "{sent}");
+        let note_file = sent.split(' ').nth(2).unwrap().to_string();
+        assert!(folder.join("link/notes/main").join(&note_file).is_file());
+        assert_eq!(crate::link::waiting(&folder.join("link"), "main").len(), 1);
         let inbox = go(&["link", "inbox", "--to", "main"]).unwrap();
-        assert!(inbox.starts_with("#1 from story at ") && inbox.ends_with("about: the tale paused\nword: save it"));
-        assert_eq!(go(&["link", "read", "--id", "1"]).unwrap(), "LINK note #1 read");
+        assert!(inbox.starts_with(&format!("note: {note_file}\nfrom: story at ")) && inbox.ends_with("about: the tale paused\nword: save it"), "{inbox}");
+        assert_eq!(go(&["link", "read", "--to", "main", "--note", &note_file]).unwrap(), format!("LINK note {note_file} read"));
+        assert!(go(&["link", "read", "--to", "main", "--note", &note_file]).is_err());
+        assert!(go(&["link", "read", "--to", "main", "--note", "../../.env"]).is_err());
         assert_eq!(go(&["link", "inbox", "--to", "main"]).unwrap(), "LINK no notes waiting");
-        assert!(go(&["link", "here", "--name", "main"]).unwrap().starts_with("main · seen "));
+        assert!(folder.join("link/read/main").join(&note_file).is_file());
+        assert_eq!(go(&["link", "here", "--name", "main"]).unwrap(), "LINK here: main");
         assert!(go(&["link", "send", "--from", "Bad Name", "--to", "main", "--about", "x"]).is_err());
         assert!(go(&["sing"]).is_err());
 
@@ -711,8 +736,11 @@ mod tests {
         assert!(go(&["dump", "--to", file.to_str().unwrap()]).unwrap().starts_with("DUMP 14 table(s), "));
         let before = go(&["diary", "show", "--date", "2026-11-10"]).unwrap();
         drop(go);
+        // the record of the note: sent once, read once
+        let recorded: Option<(u64, u64)> = conn.query_first("SELECT COUNT(*), COUNT(read_at) FROM link_notes").unwrap();
+        assert_eq!(recorded, Some((1, 1)));
         conn.query_drop("DROP TABLE diary_entries, reminders, projects, link_notes, link_terminals, imported_files, memory_files, memory_file_history, session_sections, session_section_history, skills, skill_files, skill_file_history, schema_migrations").unwrap();
-        let mut go = |line: &[&str]| run(&mut conn, &parse(&args(line)).unwrap(), &folder);
+        let mut go =|line: &[&str]| run(&mut conn, &parse(&args(line)).unwrap(), &folder);
         assert!(go(&["diary", "list"]).is_err());
         assert!(go(&["restore", "--from", file.to_str().unwrap()]).unwrap().starts_with("RESTORE "));
         assert_eq!(go(&["diary", "show", "--date", "2026-11-10"]).unwrap(), before);

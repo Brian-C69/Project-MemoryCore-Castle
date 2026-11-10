@@ -29,6 +29,7 @@ mod session;
 mod settings;
 mod setup;
 mod startup;
+mod store;
 mod story;
 mod studio;
 mod system;

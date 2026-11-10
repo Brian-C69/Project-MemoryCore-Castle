@@ -156,10 +156,19 @@ pub struct DiaryEntry {
 /// installed it, the older daily-diary/Daily-Diary-NNN.md. Sorted oldest first.
 pub fn diary_files(folder: &Path) -> Vec<PathBuf> {
     let diary = folder.join("daily-diary");
-    let mut dated: Vec<PathBuf> = std::fs::read_dir(diary.join("current"))
-        .map(|e| e.flatten().map(|e| e.path()).filter(|p| is_dated_md(p)).collect())
-        .unwrap_or_default();
-    dated.sort();
+    // a day is one file (2026-11-08.md) or a folder of pages (2026-11-10/diary-1.md, diary-2.md)
+    let mut dated: Vec<PathBuf> = Vec::new();
+    let mut days: Vec<PathBuf> = std::fs::read_dir(diary.join("current")).map(|e| e.flatten().map(|e| e.path()).collect()).unwrap_or_default();
+    days.sort();
+    for day in days {
+        if is_dated_md(&day) {
+            dated.push(day);
+        } else if day.is_dir() && day.file_name().and_then(|n| n.to_str()).is_some_and(crate::door::is_date) {
+            let mut pages = md_files(&day);
+            pages.sort_by_key(|p| crate::import::natural_key(&p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()));
+            dated.extend(pages);
+        }
+    }
     let mut numbered: Vec<PathBuf> = std::fs::read_dir(&diary)
         .map(|e| {
             e.flatten()
@@ -171,6 +180,14 @@ pub fn diary_files(folder: &Path) -> Vec<PathBuf> {
     numbered.sort();
     numbered.extend(dated);
     numbered
+}
+
+/// The day a diary page belongs to: its own name (2026-11-08.md) or its folder's (2026-11-10/diary-1.md).
+fn date_of(path: &Path) -> Option<String> {
+    if is_dated_md(path) {
+        return path.file_stem().and_then(|s| s.to_str()).map(str::to_string);
+    }
+    path.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()).filter(|n| crate::door::is_date(n)).map(str::to_string)
 }
 
 fn is_dated_md(path: &Path) -> bool {
@@ -197,7 +214,7 @@ pub fn newest_diary(folder: &Path) -> Option<DiaryEntry> {
     let path = diary_files(folder).pop()?;
     let text = std::fs::read_to_string(&path).ok()?;
     let name = path.file_name()?.to_str()?.to_string();
-    let date = is_dated_md(&path).then(|| name.trim_end_matches(".md").to_string());
+    let date = date_of(&path);
     let file = path.strip_prefix(folder).ok()?.display().to_string().replace('\\', "/");
     Some(DiaryEntry { title: diary_title(&text).unwrap_or_else(|| name.clone()), date, file })
 }
@@ -267,7 +284,7 @@ pub fn days_between(first: &str, today: &str) -> Option<u64> {
 
 pub fn growth(folder: &Path, today: &str) -> Growth {
     let diary = diary_files(folder);
-    let first_dated = diary.iter().find(|p| is_dated_md(p)).and_then(|p| p.file_stem()?.to_str().map(str::to_string));
+    let first_dated = diary.iter().find_map(|p| date_of(p));
     Growth {
         memories: count_memory_files(folder, 0),
         days: first_dated.and_then(|first| days_between(&first, today)),
@@ -277,7 +294,7 @@ pub fn growth(folder: &Path, today: &str) -> Growth {
 }
 
 /// Everything HOME shows, read in one go.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct HomeData {
     pub features: Features,
@@ -288,6 +305,10 @@ pub struct HomeData {
 }
 
 pub fn home(folder: &Path, today: &str) -> HomeData {
+    // a memory that lives in the database is read from its rows
+    if let Some(mut conn) = crate::store::source(folder) {
+        return crate::store::home(&mut conn, folder, today);
+    }
     HomeData {
         features: features(folder),
         reminders: reminders(folder),
@@ -350,7 +371,7 @@ pub fn diary_shelves(folder: &Path) -> Vec<Shelf> {
     let mut pages: Vec<(String, Page)> = Vec::new();
     for path in diary_files(folder) {
         let text = std::fs::read_to_string(&path).unwrap_or_default();
-        let date = is_dated_md(&path).then(|| path.file_stem().unwrap_or_default().to_string_lossy().to_string());
+        let date = date_of(&path);
         let month = date.as_deref().map(|d| d[..7].to_string()).unwrap_or_else(|| "Earlier".into());
         pages.push((month, Page { title: diary_title(&text).unwrap_or_else(|| page_title(&path)), file: relative(folder, &path), date }));
     }
@@ -448,12 +469,39 @@ pub fn memory_shelves(room: String, store: tauri::State<crate::settings::Setting
         return Vec::new();
     }
     let Some(folder) = store.get().memory_folder.map(PathBuf::from) else { return Vec::new() };
-    match room.as_str() {
-        "diary" => diary_shelves(&folder),
-        "projects" => project_shelves(&folder),
-        "library" => library_shelves(&folder),
+    shelves_of(&folder, &room)
+}
+
+/// A room's shelves, from the database when the memory lives there, else from its files.
+pub fn shelves_of(folder: &Path, room: &str) -> Vec<Shelf> {
+    if matches!(room, "diary" | "projects") {
+        if let Some(mut conn) = crate::store::source(folder) {
+            return if room == "diary" { crate::store::diary_shelves(&mut conn) } else { crate::store::project_shelves(&mut conn) };
+        }
+    }
+    match room {
+        "diary" => diary_shelves(folder),
+        "projects" => project_shelves(folder),
+        "library" => library_shelves(folder),
         _ => Vec::new(),
     }
+}
+
+/// One page for the reader: a row of the database (`db/...`), or a .md file inside the memory
+/// folder, at most 2 MB.
+pub fn read_page(folder: &Path, file: &str) -> Result<String, String> {
+    if file.starts_with(crate::store::PAGE_PREFIX) {
+        let mut conn = crate::memdb::open_for(folder)?;
+        return crate::store::read(&mut conn, file);
+    }
+    let path = crate::files::fenced_in(folder, file)?;
+    if path.extension().and_then(|x| x.to_str()) != Some("md") {
+        return Err("Only memory pages (.md) open here.".into());
+    }
+    if path.metadata().map(|m| m.len()).unwrap_or(0) > 2 * 1024 * 1024 {
+        return Err("This page is too large to show here.".into());
+    }
+    std::fs::read_to_string(&path).map_err(|_| "The page could not be read.".to_string())
 }
 
 /// One markdown page of the memory, for the room's reader - only a .md file inside the memory
@@ -466,14 +514,7 @@ pub fn memory_read(file: String, store: tauri::State<crate::settings::SettingsSt
         return Err(crate::rooms::off_line("diary"));
     }
     let folder = s.memory_folder.map(PathBuf::from).ok_or("No MemoryCore folder is chosen yet.")?;
-    let path = crate::files::fenced_in(&folder, &file)?;
-    if path.extension().and_then(|x| x.to_str()) != Some("md") {
-        return Err("Only memory pages (.md) open here.".into());
-    }
-    if path.metadata().map(|m| m.len()).unwrap_or(0) > 2 * 1024 * 1024 {
-        return Err("This page is too large to show here.".into());
-    }
-    std::fs::read_to_string(&path).map_err(|_| "The page could not be read.".to_string())
+    read_page(&folder, &file)
 }
 
 #[cfg(test)]
@@ -507,6 +548,30 @@ mod tests {
         let home = home(&fixture("memory-fresh"), "2026-11-09");
         assert!(home.reminders.is_empty() && home.projects.is_empty() && home.diary.is_none());
         assert_eq!(home.growth.days, None);
+    }
+
+    #[test]
+    fn a_day_kept_as_a_folder_of_pages_is_read_in_page_order() {
+        let root = std::env::temp_dir().join(format!("castle-day-folder-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let day = root.join("daily-diary").join("current").join("2026-11-10");
+        std::fs::create_dir_all(&day).unwrap();
+        std::fs::write(root.join("daily-diary").join("current").join("2026-11-08.md"), "## Session 1 - Before\nx\n").unwrap();
+        std::fs::write(day.join("diary-1.md"), "## The clinic moved\nx\n").unwrap();
+        std::fs::write(day.join("diary-2.md"), "## The board breathes\nx\n").unwrap();
+        std::fs::write(day.join("diary-10.md"), "## The tenth page\nx\n").unwrap();
+        // a folder that is not a date is not a day
+        std::fs::create_dir_all(root.join("daily-diary").join("current").join("notes")).unwrap();
+        std::fs::write(root.join("daily-diary").join("current").join("notes").join("x.md"), "## Not a day\n").unwrap();
+        let names: Vec<String> = diary_files(&root).iter().map(|p| p.file_name().unwrap().to_string_lossy().to_string()).collect();
+        assert_eq!(names, vec!["2026-11-08.md", "diary-1.md", "diary-2.md", "diary-10.md"]);
+        let newest = newest_diary(&root).unwrap();
+        assert_eq!((newest.title.as_str(), newest.date.as_deref(), newest.file.as_str()), ("The tenth page", Some("2026-11-10"), "daily-diary/current/2026-11-10/diary-10.md"));
+        let shelves = diary_shelves(&root);
+        assert_eq!(shelves[0].name, "2026-11");
+        assert_eq!(shelves[0].pages.len(), 4);
+        assert_eq!(growth(&root, "2026-11-12").days, Some(5));
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

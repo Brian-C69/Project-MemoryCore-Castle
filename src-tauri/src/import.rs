@@ -10,8 +10,9 @@
 //! ```
 //!
 //! A file that is not plain UTF-8 text is never imported and never deleted; it is named.
+//! The Neural Link's notes are not moved: they are messages on their way between terminals,
+//! and the link's own files are how a knock finds them.
 
-use crate::link;
 use crate::memory;
 use mysql::prelude::Queryable;
 use mysql::{Conn, TxOpts};
@@ -51,14 +52,6 @@ pub struct ProjectRow {
     pub source_file: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct NoteRow {
-    pub note: link::Note,
-    pub read: bool,
-    /// seconds since 1970, from the note's file name
-    pub sent_secs: Option<u64>,
-}
-
 /// Everything found in the memory folder, before anything is written.
 #[derive(Debug, Default)]
 pub struct Bundle {
@@ -66,7 +59,6 @@ pub struct Bundle {
     pub diary: Vec<DiaryRow>,
     pub reminders: Vec<ReminderRow>,
     pub projects: Vec<ProjectRow>,
-    pub notes: Vec<NoteRow>,
     /// the memory files (master-memory.md, main/*.md), by path
     pub memory: Vec<String>,
     /// the session memory file, by path
@@ -83,7 +75,6 @@ pub struct Counts {
     pub diary: usize,
     pub reminders: usize,
     pub projects: usize,
-    pub notes: usize,
     /// memory files, the session memory among them
     pub memory: usize,
     /// skills kept in the database (their files stay on disk too)
@@ -98,7 +89,6 @@ impl Bundle {
             diary: self.diary.len(),
             reminders: self.reminders.len(),
             projects: self.projects.len(),
-            notes: self.notes.len(),
             memory: self.memory.len() + usize::from(self.session.is_some()),
             skills: 0,
             skipped: self.skipped.clone(),
@@ -293,24 +283,6 @@ fn collect_projects(folder: &Path, bundle: &mut Bundle) {
     }
 }
 
-/// The Neural Link's notes: waiting ones and the ones already read.
-fn collect_notes(folder: &Path, bundle: &mut Bundle) {
-    let link = link::link_folder(folder);
-    for (sub, read) in [("notes", false), ("read", true)] {
-        for to in sorted(&link.join(sub)).into_iter().filter(|p| p.is_dir()) {
-            for path in sorted(&to).into_iter().filter(|p| is_md(p)) {
-                if !bundle.take(folder, &path) {
-                    continue;
-                }
-                let source = relative(folder, &path);
-                let Some(note) = link::parse_note(bundle.body_of(&source).unwrap_or_default()) else { continue };
-                let sent_secs = stem(&path).split('-').next().and_then(|s| s.parse().ok());
-                bundle.notes.push(NoteRow { note, read, sent_secs });
-            }
-        }
-    }
-}
-
 /// The memory architecture: master-memory.md and main/*.md (the reminders are rows of their
 /// own), with the session memory apart because it is kept by section.
 fn collect_memory(folder: &Path, bundle: &mut Bundle) {
@@ -335,7 +307,6 @@ pub fn collect(folder: &Path) -> Bundle {
     collect_memory(folder, &mut bundle);
     collect_reminders(folder, &mut bundle);
     collect_projects(folder, &mut bundle);
-    collect_notes(folder, &mut bundle);
     bundle
 }
 
@@ -386,25 +357,6 @@ pub fn load(conn: &mut Conn, bundle: &Bundle) -> Result<(), String> {
         )
         .map_err(sql("Moving a project"))?;
     }
-    for row in &bundle.notes {
-        let note = &row.note;
-        let context = (!note.context.is_empty()).then(|| note.context.join("\n"));
-        let there: Option<u64> = tx
-            .exec_first(
-                "SELECT id FROM link_notes WHERE from_terminal = ? AND to_terminal = ? AND about = ? AND word <=> ? AND sent_at <=> FROM_UNIXTIME(?) LIMIT 1",
-                (&note.from, &note.to, &note.about, &note.word, row.sent_secs),
-            )
-            .map_err(sql("Reading the notes"))?;
-        if there.is_none() {
-            tx.exec_drop(
-                "INSERT INTO link_notes (from_terminal, to_terminal, sent_at, wake, word, about, reply_to, context, read_at) \
-                 VALUES (?, ?, COALESCE(FROM_UNIXTIME(?), NOW()), ?, ?, ?, ?, ?, IF(?, NOW(), NULL))",
-                (&note.from, &note.to, row.sent_secs, note.wake, &note.word, &note.about, &note.reply_to, context, row.read),
-            )
-            .map_err(sql("Moving a note"))?;
-        }
-    }
-
     for path in &bundle.memory {
         crate::mirror::save_memory(&mut tx, path, bundle.body_of(path).unwrap_or_default())?;
     }
@@ -583,16 +535,14 @@ mod tests {
             ("Old blog", true, true),
         ]);
         assert_eq!(bundle.projects[0].status.as_deref(), Some("In progress"));
-        assert_eq!(counts.notes, 2);
-        assert_eq!(bundle.notes.iter().map(|n| (n.note.from.as_str(), n.read, n.sent_secs)).collect::<Vec<_>>(), vec![("story", false, Some(1762750000)), ("room", true, Some(1762740000))]);
-        // the link's own README is not memory: never taken, never deleted
-        assert!(bundle.body_of("link/README.md").is_none());
+        // the link is a live transport, not memory: its notes and README are never taken
+        assert!(bundle.originals.iter().all(|o| !o.path.starts_with("link/")));
         // the memory architecture: master, identity, relationship; the session memory apart
         assert_eq!(bundle.memory, vec!["master-memory.md", "main/identity-core.md", "main/relationship-memory.md"]);
         assert_eq!(bundle.session.as_deref(), Some("main/current-session.md"));
         assert_eq!(counts.memory, 4);
-        // 6 diary + reminders + list + 2 project pages + 2 notes + 4 memory files
-        assert_eq!(counts.files, 16);
+        // 6 diary + reminders + list + 2 project pages + 4 memory files
+        assert_eq!(counts.files, 14);
         // skills are never among the files to delete
         assert!(bundle.originals.iter().all(|o| !o.path.starts_with("plugins/")));
         assert!(root.join("daily-diary/current/2026-11-08.md").is_file());
@@ -606,7 +556,7 @@ mod tests {
         // changed after the import was read: must stay
         std::fs::write(root.join("main/reminders.md"), "# Reminders\n## Open\n- **New since**\n").unwrap();
         let gone = delete_originals(&root, &bundle).unwrap();
-        assert_eq!(gone, 15);
+        assert_eq!(gone, 13);
         assert!(root.join("main/reminders.md").is_file());
         assert!(!root.join("daily-diary/current/2026-11-10").exists());
         assert!(!root.join("daily-diary/archived").exists());
@@ -614,6 +564,7 @@ mod tests {
         // what was never imported is untouched
         assert!(root.join("daily-diary/current/2026-11-09.md").is_file());
         assert!(root.join("link/README.md").is_file() && root.join(".env").is_file());
+        assert!(root.join("link/notes/main/1762750000-story.md").is_file() && root.join("link/read/main/1762740000-room.md").is_file());
         // the memory files went; the skills' files stay (they are the mirror)
         assert!(!root.join("master-memory.md").exists() && !root.join("main/identity-core.md").exists());
         assert!(root.join("plugins/rin-skills/skills/save-diary/SKILL.md").is_file());
@@ -682,14 +633,9 @@ mod tests {
         assert!(root.join("daily-diary/current/2026-11-09.md").is_file());
 
         let count = |conn: &mut Conn, table: &str| -> u64 { conn.query_first(format!("SELECT COUNT(*) FROM {table}")).unwrap().unwrap() };
-        assert_eq!((count(&mut conn, "imported_files"), count(&mut conn, "diary_entries"), count(&mut conn, "reminders"), count(&mut conn, "projects"), count(&mut conn, "link_notes")), (16, 6, 3, 3, 2));
+        assert_eq!((count(&mut conn, "imported_files"), count(&mut conn, "diary_entries"), count(&mut conn, "reminders"), count(&mut conn, "projects"), count(&mut conn, "link_notes")), (14, 6, 3, 3, 0));
         let body: Option<String> = conn.query_first("SELECT body FROM diary_entries WHERE source_file LIKE '%/diary-1.md'").unwrap();
         assert_eq!(body.as_deref(), Some("# Diary\r\n\r\n## Morning - The clinic moved\r\nRows now.\r\n"));
-        let unread: Option<u64> = conn.query_first("SELECT COUNT(*) FROM link_notes WHERE read_at IS NULL").unwrap();
-        assert_eq!(unread, Some(1));
-        let sent: Option<String> = conn.query_first("SELECT DATE_FORMAT(sent_at, '%Y') FROM link_notes WHERE from_terminal = 'story'").unwrap();
-        // 1762750000 seconds is November 2025: the time comes from the note's file name
-        assert_eq!(sent.as_deref(), Some("2025"));
 
         // nothing left to move: a second run is empty and adds no rows
         assert_eq!(move_in(&mut conn, &root, || Ok(())).unwrap().files, 0);
