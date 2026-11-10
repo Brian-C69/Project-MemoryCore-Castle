@@ -47,7 +47,7 @@ fn root(memory: &Path) -> PathBuf {
 
 /// The words under master-memory's "## Character Appearance" (MemoryCore's Image Prompt feature).
 pub fn canon_from_memory(memory: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(memory.join("master-memory.md")).ok()?;
+    let text = crate::mirror::read_memory_text(memory, "master-memory.md")?;
     let start = text.lines().position(|l| l.trim_start().starts_with('#') && l.to_lowercase().contains("character appearance"))?;
     let level = text.lines().nth(start)?.chars().take_while(|c| *c == '#').count();
     let body: Vec<&str> = text

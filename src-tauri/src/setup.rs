@@ -92,7 +92,8 @@ pub fn inspect(folder: &Path) -> FolderState {
     let (companion_name, member_name, relationship_style) = names_in(folder);
     FolderState {
         exists: folder.is_dir(),
-        is_memorycore: entry.is_some(),
+        // a memory moved into the database has no master-memory.md on disk and is still a MemoryCore
+        is_memorycore: entry.is_some() || has_database(folder),
         needs_names,
         entry_file: entry.map(str::to_string),
         companion_name,
@@ -138,6 +139,22 @@ pub fn sentence_case(style: &str) -> String {
     }
 }
 
+/// What the block says when the memory files live in the database: one command prints them.
+const BOOT_FROM_DATABASE: &str =
+    "run `castle-memory boot` (in PowerShell: `& \"$env:CASTLE_TOOLS\\castle-memory.cmd\" boot`) and follow what it prints to load your memory";
+
+/// Castle's block with the member's names in it. `entry` is the file the companion reads
+/// first; None when the memory files have moved into the database.
+pub fn castle_block_for(companion: &str, member: &str, entry: Option<&str>) -> String {
+    match entry {
+        Some(entry) => castle_block(companion, member, entry),
+        None => BLOCK_TEMPLATE
+            .replace("read `{{ENTRY_FILE}}` and follow it to load your memory", BOOT_FROM_DATABASE)
+            .replace("{{AI_NAME}}", companion.trim())
+            .replace("{{USER_NAME}}", member.trim()),
+    }
+}
+
 /// Castle's block with the member's names in it.
 pub fn castle_block(companion: &str, member: &str, entry: &str) -> String {
     BLOCK_TEMPLATE
@@ -179,8 +196,11 @@ pub fn has_database(folder: &Path) -> bool {
 
 /// Writes Castle's block into CLAUDE.md (Claude Code) and AGENTS.md (Codex).
 pub fn write_blocks(folder: &Path, companion: &str, member: &str) -> Result<(), String> {
-    let entry = entry_file(folder).ok_or("This folder has no master-memory.md, so it is not a MemoryCore folder.")?;
-    let mut block = castle_block(companion, member, entry);
+    let entry = entry_file(folder);
+    if entry.is_none() && !has_database(folder) {
+        return Err("This folder has no master-memory.md, so it is not a MemoryCore folder.".into());
+    }
+    let mut block = castle_block_for(companion, member, entry);
     if has_database(folder) {
         block = with_db_section(&block, member);
     }
@@ -514,6 +534,17 @@ mod tests {
             assert!(text.trim_end().ends_with(BLOCK_END));
             assert!(text.find("### The memory database").unwrap() < text.find(BLOCK_END).unwrap());
         }
+        // the memory files moved into the database: the block boots through the door, and the
+        // folder is still a MemoryCore
+        std::fs::remove_file(root.join("master-memory.md")).unwrap();
+        let _ = std::fs::remove_dir_all(root.join("main"));
+        assert!(inspect(&root).is_memorycore && inspect(&root).entry_file.is_none());
+        write_blocks(&root, "Lyra", "Rin").unwrap();
+        let booted = std::fs::read_to_string(root.join("CLAUDE.md")).unwrap();
+        assert!(booted.contains("run `castle-memory boot`") && !booted.contains("{{ENTRY_FILE}}") && !booted.contains("read `master-memory.md`"));
+        assert_eq!(inspect(&root).companion_name.as_deref(), Some("Lyra"));
+        std::fs::write(root.join("master-memory.md"), "**I am Lyra**\n").unwrap();
+        write_blocks(&root, "Lyra", "Rin").unwrap();
         // the database gone again (the .env line removed): the section leaves with it
         std::fs::write(root.join(".env"), "OPENAI_API_KEY=sk-1\n").unwrap();
         write_blocks(&root, "Lyra", "Rin").unwrap();

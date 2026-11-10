@@ -9,6 +9,10 @@
 //!  castle-memory project list | project show --name "Portfolio site"
 //!  castle-memory link send --from main --to story --about "..." [--word "..."] [--no-wake]
 //!  castle-memory link inbox --to main | link read --id 7 | link here --name main
+//!  castle-memory boot                         the memory to read at the start of a session
+//!  castle-memory memory list | memory show --path master-memory.md | memory save --path .. --file ..
+//!  castle-memory session show [--section "Open threads"] | session set --section ".." --file .. | session clear --section ".."
+//!  castle-memory skill list | skill show --plugin p --name n | skill sync | skill save --plugin p --name n --dir <folder> | skill remove --plugin p --name n
 //!  castle-memory export --to <folder>        the memory back out as markdown
 //!  castle-memory dump --to backup/memory.sql | restore --from backup/memory.sql
 //! ```
@@ -17,6 +21,7 @@
 //! small launcher). It finds the database through the memory folder's .env.
 
 use crate::memdb;
+use crate::mirror;
 use mysql::prelude::Queryable;
 use mysql::{Conn, Row, Value};
 use std::collections::BTreeMap;
@@ -101,8 +106,9 @@ pub fn find_memory(ask: &Ask, from: &Path) -> Result<PathBuf, String> {
     Err("No memory database was found from this folder. Run this inside your MemoryCore folder.".into())
 }
 
-/// Runs one ask against an open database; the text to print.
-pub fn run(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+/// Runs one ask against an open database; the text to print. `memory` is the memory folder
+/// (the skills' mirror lives there).
+pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> {
     let words: Vec<&str> = ask.words.iter().map(String::as_str).collect();
     match words.as_slice() {
         ["diary", "add"] => diary_add(conn, ask),
@@ -118,10 +124,25 @@ pub fn run(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
         ["link", "inbox"] => link_inbox(conn, ask),
         ["link", "read"] => link_read(conn, ask),
         ["link", "here"] => link_here(conn, ask),
+        ["boot"] => mirror::boot(conn),
+        ["memory", "list"] => memory_list(conn),
+        ["memory", "show"] => mirror::memory_file(conn, ask.need("path")?)?.ok_or_else(|| "No memory file with that path.".to_string()),
+        ["memory", "save"] => memory_save(conn, ask),
+        ["session", "show"] => session_show(conn, ask),
+        ["session", "set"] => {
+            let content = ask.text()?.ok_or("--file or --body is needed.")?;
+            mirror::set_section(conn, ask.need("section")?, &content).map(|what| format!("SESSION section {what}: {}", ask.need("section").unwrap_or_default()))
+        }
+        ["session", "clear"] => Ok(if mirror::clear_section(conn, ask.need("section")?)? { "SESSION section cleared".into() } else { "SESSION no such section".into() }),
+        ["skill", "list"] => skill_list(conn),
+        ["skill", "show"] => skill_show(conn, ask),
+        ["skill", "sync"] => skill_sync(conn, memory),
+        ["skill", "save"] => skill_save(conn, ask, memory),
+        ["skill", "remove"] => Ok(if mirror::remove_skill(conn, memory, ask.need("plugin")?, ask.need("name")?)? { "SKILL removed".into() } else { "SKILL not found".into() }),
         ["export"] => export(conn, Path::new(ask.need("to")?)),
         ["dump"] => dump(conn, Path::new(ask.need("to")?)),
         ["restore"] => restore(conn, Path::new(ask.need("from")?)),
-        _ => Err(format!("castle-memory does not know `{}`. Verbs: diary, reminder, project, link, export, dump, restore.", words.join(" "))),
+        _ => Err(format!("castle-memory does not know `{}`. Verbs: boot, memory, session, skill, diary, reminder, project, link, export, dump, restore.", words.join(" "))),
     }
 }
 
@@ -329,6 +350,95 @@ fn link_here(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
     Ok(rows.into_iter().map(|(n, at)| format!("{n} · seen {at}")).collect::<Vec<_>>().join("\n"))
 }
 
+// ---------- memory files, session memory, skills ----------
+
+fn memory_list(conn: &mut Conn) -> Result<String, String> {
+    let rows: Vec<(String, Option<u32>, u64)> =
+        conn.query("SELECT path, boot_order, CHAR_LENGTH(body) FROM memory_files ORDER BY COALESCE(boot_order, 999), path").map_err(sql("Reading the memory"))?;
+    if rows.is_empty() {
+        return Ok("MEMORY no files in the database".into());
+    }
+    Ok(rows.into_iter().map(|(path, boot, len)| format!("{path} · {len} characters{}", if boot.is_some() { " · read at boot" } else { "" })).collect::<Vec<_>>().join("\n"))
+}
+
+fn memory_save(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+    let path = ask.need("path")?;
+    if !mirror::memory_path_ok(path) {
+        return Err(format!("{path} is not a memory path (like main/identity-core.md)."));
+    }
+    if mirror::is_session_file(path) {
+        return Err("The session memory is kept by section: use `session set --section \"<heading>\" --file <text file>`.".into());
+    }
+    let body = ask.text()?.ok_or("--file or --body is needed.")?;
+    Ok(if mirror::save_memory(conn, path, &body)? { format!("MEMORY saved {path} (the older text is kept)") } else { format!("MEMORY {path} is already the same") })
+}
+
+fn session_show(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+    match ask.get("section") {
+        Some(section) => {
+            let body: Option<String> = conn
+                .exec_first("SELECT body FROM session_sections WHERE heading = ?", (section.trim().trim_start_matches('#').trim(),))
+                .map_err(sql("Reading the session memory"))?;
+            body.ok_or_else(|| "SESSION no such section".to_string())
+        }
+        None => {
+            let text = mirror::session_text(conn)?;
+            Ok(if text.is_empty() { "SESSION empty".into() } else { text })
+        }
+    }
+}
+
+fn skill_list(conn: &mut Conn) -> Result<String, String> {
+    let rows: Vec<(String, String, Option<String>)> = conn.query("SELECT plugin, name, description FROM skills ORDER BY plugin, name").map_err(sql("Reading the skills"))?;
+    if rows.is_empty() {
+        return Ok("SKILLS none in the database".into());
+    }
+    Ok(rows.into_iter().map(|(plugin, name, description)| format!("{plugin}/{name} · {}", description.unwrap_or_else(|| "-".into()))).collect::<Vec<_>>().join("\n"))
+}
+
+fn skill_show(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+    let body: Option<String> = conn
+        .exec_first("SELECT body FROM skill_files WHERE plugin = ? AND name = ? AND path = ?", (ask.need("plugin")?, ask.need("name")?, ask.get("path").unwrap_or("SKILL.md")))
+        .map_err(sql("Reading the skill"))?;
+    body.ok_or_else(|| "SKILL not found".to_string())
+}
+
+fn skill_sync(conn: &mut Conn, memory: &Path) -> Result<String, String> {
+    let done = mirror::sync_skills(conn, memory)?;
+    Ok(format!("SKILLS {} skill(s): {} file(s) taken into the database, {} written to disk, {} the same", done.skills, done.to_database, done.to_disk, done.same))
+}
+
+/// Takes a skill from a folder (where the companion prepared it) into the memory's plugins,
+/// then syncs: the database keeps it and the mirror on disk is what the CLI reads.
+fn skill_save(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> {
+    let (plugin, name) = (ask.need("plugin")?, ask.need("name")?);
+    if !mirror::folder_name_ok(plugin) || !mirror::folder_name_ok(name) {
+        return Err("That is not a skill name.".into());
+    }
+    let from = PathBuf::from(ask.need("dir")?);
+    if !from.join("SKILL.md").is_file() {
+        return Err("That folder has no SKILL.md.".into());
+    }
+    let target = memory.join("plugins").join(plugin).join("skills").join(name);
+    if from != target {
+        copy_folder(&from, &target)?;
+    }
+    skill_sync(conn, memory)
+}
+
+fn copy_folder(from: &Path, to: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(to).map_err(|_| "The skill's folder could not be created.".to_string())?;
+    for entry in std::fs::read_dir(from).map_err(|_| "The folder could not be read.".to_string())?.flatten() {
+        let target = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_folder(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), &target).map_err(|_| "A skill file could not be copied.".to_string())?;
+        }
+    }
+    Ok(())
+}
+
 // ---------- export: the memory back out as markdown ----------
 
 fn write(path: &Path, text: &str) -> Result<(), String> {
@@ -357,6 +467,15 @@ fn export(conn: &mut Conn, to: &Path) -> Result<String, String> {
     let originals: Vec<(String, String)> = conn.query("SELECT path, body FROM imported_files ORDER BY path").map_err(sql("Reading the kept files"))?;
     for (path, body) in &originals {
         write(&to.join(path), body)?;
+    }
+
+    // the memory files and the session memory as they are now
+    let files: Vec<(String, String)> = conn.query("SELECT path, body FROM memory_files ORDER BY path").map_err(sql("Reading the memory"))?;
+    for (path, body) in &files {
+        write(&to.join(path), body)?;
+    }
+    if let Some(file) = mirror::session_file(conn)? {
+        write(&to.join(file), &mirror::session_text(conn)?)?;
     }
 
     // 2. diary entries written since then: appended to their day's file, MemoryCore's own shape
@@ -475,7 +594,7 @@ pub fn main(args: &[String]) -> i32 {
         }
         let memory = find_memory(&ask, &std::env::current_dir().map_err(|_| "This folder could not be read.".to_string())?)?;
         let mut conn = memdb::open_for(&memory)?;
-        run(&mut conn, &ask)
+        run(&mut conn, &ask, &memory)
     })();
     match result {
         Ok(text) => {
@@ -545,7 +664,7 @@ mod tests {
         std::fs::create_dir_all(&folder).unwrap();
         let entry = folder.join("entry.md");
         std::fs::write(&entry, "We planned the garden beds; it's \"ours\".\nLine two 💜\n").unwrap();
-        let mut go = |line: &[&str]| run(&mut conn, &parse(&args(line)).unwrap());
+        let mut go = |line: &[&str]| run(&mut conn, &parse(&args(line)).unwrap(), &folder);
 
         assert_eq!(go(&["diary", "add", "--date", "2026-11-10", "--title", "The garden", "--file", entry.to_str().unwrap()]).unwrap(), "DIARY saved 2026-11-10 session 1: The garden");
         assert!(go(&["diary", "add", "--date", "2026-11-10", "--title", "Evening", "--body", "Tea."]).unwrap().contains("session 2"));
@@ -589,11 +708,11 @@ mod tests {
         assert_eq!(crate::memory::projects(&out)[0].name, "Portfolio site");
 
         let file = folder.join("backup").join("memory.sql");
-        assert!(go(&["dump", "--to", file.to_str().unwrap()]).unwrap().starts_with("DUMP 7 table(s), "));
+        assert!(go(&["dump", "--to", file.to_str().unwrap()]).unwrap().starts_with("DUMP 14 table(s), "));
         let before = go(&["diary", "show", "--date", "2026-11-10"]).unwrap();
         drop(go);
-        conn.query_drop("DROP TABLE diary_entries, reminders, projects, link_notes, link_terminals, imported_files, schema_migrations").unwrap();
-        let mut go = |line: &[&str]| run(&mut conn, &parse(&args(line)).unwrap());
+        conn.query_drop("DROP TABLE diary_entries, reminders, projects, link_notes, link_terminals, imported_files, memory_files, memory_file_history, session_sections, session_section_history, skills, skill_files, skill_file_history, schema_migrations").unwrap();
+        let mut go = |line: &[&str]| run(&mut conn, &parse(&args(line)).unwrap(), &folder);
         assert!(go(&["diary", "list"]).is_err());
         assert!(go(&["restore", "--from", file.to_str().unwrap()]).unwrap().starts_with("RESTORE "));
         assert_eq!(go(&["diary", "show", "--date", "2026-11-10"]).unwrap(), before);

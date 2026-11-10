@@ -67,6 +67,10 @@ pub struct Bundle {
     pub reminders: Vec<ReminderRow>,
     pub projects: Vec<ProjectRow>,
     pub notes: Vec<NoteRow>,
+    /// the memory files (master-memory.md, main/*.md), by path
+    pub memory: Vec<String>,
+    /// the session memory file, by path
+    pub session: Option<String>,
     /// files left in place because they are not readable text
     pub skipped: Vec<String>,
 }
@@ -80,6 +84,10 @@ pub struct Counts {
     pub reminders: usize,
     pub projects: usize,
     pub notes: usize,
+    /// memory files, the session memory among them
+    pub memory: usize,
+    /// skills kept in the database (their files stay on disk too)
+    pub skills: usize,
     pub skipped: Vec<String>,
 }
 
@@ -91,6 +99,8 @@ impl Bundle {
             reminders: self.reminders.len(),
             projects: self.projects.len(),
             notes: self.notes.len(),
+            memory: self.memory.len() + usize::from(self.session.is_some()),
+            skills: 0,
             skipped: self.skipped.clone(),
         }
     }
@@ -301,9 +311,28 @@ fn collect_notes(folder: &Path, bundle: &mut Bundle) {
     }
 }
 
+/// The memory architecture: master-memory.md and main/*.md (the reminders are rows of their
+/// own), with the session memory apart because it is kept by section.
+fn collect_memory(folder: &Path, bundle: &mut Bundle) {
+    let mut files = vec![folder.join("master-memory.md")];
+    files.extend(sorted(&folder.join("main")).into_iter().filter(|p| is_md(p)));
+    for path in files {
+        let source = relative(folder, &path);
+        if source == "main/reminders.md" || !bundle.take(folder, &path) {
+            continue;
+        }
+        if crate::mirror::is_session_file(&source) && bundle.session.is_none() {
+            bundle.session = Some(source);
+        } else {
+            bundle.memory.push(source);
+        }
+    }
+}
+
 pub fn collect(folder: &Path) -> Bundle {
     let mut bundle = Bundle::default();
     collect_diary(folder, &mut bundle);
+    collect_memory(folder, &mut bundle);
     collect_reminders(folder, &mut bundle);
     collect_projects(folder, &mut bundle);
     collect_notes(folder, &mut bundle);
@@ -376,6 +405,21 @@ pub fn load(conn: &mut Conn, bundle: &Bundle) -> Result<(), String> {
         }
     }
 
+    for path in &bundle.memory {
+        crate::mirror::save_memory(&mut tx, path, bundle.body_of(path).unwrap_or_default())?;
+    }
+    if let Some(file) = &bundle.session {
+        crate::mirror::save_session_whole(&mut tx, file, bundle.body_of(file).unwrap_or_default())?;
+        if crate::mirror::session_text(&mut tx)?.as_str() != bundle.body_of(file).unwrap_or_default() {
+            return Err("The session memory did not read back the same, so nothing was changed.".into());
+        }
+    }
+    for path in &bundle.memory {
+        if crate::mirror::memory_file(&mut tx, path)?.as_deref() != bundle.body_of(path) {
+            return Err(format!("{path} did not read back the same, so nothing was changed."));
+        }
+    }
+
     // read back: the database must hold every file exactly, and every diary page whole
     for original in &bundle.originals {
         let kept: Option<String> = tx.exec_first("SELECT body FROM imported_files WHERE path = ?", (&original.path,)).map_err(sql("Checking a file"))?;
@@ -436,14 +480,17 @@ pub fn delete_originals(folder: &Path, bundle: &Bundle) -> Result<usize, String>
 /// database holds everything and before any file goes (Castle backs up there).
 pub fn move_in(conn: &mut Conn, folder: &Path, before_delete: impl FnOnce() -> Result<(), String>) -> Result<Counts, String> {
     let bundle = collect(folder);
+    let mut counts = bundle.counts();
+    // the skills are taken in too, and stay on disk as the mirror the CLI reads
+    counts.skills = crate::mirror::sync_skills(conn, folder)?.skills;
     if bundle.originals.is_empty() {
-        return Ok(bundle.counts());
+        return Ok(counts);
     }
     load(conn, &bundle)?;
     crate::door::dump(conn, &folder.join("backup").join("memory.sql"))?;
     before_delete()?;
     delete_originals(folder, &bundle)?;
-    Ok(bundle.counts())
+    Ok(counts)
 }
 
 #[cfg(test)]
@@ -486,6 +533,10 @@ mod tests {
         w("link/notes/main/1762750000-story.md", "from: story\nto: main\nat: 2026-11-10 04:46 UTC\nwake: yes\nword: \"save it\"\nabout: the tale paused\n");
         w("link/read/main/1762740000-room.md", "from: room\nto: main\nat: 2026-11-10 02:00 UTC\nwake: no\nabout: a guest said hello\n");
         w("link/README.md", "how the link works\n");
+        w("main/current-session.md", "# Session\r\n\r\n## Now\r\n- planning\r\n\r\n## Open threads\n- the garden\n");
+        w("main/relationship-memory.md", "# Rin\nlikes tea\n");
+        w("plugins/rin-skills/skills/save-diary/SKILL.md", "---\nname: save-diary\ndescription: Writes today into the diary\n---\n# Save diary\n");
+        w("plugins/rin-skills/skills/save-diary/reference/flows.md", "flows\n");
         std::fs::write(root.join("daily-diary/current/2026-11-09.md"), [0xff, 0xfe, 0x00, 0x41]).unwrap();
         root
     }
@@ -536,8 +587,14 @@ mod tests {
         assert_eq!(bundle.notes.iter().map(|n| (n.note.from.as_str(), n.read, n.sent_secs)).collect::<Vec<_>>(), vec![("story", false, Some(1762750000)), ("room", true, Some(1762740000))]);
         // the link's own README is not memory: never taken, never deleted
         assert!(bundle.body_of("link/README.md").is_none());
-        // 6 diary + reminders + list + 2 project pages + 2 notes
-        assert_eq!(counts.files, 12);
+        // the memory architecture: master, identity, relationship; the session memory apart
+        assert_eq!(bundle.memory, vec!["master-memory.md", "main/identity-core.md", "main/relationship-memory.md"]);
+        assert_eq!(bundle.session.as_deref(), Some("main/current-session.md"));
+        assert_eq!(counts.memory, 4);
+        // 6 diary + reminders + list + 2 project pages + 2 notes + 4 memory files
+        assert_eq!(counts.files, 16);
+        // skills are never among the files to delete
+        assert!(bundle.originals.iter().all(|o| !o.path.starts_with("plugins/")));
         assert!(root.join("daily-diary/current/2026-11-08.md").is_file());
         std::fs::remove_dir_all(&root).unwrap();
     }
@@ -549,14 +606,17 @@ mod tests {
         // changed after the import was read: must stay
         std::fs::write(root.join("main/reminders.md"), "# Reminders\n## Open\n- **New since**\n").unwrap();
         let gone = delete_originals(&root, &bundle).unwrap();
-        assert_eq!(gone, 11);
+        assert_eq!(gone, 15);
         assert!(root.join("main/reminders.md").is_file());
         assert!(!root.join("daily-diary/current/2026-11-10").exists());
         assert!(!root.join("daily-diary/archived").exists());
         assert!(!root.join("projects").exists());
         // what was never imported is untouched
         assert!(root.join("daily-diary/current/2026-11-09.md").is_file());
-        assert!(root.join("link/README.md").is_file() && root.join("master-memory.md").is_file() && root.join(".env").is_file());
+        assert!(root.join("link/README.md").is_file() && root.join(".env").is_file());
+        // the memory files went; the skills' files stay (they are the mirror)
+        assert!(!root.join("master-memory.md").exists() && !root.join("main/identity-core.md").exists());
+        assert!(root.join("plugins/rin-skills/skills/save-diary/SKILL.md").is_file());
         assert!(root.join("appearance/companion.md").is_file());
         std::fs::remove_dir_all(&root).unwrap();
     }
@@ -582,13 +642,47 @@ mod tests {
         let mut backed_up = false;
         let counts = move_in(&mut conn, &root, || { backed_up = true; Ok(()) }).unwrap();
         assert!(backed_up);
-        assert_eq!(counts, before.counts());
+        assert_eq!(counts, Counts { skills: 1, ..before.counts() });
+        // the memory boots from the database now, in order, session memory last and exact
+        let boot = crate::mirror::boot(&mut conn).unwrap();
+        let at = |needle: &str| boot.find(needle).unwrap_or_else(|| panic!("missing {needle}"));
+        assert!(at("===== master-memory.md =====") < at("===== main/identity-core.md =====") && at("===== main/identity-core.md =====") < at("===== main/relationship-memory.md ====="));
+        assert!(at("===== main/relationship-memory.md =====") < at("===== main/current-session.md (session memory) ====="));
+        assert_eq!(crate::mirror::session_text(&mut conn).unwrap(), "# Session\r\n\r\n## Now\r\n- planning\r\n\r\n## Open threads\n- the garden\n");
+        assert!(!root.join("master-memory.md").exists() && !root.join("main").exists());
+        // Castle still reads the master memory, from the database
+        assert_eq!(crate::mirror::read_memory_text(&root, "master-memory.md"), None); // this scratch folder has no .env
+        // one section changed keeps the old one; a saved memory file keeps its older text
+        assert_eq!(crate::mirror::set_section(&mut conn, "Now", "- building").unwrap(), "updated");
+        assert_eq!(crate::mirror::set_section(&mut conn, "Now", "- building").unwrap(), "unchanged");
+        assert_eq!(crate::mirror::set_section(&mut conn, "Tomorrow", "- rest").unwrap(), "added");
+        assert!(crate::mirror::session_text(&mut conn).unwrap().ends_with("## Open threads\n- the garden\n## Tomorrow\n- rest\n\n"));
+        assert!(crate::mirror::clear_section(&mut conn, "Tomorrow").unwrap() && !crate::mirror::clear_section(&mut conn, "Tomorrow").unwrap());
+        assert!(crate::mirror::save_memory(&mut conn, "main/relationship-memory.md", "# Rin\nlikes coffee now\n").unwrap());
+        let history: Option<String> = conn.query_first("SELECT body FROM memory_file_history WHERE path = 'main/relationship-memory.md'").unwrap();
+        assert_eq!(history.as_deref(), Some("# Rin\nlikes tea\n"));
+
+        // the skills: in the database, still on disk; a deleted file comes back, a hand edit is taken in
+        let skill = root.join("plugins/rin-skills/skills/save-diary");
+        assert_eq!(crate::mirror::sync_skills(&mut conn, &root).unwrap(), crate::mirror::SkillSync { to_database: 0, to_disk: 0, same: 2, skills: 1 });
+        std::fs::remove_file(skill.join("reference/flows.md")).unwrap();
+        assert_eq!(crate::mirror::sync_skills(&mut conn, &root).unwrap().to_disk, 1);
+        assert_eq!(std::fs::read_to_string(skill.join("reference/flows.md")).unwrap(), "flows\n");
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        std::fs::write(skill.join("SKILL.md"), "---\nname: save-diary\ndescription: Edited by hand\n---\n# Save diary v2\n").unwrap();
+        assert_eq!(crate::mirror::sync_skills(&mut conn, &root).unwrap().to_database, 1);
+        let described: Option<String> = conn.query_first("SELECT description FROM skills WHERE name = 'save-diary'").unwrap();
+        assert_eq!(described.as_deref(), Some("Edited by hand"));
+        let older: Option<u64> = conn.query_first("SELECT COUNT(*) FROM skill_file_history").unwrap();
+        assert_eq!(older, Some(1));
+        assert!(crate::mirror::remove_skill(&mut conn, &root, "rin-skills", "save-diary").unwrap());
+        assert!(!skill.exists());
         assert!(!root.join("daily-diary/current/2026-11-08.md").exists() && !root.join("projects").exists());
         assert!(root.join("backup/memory.sql").is_file());
         assert!(root.join("daily-diary/current/2026-11-09.md").is_file());
 
         let count = |conn: &mut Conn, table: &str| -> u64 { conn.query_first(format!("SELECT COUNT(*) FROM {table}")).unwrap().unwrap() };
-        assert_eq!((count(&mut conn, "imported_files"), count(&mut conn, "diary_entries"), count(&mut conn, "reminders"), count(&mut conn, "projects"), count(&mut conn, "link_notes")), (12, 6, 3, 3, 2));
+        assert_eq!((count(&mut conn, "imported_files"), count(&mut conn, "diary_entries"), count(&mut conn, "reminders"), count(&mut conn, "projects"), count(&mut conn, "link_notes")), (16, 6, 3, 3, 2));
         let body: Option<String> = conn.query_first("SELECT body FROM diary_entries WHERE source_file LIKE '%/diary-1.md'").unwrap();
         assert_eq!(body.as_deref(), Some("# Diary\r\n\r\n## Morning - The clinic moved\r\nRows now.\r\n"));
         let unread: Option<u64> = conn.query_first("SELECT COUNT(*) FROM link_notes WHERE read_at IS NULL").unwrap();
@@ -603,10 +697,14 @@ mod tests {
 
         // the originals come back exactly
         let out = root.join("out");
-        let line = crate::door::run(&mut conn, &crate::door::parse(&["export".into(), "--to".into(), out.display().to_string()]).unwrap()).unwrap();
+        let line = crate::door::run(&mut conn, &crate::door::parse(&["export".into(), "--to".into(), out.display().to_string()]).unwrap(), &root).unwrap();
         assert!(line.starts_with("EXPORT "), "{line}");
         // (the reminders and the project list are written from the rows as they are now)
-        for original in before.originals.iter().filter(|o| o.path != "main/reminders.md" && o.path != "projects/project-list.md") {
+        // (and the two memory texts this test changed after the move come back as they are now)
+        assert_eq!(std::fs::read_to_string(out.join("main/relationship-memory.md")).unwrap(), "# Rin\nlikes coffee now\n");
+        assert!(std::fs::read_to_string(out.join("main/current-session.md")).unwrap().contains("## Now\n- building\n"));
+        let changed = ["main/reminders.md", "projects/project-list.md", "main/relationship-memory.md", "main/current-session.md"];
+        for original in before.originals.iter().filter(|o| !changed.contains(&o.path.as_str())) {
             assert_eq!(std::fs::read_to_string(out.join(&original.path)).unwrap(), original.body, "{}", original.path);
         }
 

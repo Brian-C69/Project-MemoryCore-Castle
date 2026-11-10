@@ -17,6 +17,7 @@ mod key;
 mod link;
 mod memdb;
 mod memory;
+mod mirror;
 mod pty;
 mod quota;
 mod roomread;

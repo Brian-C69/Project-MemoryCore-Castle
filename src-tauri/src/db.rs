@@ -541,13 +541,30 @@ pub fn start_with_castle(app: &AppHandle) {
     std::thread::spawn(move || {
         let s = app.state::<SettingsStore>().get();
         let home = home();
-        if s.db_external || !installed(&home) {
+        if s.db_external {
+            settle_skills(&s);
+            return;
+        }
+        if !installed(&home) {
             return;
         }
         if let Err(why) = start(&home, s.db_port.unwrap_or(PREFERRED_PORT)) {
             eprintln!("MemoryCore Castle: the database did not start: {why}");
+            return;
         }
+        settle_skills(&s);
     });
+}
+
+/// The skills on disk and in the database made the same (a file someone deleted comes back,
+/// a file edited by hand is taken in). Quiet: a memory with no database is left alone.
+fn settle_skills(settings: &crate::settings::Settings) {
+    let Some(folder) = settings.memory_folder.as_ref().map(PathBuf::from).filter(|f| crate::setup::has_database(f)) else { return };
+    if let Ok(mut conn) = crate::memdb::open_for(&folder) {
+        if crate::memdb::migrate(&mut conn).is_ok() {
+            let _ = crate::mirror::sync_skills(&mut conn, &folder);
+        }
+    }
 }
 
 /// When Castle ends: its own engine stops with it, unless the member keeps it running.

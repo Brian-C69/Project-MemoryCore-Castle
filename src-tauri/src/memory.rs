@@ -395,7 +395,7 @@ pub fn project_shelves(folder: &Path) -> Vec<Shelf> {
 /// library (the member may have chosen another path at install), else library/, else MemoryCore's
 /// own library-items/.
 pub fn library_folder(folder: &Path) -> Option<PathBuf> {
-    let master = std::fs::read_to_string(folder.join("master-memory.md")).unwrap_or_default();
+    let master = crate::mirror::read_memory_text(folder, "master-memory.md").unwrap_or_default();
     // lines that mention the library, and every line of a section whose heading does
     let mut in_section = false;
     let lines: Vec<&str> = master
