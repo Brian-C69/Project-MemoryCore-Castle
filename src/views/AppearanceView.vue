@@ -6,7 +6,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
-import { appearanceLook, appearanceNew, appearanceWear, studioPowers } from '../api/castle.js'
+import { appearanceImport, appearanceLook, appearanceNew, appearanceWear, choosePicture, studioPowers } from '../api/castle.js'
+import { referenceLine, improvementLine } from '../components/appearance.js'
 import { askCompanion } from '../api/ask.js'
 
 const props = defineProps({
@@ -22,7 +23,10 @@ const problem = ref('')
 const done = ref('')
 const form = ref({ kind: '', name: '', description: '' })
 const viewer = ref(null)
-const src = (path) => convertFileSrc(path) + `?v=${props.stamp}`
+const changes = ref('')
+const revision = ref(0)
+const formPicture = ref('')
+const src = (path) => convertFileSrc(path) + `?v=${props.stamp}-${revision.value}`
 
 const STATE = { ready: 'Ready to draw', builtin: 'Codex draws by itself', prompt: 'No ChatGPT key - prompts are saved' }
 const sep = computed(() => (look.value?.folder?.includes('/') ? '/' : '\\'))
@@ -31,6 +35,7 @@ const path = (...parts) => [look.value.folder, ...parts].join(sep.value)
 async function load() {
   try {
     look.value = await appearanceLook()
+    revision.value++
     image.value = (await studioPowers()).image
   } catch (reason) {
     problem.value = String(reason)
@@ -62,6 +67,9 @@ async function drawPortrait() {
       [
         `Please draw your standard appearance for Castle's APPEARANCE room.`,
         styleLine('standard-appearance.md'),
+        referenceLine(look.value.portrait),
+        improvementLine(changes.value),
+        'Keep the original reference unchanged; preserve a backup before replacing any existing output.',
         `Save it as ${path('portrait.png')}.`,
         'Tell me the cost first and ask before you draw.',
       ],
@@ -81,7 +89,10 @@ async function drawSheet(kind, item) {
         `Please draw the ${kind === 'outfit' ? 'outfit' : 'hairstyle'} turnaround (front, side, back) for "${item.name}".`,
         styleLine(style),
         `The ${kind === 'outfit' ? 'outfit' : 'hairstyle'} is described in ${path(dir, item.id, note)}.`,
-        look.value.portrait ? `Pass -Reference ${look.value.portrait} so the face stays the same.` : 'There is no portrait yet, so keep the face exactly as companion.md describes it.',
+        referenceLine(item.reference || item.sheet || look.value.portrait),
+        improvementLine(changes.value),
+        look.value.portrait ? `Also inspect the standard look for identity: ${JSON.stringify(look.value.portrait)}.` : 'Keep the face as companion.md describes it.',
+        'Keep imported references unchanged and preserve a backup before replacing any existing output.',
         `Save it as ${path(dir, item.id, 'turnaround.png')}.`,
         'Tell me the cost first and ask before you draw.',
       ],
@@ -103,7 +114,10 @@ async function tryOn() {
       [
         `Please draw a try-on picture: you in ${outfit ? `the outfit "${outfit.name}" (${path('wardrobe', outfit.id, 'outfit.md')})` : 'your usual clothes'} with ${hair ? `the hairstyle "${hair.name}" (${path('hairstyles', hair.id, 'hair.md')})` : 'your usual hair'}.`,
         styleLine('try-on.md'),
-        look.value.portrait ? `Pass -Reference ${look.value.portrait}.` : '',
+        referenceLine(look.value.portrait),
+        outfit?.reference ? `Inspect outfit reference: ${JSON.stringify(outfit.reference)}.` : '',
+        hair?.reference ? `Inspect hairstyle reference: ${JSON.stringify(hair.reference)}.` : '',
+        improvementLine(changes.value),
         `Save it as ${path('try-on.png')}.`,
         'Tell me the cost first and ask before you draw.',
       ].filter(Boolean),
@@ -124,11 +138,35 @@ async function create() {
   let item = null
   const ok = await attempt('Adding…', async () => {
     const id = await appearanceNew(kind, form.value.name, form.value.description)
+    if (formPicture.value) await appearanceImport(kind, id, formPicture.value)
     await load()
     item = (kind === 'outfit' ? look.value.wardrobe : look.value.hairstyles).find((i) => i.id === id)
     form.value = { kind: '', name: '', description: '' }
+    formPicture.value = ''
   })
-  if (ok && item) await drawSheet(kind, item)
+  if (ok && item) done.value = 'Added. You can wear this item or draw its turnaround when ready.'
+}
+
+async function upload(kind, id = null) {
+  await attempt('Importing…', async () => {
+    const selected = await choosePicture('Choose an existing appearance image')
+    if (!selected) return
+    look.value = await appearanceImport(kind, id, selected)
+    revision.value++
+    done.value = 'Image imported. No generation or API charge was started.'
+  })
+}
+
+async function pickFormPicture() {
+  await attempt('Choosing…', async () => {
+    const selected = await choosePicture('Choose an outfit or hairstyle reference')
+    if (selected) formPicture.value = selected
+  })
+}
+
+function newForm(kind) {
+  form.value = { kind, name: '', description: '' }
+  formPicture.value = ''
 }
 
 async function wear(kind, id) {
@@ -162,6 +200,10 @@ watch(() => props.stamp, load)
       <button @click="load">Refresh</button>
     </header>
 
+    <label class="edit-request">Changes for the next drawing
+      <textarea v-model="changes" rows="2" placeholder="For example: keep the face and proportions, change only the jacket colour." :disabled="!!busy"></textarea>
+    </label>
+
     <div v-if="look" class="columns">
       <section class="standard widget">
         <h3>STANDARD LOOK</h3>
@@ -169,34 +211,40 @@ watch(() => props.stamp, load)
           <img :src="src(look.portrait)" alt="Standard look" />
         </button>
         <div v-else class="portrait empty"><span class="crystal">◆</span></div>
-        <button class="primary" @click="drawPortrait">{{ look.portrait ? 'Redraw' : 'Draw the standard look' }}</button>
-        <button @click="tryOn">Try on today's look</button>
+        <button :disabled="!!busy" @click="upload('standard')">{{ look.portrait ? 'Replace image' : 'Upload image' }}</button>
+        <button class="primary" :disabled="!!busy" @click="drawPortrait">{{ look.portrait ? 'Improve from image' : 'Draw the standard look' }}</button>
+        <button :disabled="!!busy" @click="tryOn">Try on today's look</button>
+        <p class="hint">Upload PNG, JPEG or WebP (up to 25 MB). Uploading is free. Drawing uses your companion; API generation requires your ChatGPT key and cost confirmation.</p>
         <p class="hint">The look in words lives in <code>appearance/companion.md</code> - ask {{ companion }} to change it, or edit it yourself.</p>
       </section>
 
       <section v-for="shelf in [{ kind: 'outfit', title: 'WARDROBE', items: look.wardrobe, current: look.current.outfit }, { kind: 'hair', title: 'HAIR', items: look.hairstyles, current: look.current.hair }]" :key="shelf.kind" class="shelf widget">
         <header class="shelf-head">
           <h3>{{ shelf.title }}</h3>
-          <button @click="form = { kind: shelf.kind, name: '', description: '' }">+ New</button>
+          <button :disabled="!!busy" @click="newForm(shelf.kind)">+ New</button>
         </header>
         <div v-if="form.kind === shelf.kind" class="new">
-          <input v-model="form.name" :placeholder="shelf.kind === 'outfit' ? 'Winter coat' : 'Twin tails'" maxlength="40" />
-          <input v-model="form.description" :placeholder="shelf.kind === 'outfit' ? 'a long navy coat with silver buttons, a white scarf' : 'high twin tails tied with blue ribbons'" />
+          <label>Name<input v-model="form.name" :placeholder="shelf.kind === 'outfit' ? 'Winter coat' : 'Twin tails'" maxlength="40" /></label>
+          <label>Description<input v-model="form.description" :placeholder="shelf.kind === 'outfit' ? 'a long navy coat with silver buttons, a white scarf' : 'high twin tails tied with blue ribbons'" /></label>
+          <button :disabled="!!busy" @click="pickFormPicture">{{ formPicture ? 'Change reference image' : 'Add reference image' }}</button>
+          <span v-if="formPicture" class="hint">{{ formPicture.split(/[\\/]/).pop() }}</span>
           <div class="row">
-            <button class="primary" :disabled="!form.name.trim() || !!busy" @click="create">Add and draw</button>
-            <button @click="form = { kind: '', name: '', description: '' }">Cancel</button>
+            <button class="primary" :disabled="!form.name.trim() || !!busy" @click="create">Add</button>
+            <button :disabled="!!busy" @click="newForm('')">Cancel</button>
           </div>
         </div>
         <p v-if="!shelf.items.length && form.kind !== shelf.kind" class="hint">Nothing here yet. Press + New and describe it.</p>
         <div class="items">
           <article v-for="item in shelf.items" :key="item.id" class="item" :class="{ worn: shelf.current === item.id }">
             <button v-if="item.sheet" class="sheet" @click="openSheet(item.sheet, item.name)"><img :src="src(item.sheet)" :alt="item.name" /></button>
+            <button v-else-if="item.reference" class="sheet" @click="openSheet(item.reference, item.name + ' reference')"><img :src="src(item.reference)" :alt="item.name + ' reference'" /></button>
             <div v-else class="sheet empty">{{ item.savedPrompt ? 'Prompt saved - add the key to draw' : 'Not drawn yet' }}</div>
             <strong>{{ item.name }}</strong>
             <p class="hint">{{ item.note }}</p>
             <div class="row">
-              <button :class="{ primary: shelf.current !== item.id }" @click="wear(shelf.kind, item.id)">{{ shelf.current === item.id ? 'Wearing' : 'Wear' }}</button>
-              <button @click="drawSheet(shelf.kind, item)">{{ item.sheet ? 'Redraw' : 'Draw' }}</button>
+              <button :disabled="!!busy" :class="{ primary: shelf.current !== item.id }" @click="wear(shelf.kind, item.id)">{{ shelf.current === item.id ? 'Wearing' : 'Wear' }}</button>
+              <button :disabled="!!busy" @click="upload(shelf.kind, item.id)">{{ item.reference ? 'Replace reference' : 'Upload reference' }}</button>
+              <button :disabled="!!busy" @click="drawSheet(shelf.kind, item)">{{ item.reference || item.sheet ? 'Improve / draw turnaround' : 'Draw' }}</button>
             </div>
           </article>
         </div>
@@ -334,7 +382,9 @@ h3 {
   flex-direction: column;
   gap: 8px;
 }
-input {
+label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+input,
+textarea {
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -342,6 +392,13 @@ input {
   color: var(--text);
   font: inherit;
   font-size: 14px;
+}
+textarea { resize: vertical; min-height: 48px; }
+.edit-request { flex-shrink: 0; }
+@media (max-width: 900px) {
+  .appearance { overflow-y: auto; }
+  .columns { grid-template-columns: 1fr; flex: none; }
+  .portrait { max-height: 400px; }
 }
 .hint {
   margin: 0;

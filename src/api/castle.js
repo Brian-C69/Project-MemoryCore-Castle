@@ -92,6 +92,7 @@ export const onStoryExit = on('story-exit')
 // APPEARANCE. -> { folder, canon, portrait, wardrobe: [{ id, name, note, sheet, savedPrompt }], hairstyles, current: { outfit, hair } }
 export const appearanceLook = () => invoke('appearance_look')
 export const appearanceNew = (kind, name, description) => invoke('appearance_new', { kind, name, description })
+export const appearanceImport = (kind, id, source) => invoke('appearance_import', { kind, id, source })
 export const appearanceWear = (outfit, hair) => invoke('appearance_wear', { outfit, hair })
 
 // STORY: adventures/ prepared with Castle's rulebook; the saved worlds.

@@ -221,6 +221,7 @@ pub fn run() {
             studio::studio_powers,
             appearance::appearance_look,
             appearance::appearance_new,
+            appearance::appearance_import,
             appearance::appearance_wear,
             story::story_prepare,
             story::story_worlds,
@@ -339,6 +340,7 @@ pub fn run() {
                 screen::fill_desktop(&window)?;
                 window.show()?;
             }
+            screen::watch_desktop(app.handle());
             world::restore(app.handle());
             world::watch_covered(app.handle());
             roomread::start(app.handle());
