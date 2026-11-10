@@ -5,6 +5,7 @@ import { computed, onMounted, ref } from 'vue'
 import ModalSheet from '../components/ModalSheet.vue'
 import { LOOKS } from '../components/stage/stage.js'
 import BackupPanel from '../components/BackupPanel.vue'
+import DatabasePanel from '../components/DatabasePanel.vue'
 import {
   roomsApply,
   roomCompanionRefresh,
@@ -42,6 +43,7 @@ const SECTIONS = [
   { id: 'quick', label: 'Quick actions' },
   { id: 'rooms', label: 'Rooms' },
   { id: 'story', label: 'Story' },
+  { id: 'database', label: 'Database' },
   { id: 'backup', label: 'Backup' },
   { id: 'startup', label: 'Start-up' },
   { id: 'about', label: 'About' },
@@ -302,6 +304,10 @@ onMounted(async () => {
           <input v-model="newAction.command" class="wide" placeholder="the words to type, e.g. plan my day" maxlength="200" />
           <button class="primary" :disabled="!newAction.label.trim() || !newAction.command.trim()" @click="addAction">Add</button>
         </div>
+      </section>
+
+      <section v-else-if="tab === 'database'" class="pane">
+        <DatabasePanel :companion="settings.companionName ?? 'your companion'" @changed="emit('saved')" />
       </section>
 
       <section v-else-if="tab === 'backup'" class="pane">

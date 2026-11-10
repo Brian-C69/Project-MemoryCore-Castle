@@ -232,6 +232,11 @@ pub fn version_seen(version: String, store: tauri::State<crate::settings::Settin
 #[tauri::command]
 pub fn diary_stamp(store: tauri::State<crate::settings::SettingsStore>) -> u64 {
     let Some(folder) = store.get().memory_folder else { return 0 };
+    // a memory in the database: the newest change among the diary's rows
+    if let Some(mut conn) = crate::store::source(std::path::Path::new(&folder)) {
+        use mysql::prelude::Queryable;
+        return conn.query_first::<Option<u64>, _>("SELECT UNIX_TIMESTAMP(MAX(updated_at)) FROM diary_entries").ok().flatten().flatten().unwrap_or(0);
+    }
     crate::memory::diary_files(std::path::Path::new(&folder))
         .iter()
         .filter_map(|p| p.metadata().and_then(|m| m.modified()).ok())

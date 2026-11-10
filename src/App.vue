@@ -25,7 +25,7 @@ import { sectionFor, unseenSections } from './components/changelog.js'
 import changelog from '../CHANGELOG.md?raw'
 import { version as appVersion } from '../package.json'
 import NoticeToasts from './components/NoticeToasts.vue'
-import { avatarGet, backupNow, backupStatus, getSettings, hideCastle, memoryHome, onBackupDone, onStoryOutput, userThemes, versionSeen } from './api/castle.js'
+import { avatarGet, backupNow, backupStatus, dbMemory, dbStart, dbStatus, getSettings, hideCastle, memoryHome, onBackupDone, onStoryOutput, userThemes, versionSeen } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
 
 // The rooms across the top. A room whose MemoryCore feature is not installed stays hidden
@@ -49,6 +49,8 @@ const active = ref(devTab || 'home')
 // What HOME shows (memory_home), the backup card, the portrait and the CLI chip.
 const home = ref(null)
 const backup = ref(null)
+// the DATABASE card: { engine, memory }
+const database = ref(null)
 const avatar = ref(null)
 const cliLabel = ref('Claude Code')
 const memoryFolder = ref('')
@@ -173,6 +175,9 @@ function openKeys() {
 async function settingsSaved() {
   await loadSettingsAndTheme()
   settingsStamp.value += 1
+  // the database may have been installed, started or moved into from Settings
+  loadDatabase()
+  loadHome()
 }
 
 function openSetup() {
@@ -204,6 +209,29 @@ async function loadHome() {
   if (!tabs.value.some((t) => t.id === active.value)) active.value = 'home'
 }
 
+async function loadDatabase() {
+  try {
+    database.value = { engine: (await dbStatus()).engine, memory: await dbMemory() }
+  } catch {
+    database.value = null
+  }
+}
+
+// The DATABASE card: Start runs here; everything else opens Settings > Database.
+async function onDatabaseCard(action) {
+  if (action === 'start') {
+    try {
+      await dbStart()
+    } catch {
+      openSettings('database')
+    }
+    await loadDatabase()
+    loadHome()
+    return
+  }
+  openSettings('database')
+}
+
 async function loadBackup() {
   try {
     backup.value = await backupStatus()
@@ -215,7 +243,8 @@ async function loadBackup() {
 // A project or diary card opens its page in the DIARY or PROJECTS room.
 function openMemoryFile(file) {
   if (!file) return
-  const room = file.startsWith('projects/') ? 'projects' : 'diary'
+  // a page of the database opens under db/project/... or db/diary/...
+  const room = file.startsWith('projects/') || file.startsWith('db/project/') ? 'projects' : 'diary'
   if (!tabs.value.some((t) => t.id === room)) return
   roomFile.value = file
   active.value = room
@@ -240,6 +269,7 @@ onMounted(async () => {
   await loadSettingsAndTheme()
   loadHome()
   loadBackup()
+  loadDatabase()
   // the memory changes as the companion writes: read it again every minute
   refresh = setInterval(loadHome, 60000)
   try {
@@ -259,6 +289,7 @@ onBeforeUnmount(() => {
 watch(settingsStamp, () => {
   loadHome()
   loadBackup()
+  loadDatabase()
 })
 </script>
 
@@ -287,8 +318,8 @@ watch(settingsStamp, () => {
         </TerminalPanel>
         <div class="widget-slot" :style="placeStyle(widgets.clock)"><ClockWidget :size="widgets.clock?.size ?? 'm'" /></div>
         <div class="widget-slot" :style="placeStyle(widgets.gauges)"><GaugeWidget /></div>
-        <div v-for="kind in ['today', 'projects', 'diary', 'growth', 'backup']" :key="kind" class="widget-slot" :style="placeStyle(widgets[kind])">
-          <HomeCards v-if="widgets[kind]" :kind="kind" :data="home" :backup="backup" @open="openMemoryFile" @backup="onBackupCard" />
+        <div v-for="kind in ['today', 'projects', 'diary', 'growth', 'backup', 'database']" :key="kind" class="widget-slot" :style="placeStyle(widgets[kind])">
+          <HomeCards v-if="widgets[kind]" :kind="kind" :data="home" :backup="backup" :database="database" @open="openMemoryFile" @backup="onBackupCard" @database="onDatabaseCard" />
         </div>
       </div>
       <AppsView v-if="active === 'apps'" class="room" />

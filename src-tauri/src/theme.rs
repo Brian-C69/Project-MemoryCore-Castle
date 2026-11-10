@@ -106,7 +106,8 @@ fn default_layout() -> (Value, Value) {
             "projects": { "right": "2%", "top": "calc(22% + 190px)", "width": "28%" },
             "diary": { "right": "2%", "top": "calc(22% + 395px)", "width": "28%" },
             "growth": { "right": "2%", "bottom": "4%", "width": "28%" },
-            "backup": { "right": "31%", "bottom": "4%", "width": "16%" }
+            "backup": { "right": "31%", "bottom": "4%", "width": "16%" },
+            "database": { "right": "48%", "bottom": "4%", "width": "16%" }
         }),
     )
 }

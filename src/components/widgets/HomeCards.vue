@@ -1,16 +1,21 @@
 <script setup>
 // One card component for HOME's memory widgets, so every card shares one look: TODAY,
-// PROJECTS, DIARY, GROWTH and BACKUP. Each shows a friendly empty line when the member's
+// PROJECTS, DIARY, GROWTH, BACKUP and DATABASE. Each shows a friendly empty line when the member's
 // memory has nothing there yet (a fresh MemoryCore), never an error.
+import { computed } from 'vue'
+import { card as databaseCard } from '../database.js'
+
 const props = defineProps({
-  kind: { type: String, required: true }, // today | projects | diary | growth | backup
+  kind: { type: String, required: true }, // today | projects | diary | growth | backup | database
   data: { type: Object, default: null }, // HomeData from memory_home
   backup: { type: Object, default: null }, // BackupStatus
+  database: { type: Object, default: null }, // { engine, memory } from db_status and db_memory
 })
-defineEmits(['open', 'backup'])
+defineEmits(['open', 'backup', 'database'])
+const db = computed(() => databaseCard(props.database?.engine ?? null, props.database?.memory ?? null))
 
-const TITLES = { today: 'TODAY', projects: 'PROJECTS', diary: 'DIARY', growth: 'GROWTH', backup: 'BACKUP' }
-const ICONS = { today: '▦', projects: '▤', diary: '❒', growth: '↗', backup: '⇪' }
+const TITLES = { today: 'TODAY', projects: 'PROJECTS', diary: 'DIARY', growth: 'GROWTH', backup: 'BACKUP', database: 'DATABASE' }
+const ICONS = { today: '▦', projects: '▤', diary: '❒', growth: '↗', backup: '⇪', database: '⛁' }
 
 function ago(iso) {
   if (!iso) return 'never'
@@ -79,6 +84,11 @@ function due(date) {
         <p class="empty">Not set up yet.</p>
         <button @click="$emit('backup', 'setup')">Set up backup</button>
       </template>
+    </template>
+
+    <template v-else-if="kind === 'database'">
+      <p :class="db.button ? 'empty' : 'facts'">{{ db.line }}</p>
+      <button v-if="db.button" @click="$emit('database', db.button.action)">{{ db.button.label }}</button>
     </template>
   </section>
 </template>

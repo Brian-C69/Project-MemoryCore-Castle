@@ -22,6 +22,7 @@ import {
 } from '../api/castle.js'
 import { builtInThemes } from '../themes/loader.js'
 import BackupPanel from '../components/BackupPanel.vue'
+import DatabasePanel from '../components/DatabasePanel.vue'
 
 const emit = defineEmits(['done', 'close'])
 const props = defineProps({
@@ -383,6 +384,8 @@ onMounted(async () => {
       <div v-else-if="step > LAST_FORM_STEP" class="body">
         <h2>Keep the memory safe (optional)</h2>
         <BackupPanel :companion="form.companion" />
+        <h2>A database for the memory (optional)</h2>
+        <DatabasePanel :companion="form.companion" />
       </div>
 
       <!-- 5. Look -->

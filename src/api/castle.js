@@ -152,6 +152,23 @@ export const releasesPage = () => invoke('releases_page')
 // The diary's newest change (seconds), to wait for Save diary before an update.
 export const diaryStamp = () => invoke('diary_stamp')
 
+// The memory database. dbStatus -> { engine: { state: notInstalled | stopped | running | external, port, external, answering },
+//   version, downloadBytes, keepRunning }; dbMemory -> { name, reachable, movedIn, canRestore };
+//   dbMovePreview / dbMoveIn -> { files, diary, reminders, projects, memory, skills, skipped }
+export const dbStatus = () => invoke('db_status')
+export const dbInstall = () => invoke('db_install')
+export const dbStart = () => invoke('db_start')
+export const dbStop = () => invoke('db_stop')
+export const dbUseExisting = () => invoke('db_use_existing')
+export const dbCreate = (adminUser, adminPassword) => invoke('db_create', { adminUser, adminPassword })
+export const dbMemory = () => invoke('db_memory')
+export const dbMovePreview = () => invoke('db_move_preview')
+export const dbMoveIn = () => invoke('db_move_in')
+export const dbRestore = () => invoke('db_restore')
+export const dbExport = (to) => invoke('db_export', { to })
+// while the engine downloads: { done, total } in bytes
+export const onDbInstall = on('castle://db-install')
+
 // STUDIO: what the companion made, and each power's state (ready | builtin | prompt).
 export const studioLibrary = () => invoke('studio_library')
 export const studioPowers = () => invoke('studio_powers')
