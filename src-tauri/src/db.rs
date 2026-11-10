@@ -1,0 +1,409 @@
+//! The member's own database engine: a portable MariaDB that Castle downloads once (with the
+//! member's OK), keeps in its own app-data folder and starts and stops like XAMPP's buttons.
+//! No admin prompt, no Windows service, no window ever shown.
+//!
+//! ```text
+//!  %LOCALAPPDATA%\MemoryCore Castle\mariadb\
+//!    11.4.13\bin\mariadbd.exe ...   the official zip, unpacked (its top folder dropped)
+//!    data\                          the databases (made once by mariadb-install-db)
+//!    my.ini                         Castle's settings: port, 127.0.0.1 only, utf8mb4
+//! ```
+//!
+//! The port rule: 3306 when it is free. When a MySQL / MariaDB already answers there (XAMPP),
+//! the member may use that one instead. Otherwise Castle's own engine takes the first free port
+//! from 3307 and keeps it for good (saved in settings), so the companion's connection never moves.
+
+use serde::Serialize;
+use sha2::{Digest, Sha256};
+use std::io::Read;
+use std::net::{SocketAddr, TcpStream};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
+
+/// The MariaDB release Castle installs: 11.4 is the long-term-support line.
+pub const VERSION: &str = "11.4.13";
+pub const ZIP_URL: &str = "https://archive.mariadb.org/mariadb-11.4.13/winx64-packages/mariadb-11.4.13-winx64.zip";
+/// From the release's own sha256sums.txt; a download that differs is thrown away.
+pub const ZIP_SHA256: &str = "d62986d433eeebfde218560b276103831604a61e929e87f1a17f5aebd80257e2";
+/// For the Install button's "about 95 MB".
+pub const ZIP_BYTES: u64 = 95_024_126;
+pub const PREFERRED_PORT: u16 = 3306;
+/// Castle's own engine looks for a free port from here when 3306 is taken.
+pub const FIRST_OWN_PORT: u16 = 3307;
+/// The event the page hears while the engine downloads: { done, total }.
+pub const INSTALL_EVENT: &str = "castle://db-install";
+/// Tests point the engine folder somewhere else.
+pub const HOME_VAR: &str = "CASTLE_DB_HOME";
+
+const START_LIMIT: Duration = Duration::from_secs(20);
+
+/// What the database engine is right now, for Settings and the HOME card.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase", tag = "state")]
+pub enum Engine {
+    /// Nothing installed yet; `external` is a MySQL already answering on 3306 (XAMPP) if any.
+    NotInstalled { external: Option<u16> },
+    /// Castle's engine is installed but stopped.
+    Stopped { port: u16 },
+    /// Castle's engine is running.
+    Running { port: u16 },
+    /// The member chose a MySQL / MariaDB that was already on this PC.
+    External { port: u16, answering: bool },
+}
+
+/// Who holds a port.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PortUse {
+    Free,
+    /// A MySQL or MariaDB server greets there.
+    MySql,
+    /// Something else is listening.
+    Other,
+}
+
+// ---------- pure parts (tested) ----------
+
+/// A MySQL / MariaDB server speaks first: a packet whose fifth byte is the protocol version 10
+/// (or an error packet, 0xff, when it refuses this host - still a MySQL).
+pub fn is_mysql_greeting(bytes: &[u8]) -> bool {
+    bytes.len() >= 5 && (bytes[4] == 10 || bytes[4] == 0xff)
+}
+
+/// The port Castle's own engine takes: 3306 when free, else the first free one from 3307.
+/// None when nothing in 3307..=3399 is free.
+pub fn choose_port(probe: impl Fn(u16) -> PortUse) -> Option<u16> {
+    if probe(PREFERRED_PORT) == PortUse::Free {
+        return Some(PREFERRED_PORT);
+    }
+    (FIRST_OWN_PORT..=3399).find(|p| probe(*p) == PortUse::Free)
+}
+
+/// Castle's my.ini: only this PC may connect, and text is stored as full Unicode.
+pub fn my_ini(data: &Path, port: u16) -> String {
+    let data = data.display().to_string().replace('\\', "/");
+    format!(
+        "# Written by MemoryCore Castle - Castle rewrites this file.\n\
+         [mysqld]\n\
+         datadir={data}\n\
+         port={port}\n\
+         bind-address=127.0.0.1\n\
+         character-set-server=utf8mb4\n\
+         collation-server=utf8mb4_unicode_ci\n\
+         \n\
+         [client]\n\
+         port={port}\n\
+         default-character-set=utf8mb4\n"
+    )
+}
+
+/// The lowercase hex SHA-256 of some bytes.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// A download is kept only when it is exactly the release's own file.
+pub fn checksum_ok(bytes: &[u8]) -> bool {
+    sha256_hex(bytes) == ZIP_SHA256
+}
+
+/// One line for a port Castle cannot use, saying what to do about it.
+pub fn port_busy_line(port: u16) -> String {
+    format!(
+        "Port {port} is being used by another program, so the database cannot start. \
+         See which one with `netstat -ano | findstr :{port}` and close it (or end it with `taskkill /PID <number>`), then press Start again."
+    )
+}
+
+// ---------- where things live ----------
+
+/// The engine's own folder.
+pub fn home() -> PathBuf {
+    if let Some(dir) = std::env::var_os(HOME_VAR).filter(|v| !v.is_empty()) {
+        return PathBuf::from(dir);
+    }
+    let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    local.join("MemoryCore Castle").join("mariadb")
+}
+
+pub fn bin_dir(home: &Path) -> PathBuf {
+    home.join(VERSION).join("bin")
+}
+
+pub fn data_dir(home: &Path) -> PathBuf {
+    home.join("data")
+}
+
+pub fn ini_path(home: &Path) -> PathBuf {
+    home.join("my.ini")
+}
+
+/// Installed means the server program and its data folder are both there.
+pub fn installed(home: &Path) -> bool {
+    bin_dir(home).join("mariadbd.exe").is_file() && data_dir(home).join("mysql").is_dir()
+}
+
+// ---------- the port ----------
+
+/// Who holds 127.0.0.1:<port>: free, a MySQL that greets, or something else.
+pub fn probe_port(port: u16) -> PortUse {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(400)) else {
+        return PortUse::Free;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(800)));
+    let mut buf = [0u8; 16];
+    match stream.read(&mut buf) {
+        Ok(n) if is_mysql_greeting(&buf[..n]) => PortUse::MySql,
+        _ => PortUse::Other,
+    }
+}
+
+/// The engine's state, from the settings Castle keeps and what answers on the port.
+pub fn detect(home: &Path, port: Option<u16>, external: bool) -> Engine {
+    if external {
+        let port = port.unwrap_or(PREFERRED_PORT);
+        return Engine::External { port, answering: probe_port(port) == PortUse::MySql };
+    }
+    if !installed(home) {
+        let external = (probe_port(PREFERRED_PORT) == PortUse::MySql).then_some(PREFERRED_PORT);
+        return Engine::NotInstalled { external };
+    }
+    let port = port.unwrap_or(PREFERRED_PORT);
+    if probe_port(port) == PortUse::MySql {
+        Engine::Running { port }
+    } else {
+        Engine::Stopped { port }
+    }
+}
+
+// ---------- programs ----------
+
+fn hidden(program: &Path) -> Command {
+    let mut command = Command::new(program);
+    command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // no console window
+    }
+    command
+}
+
+/// Runs a program to the end, at most `limit`; true when it finished well.
+fn run_to_end(mut command: Command, limit: Duration) -> bool {
+    let Ok(mut child) = command.spawn() else { return false };
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) if started.elapsed() < limit => std::thread::sleep(Duration::from_millis(100)),
+            _ => {
+                let _ = child.kill();
+                return false;
+            }
+        }
+    }
+}
+
+// ---------- install ----------
+
+/// Downloads the release (reporting progress), checks it, unpacks it into the engine folder,
+/// makes the data folder and writes my.ini. Returns the port the engine will use.
+pub fn install(home: &Path, port: u16, progress: impl Fn(u64, u64)) -> Result<u16, String> {
+    let bytes = download(progress)?;
+    if !checksum_ok(&bytes) {
+        return Err("The download did not match MariaDB's own checksum, so Castle threw it away. Try again later.".into());
+    }
+    unpack(&bytes, &home.join(VERSION))?;
+    initialise(home, port)?;
+    Ok(port)
+}
+
+fn download(progress: impl Fn(u64, u64)) -> Result<Vec<u8>, String> {
+    let offline = || "MariaDB could not be downloaded. Check the internet connection and try again.".to_string();
+    let mut response = reqwest::blocking::Client::builder()
+        .user_agent(concat!("MemoryCore-Castle/", env!("CARGO_PKG_VERSION")))
+        .timeout(Duration::from_secs(900))
+        .build()
+        .and_then(|c| c.get(ZIP_URL).send())
+        .and_then(|r| r.error_for_status())
+        .map_err(|_| offline())?;
+    let total = response.content_length().unwrap_or(ZIP_BYTES);
+    let mut bytes = Vec::with_capacity(total as usize);
+    let mut chunk = [0u8; 256 * 1024];
+    let mut last = Instant::now();
+    loop {
+        let n = response.read(&mut chunk).map_err(|_| offline())?;
+        if n == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&chunk[..n]);
+        if last.elapsed() > Duration::from_millis(250) {
+            progress(bytes.len() as u64, total);
+            last = Instant::now();
+        }
+    }
+    progress(bytes.len() as u64, total);
+    Ok(bytes)
+}
+
+/// The zip holds one top folder (mariadb-11.4.13-winx64/); its contents land in `target`.
+fn unpack(bytes: &[u8], target: &Path) -> Result<(), String> {
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|_| "The download was not a readable zip.".to_string())?;
+    let partial = target.with_extension("partial");
+    let _ = std::fs::remove_dir_all(&partial);
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).map_err(|_| "The zip could not be read.".to_string())?;
+        let Some(inside) = file.enclosed_name() else { continue };
+        let relative: PathBuf = inside.components().skip(1).collect();
+        if relative.as_os_str().is_empty() {
+            continue;
+        }
+        let out = partial.join(relative);
+        if file.is_dir() {
+            std::fs::create_dir_all(&out).map_err(|_| "A folder could not be created.".to_string())?;
+        } else {
+            if let Some(parent) = out.parent() {
+                std::fs::create_dir_all(parent).map_err(|_| "A folder could not be created.".to_string())?;
+            }
+            let mut writer = std::fs::File::create(&out).map_err(|_| "A file could not be written.".to_string())?;
+            std::io::copy(&mut file, &mut writer).map_err(|_| "A file could not be written.".to_string())?;
+        }
+    }
+    // only a whole unpack becomes the engine
+    let _ = std::fs::remove_dir_all(target);
+    std::fs::rename(&partial, target).map_err(|_| "The database folder could not be put in place.".to_string())
+}
+
+/// Makes the data folder once (root on 127.0.0.1 only) and writes Castle's my.ini.
+fn initialise(home: &Path, port: u16) -> Result<(), String> {
+    let data = data_dir(home);
+    if !data.join("mysql").is_dir() {
+        let mut command = hidden(&bin_dir(home).join("mariadb-install-db.exe"));
+        command.arg(format!("--datadir={}", data.display())).arg(format!("--port={port}"));
+        if !run_to_end(command, Duration::from_secs(180)) || !data.join("mysql").is_dir() {
+            return Err("MariaDB was downloaded but its data folder could not be made.".into());
+        }
+    }
+    write_ini(home, port)
+}
+
+pub fn write_ini(home: &Path, port: u16) -> Result<(), String> {
+    std::fs::write(ini_path(home), my_ini(&data_dir(home), port)).map_err(|_| "The database settings could not be written.".to_string())
+}
+
+// ---------- start / stop ----------
+
+/// Starts Castle's engine hidden and waits until it greets on its port.
+pub fn start(home: &Path, port: u16) -> Result<(), String> {
+    if !installed(home) {
+        return Err("The database is not installed yet.".into());
+    }
+    match probe_port(port) {
+        PortUse::MySql => return Ok(()),
+        PortUse::Other => return Err(port_busy_line(port)),
+        PortUse::Free => {}
+    }
+    write_ini(home, port)?;
+    let mut command = hidden(&bin_dir(home).join("mariadbd.exe"));
+    command.arg(format!("--defaults-file={}", ini_path(home).display()));
+    command.spawn().map_err(|_| "The database could not be started.".to_string())?;
+    let started = Instant::now();
+    while started.elapsed() < START_LIMIT {
+        if probe_port(port) == PortUse::MySql {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    Err("The database did not answer within 20 seconds.".into())
+}
+
+/// Asks Castle's engine to shut down cleanly; waits until the port is quiet.
+pub fn stop(home: &Path, port: u16) -> Result<(), String> {
+    if probe_port(port) != PortUse::MySql {
+        return Ok(());
+    }
+    let mut command = hidden(&bin_dir(home).join("mariadb-admin.exe"));
+    command.args(["--protocol=tcp", "--host=127.0.0.1", &format!("--port={port}"), "--user=root", "shutdown"]);
+    if !run_to_end(command, Duration::from_secs(30)) {
+        return Err("The database did not stop when asked.".into());
+    }
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_secs(15) {
+        if probe_port(port) == PortUse::Free {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    Err("The database is still stopping.".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_mysql_greeting_is_known_by_its_protocol_byte() {
+        // length (3) + sequence (1) + protocol 10 + "11.4.13-MariaDB"...
+        assert!(is_mysql_greeting(&[0x5b, 0, 0, 0, 10, b'1', b'1']));
+        assert!(is_mysql_greeting(&[0x40, 0, 0, 0, 0xff, 0x6a, 0x04]));
+        assert!(!is_mysql_greeting(b"HTTP/1.1 400"));
+        assert!(!is_mysql_greeting(&[1, 2, 3]));
+    }
+
+    #[test]
+    fn the_engine_takes_3306_when_free_else_the_first_free_from_3307() {
+        assert_eq!(choose_port(|_| PortUse::Free), Some(3306));
+        assert_eq!(choose_port(|p| if p == 3306 { PortUse::MySql } else { PortUse::Free }), Some(3307));
+        assert_eq!(choose_port(|p| if p <= 3308 { PortUse::Other } else { PortUse::Free }), Some(3309));
+        assert_eq!(choose_port(|_| PortUse::Other), None);
+    }
+
+    #[test]
+    fn my_ini_keeps_the_engine_on_this_pc_with_unicode_text() {
+        let ini = my_ini(Path::new("C:\\Users\\Rin\\AppData\\Local\\MemoryCore Castle\\mariadb\\data"), 3307);
+        assert!(ini.contains("datadir=C:/Users/Rin/AppData/Local/MemoryCore Castle/mariadb/data\n"));
+        assert!(ini.contains("port=3307\nbind-address=127.0.0.1\n"));
+        assert!(ini.contains("character-set-server=utf8mb4"));
+        assert_eq!(ini.matches("port=3307").count(), 2);
+    }
+
+    #[test]
+    fn a_download_that_is_not_the_release_is_refused() {
+        assert!(!checksum_ok(b"not the zip"));
+        assert_eq!(sha256_hex(b"abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        assert_eq!(ZIP_SHA256.len(), 64);
+    }
+
+    #[test]
+    fn a_busy_port_says_how_to_find_the_program() {
+        let line = port_busy_line(3307);
+        assert!(line.contains("netstat -ano | findstr :3307") && line.contains("taskkill"));
+    }
+
+    #[test]
+    fn an_empty_engine_folder_is_not_installed_and_nothing_answers_on_a_free_port() {
+        let home = std::env::temp_dir().join(format!("castle-db-home-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+        assert!(!installed(&home));
+        assert_eq!(bin_dir(&home), home.join(VERSION).join("bin"));
+        // a port nobody uses in the test range
+        let free = (40000..40100).find(|p| probe_port(*p) == PortUse::Free).unwrap();
+        assert_eq!(detect(&home, Some(free), true), Engine::External { port: free, answering: false });
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn a_listener_that_does_not_greet_is_something_else() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = std::thread::spawn(move || {
+            let (_s, _) = listener.accept().unwrap();
+            std::thread::sleep(Duration::from_millis(1200));
+        });
+        assert_eq!(probe_port(port), PortUse::Other);
+        handle.join().unwrap();
+    }
+}

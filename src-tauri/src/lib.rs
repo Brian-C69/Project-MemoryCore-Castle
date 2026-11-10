@@ -8,6 +8,7 @@ mod chat;
 mod chatroom;
 mod clipboard;
 mod commands;
+mod db;
 mod env;
 mod files;
 mod key;
