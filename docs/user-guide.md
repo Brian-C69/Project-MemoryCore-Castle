@@ -348,11 +348,11 @@ The cards on the right are every world you can choose. Click a screen's row, the
 
 ### The crystal's glow
 
-Your companion's crystal shines with how much of your **weekly limit** is left on Claude Code or Codex: bright and sparkling when there is plenty, softer as you use it, dim and warm under a fifth, a faint ember when it is used up. The WORLD room says the number under MUSIC. Castle reads it on your PC with the login Claude Code already keeps (or from Codex's own session files) every five minutes, and never shows or sends that login anywhere else. If it can't read the limit, the crystal keeps its normal glow.
+Your companion's crystal shines with how much of your **weekly limit** is left on Claude Code or Codex: bright and sparkling when there is plenty, softer as you use it, dim and warm under a fifth, a faint ember when it is used up. The WORLD room says the number under the list of your screens. Castle reads it on your PC with the login Claude Code already keeps (or from Codex's own session files) every five minutes, and never shows or sends that login anywhere else. If it can't read the limit, the crystal keeps its normal glow.
 
 ### Music
 
-The first screen showing a world plays the music: Castle's own (*Floating Isles* for 3D worlds, *Castle Theme* for 2D ones), then the songs your companion has made. Turn it on or off and set the volume in the **MUSIC** strip.
+The first screen showing a world plays the music: Castle's own (*Floating Isles* for 3D worlds, *Castle Theme* for 2D ones), then the songs your companion has made. Turn it on or off and set the volume with **MUSIC**, beside **Look for screens** at the top of the WORLD room.
 
 ### Resting
 

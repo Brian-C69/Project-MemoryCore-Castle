@@ -296,6 +296,12 @@ watch(
           <h2>YOUR SCREENS</h2>
           <span class="spacer"></span>
           <span v-if="saved" class="good">{{ saved }}</span>
+          <!-- the world's music: on / off and how loud, beside the screens it plays on -->
+          <span v-if="settings" class="music" title="Plays on the first screen showing a world: Castle's own music, then the songs your companion makes.">
+            <span class="music-label">MUSIC</span>
+            <button :class="{ primary: settings.world.music }" @click="saveMusic({ music: !settings.world.music })">{{ settings.world.music ? 'on' : 'off' }}</button>
+            <input type="range" min="0" max="1" step="0.05" :value="settings.world.volume" aria-label="Music volume" @change="saveMusic({ volume: +$event.target.value })" />
+          </span>
           <button @click="refresh({ fresh: true })">Look for screens</button>
         </div>
 
@@ -366,6 +372,8 @@ watch(
         <p v-if="!others.length && rows.length" class="hint">Only one screen is connected. Plug in another screen to give it a world, or preview a world here.</p>
         <p v-else-if="others.length" class="hint">Click a screen, then a world on the right to show it there.</p>
         <p v-if="problem" class="problem">{{ problem }}</p>
+        <p v-if="settings" class="hint">Music plays on the first screen showing a world: Castle's own music, then the songs your companion makes.</p>
+        <p v-if="quotaLine" class="hint">{{ quotaLine }}</p>
       </section>
 
       <section class="widget worlds">
@@ -423,15 +431,6 @@ watch(
       </section>
     </div>
 
-    <section class="widget music">
-      <h2>MUSIC</h2>
-      <template v-if="settings">
-        <button :class="{ primary: settings.world.music }" @click="saveMusic({ music: !settings.world.music })">{{ settings.world.music ? 'on' : 'off' }}</button>
-        <input type="range" min="0" max="1" step="0.05" :value="settings.world.volume" @change="saveMusic({ volume: +$event.target.value })" />
-        <span class="hint">Plays on the first screen showing a world: Castle's own music, then the songs your companion makes.</span>
-      </template>
-      <p v-if="quotaLine" class="hint quota">{{ quotaLine }}</p>
-    </section>
 
     <section v-if="previewOpen" class="widget preview-panel">
       <WorldStage :config="previewConfig" :mine="mine" :active="active" />
@@ -669,14 +668,17 @@ button.danger {
   color: var(--warn);
 }
 .music {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  display: inline-flex;
+  gap: 8px;
   align-items: center;
-  padding: 12px 18px;
 }
-.quota {
-  flex-basis: 100%;
+.music-label {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+}
+.music input[type='range'] {
+  width: 110px;
 }
 .preview-panel {
   position: relative;
