@@ -5,6 +5,7 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { memoryFeatures, providersList, providerSwitch, providerSwitchStatus, providerSwitchCancel } from '../api/castle.js'
 import { currentProvider, providerStatus, shownProvider } from './providerpicker.js'
 import { needsSavePrompt, saveChoices } from './switchsave.js'
+import { typeLine } from './typeline.js'
 const providers = ref([])
 const switching = ref({})
 const problem = ref('')
@@ -16,7 +17,6 @@ async function discover() {
 const shown = computed(() => shownProvider(providers.value, props.cliLabel, switching.value.target))
 // A switch hands the new provider only the saved memory and the recent dialogue, so with a session
 // running Castle asks first. `asking` is the provider chosen, waiting for the member's answer.
-const ENTER = String.fromCharCode(13) // the Enter key, as the quick-action buttons send it
 const asking = ref('')
 const choices = ref(saveChoices())
 async function startSwitch(target) {
@@ -40,8 +40,7 @@ async function saveThenSwitch(choice) {
   const target = asking.value
   asking.value = ''
   try {
-    await props.write(choice.command)
-    await props.write(ENTER)
+    await typeLine(props.write, choice.command)
   } catch (e) {
     problem.value = String(e)
     return
