@@ -256,7 +256,8 @@ fn run_cli(cli: Cli, folder: &Path, words: &str) -> Result<String, String> {
     for name in NEVER_INHERITED {
         command.env_remove(name);
     }
-    for name in ["CASTLE_TOOLS", "CASTLE_STYLES", "CASTLE_IMAGE", "CASTLE_CLI"] {
+    // the room's companion speaks in public: no tools, and no door to the memory database
+    for name in ["CASTLE_TOOLS", "CASTLE_STYLES", "CASTLE_IMAGE", "CASTLE_CLI", "CASTLE_EXE"] {
         command.env_remove(name);
     }
     #[cfg(windows)]

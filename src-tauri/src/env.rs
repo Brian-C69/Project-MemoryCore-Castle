@@ -42,6 +42,10 @@ pub fn session_env(cli: Cli, key: &dyn Fn(&str) -> Option<String>, tools: &Path)
         ("CASTLE_CLI".to_string(), cli.command().to_string()),
         ("CASTLE_TOOLS".to_string(), tools.display().to_string()),
     ];
+    // castle-memory (in the tools folder) starts this same program with --memory
+    if let Ok(exe) = std::env::current_exe() {
+        vars.push(("CASTLE_EXE".into(), exe.display().to_string()));
+    }
     let openai = key("openai");
     vars.push(("CASTLE_IMAGE".into(), image_mode(cli, openai.is_some()).into()));
     if cli == Cli::Claude {

@@ -11,6 +11,7 @@ use std::time::Duration;
 
 pub const MEMORYCORE_REPO: &str = "https://github.com/Kiyoraka/Poject-AI-Memory-Architecture";
 const BLOCK_TEMPLATE: &str = include_str!("../resources/castle-block.md");
+const DB_BLOCK_TEMPLATE: &str = include_str!("../resources/castle-block-db.md");
 const BLOCK_BEGIN: &str = "<!-- castle:begin";
 const BLOCK_END: &str = "<!-- castle:end -->";
 const PLACEHOLDERS: [&str; 3] = ["[AI_NAME]", "[YOUR_NAME]", "[RELATIONSHIP_STYLE]"];
@@ -162,10 +163,27 @@ pub fn with_block(text: &str, block: &str) -> String {
     }
 }
 
+/// Castle's block plus the memory-database section, placed just before the closing marker.
+pub fn with_db_section(block: &str, member: &str) -> String {
+    let section = DB_BLOCK_TEMPLATE.replace("{{USER_NAME}}", member.trim());
+    match block.rfind(BLOCK_END) {
+        Some(end) => format!("{}\n{}\n{}", block[..end].trim_end(), section.trim_end(), &block[end..]),
+        None => block.to_string(),
+    }
+}
+
+/// True when the memory folder's .env names a memory database (Castle wrote it there).
+pub fn has_database(folder: &Path) -> bool {
+    std::fs::read_to_string(folder.join(".env")).is_ok_and(|text| crate::memdb::access_from_env(&text).is_some())
+}
+
 /// Writes Castle's block into CLAUDE.md (Claude Code) and AGENTS.md (Codex).
 pub fn write_blocks(folder: &Path, companion: &str, member: &str) -> Result<(), String> {
     let entry = entry_file(folder).ok_or("This folder has no master-memory.md, so it is not a MemoryCore folder.")?;
-    let block = castle_block(companion, member, entry);
+    let mut block = castle_block(companion, member, entry);
+    if has_database(folder) {
+        block = with_db_section(&block, member);
+    }
     for name in ["CLAUDE.md", "AGENTS.md"] {
         let path = folder.join(name);
         let text = std::fs::read_to_string(&path).unwrap_or_default();
@@ -475,6 +493,31 @@ mod tests {
         // after Memory Consolidation the entry file moves
         std::fs::write(root.join("main").join("main-memory.md"), "x").unwrap();
         assert_eq!(inspect(&root).entry_file.as_deref(), Some("main/main-memory.md"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_memory_with_a_database_is_told_to_use_the_door() {
+        let root = memory("blocks-db");
+        write_blocks(&root, "Lyra", "Rin").unwrap();
+        let plain = std::fs::read_to_string(root.join("CLAUDE.md")).unwrap();
+        assert!(!plain.contains("castle-memory"));
+        std::fs::write(root.join(".env"), "MEMORY_DB_HOST=127.0.0.1\nMEMORY_DB_PORT=3307\nMEMORY_DB_NAME=lyra_memorycoredb\nMEMORY_DB_USER=castle_lyra\nMEMORY_DB_PASSWORD=x\n").unwrap();
+        assert!(has_database(&root));
+        write_blocks(&root, "Lyra", "Rin").unwrap();
+        for name in ["CLAUDE.md", "AGENTS.md"] {
+            let text = std::fs::read_to_string(root.join(name)).unwrap();
+            assert!(text.contains("### The memory database") && text.contains("castle-memory diary add"));
+            assert!(text.contains("on Rin's own computer") && !text.contains("{{"));
+            // the section sits inside the block, once, and the block still closes
+            assert_eq!(text.matches("### The memory database").count(), 1);
+            assert!(text.trim_end().ends_with(BLOCK_END));
+            assert!(text.find("### The memory database").unwrap() < text.find(BLOCK_END).unwrap());
+        }
+        // the database gone again (the .env line removed): the section leaves with it
+        std::fs::write(root.join(".env"), "OPENAI_API_KEY=sk-1\n").unwrap();
+        write_blocks(&root, "Lyra", "Rin").unwrap();
+        assert_eq!(std::fs::read_to_string(root.join("CLAUDE.md")).unwrap(), plain);
         let _ = std::fs::remove_dir_all(root);
     }
 

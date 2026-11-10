@@ -9,6 +9,7 @@ mod chatroom;
 mod clipboard;
 mod commands;
 mod db;
+mod door;
 mod env;
 mod files;
 mod key;
@@ -156,6 +157,12 @@ fn key_reveal(name: String) -> Option<String> {
 }
 
 pub fn run() {
+    // `memorycore-castle.exe --memory <verb> ...` is the companion's door to the memory
+    // database (castle-memory in the tools folder): it answers and ends, no window.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some(door::FLAG) {
+        std::process::exit(door::main(&args[1..]));
+    }
     let builder = tauri::Builder::default();
     // the signed self-updater lives only in official builds (scripts/release.ps1)
     #[cfg(feature = "official")]
