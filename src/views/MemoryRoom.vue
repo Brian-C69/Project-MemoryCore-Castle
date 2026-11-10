@@ -106,7 +106,8 @@ watch(() => [props.room, props.stamp, props.openFile], load)
       <template v-if="current">
         <header>
           <h1>{{ current.title }}</h1>
-          <button class="small" title="Show the file in its folder" @click="openOutside">Show file</button>
+          <!-- a page of the database has no file to show -->
+          <button v-if="!current.file.startsWith('db/')" class="small" title="Show the file in its folder" @click="openOutside">Show file</button>
         </header>
         <p v-if="problem" class="problem">{{ problem }}</p>
         <div class="text"><MarkdownText :text="text" /></div>

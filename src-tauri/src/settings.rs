@@ -204,8 +204,11 @@ pub struct Settings {
     /// True once the member has answered the one-time offer to move the memory into a database
     /// (either button), or finished a setup that showed it.
     pub db_offer_seen: bool,
+    /// How the DIARY room is read: one of DIARY_LOOKS.
+    pub diary_look: String,
 }
 
+pub const DIARY_LOOKS: [&str; 3] = ["list", "calendar", "book"];
 pub const STORY_LOOKS: [&str; 5] = ["classic", "cinema", "book", "messenger", "jrpg"];
 
 fn all_rooms_on() -> std::collections::BTreeMap<String, bool> {
@@ -240,6 +243,7 @@ impl Default for Settings {
             db_keep_running: false,
             db_boot_at_wake: true,
             db_offer_seen: false,
+            diary_look: "list".into(),
         }
     }
 }
@@ -271,6 +275,9 @@ impl Settings {
         self.world.screens = std::mem::take(&mut self.world.screens).into_iter().map(WorldScreen::normalized).collect();
         if !STORY_LOOKS.contains(&self.story_look.as_str()) {
             self.story_look = "classic".into();
+        }
+        if !DIARY_LOOKS.contains(&self.diary_look.as_str()) {
+            self.diary_look = "list".into();
         }
         // every known room is listed (a missing one is on); unknown names go
         self.rooms = ROOMS.iter().map(|r| (r.to_string(), self.rooms.get(*r).copied().unwrap_or(true))).collect();
@@ -417,6 +424,7 @@ mod tests {
             db_keep_running: true,
             db_boot_at_wake: false,
             db_offer_seen: true,
+            diary_look: "book".into(),
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));
@@ -524,6 +532,13 @@ mod tests {
         assert_eq!(Settings::default().last_seen_version, None);
         assert_eq!(Settings { last_seen_version: Some(" 0.2.0 ".into()), ..Settings::default() }.normalized().last_seen_version.as_deref(), Some("0.2.0"));
         assert_eq!(Settings { last_seen_version: Some("  ".into()), ..Settings::default() }.normalized().last_seen_version, None);
+    }
+
+    #[test]
+    fn the_diary_look_is_one_of_the_three() {
+        assert_eq!(Settings::default().diary_look, "list");
+        assert_eq!(Settings { diary_look: "calendar".into(), ..Settings::default() }.normalized().diary_look, "calendar");
+        assert_eq!(Settings { diary_look: "scroll".into(), ..Settings::default() }.normalized().diary_look, "list");
     }
 
     #[test]

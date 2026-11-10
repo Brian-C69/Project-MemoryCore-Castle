@@ -540,6 +540,7 @@ pub async fn db_memory(app: AppHandle) -> MemoryDb {
             view.reachable = true;
             view.moved_in = crate::memdb::migrate(&mut conn).is_ok() && crate::store::moved_in(&mut conn);
             let _ = crate::mirror::backfill_titles(&mut conn);
+            let _ = crate::import::drop_placeholder_entries(&mut conn);
             view.can_restore = !view.moved_in && folder.join(crate::backup::DUMP_FILE).is_file();
         }
         view
@@ -766,6 +767,7 @@ fn settle_skills(settings: &crate::settings::Settings) {
     if let Ok(mut conn) = crate::memdb::open_for(&folder) {
         if crate::memdb::migrate(&mut conn).is_ok() {
             let _ = crate::mirror::backfill_titles(&mut conn);
+            let _ = crate::import::drop_placeholder_entries(&mut conn);
             let _ = crate::mirror::sync_skills(&mut conn, &folder);
         }
     }

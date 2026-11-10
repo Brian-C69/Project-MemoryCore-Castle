@@ -3,6 +3,7 @@
 //! ```text
 //!  castle-memory diary add --date 2026-11-10 --title "The garden" --file entry.md
 //!  castle-memory diary list [--month 2026-11] [--limit 20]      diary show --date 2026-11-10
+//!  castle-memory diary rewrite --date 2026-11-10 --session 1 [--title "..."] --file entry.md
 //!  castle-memory reminder add --title "Call Rin" [--due 2026-11-12] [--detail "..."]
 //!  castle-memory reminder list | reminder done --id 3
 //!  castle-memory project add|update --name "Portfolio site" [--status ..] [--summary ..] [--file notes.md]
@@ -115,6 +116,11 @@ pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> 
     let words: Vec<&str> = ask.words.iter().map(String::as_str).collect();
     match words.as_slice() {
         ["diary", "add"] => diary_add(conn, ask),
+        ["diary", "rewrite"] => diary_rewrite(conn, ask),
+        ["diary", "unseed"] => {
+            conn.query_drop("DELETE FROM diary_entries WHERE source_file LIKE 'seed/%'").map_err(sql("Removing the seed entries"))?;
+            Ok(format!("DIARY {} seed entries removed", conn.affected_rows()))
+        }
         ["diary", "list"] => diary_list(conn, ask),
         ["diary", "show"] => diary_show(conn, ask),
         ["reminder", "add"] => reminder_add(conn, ask),
@@ -160,6 +166,19 @@ pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> 
 
 // ---------- diary ----------
 
+/// True when an entry reads like a report instead of a diary: three or more lines that open
+/// with a bold label ("**Summary**: ..."), or more list lines than lines of sentences.
+pub fn reads_like_a_report(text: &str) -> bool {
+    let lines: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    let labels = lines.iter().filter(|l| l.starts_with("**") && (l.contains("**:") || l.contains(":**"))).count();
+    let is_list = |l: &&&str| l.starts_with("- ") || l.starts_with("* ") || l.split_once(". ").is_some_and(|(n, _)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
+    let lists = lines.iter().filter(is_list).count();
+    let sentences = lines.iter().filter(|l| !is_list(l) && !l.starts_with('#') && !l.starts_with("**")).count();
+    labels >= 3 || (lists >= 3 && lists > sentences)
+}
+
+const REPORT_HINT: &str = "\nThis reads like a report. A diary is written in sentences, the way a person writes their own - rewrite it if you like: `castle-memory diary rewrite --date <date> --session <n> --title \"...\" --file <text file>`.";
+
 fn diary_add(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
     let day = date(ask.need("date")?)?;
     let title = ask.need("title")?;
@@ -168,9 +187,28 @@ fn diary_add(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
         .exec_first("SELECT COALESCE(MAX(session_no), 0) + 1 FROM diary_entries WHERE entry_date = ?", (day,))
         .map_err(sql("Reading the diary"))?;
     let session = next.unwrap_or(1);
-    conn.exec_drop("INSERT INTO diary_entries (entry_date, session_no, title, body) VALUES (?, ?, ?, ?)", (day, session, title, body))
+    // staging only: a seed entry carries a mark so it can be taken out again
+    let seed = ask.get("seed").map(|name| format!("seed/{}.md", file_slug(name)));
+    let hint = if reads_like_a_report(&body) { REPORT_HINT } else { "" };
+    conn.exec_drop("INSERT INTO diary_entries (entry_date, session_no, title, body, source_file) VALUES (?, ?, ?, ?, ?)", (day, session, title, body, seed))
         .map_err(sql("Saving the diary entry"))?;
-    Ok(format!("DIARY saved {day} session {session}: {title}"))
+    Ok(format!("DIARY saved {day} session {session}: {title}{hint}"))
+}
+
+/// Puts better words in place of one entry; the older title and text are kept.
+fn diary_rewrite(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+    let day = date(ask.need("date")?)?;
+    let session: u32 = ask.get("session").unwrap_or("1").parse().map_err(|_| "--session is a number, like 1.".to_string())?;
+    let body = ask.text()?.ok_or("--file or --body is needed.")?;
+    let row: Option<(u64, String, String)> = conn
+        .exec_first("SELECT id, title, body FROM diary_entries WHERE entry_date = ? AND session_no = ?", (day, session))
+        .map_err(sql("Reading the diary"))?;
+    let (id, old_title, old_body) = row.ok_or(format!("No diary entry on {day} session {session}."))?;
+    let title = ask.get("title").filter(|t| !t.trim().is_empty()).unwrap_or(&old_title).to_string();
+    conn.exec_drop("INSERT INTO diary_entry_history (entry_id, title, body) VALUES (?, ?, ?)", (id, &old_title, old_body)).map_err(sql("Keeping the older words"))?;
+    conn.exec_drop("UPDATE diary_entries SET title = ?, body = ? WHERE id = ?", (&title, &body, id)).map_err(sql("Saving the diary entry"))?;
+    let hint = if reads_like_a_report(&body) { REPORT_HINT } else { "" };
+    Ok(format!("DIARY rewritten {day} session {session}: {title} (the older words are kept){hint}"))
 }
 
 fn diary_list(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
@@ -678,6 +716,18 @@ mod tests {
     }
 
     #[test]
+    fn a_report_is_told_from_a_diary() {
+        let log = "## Session 3 - Garden Planning\n**Summary**: Discussed garden layout.\n**Key Topics**:\n- Bed placement\n- Tomato varieties\n**Decisions**: Tomatoes by south wall.\n**Action Items**: Buy seeds (Friday).\n**Status**: Complete\n";
+        let diary = "Rin came in tired from work and still wanted to talk about the garden. We went back and forth on where the beds should go until she laughed and said the tomatoes get the south wall, final answer.\n\nI liked how sure she sounded. She wants to buy seeds on Friday.\n";
+        assert!(reads_like_a_report(log));
+        assert!(!reads_like_a_report(diary));
+        // a list with no sentences around it is a report; a diary may hold one short list
+        assert!(reads_like_a_report("- planned beds\n- chose tomatoes\n- bought seeds\n"));
+        assert!(!reads_like_a_report(&format!("{diary}\nWhat she wants from the shop:\n- tomato seeds\n- twine\n")));
+        assert!(!reads_like_a_report(""));
+    }
+
+    #[test]
     fn the_memory_folder_is_found_upward_from_a_subfolder() {
         let root = std::env::temp_dir().join(format!("castle-door-{}", std::process::id()));
         let deep = root.join("adventures").join("world");
@@ -712,6 +762,17 @@ mod tests {
         assert!(go(&["diary", "add", "--date", "10 Nov", "--title", "x", "--body", "y"]).is_err());
         assert_eq!(go(&["diary", "list"]).unwrap(), "2026-11-10 #2 Evening\n2026-11-10 #1 The garden");
         assert_eq!(go(&["diary", "list", "--month", "2025-01"]).unwrap(), "DIARY empty");
+        // a report is saved all the same, with a kind word; a rewrite keeps the older words
+        let logged = go(&["diary", "add", "--date", "2026-11-09", "--title", "Session 3", "--body", "**Summary**: x\n**Decisions**: y\n**Status**: done\n"]).unwrap();
+        assert!(logged.starts_with("DIARY saved 2026-11-09 session 1: Session 3\nThis reads like a report."), "{logged}");
+        assert_eq!(go(&["diary", "rewrite", "--date", "2026-11-09", "--session", "1", "--title", "The day we chose", "--body", "We chose, and it felt right."]).unwrap(), "DIARY rewritten 2026-11-09 session 1: The day we chose (the older words are kept)");
+        assert!(go(&["diary", "show", "--date", "2026-11-09"]).unwrap().ends_with("## Session 1 - The day we chose\nWe chose, and it felt right."));
+        assert!(go(&["diary", "rewrite", "--date", "2026-11-01", "--body", "x"]).is_err());
+        // staging seeds carry a mark and leave by it, and nothing else does
+        go(&["diary", "add", "--date", "2026-10-12", "--title", "A seeded day", "--body", "Seeded.", "--seed", "A seeded day"]).unwrap();
+        assert_eq!(go(&["diary", "unseed"]).unwrap(), "DIARY 1 seed entries removed");
+        assert_eq!(go(&["diary", "list", "--month", "2026-10"]).unwrap(), "DIARY empty");
+        assert_eq!(go(&["diary", "rewrite", "--date", "2026-11-09", "--body", "We chose, and it felt right."]).unwrap(), "DIARY rewritten 2026-11-09 session 1: The day we chose (the older words are kept)");
         let shown = go(&["diary", "show", "--date", "2026-11-10"]).unwrap();
         assert!(shown.starts_with("# Daily Diary - 2026-11-10\n\n## Session 1 - The garden\nWe planned") && shown.contains("Line two 💜") && shown.ends_with("## Session 2 - Evening\nTea."));
 
@@ -746,7 +807,7 @@ mod tests {
         assert!(go(&["sing"]).is_err());
 
         let out = folder.join("out");
-        assert!(go(&["export", "--to", out.to_str().unwrap()]).unwrap().starts_with("EXPORT 2 diary page(s), 2 reminder(s), 1 project(s), 0 original file(s)"));
+        assert!(go(&["export", "--to", out.to_str().unwrap()]).unwrap().starts_with("EXPORT 3 diary page(s), 2 reminder(s), 1 project(s), 0 original file(s)"));
         let day = std::fs::read_to_string(out.join("daily-diary/current/2026-11-10.md")).unwrap();
         assert!(day.starts_with("# Daily Diary - 2026-11-10\n\n## Session 1 - The garden\n") && day.contains("## Session 2 - Evening\nTea.\n"));
         assert!(std::fs::read_to_string(out.join("main/reminders.md")).unwrap().contains("## Open\n- **Water plants**\n\n## Completed\n- **Call Rin** (by 2026-11-12): about the trip"));
@@ -757,13 +818,13 @@ mod tests {
         assert_eq!(crate::memory::projects(&out)[0].name, "Portfolio site");
 
         let file = folder.join("backup").join("memory.sql");
-        assert!(go(&["dump", "--to", file.to_str().unwrap()]).unwrap().starts_with("DUMP 14 table(s), "));
+        assert!(go(&["dump", "--to", file.to_str().unwrap()]).unwrap().starts_with("DUMP 15 table(s), "));
         let before = go(&["diary", "show", "--date", "2026-11-10"]).unwrap();
         drop(go);
         // the record of the note: sent once, read once
         let recorded: Option<(u64, u64)> = conn.query_first("SELECT COUNT(*), COUNT(read_at) FROM link_notes").unwrap();
         assert_eq!(recorded, Some((1, 1)));
-        conn.query_drop("DROP TABLE diary_entries, reminders, projects, link_notes, link_terminals, imported_files, memory_files, memory_file_history, session_sections, session_section_history, skills, skill_files, skill_file_history, schema_migrations").unwrap();
+        conn.query_drop("DROP TABLE diary_entries, reminders, projects, link_notes, link_terminals, imported_files, memory_files, memory_file_history, session_sections, session_section_history, skills, skill_files, skill_file_history, diary_entry_history, schema_migrations").unwrap();
         let mut go =|line: &[&str]| run(&mut conn, &parse(&args(line)).unwrap(), &folder);
         assert!(go(&["diary", "list"]).is_err());
         assert!(go(&["restore", "--from", file.to_str().unwrap()]).unwrap().starts_with("RESTORE "));

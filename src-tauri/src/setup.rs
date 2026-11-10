@@ -547,12 +547,16 @@ mod tests {
         write_blocks(&root, "Lyra", "Rin").unwrap();
         let plain = std::fs::read_to_string(root.join("CLAUDE.md")).unwrap();
         assert!(!plain.contains("castle-memory"));
+        // every member's companion is told to write the diary like a person, database or not
+        assert!(plain.contains("the way a person writes their own diary") && plain.contains("Never a report"));
         std::fs::write(root.join(".env"), "MEMORY_DB_HOST=127.0.0.1\nMEMORY_DB_PORT=3307\nMEMORY_DB_NAME=lyra_memorycoredb\nMEMORY_DB_USER=castle_lyra\nMEMORY_DB_PASSWORD=x\n").unwrap();
         assert!(has_database(&root));
         write_blocks(&root, "Lyra", "Rin").unwrap();
         for name in ["CLAUDE.md", "AGENTS.md"] {
             let text = std::fs::read_to_string(root.join(name)).unwrap();
             assert!(text.contains("### The memory database") && text.contains("castle-memory diary add"));
+            assert_eq!(text.matches("the way a person writes their own diary").count(), 2);
+            assert!(text.contains("The diary never needs archiving") && text.contains("castle-memory diary rewrite"));
             assert!(text.contains("on Rin's own computer") && !text.contains("{{"));
             // the section sits inside the block, once, and the block still closes
             assert_eq!(text.matches("### The memory database").count(), 1);

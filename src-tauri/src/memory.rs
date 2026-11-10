@@ -207,6 +207,9 @@ pub fn diary_title(text: &str) -> Option<String> {
         .filter(|(head, _)| head.to_lowercase().starts_with("session"))
         .map(|(_, rest)| rest)
         .unwrap_or(title);
+    // "🎯 **Auto-Archive Protocol**" -> "Auto-Archive Protocol": no emphasis marks, no decoration in front
+    let title = title.replace("**", "").replace("__", "");
+    let title = title.trim_start_matches(|c: char| !c.is_alphanumeric() && !c.is_ascii_punctuation()).trim();
     (!title.is_empty()).then(|| title.to_string())
 }
 
@@ -572,6 +575,14 @@ mod tests {
         assert_eq!(shelves[0].pages.len(), 4);
         assert_eq!(growth(&root, "2026-11-12").days, Some(5));
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_diary_title_loses_its_emphasis_marks_and_decoration() {
+        assert_eq!(diary_title("# \u{1F3AF} **Auto-Archive Protocol**\n").as_deref(), Some("Auto-Archive Protocol"));
+        assert_eq!(diary_title("## Session 2 - **The** garden\n").as_deref(), Some("The garden"));
+        assert_eq!(diary_title("## \"Quoted\" stays\n").as_deref(), Some("\"Quoted\" stays"));
+        assert_eq!(diary_title("## \u{1F49C}\n"), None);
     }
 
     #[test]

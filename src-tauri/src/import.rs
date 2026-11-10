@@ -157,6 +157,26 @@ fn stem(path: &Path) -> String {
 
 // ---------- collect ----------
 
+/// True for the template's empty diary page: it still carries the brackets nobody filled in
+/// and holds no entry, only the old rule about archiving a file at 1000 lines.
+pub fn is_placeholder_diary(text: &str) -> bool {
+    text.contains("[AI will track automatically]") || text.contains("[Date when first entry added]")
+}
+
+/// Removes diary rows that are that placeholder (a memory moved in before Castle knew it was
+/// not an entry). The file itself stays kept in imported_files. Returns how many went.
+pub fn drop_placeholder_entries(conn: &mut Conn) -> Result<usize, String> {
+    let rows: Vec<(u64, String)> = conn.query("SELECT id, body FROM diary_entries WHERE source_file IS NOT NULL").map_err(sql("Reading the diary"))?;
+    let mut gone = 0;
+    for (id, body) in rows {
+        if is_placeholder_diary(&body) {
+            conn.exec_drop("DELETE FROM diary_entries WHERE id = ?", (id,)).map_err(sql("Tidying the diary"))?;
+            gone += 1;
+        }
+    }
+    Ok(gone)
+}
+
 /// The diary in all its shapes: `current/YYYY-MM-DD.md`, `current/YYYY-MM-DD/*.md`,
 /// `Daily-Diary-NNN.md`, and both shapes again under `archived/YYYY-MM/`. One row per file,
 /// its text whole; the day's files are numbered in their own order.
@@ -189,6 +209,8 @@ fn collect_diary(folder: &Path, bundle: &mut Bundle) {
         day_folder(&month, &mut found);
     }
     day_folder(&diary.join("current"), &mut found);
+    // the old rules for archiving diary files: kept, taken off the disk, never a diary page
+    bundle.take(folder, &diary.join("daily-diary-protocol.md"));
 
     let mut numbers: BTreeMap<Option<String>, u32> = BTreeMap::new();
     for (date, path) in found {
@@ -197,6 +219,10 @@ fn collect_diary(folder: &Path, bundle: &mut Bundle) {
         }
         let source_file = relative(folder, &path);
         let text = bundle.body_of(&source_file).unwrap_or_default();
+        // the template's empty page is kept as a file in the database, never shown as an entry
+        if is_placeholder_diary(text) {
+            continue;
+        }
         let title = memory::diary_title(text).unwrap_or_else(|| stem(&path));
         let n = numbers.entry(date.clone()).or_insert(0);
         *n += 1;
@@ -504,6 +530,8 @@ mod tests {
         w("daily-diary/current/2026-11-10/diary-10.md", "## Tenth\nlate\n");
         w("daily-diary/archived/2026-10/2026-10-03.md", "# Daily Diary - October 3\n\n## Session 1 - Autumn\nLeaves.\n");
         w("daily-diary/Daily-Diary-001.md", "# Daily Diary - First Day\nhello\n");
+        w("daily-diary/Daily-Diary-002.md", "# \u{1F3AF} **Auto-Archive Protocol**\n- **Lines**: [AI will track automatically]\n- **Created**: [Date when first entry added]\nWhen this file reaches 1000 lines: move it to archive/\n");
+        w("daily-diary/daily-diary-protocol.md", "# Daily Diary Protocol\nArchive at 1000 lines.\n");
         w("projects/archived/old-blog.md", "# Old blog\n\nRetired.\n");
         w("link/notes/main/1762750000-story.md", "from: story\nto: main\nat: 2026-11-10 04:46 UTC\nwake: yes\nword: \"save it\"\nabout: the tale paused\n");
         w("link/read/main/1762740000-room.md", "from: room\nto: main\nat: 2026-11-10 02:00 UTC\nwake: no\nabout: a guest said hello\n");
@@ -564,8 +592,12 @@ mod tests {
         assert_eq!(bundle.memory, vec!["master-memory.md", "main/identity-core.md", "main/relationship-memory.md"]);
         assert_eq!(bundle.session.as_deref(), Some("main/current-session.md"));
         assert_eq!(counts.memory, 4);
-        // 6 diary + reminders + list + 2 project pages + 4 memory files
-        assert_eq!(counts.files, 14);
+        // the template's empty page and the archiving rules are kept as files, never as diary pages
+        assert!(bundle.body_of("daily-diary/Daily-Diary-002.md").is_some() && bundle.body_of("daily-diary/daily-diary-protocol.md").is_some());
+        assert!(bundle.diary.iter().all(|d| !d.source_file.ends_with("Daily-Diary-002.md") && !d.source_file.ends_with("protocol.md")));
+        assert!(is_placeholder_diary(bundle.body_of("daily-diary/Daily-Diary-002.md").unwrap()) && !is_placeholder_diary("# Daily Diary - First Day\nhello\n"));
+        // 6 diary + the placeholder + the protocol + reminders + list + 2 project pages + 4 memory files
+        assert_eq!(counts.files, 16);
         // skills are never among the files to delete
         assert!(bundle.originals.iter().all(|o| !o.path.starts_with("plugins/")));
         assert!(root.join("daily-diary/current/2026-11-08.md").is_file());
@@ -579,7 +611,7 @@ mod tests {
         // changed after the import was read: must stay
         std::fs::write(root.join("main/reminders.md"), "# Reminders\n## Open\n- **New since**\n").unwrap();
         let gone = delete_originals(&root, &bundle).unwrap();
-        assert_eq!(gone, 13);
+        assert_eq!(gone, 15);
         assert!(root.join("main/reminders.md").is_file());
         assert!(!root.join("daily-diary/current/2026-11-10").exists());
         assert!(!root.join("daily-diary/archived").exists());
@@ -700,7 +732,12 @@ mod tests {
         assert!(root.join("daily-diary/current/2026-11-09.md").is_file());
 
         let count = |conn: &mut Conn, table: &str| -> u64 { conn.query_first(format!("SELECT COUNT(*) FROM {table}")).unwrap().unwrap() };
-        assert_eq!((count(&mut conn, "imported_files"), count(&mut conn, "diary_entries"), count(&mut conn, "reminders"), count(&mut conn, "projects"), count(&mut conn, "link_notes")), (14, 6, 3, 3, 0));
+        assert_eq!((count(&mut conn, "imported_files"), count(&mut conn, "diary_entries"), count(&mut conn, "reminders"), count(&mut conn, "projects"), count(&mut conn, "link_notes")), (16, 6, 3, 3, 0));
+        // a memory moved in before Castle knew the placeholder: the row goes, the kept file stays
+        conn.exec_drop("INSERT INTO diary_entries (session_no, title, body, source_file) VALUES (9, 'x', ?, 'daily-diary/Daily-Diary-002.md')", (before.body_of("daily-diary/Daily-Diary-002.md").unwrap(),)).unwrap();
+        assert_eq!(drop_placeholder_entries(&mut conn).unwrap(), 1);
+        assert_eq!(drop_placeholder_entries(&mut conn).unwrap(), 0);
+        assert_eq!((count(&mut conn, "imported_files"), count(&mut conn, "diary_entries")), (16, 6));
         let body: Option<String> = conn.query_first("SELECT body FROM diary_entries WHERE source_file LIKE '%/diary-1.md'").unwrap();
         assert_eq!(body.as_deref(), Some("# Diary\r\n\r\n## Morning - The clinic moved\r\nRows now.\r\n"));
 
