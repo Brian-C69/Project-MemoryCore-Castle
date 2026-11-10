@@ -38,6 +38,7 @@ By hand, a theme is a folder with a `theme.json` and a wallpaper:
   "widgets": {
     "clock": { "right": "21%", "top": "4%", "size": "l" },
     "gauges": { "right": "2%", "top": "4%" },
+    "usage": { "right": "31%", "bottom": "calc(4% + 104px)", "width": "33%" },
     "today": { "right": "2%", "top": "22%", "width": "28%" },
     "projects": { "right": "2%", "top": "calc(22% + 190px)", "width": "28%" },
     "diary": { "right": "2%", "top": "calc(22% + 395px)", "width": "28%" },
@@ -47,7 +48,7 @@ By hand, a theme is a folder with a `theme.json` and a wallpaper:
 }
 ```
 
-Rules the loader checks (`src/themes/loader.js`): an `id` and a `name`; colours only as `--variables` in `colors`; widget places only `left`, `top`, `right`, `bottom`, `width`, `height` (and `size` for the clock: `s`, `m` or `l`). A broken theme is listed with its reason and never shown. Press **Reload themes** after editing.
+Rules the loader checks (`src/themes/loader.js`): an `id` and a `name`; colours only as `--variables` in `colors`; widget places only `left`, `top`, `right`, `bottom`, `width`, `height` (and `size` for the clock: `s`, `m` or `l`). A widget your theme leaves out is not shown (the USAGE card is only on HOME when the theme gives it a place). A broken theme is listed with its reason and never shown. Press **Reload themes** after editing.
 
 To ship a theme **inside** your build, put its folder in `src/themes/<id>/` instead - built-in themes are found automatically.
 
