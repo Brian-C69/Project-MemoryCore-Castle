@@ -170,6 +170,10 @@ export const dbExport = (to) => invoke('db_export', { to })
 // SKILL.md on disk and its instructions are loaded from the database when it fires
 export const dbSkills = () => invoke('db_skills')
 export const dbSkillStub = (plugin, name, on) => invoke('db_skill_stub', { plugin, name, on })
+// "Set it up for me": install, start, create, check - then it stops and gives the move's counts
+export const dbSetupAll = () => invoke('db_setup_all')
+// while it runs: { step: install | start | create | check, state: running | done }
+export const onDbSetup = on('castle://db-setup')
 // while the engine downloads: { done, total } in bytes
 export const onDbInstall = on('castle://db-install')
 

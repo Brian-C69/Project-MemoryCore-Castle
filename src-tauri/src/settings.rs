@@ -201,6 +201,9 @@ pub struct Settings {
     /// Castle reads the memory from the database when it wakes the companion and starts her
     /// with it already loaded (Claude Code). Off: she loads it herself with `castle-memory boot`.
     pub db_boot_at_wake: bool,
+    /// True once the member has answered the one-time offer to move the memory into a database
+    /// (either button), or finished a setup that showed it.
+    pub db_offer_seen: bool,
 }
 
 pub const STORY_LOOKS: [&str; 5] = ["classic", "cinema", "book", "messenger", "jrpg"];
@@ -236,6 +239,7 @@ impl Default for Settings {
             db_external: false,
             db_keep_running: false,
             db_boot_at_wake: true,
+            db_offer_seen: false,
         }
     }
 }
@@ -412,6 +416,7 @@ mod tests {
             db_external: false,
             db_keep_running: true,
             db_boot_at_wake: false,
+            db_offer_seen: true,
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));

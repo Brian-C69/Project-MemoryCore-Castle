@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { card, megabytes, moveLine, nextStep, progressLine, steps } from './database.js'
+import { card, megabytes, moveLine, nextStep, progressLine, setupStepLabel, shouldOffer, steps } from './database.js'
 
 const none = { state: 'notInstalled', external: null }
 const stopped = { state: 'stopped', port: 3307 }
@@ -67,5 +67,37 @@ describe('the HOME card', () => {
 
   it('never offers to start a server Castle does not own', () => {
     expect(card(xampp(false), made).button.action).toBe('open')
+  })
+})
+
+describe('the one-time offer after an update', () => {
+  const member = { offerSeen: false, hadCastleBefore: true, hasFolder: true, setupOpen: false }
+
+  it('is shown to a member who updated and whose memory is still in files', () => {
+    expect(shouldOffer(member, none, empty)).toBe(true)
+  })
+
+  it('is asked once: either button marks it seen', () => {
+    expect(shouldOffer({ ...member, offerSeen: true }, none, empty)).toBe(false)
+  })
+
+  it('never shows on a first run, during setup, or before a memory folder is chosen', () => {
+    expect(shouldOffer({ ...member, hadCastleBefore: false }, none, empty)).toBe(false)
+    expect(shouldOffer({ ...member, setupOpen: true }, none, empty)).toBe(false)
+    expect(shouldOffer({ ...member, hasFolder: false }, none, empty)).toBe(false)
+  })
+
+  it('never shows once any database is there, or before the core has answered', () => {
+    expect(shouldOffer(member, stopped, empty)).toBe(false)
+    expect(shouldOffer(member, running, made)).toBe(false)
+    expect(shouldOffer(member, xampp(true), empty)).toBe(false)
+    expect(shouldOffer(member, none, home)).toBe(false)
+    expect(shouldOffer(member, null, null)).toBe(false)
+  })
+
+  it('names each step as it runs', () => {
+    expect(setupStepLabel('install')).toBe('Downloading and installing the database')
+    expect(setupStepLabel('check')).toBe('Checking what would move')
+    expect(setupStepLabel('other')).toBe('other')
   })
 })

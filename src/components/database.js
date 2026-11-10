@@ -60,3 +60,24 @@ export function card(engine, memory) {
   if (next === 'move') return { line: 'Running · your memory is still in files.', button: { label: 'Open', action: 'open' } }
   return { line: `${memory.name} · running`, button: null }
 }
+
+// The words beside each step while "Set it up for me" runs.
+export function setupStepLabel(step) {
+  return (
+    {
+      install: 'Downloading and installing the database',
+      start: 'Starting it',
+      create: 'Creating your memory database',
+      check: 'Checking what would move',
+    }[step] ?? step
+  )
+}
+
+// Whether to show the one-time offer: only to someone who had Castle before this version
+// (an update, not a first run), whose memory folder is chosen, who has not answered yet, and
+// who has no database of any kind - not installed, not an existing one chosen, none created.
+export function shouldOffer({ offerSeen, hadCastleBefore, hasFolder, setupOpen }, engine, memory) {
+  if (offerSeen || !hadCastleBefore || !hasFolder || setupOpen) return false
+  if (!engine || engine.state !== 'notInstalled') return false
+  return !memory?.name && !memory?.movedIn
+}

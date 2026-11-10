@@ -6,6 +6,8 @@ import ClockWidget from './components/widgets/ClockWidget.vue'
 import GaugeWidget from './components/widgets/GaugeWidget.vue'
 import SetupView from './views/SetupView.vue'
 import HomeCards from './components/widgets/HomeCards.vue'
+import DatabaseOffer from './components/DatabaseOffer.vue'
+import { shouldOffer } from './components/database.js'
 import CompanionHeader from './components/CompanionHeader.vue'
 import ModalSheet from './components/ModalSheet.vue'
 import BackupPanel from './components/BackupPanel.vue'
@@ -25,7 +27,7 @@ import { sectionFor, unseenSections } from './components/changelog.js'
 import changelog from '../CHANGELOG.md?raw'
 import { version as appVersion } from '../package.json'
 import NoticeToasts from './components/NoticeToasts.vue'
-import { avatarGet, backupNow, backupStatus, dbMemory, dbStart, dbStatus, getSettings, hideCastle, memoryHome, onBackupDone, onStoryOutput, userThemes, versionSeen } from './api/castle.js'
+import { avatarGet, backupNow, backupStatus, dbMemory, dbStart, dbStatus, getSettings, hideCastle, memoryHome, saveSettings, onBackupDone, onStoryOutput, userThemes, versionSeen } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
 
 // The rooms across the top. A room whose MemoryCore feature is not installed stays hidden
@@ -51,6 +53,10 @@ const home = ref(null)
 const backup = ref(null)
 // the DATABASE card: { engine, memory }
 const database = ref(null)
+// the one-time offer after an update (memory still in files, no database yet)
+const databaseOffer = ref(false)
+const databaseBytes = ref(0)
+const offerFacts = ref({ offerSeen: true, hadCastleBefore: false, hasFolder: false })
 const avatar = ref(null)
 const cliLabel = ref('Claude Code')
 const memoryFolder = ref('')
@@ -132,6 +138,7 @@ async function loadSettingsAndTheme() {
   try {
     const view = await getSettings()
     lastSeen = view.settings.lastSeenVersion ?? null
+    offerFacts.value = { offerSeen: !!view.settings.dbOfferSeen, hadCastleBefore: lastSeen !== null, hasFolder: !!view.settings.memoryFolder }
     companion.value = view.companionLabel
     cli.value = view.settings.cli
     cliLabel.value = view.cliLabel
@@ -187,6 +194,13 @@ function openSetup() {
 
 async function setupDone() {
   setupOpen.value = false
+  // the setup's last step already showed the database panel: the one-time offer is not asked again
+  try {
+    const { settings } = await getSettings()
+    if (!settings.dbOfferSeen) await saveSettings({ ...settings, dbOfferSeen: true })
+  } catch {
+    // outside Castle's window
+  }
   await loadSettingsAndTheme()
   settingsStamp.value += 1
 }
@@ -211,10 +225,24 @@ async function loadHome() {
 
 async function loadDatabase() {
   try {
-    database.value = { engine: (await dbStatus()).engine, memory: await dbMemory() }
+    const status = await dbStatus()
+    databaseBytes.value = status.downloadBytes
+    database.value = { engine: status.engine, memory: await dbMemory() }
   } catch {
     database.value = null
+    return
   }
+  // asked once, after "What's new" has had its turn
+  if (!whatsNew.value && !databaseOffer.value && shouldOffer({ ...offerFacts.value, setupOpen: setupOpen.value }, database.value.engine, database.value.memory)) {
+    databaseOffer.value = true
+  }
+}
+
+function closeDatabaseOffer() {
+  databaseOffer.value = false
+  offerFacts.value = { ...offerFacts.value, offerSeen: true }
+  loadDatabase()
+  loadHome()
 }
 
 // The DATABASE card: Start runs here; everything else opens Settings > Database.
@@ -344,7 +372,8 @@ watch(settingsStamp, () => {
         @setup="settingsOpen = false; openSetup()"
         @whatsnew="showWhatsNew"
       />
-      <WhatsNew v-if="whatsNew" :version="whatsNew.version" :sections="whatsNew.sections" @close="whatsNew = null" />
+      <WhatsNew v-if="whatsNew" :version="whatsNew.version" :sections="whatsNew.sections" @close="whatsNew = null; loadDatabase()" />
+      <DatabaseOffer v-if="databaseOffer" :companion="companion" :download-bytes="databaseBytes" @close="closeDatabaseOffer" @changed="loadHome" />
       <ModalSheet v-if="backupOpen" tag="BACKUP" title="Keep the memory safe" @close="backupOpen = false; loadBackup()">
         <BackupPanel :companion="companion" />
       </ModalSheet>

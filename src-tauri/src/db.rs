@@ -585,6 +585,74 @@ pub async fn db_export(app: AppHandle, to: String) -> Result<String, String> {
     .map_err(|_| "The export stopped.".to_string())?
 }
 
+/// The event the page hears while "Set it up for me" runs: { step, state } with state
+/// "running" or "done".
+pub const SETUP_EVENT: &str = "castle://db-setup";
+
+/// The steps "Set it up for me" still has to run, in order, from where things stand now
+/// (pure, tested). It never includes the move: that waits for the member's own tick.
+pub fn setup_plan(engine: &Engine, has_database: bool) -> Vec<&'static str> {
+    let mut steps = Vec::new();
+    match engine {
+        Engine::NotInstalled { .. } => steps.extend(["install", "start"]),
+        Engine::Stopped { .. } => steps.push("start"),
+        Engine::Running { .. } | Engine::External { .. } => {}
+    }
+    if !has_database {
+        steps.push("create");
+    }
+    steps.push("check");
+    steps
+}
+
+/// "Set it up for me": installs Castle's own database when there is none, starts it, creates
+/// the companion's database and checks what would move - each step said as it runs. It stops
+/// there and gives back the counts; nothing is moved or deleted without the member's own tick.
+/// A step that fails gives its plain line and leaves the earlier steps done.
+#[tauri::command]
+pub async fn db_setup_all(app: AppHandle) -> Result<crate::import::Counts, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = app.state::<SettingsStore>();
+        let folder = memory_folder(&store)?;
+        let home = home();
+        let s = store.get();
+        let engine = detect(&home, s.db_port, s.db_external);
+        let said = |step: &str, state: &str| {
+            let _ = app.emit(SETUP_EVENT, serde_json::json!({ "step": step, "state": state }));
+        };
+        for step in setup_plan(&engine, crate::setup::has_database(&folder)) {
+            said(step, "running");
+            match step {
+                "install" => {
+                    let port = choose_port(probe_port).ok_or("No free port was found for the database between 3306 and 3399.")?;
+                    let emitter = app.clone();
+                    install(&home, port, move |done, total| {
+                        let _ = emitter.emit(INSTALL_EVENT, serde_json::json!({ "done": done, "total": total }));
+                    })?;
+                    remember(&store, Some(port), false)?;
+                }
+                "start" => start(&home, store.get().db_port.unwrap_or(PREFERRED_PORT))?,
+                "create" => {
+                    let now = store.get();
+                    if now.db_external {
+                        return Err("This database belongs to another program on this PC, so Castle needs its admin login once. Open Settings > Database to create your memory database.".into());
+                    }
+                    let port = now.db_port.ok_or("Install the database first.")?;
+                    let root = crate::memdb::secure_root(port, crate::key::db_root())?;
+                    crate::key::keep_db_root(&root)?;
+                    let access = crate::memdb::provision(port, "root", &root, &now.companion_name.clone().unwrap_or_default())?;
+                    crate::memdb::write_env(&folder, &access)?;
+                }
+                _ => {}
+            }
+            said(step, "done");
+        }
+        Ok(crate::import::collect(&folder).counts())
+    })
+    .await
+    .map_err(|_| "The setup stopped.".to_string())?
+}
+
 /// One skill, for Settings > Database.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -732,6 +800,21 @@ mod tests {
     fn a_busy_port_says_how_to_find_the_program() {
         let line = port_busy_line(3307);
         assert!(line.contains("netstat -ano | findstr :3307") && line.contains("taskkill"));
+    }
+
+    #[test]
+    fn set_it_up_for_me_runs_only_what_is_still_missing_and_never_the_move() {
+        let fresh = Engine::NotInstalled { external: None };
+        assert_eq!(setup_plan(&fresh, false), vec!["install", "start", "create", "check"]);
+        assert_eq!(setup_plan(&Engine::Stopped { port: 3307 }, false), vec!["start", "create", "check"]);
+        assert_eq!(setup_plan(&Engine::Running { port: 3307 }, false), vec!["create", "check"]);
+        assert_eq!(setup_plan(&Engine::Running { port: 3307 }, true), vec!["check"]);
+        // pressed again after a failed step: the done steps are not repeated
+        assert_eq!(setup_plan(&Engine::Stopped { port: 3307 }, true), vec!["start", "check"]);
+        assert_eq!(setup_plan(&Engine::External { port: 3306, answering: true }, false), vec!["create", "check"]);
+        for engine in [fresh, Engine::Running { port: 3307 }] {
+            assert!(!setup_plan(&engine, false).contains(&"move"));
+        }
     }
 
     #[test]
