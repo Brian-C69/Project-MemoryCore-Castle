@@ -204,6 +204,10 @@ pub struct Settings {
     /// True once the member has answered the one-time offer to move the memory into a database
     /// (either button), or finished a setup that showed it.
     pub db_offer_seen: bool,
+    /// Castle's session is only this companion: the member's personal Claude Code setup (its
+    /// own CLAUDE.md, hooks and plugins) is left out, and Castle hands the companion her
+    /// instructions itself. Off by default; for a PC where that setup is another companion.
+    pub only_this_companion: bool,
     /// How the DIARY room is read: one of DIARY_LOOKS.
     pub diary_look: String,
 }
@@ -243,6 +247,7 @@ impl Default for Settings {
             db_keep_running: false,
             db_boot_at_wake: true,
             db_offer_seen: false,
+            only_this_companion: false,
             diary_look: "list".into(),
         }
     }
@@ -424,6 +429,7 @@ mod tests {
             db_keep_running: true,
             db_boot_at_wake: false,
             db_offer_seen: true,
+            only_this_companion: true,
             diary_look: "book".into(),
         };
         save(&path, &settings).unwrap();

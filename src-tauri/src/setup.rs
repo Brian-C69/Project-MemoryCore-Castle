@@ -221,14 +221,7 @@ pub fn write_blocks(folder: &Path, companion: &str, member: &str) -> Result<(), 
 /// Writes Castle's block. `loaded` = Castle is waking the companion with the memory already in
 /// the session, so the block says so instead of telling her to load it.
 pub fn write_blocks_for(folder: &Path, companion: &str, member: &str, loaded: bool) -> Result<(), String> {
-    let entry = entry_file(folder);
-    if entry.is_none() && !lives_in_database(folder) {
-        return Err("This folder has no master-memory.md, so it is not a MemoryCore folder.".into());
-    }
-    let mut block = if loaded { castle_block_loaded(companion, member) } else { castle_block_for(companion, member, entry) };
-    if has_database(folder) {
-        block = with_db_section(&block, member);
-    }
+    let block = block_text(folder, companion, member, loaded)?;
     for name in ["CLAUDE.md", "AGENTS.md"] {
         let path = folder.join(name);
         let text = std::fs::read_to_string(&path).unwrap_or_default();
@@ -238,6 +231,20 @@ pub fn write_blocks_for(folder: &Path, companion: &str, member: &str, loaded: bo
         }
     }
     Ok(())
+}
+
+/// Castle's whole block for this folder, as text: the opening that fits (read the entry file,
+/// boot from the database, or already loaded) and the database section when there is one.
+pub fn block_text(folder: &Path, companion: &str, member: &str, loaded: bool) -> Result<String, String> {
+    let entry = entry_file(folder);
+    if entry.is_none() && !lives_in_database(folder) {
+        return Err("This folder has no master-memory.md, so it is not a MemoryCore folder.".into());
+    }
+    let mut block = if loaded { castle_block_loaded(companion, member) } else { castle_block_for(companion, member, entry) };
+    if has_database(folder) {
+        block = with_db_section(&block, member);
+    }
+    Ok(block)
 }
 
 /// Runs a program with no console window and a time limit; its first output line.

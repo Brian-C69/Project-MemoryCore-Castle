@@ -126,29 +126,69 @@ pub fn forget_boot_file(store: &SettingsStore) {
     let _ = std::fs::remove_file(boot_file(store));
 }
 
-/// The CLI's own arguments at wake: Claude Code is given the memory as a system prompt file.
-/// Codex has no such option, so it gets none and loads the memory itself.
-pub fn wake_args(cli: Cli, boot: Option<&Path>) -> Vec<String> {
-    match (cli, boot) {
-        (Cli::Claude, Some(file)) => vec!["--append-system-prompt-file".to_string(), file.display().to_string()],
+/// What Castle hands the CLI as it starts.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Boot {
+    /// the system prompt file
+    pub file: PathBuf,
+    /// the memory is in it (read from the database)
+    pub memory: bool,
+    /// the session is only this companion: the personal Claude Code setup is left out
+    pub only_this: bool,
+}
+
+/// The CLI's own arguments at wake. Claude Code is given the boot file as a system prompt; a
+/// session that is only this companion also leaves out the personal settings (hooks, plugins).
+/// Codex has no such options, so it gets none and loads the memory itself.
+pub fn wake_args(cli: Cli, boot: Option<&Boot>) -> Vec<String> {
+    let (Cli::Claude, Some(boot)) = (cli, boot) else { return Vec::new() };
+    let mut args = vec!["--append-system-prompt-file".to_string(), boot.file.display().to_string()];
+    if boot.only_this {
+        args.extend(["--setting-sources".to_string(), "project,local".to_string()]);
+    }
+    args
+}
+
+/// The variables a wake adds for the boot: a session that is only this companion reads no
+/// CLAUDE.md at all (the personal one would make it someone else), so Castle's own block
+/// travels in the boot file instead.
+pub fn wake_vars(boot: Option<&Boot>) -> Vec<(String, String)> {
+    match boot {
+        Some(boot) if boot.only_this => vec![("CLAUDE_CODE_DISABLE_CLAUDE_MDS".to_string(), "1".to_string())],
         _ => Vec::new(),
     }
 }
 
-/// Writes the memory to the boot file when this wake can carry it: the main room, Claude Code,
-/// the switch on, and a database that answers and holds the memory. Any miss is None - the
-/// companion then loads the memory herself, exactly as before.
-fn prepare_boot(store: &SettingsStore, settings: &Settings, room: Room, folder: &Path) -> Option<PathBuf> {
+/// Writes the boot file when this wake carries one: the main room and Claude Code, with the
+/// memory read from the database (the switch on, the database answering and holding it) and,
+/// for a session that is only this companion, Castle's own block in front. Any miss is None -
+/// the companion then loads everything herself, exactly as before.
+fn prepare_boot(store: &SettingsStore, settings: &Settings, room: Room, folder: &Path) -> Option<Boot> {
     forget_boot_file(store);
-    if room != Room::Main || settings.cli != Cli::Claude || !settings.db_boot_at_wake {
+    if room != Room::Main || settings.cli != Cli::Claude {
         return None;
     }
-    let mut conn = crate::store::source(folder)?;
-    let text = crate::mirror::boot_prompt(&mut conn).ok().flatten()?;
+    let memory = if settings.db_boot_at_wake {
+        crate::store::source(folder).and_then(|mut conn| crate::mirror::boot_prompt(&mut conn).ok().flatten())
+    } else {
+        None
+    };
+    let block = if settings.only_this_companion {
+        let (companion, member) = (settings.companion_name.as_deref()?, settings.member_name.as_deref()?);
+        Some(crate::setup::block_text(folder, companion, member, memory.is_some()).ok()?)
+    } else {
+        None
+    };
+    let text = match (&block, &memory) {
+        (None, None) => return None,
+        (Some(block), Some(memory)) => format!("{block}\n\n{memory}"),
+        (Some(block), None) => block.clone(),
+        (None, Some(memory)) => memory.clone(),
+    };
     let file = boot_file(store);
     std::fs::create_dir_all(file.parent()?).ok()?;
     std::fs::write(&file, text).ok()?;
-    Some(file)
+    Some(Boot { file, memory: memory.is_some(), only_this: block.is_some() })
 }
 
 /// Starts the room's session unless it is already running. The screen hears it through that
@@ -169,16 +209,17 @@ fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols
     // reach a member who set up before them); the member's own words outside it are untouched
     // the memory, read from the database now and handed to the CLI as it starts
     let boot = prepare_boot(store, &settings, room, &folder);
+    vars.extend(wake_vars(boot.as_ref()));
     if room == Room::Main {
         if let (Some(companion), Some(member)) = (settings.companion_name.as_deref(), settings.member_name.as_deref()) {
-            let _ = crate::setup::write_blocks_for(&folder, companion, member, boot.is_some());
+            let _ = crate::setup::write_blocks_for(&folder, companion, member, boot.as_ref().is_some_and(|b| b.memory));
         }
     }
     let (output_event, exit_event) = room.events();
     let output = app.clone();
     let ending = app.clone();
     host.start(
-        pty::launch_command(&program, &folder, &vars, &wake_args(settings.cli, boot.as_deref())),
+        pty::launch_command(&program, &folder, &vars, &wake_args(settings.cli, boot.as_ref())),
         cols.max(20),
         rows.max(5),
         move |text| {
@@ -294,11 +335,44 @@ mod tests {
     }
 
     #[test]
-    fn claude_code_is_given_the_memory_file_and_codex_loads_it_itself() {
-        let file = Path::new("C:\\Users\\Rin\\AppData\\Roaming\\com.memorycore.castle\\boot\\main.md");
-        assert_eq!(wake_args(Cli::Claude, Some(file)), vec!["--append-system-prompt-file".to_string(), file.display().to_string()]);
-        assert!(wake_args(Cli::Codex, Some(file)).is_empty());
+    fn claude_code_is_given_the_boot_file_and_codex_loads_it_itself() {
+        let boot = Boot { file: PathBuf::from("C:/castle/boot/main.md"), memory: true, only_this: false };
+        assert_eq!(wake_args(Cli::Claude, Some(&boot)), vec!["--append-system-prompt-file".to_string(), boot.file.display().to_string()]);
+        assert!(wake_args(Cli::Codex, Some(&boot)).is_empty());
         assert!(wake_args(Cli::Claude, None).is_empty());
+        assert!(wake_vars(Some(&boot)).is_empty() && wake_vars(None).is_empty());
+        // only this companion: the personal settings are left out and no CLAUDE.md is read
+        let only = Boot { only_this: true, ..boot.clone() };
+        assert_eq!(wake_args(Cli::Claude, Some(&only))[2..], ["--setting-sources".to_string(), "project,local".to_string()]);
+        assert_eq!(wake_vars(Some(&only)), vec![("CLAUDE_CODE_DISABLE_CLAUDE_MDS".to_string(), "1".to_string())]);
+        assert!(wake_args(Cli::Codex, Some(&only)).is_empty());
+    }
+
+    #[test]
+    fn a_session_that_is_only_this_companion_carries_castles_block_in_the_boot_file() {
+        let config = folder("only-config");
+        let memory = folder("only-memory");
+        std::fs::write(memory.join("master-memory.md"), "**I am Lyra**\n").unwrap();
+        let store = SettingsStore::open(&config);
+        let mut settings = Settings {
+            memory_folder: Some(memory.display().to_string()),
+            companion_name: Some("Lyra".into()),
+            member_name: Some("Rin".into()),
+            ..Settings::default()
+        };
+        // off (the default): a memory kept in files hands nothing over
+        assert!(!settings.only_this_companion);
+        assert_eq!(prepare_boot(&store, &settings, Room::Main, &memory), None);
+        settings.only_this_companion = true;
+        let boot = prepare_boot(&store, &settings, Room::Main, &memory).unwrap();
+        assert_eq!((boot.memory, boot.only_this), (false, true));
+        let text = std::fs::read_to_string(&boot.file).unwrap();
+        assert!(text.contains("You are **Lyra**, the MemoryCore companion of **Rin**") && text.contains("read `master-memory.md`"));
+        assert!(text.contains("In this folder you are Lyra and only Lyra"));
+        // never for the STORY room or Codex, and never without both names
+        assert_eq!(prepare_boot(&store, &settings, Room::Story, &memory), None);
+        assert_eq!(prepare_boot(&store, &Settings { cli: Cli::Codex, ..settings.clone() }, Room::Main, &memory), None);
+        assert_eq!(prepare_boot(&store, &Settings { member_name: None, ..settings.clone() }, Room::Main, &memory), None);
     }
 
     #[test]

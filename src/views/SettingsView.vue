@@ -251,6 +251,13 @@ onMounted(async () => {
           <button :class="{ primary: settings.cli === 'codex' }" @click="switchCli('codex')">Codex</button>
           <span v-if="cliCheck && !cliCheck.installed" class="warn">{{ cliCheck.label }} is not installed: <code>{{ cliCheck.installCommand }}</code></span>
         </div>
+        <label v-if="settings.cli === 'claude'" class="only-this">
+          <input type="checkbox" :checked="!!settings.onlyThisCompanion" @change="save({ onlyThisCompanion: $event.target.checked }, 'Saved. It takes effect the next time ' + (settings.companionName ?? 'your companion') + ' wakes.')" />
+          <span>
+            Only {{ settings.companionName ?? 'this companion' }} in Castle
+            <small>Leave out my personal Claude Code setup (its own CLAUDE.md, hooks and plugins) in Castle's session. Turn this on when that setup is another companion, or to test with a clean one.</small>
+          </span>
+        </label>
         <h3>Names</h3>
         <div class="row">
           <label>Companion <input v-model="settings.companionName" maxlength="40" /></label>
@@ -377,6 +384,19 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.only-this {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 10px;
+  font-size: 14px;
+}
+.only-this small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
 .looks {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
