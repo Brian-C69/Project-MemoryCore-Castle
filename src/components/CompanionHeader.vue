@@ -1,8 +1,9 @@
 <script setup>
 // The top of the companion panel: the portrait (their picture, or the glowing crystal), the
 // name, and which app they think with - as in the Constellation design.
-import { onMounted, onBeforeUnmount, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { providersList, providerSwitch, providerSwitchStatus, providerSwitchCancel } from '../api/castle.js'
+import { currentProvider, providerStatus, shownProvider } from './providerpicker.js'
 const providers = ref([])
 const switching = ref({})
 const problem = ref('')
@@ -10,15 +11,19 @@ let timer
 async function discover() {
   try { providers.value = await providersList() } catch (e) { problem.value = String(e) }
 }
+// The picker always shows the provider in use; choosing the other one starts the switch.
+const shown = computed(() => shownProvider(providers.value, props.cliLabel, switching.value.target))
 async function select(event) {
-  if (!event.target.value) return
-  try { switching.value = await providerSwitch(event.target.value); problem.value = '' } catch (e) { problem.value = String(e) }
-  event.target.value = ''
+  const target = event.target.value
+  if (!target || target === currentProvider(providers.value, props.cliLabel)) return
+  try { switching.value = await providerSwitch(target); problem.value = '' } catch (e) { problem.value = String(e) }
+  // Until Castle confirms the switch, keep showing what is really running (or the switch in progress).
+  event.target.value = shown.value
 }
 async function cancel() { await providerSwitchCancel(); switching.value = {} }
 onMounted(() => { discover(); timer = setInterval(async () => { try { switching.value = await providerSwitchStatus() } catch {} }, 1000) })
 onBeforeUnmount(() => clearInterval(timer))
-defineProps({
+const props = defineProps({
   name: { type: String, default: 'Your companion' },
   cliLabel: { type: String, default: 'Claude Code' },
   avatar: { type: String, default: null },
@@ -33,9 +38,9 @@ defineProps({
     </div>
     <div class="who">
       <p class="name">{{ name }}</p>
-      <select aria-label="Switch conversation provider" :disabled="!!switching.target" @change="select">
-        <option value="">{{ cliLabel }} — switch provider…</option>
-        <option v-for="p in providers" :key="p.cli" :value="p.cli" :disabled="!p.installed">{{ p.label }} — {{ !p.installed ? 'not installed' : p.signedIn ? 'signed in' : p.signedIn === false ? 'sign in needed' : 'status unknown' }}</option>
+      <select aria-label="Conversation provider" :value="shown" :disabled="!!switching.target" @change="select">
+        <option v-if="!shown" value="">{{ cliLabel }}</option>
+        <option v-for="p in providers" :key="p.cli" :value="p.cli" :disabled="!p.installed">{{ p.label }} — {{ providerStatus(p) }}</option>
       </select>
       <button @click="discover">Refresh providers</button>
       <p v-if="switching.message" role="status">{{ switching.message }}</p>
