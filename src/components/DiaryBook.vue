@@ -20,11 +20,14 @@ const texts = ref({}) // file -> text | { problem }
 
 async function read(page) {
   if (!page || texts.value[page.file] !== undefined) return
+  // read first, then add: the two pages load side by side, and each must keep the other's text
+  let got
   try {
-    texts.value = { ...texts.value, [page.file]: await memoryRead(page.file) }
+    got = await memoryRead(page.file)
   } catch (reason) {
-    texts.value = { ...texts.value, [page.file]: { problem: String(reason) } }
+    got = { problem: String(reason) }
   }
+  texts.value = { ...texts.value, [page.file]: got }
 }
 
 function go(by) {

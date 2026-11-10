@@ -109,7 +109,7 @@ watch(() => [props.room, props.stamp, props.openFile], load)
       <h2>{{ TITLES[room] }}</h2>
       <button v-for="l in DIARY_LOOKS" :key="l.id" :class="{ on: look === l.id }" :title="l.line" @click="chooseLook(l.id)">{{ l.label }}</button>
     </div>
-    <DiaryBook :shelves="shelves" :open-file="openFile" @open="current = $event" />
+    <DiaryBook :shelves="shelves" :open-file="openFile" @open="open" />
   </div>
   <div v-else class="memory-room">
     <aside class="list widget">
