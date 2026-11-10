@@ -42,4 +42,5 @@ mysql = { version = "28.0.4", default-features = false, features = ["minimal-rus
 
 [target.'cfg(windows)'.dependencies]
 # the world windows ask which window is on top at a few points, to rest when covered
-windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+# (and the CPU gauge reads processor time with GetSystemTimes, from Threading)
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading"] }
