@@ -382,12 +382,17 @@ fn link_here(ask: &Ask, memory: &Path) -> Result<String, String> {
 // ---------- memory files, session memory, skills ----------
 
 fn memory_list(conn: &mut Conn) -> Result<String, String> {
-    let rows: Vec<(String, Option<u32>, u64)> =
-        conn.query("SELECT path, boot_order, CHAR_LENGTH(body) FROM memory_files ORDER BY COALESCE(boot_order, 999), path").map_err(sql("Reading the memory"))?;
+    mirror::backfill_titles(conn)?;
+    let rows: Vec<(String, Option<String>, Option<u32>, u64)> =
+        conn.query("SELECT path, title, boot_order, CHAR_LENGTH(body) FROM memory_files ORDER BY COALESCE(boot_order, 999), path").map_err(sql("Reading the memory"))?;
     if rows.is_empty() {
-        return Ok("MEMORY no files in the database".into());
+        return Ok("MEMORY nothing in the database".into());
     }
-    Ok(rows.into_iter().map(|(path, boot, len)| format!("{path} · {len} characters{}", if boot.is_some() { " · read at boot" } else { "" })).collect::<Vec<_>>().join("\n"))
+    Ok(rows
+        .into_iter()
+        .map(|(path, title, boot, len)| format!("{} · {path} · {len} characters{}", title.unwrap_or_default(), if boot.is_some() { " · read at boot" } else { "" }))
+        .collect::<Vec<_>>()
+        .join("\n"))
 }
 
 fn memory_save(conn: &mut Conn, ask: &Ask) -> Result<String, String> {

@@ -640,6 +640,11 @@ mod tests {
         assert!(crate::mirror::session_text(&mut conn).unwrap().ends_with("## Open threads\n- the garden\n## Tomorrow\n- rest\n\n"));
         assert!(crate::mirror::clear_section(&mut conn, "Tomorrow").unwrap() && !crate::mirror::clear_section(&mut conn, "Tomorrow").unwrap());
         assert!(crate::mirror::save_memory(&mut conn, "main/relationship-memory.md", "# Rin\nlikes coffee now\n").unwrap());
+        let titles: Vec<(String, Option<String>)> = conn.query("SELECT path, title FROM memory_files ORDER BY path").unwrap();
+        assert!(titles.iter().all(|(_, t)| t.as_deref().is_some_and(|t| !t.is_empty() && !t.ends_with(".md"))), "{titles:?}");
+        assert_eq!(titles.iter().find(|(p, _)| p == "main/relationship-memory.md").unwrap().1.as_deref(), Some("Rin"));
+        conn.query_drop("UPDATE memory_files SET title = NULL WHERE path = 'master-memory.md'").unwrap();
+        assert_eq!(crate::mirror::backfill_titles(&mut conn).unwrap(), 1);
         let history: Option<String> = conn.query_first("SELECT body FROM memory_file_history WHERE path = 'main/relationship-memory.md'").unwrap();
         assert_eq!(history.as_deref(), Some("# Rin\nlikes tea\n"));
 

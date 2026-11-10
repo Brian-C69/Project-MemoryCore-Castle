@@ -210,6 +210,38 @@ pub fn skill_view(master: &str, section: Option<&str>, all: bool) -> Result<Stri
     Ok(out)
 }
 
+/// A plain name for a memory row: its first "# " heading without the decoration in front
+/// ("# 💜 Identity Core - lyra" -> "Identity Core - lyra"), else its file name in words
+/// ("main/relationship-memory.md" -> "Relationship Memory").
+pub fn memory_title(path: &str, body: &str) -> String {
+    let heading = body
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("# "))
+        .map(|h| h.trim_start_matches(|c: char| !c.is_alphanumeric()).trim().to_string())
+        .filter(|h| !h.is_empty());
+    heading.unwrap_or_else(|| {
+        let stem = path.rsplit('/').next().unwrap_or(path).trim_end_matches(".md");
+        stem.split(['-', '_'])
+            .filter(|w| !w.is_empty())
+            .map(|w| {
+                let mut chars = w.chars();
+                chars.next().map(|c| c.to_uppercase().collect::<String>() + chars.as_str()).unwrap_or_default()
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    })
+}
+
+/// Gives a title to every memory row that has none yet (rows moved in before titles existed).
+pub fn backfill_titles(conn: &mut impl Queryable) -> Result<usize, String> {
+    let rows: Vec<(String, String)> = conn.query("SELECT path, body FROM memory_files WHERE title IS NULL").map_err(sql("Reading the memory"))?;
+    for (path, body) in &rows {
+        // updated_at is kept: naming a row is not a change to the memory
+        conn.exec_drop("UPDATE memory_files SET title = ?, updated_at = updated_at WHERE path = ?", (memory_title(path, body), path)).map_err(sql("Naming the memory"))?;
+    }
+    Ok(rows.len())
+}
+
 // ---------- memory files ----------
 
 /// Saves one memory file; the text it replaces goes to history.
@@ -222,8 +254,8 @@ pub fn save_memory(conn: &mut impl Queryable, path: &str, body: &str) -> Result<
         conn.exec_drop("INSERT INTO memory_file_history (path, body) VALUES (?, ?)", (path, old)).map_err(sql("Keeping the older text"))?;
     }
     conn.exec_drop(
-        "INSERT INTO memory_files (path, body, boot_order) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE body = VALUES(body), boot_order = VALUES(boot_order)",
-        (path, body, boot_order(path)),
+        "INSERT INTO memory_files (path, body, boot_order, title) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE body = VALUES(body), boot_order = VALUES(boot_order), title = VALUES(title)",
+        (path, body, boot_order(path), memory_title(path, body)),
     )
     .map_err(sql("Saving the memory"))?;
     Ok(true)
@@ -567,6 +599,14 @@ mod tests {
         assert_eq!(boot_order("daily-diary/daily-diary-protocol.md"), None);
         assert!(is_session_file("main/current-session.md") && is_session_file("main/current-session-memory.md"));
         assert!(!is_session_file("main/identity-core.md") && !is_session_file("current-session.md"));
+    }
+
+    #[test]
+    fn a_memory_row_is_named_by_its_heading_or_its_file_name() {
+        assert_eq!(memory_title("main/identity-core.md", "# 💜 Identity Core - lyra\n*Who I am*\n"), "Identity Core - lyra");
+        assert_eq!(memory_title("master-memory.md", "intro\n# 🧠 Master Memory - Universal AI Architecture\n"), "Master Memory - Universal AI Architecture");
+        assert_eq!(memory_title("main/relationship-memory.md", "no heading here\n"), "Relationship Memory");
+        assert_eq!(memory_title("main/notes_for_rin.md", "# 💜\n"), "Notes For Rin");
     }
 
     #[test]
