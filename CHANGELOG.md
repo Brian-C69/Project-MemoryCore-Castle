@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.2 - 2026-11-10
+
 - **A database for your memory** (optional, Settings > Database): Castle can install a small MariaDB on your own computer - no admin prompt, it starts and stops with Castle - make your companion its own database, and move the diary, reminders, projects and memory files into it. Every file is copied, read back and checked before it is deleted, and **Export to markdown** gives everything back. Already run XAMPP? Castle can use that database instead.
 - Your companion reads and writes that memory with one command, `castle-memory`, and boots from it at the start of a session. Skills are kept in the database too and stay on disk as files, so a deleted skill file comes back and an edit by hand is taken in.
 - With the memory in the database, **Castle loads it when your companion wakes** (Claude Code): the memory is already there before the first word, and it stays through a long session. One tick in Settings > Database turns it off; with Codex the companion loads it with one command, as before.
