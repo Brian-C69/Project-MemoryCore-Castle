@@ -12,6 +12,7 @@ mod db;
 mod door;
 mod env;
 mod files;
+mod import;
 mod key;
 mod link;
 mod memdb;
@@ -281,7 +282,9 @@ pub fn run() {
             db::db_start,
             db::db_stop,
             db::db_use_existing,
-            db::db_create
+            db::db_create,
+            db::db_move_preview,
+            db::db_move_in
         ])
         .setup(|app| {
             let config = match settings::test_override(settings::TEST_CONFIG_VAR) {

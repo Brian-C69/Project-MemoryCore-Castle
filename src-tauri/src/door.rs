@@ -158,12 +158,16 @@ fn diary_list(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
 
 fn diary_show(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
     let day = date(ask.need("date")?)?;
-    let rows: Vec<(u32, String, String)> = conn
-        .exec("SELECT session_no, title, body FROM diary_entries WHERE entry_date = ? ORDER BY session_no", (day,))
+    let rows: Vec<(u32, String, String, Option<String>)> = conn
+        .exec("SELECT session_no, title, body, source_file FROM diary_entries WHERE entry_date = ? ORDER BY session_no", (day,))
         .map_err(sql("Reading the diary"))?;
     let wanted: Option<u32> = ask.get("session").and_then(|v| v.parse().ok());
-    let parts: Vec<String> =
-        rows.into_iter().filter(|(n, _, _)| wanted.is_none_or(|w| w == *n)).map(|(n, t, b)| format!("## Session {n} - {t}\n{}", b.trim_end())).collect();
+    // a page that was moved in is its own whole text; one written through the door gets its heading
+    let parts: Vec<String> = rows
+        .into_iter()
+        .filter(|(n, _, _, _)| wanted.is_none_or(|w| w == *n))
+        .map(|(n, t, b, source)| if source.is_some() { b.trim_end().to_string() } else { format!("## Session {n} - {t}\n{}", b.trim_end()) })
+        .collect();
     if parts.is_empty() {
         return Ok(format!("DIARY nothing on {day}"));
     }
@@ -349,19 +353,31 @@ pub fn file_slug(title: &str) -> String {
 }
 
 fn export(conn: &mut Conn, to: &Path) -> Result<String, String> {
-    // diary: one file per day, MemoryCore's own shape
+    // 1. every file that was moved in comes back exactly as it was
+    let originals: Vec<(String, String)> = conn.query("SELECT path, body FROM imported_files ORDER BY path").map_err(sql("Reading the kept files"))?;
+    for (path, body) in &originals {
+        write(&to.join(path), body)?;
+    }
+
+    // 2. diary entries written since then: appended to their day's file, MemoryCore's own shape
     let rows: Vec<(Option<String>, u32, String, String)> = conn
-        .query("SELECT DATE_FORMAT(entry_date, '%Y-%m-%d'), session_no, title, body FROM diary_entries ORDER BY entry_date, session_no, id")
+        .query("SELECT DATE_FORMAT(entry_date, '%Y-%m-%d'), session_no, title, body FROM diary_entries WHERE source_file IS NULL ORDER BY entry_date, session_no, id")
         .map_err(sql("Reading the diary"))?;
     let mut days: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (day, n, title, body) in rows {
         days.entry(day.unwrap_or_else(|| "earlier".into())).or_default().push(format!("## Session {n} - {title}\n{}\n", body.trim_end()));
     }
     for (day, sessions) in &days {
-        write(&to.join("daily-diary").join("current").join(format!("{day}.md")), &format!("# Daily Diary - {day}\n\n{}", sessions.join("\n")))?;
+        let path = to.join("daily-diary").join("current").join(format!("{day}.md"));
+        let text = match std::fs::read_to_string(&path) {
+            Ok(there) => format!("{}\n\n{}", there.trim_end(), sessions.join("\n")),
+            Err(_) => format!("# Daily Diary - {day}\n\n{}", sessions.join("\n")),
+        };
+        write(&path, &text)?;
     }
+    let diary: Option<u64> = conn.query_first("SELECT COUNT(*) FROM diary_entries").map_err(sql("Counting the diary"))?;
 
-    // reminders
+    // 3. reminders as they are now
     let rows: Vec<(String, Option<String>, String, String)> = conn
         .query("SELECT title, DATE_FORMAT(due_date, '%Y-%m-%d'), detail, state FROM reminders ORDER BY position, id")
         .map_err(sql("Reading the reminders"))?;
@@ -373,12 +389,12 @@ fn export(conn: &mut Conn, to: &Path) -> Result<String, String> {
         };
         let open: Vec<String> = rows.iter().filter(|r| r.3 == "open").map(line).collect();
         let done: Vec<String> = rows.iter().filter(|r| r.3 != "open").map(line).collect();
-        write(&to.join("main").join("reminders.md"), &format!("# Reminders\n\n## Open\n{}\n\n## Done\n{}\n", open.join("\n"), done.join("\n")))?;
+        write(&to.join("main").join("reminders.md"), &format!("# Reminders\n\n## Open\n{}\n\n## Completed\n{}\n", open.join("\n"), done.join("\n")))?;
     }
 
-    // projects: the list and one file each
-    let rows: Vec<(String, Option<String>, String, Option<String>, Option<String>, Option<String>)> = conn
-        .query("SELECT name, status, shelf, summary, body, last_updated FROM projects ORDER BY shelf, updated_at DESC, id DESC")
+    // 4. projects as they are now: the list, and each page at the path it came from
+    let rows: Vec<(String, Option<String>, String, Option<String>, Option<String>, Option<String>, Option<String>)> = conn
+        .query("SELECT name, status, shelf, summary, body, last_updated, source_file FROM projects ORDER BY shelf, id")
         .map_err(sql("Reading the projects"))?;
     let projects = rows.len();
     if projects > 0 {
@@ -390,29 +406,35 @@ fn export(conn: &mut Conn, to: &Path) -> Result<String, String> {
             }
             let heading = if shelf == "active" { "Active Projects" } else { "Archived Projects" };
             list.push_str(&format!("\n## {heading}\n| Pos | Project | Last Updated | Status |\n|-----|---------|--------------|--------|\n"));
-            for (i, (name, status, _, summary, body, updated)) in on.iter().enumerate() {
-                let slug = file_slug(name);
+            for (i, (name, status, _, summary, body, updated, source)) in on.iter().enumerate() {
+                let page = source.clone().filter(|s| s.starts_with("projects/")).unwrap_or_else(|| format!("projects/{shelf}/{}.md", file_slug(name)));
                 list.push_str(&format!(
-                    "| {} | [{name}](./{shelf}/{slug}.md) | {} | {} |\n",
+                    "| {} | [{name}](./{}) | {} | {} |\n",
                     i + 1,
+                    page.trim_start_matches("projects/"),
                     updated.clone().unwrap_or_default(),
                     status.clone().unwrap_or_default()
                 ));
                 let text = match body.as_ref().filter(|b| !b.trim().is_empty()) {
-                    Some(body) => format!("{}\n", body.trim_end()),
+                    Some(body) => body.clone(),
                     None => format!("# {name}\n\n{}\n", summary.clone().unwrap_or_default()),
                 };
-                write(&to.join("projects").join(shelf).join(format!("{slug}.md")), &text)?;
+                write(&to.join(&page), &text)?;
             }
         }
         write(&to.join("projects").join("project-list.md"), &list)?;
     }
-    Ok(format!("EXPORT {} diary day(s), {reminders} reminder(s), {projects} project(s) -> {}", days.len(), to.display()))
+    Ok(format!(
+        "EXPORT {} diary page(s), {reminders} reminder(s), {projects} project(s), {} original file(s) -> {}",
+        diary.unwrap_or(0),
+        originals.len(),
+        to.display()
+    ))
 }
 
 // ---------- dump and restore: one statement per line ----------
 
-fn dump(conn: &mut Conn, to: &Path) -> Result<String, String> {
+pub fn dump(conn: &mut Conn, to: &Path) -> Result<String, String> {
     let tables: Vec<String> = conn.query("SHOW TABLES").map_err(sql("Reading the database"))?;
     let mut out = String::from("-- MemoryCore Castle memory dump: one statement per line. Restore with `castle-memory restore --from <this file>`.\nSET FOREIGN_KEY_CHECKS=0;\n");
     let mut total = 0usize;
@@ -556,10 +578,10 @@ mod tests {
         assert!(go(&["sing"]).is_err());
 
         let out = folder.join("out");
-        assert!(go(&["export", "--to", out.to_str().unwrap()]).unwrap().starts_with("EXPORT 1 diary day(s), 2 reminder(s), 1 project(s)"));
+        assert!(go(&["export", "--to", out.to_str().unwrap()]).unwrap().starts_with("EXPORT 2 diary page(s), 2 reminder(s), 1 project(s), 0 original file(s)"));
         let day = std::fs::read_to_string(out.join("daily-diary/current/2026-11-10.md")).unwrap();
         assert!(day.starts_with("# Daily Diary - 2026-11-10\n\n## Session 1 - The garden\n") && day.contains("## Session 2 - Evening\nTea.\n"));
-        assert!(std::fs::read_to_string(out.join("main/reminders.md")).unwrap().contains("## Open\n- **Water plants**\n\n## Done\n- **Call Rin** (by 2026-11-12): about the trip"));
+        assert!(std::fs::read_to_string(out.join("main/reminders.md")).unwrap().contains("## Open\n- **Water plants**\n\n## Completed\n- **Call Rin** (by 2026-11-12): about the trip"));
         assert!(std::fs::read_to_string(out.join("projects/project-list.md")).unwrap().contains("| 1 | [Portfolio site](./active/portfolio-site.md) |"));
         // the export reads back through Castle's own file readers
         assert_eq!(crate::memory::newest_diary(&out).unwrap().title, "Evening");
@@ -567,10 +589,10 @@ mod tests {
         assert_eq!(crate::memory::projects(&out)[0].name, "Portfolio site");
 
         let file = folder.join("backup").join("memory.sql");
-        assert!(go(&["dump", "--to", file.to_str().unwrap()]).unwrap().starts_with("DUMP 6 table(s), "));
+        assert!(go(&["dump", "--to", file.to_str().unwrap()]).unwrap().starts_with("DUMP 7 table(s), "));
         let before = go(&["diary", "show", "--date", "2026-11-10"]).unwrap();
         drop(go);
-        conn.query_drop("DROP TABLE diary_entries, reminders, projects, link_notes, link_terminals, schema_migrations").unwrap();
+        conn.query_drop("DROP TABLE diary_entries, reminders, projects, link_notes, link_terminals, imported_files, schema_migrations").unwrap();
         let mut go = |line: &[&str]| run(&mut conn, &parse(&args(line)).unwrap());
         assert!(go(&["diary", "list"]).is_err());
         assert!(go(&["restore", "--from", file.to_str().unwrap()]).unwrap().starts_with("RESTORE "));

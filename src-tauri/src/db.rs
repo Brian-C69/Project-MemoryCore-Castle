@@ -476,6 +476,46 @@ pub async fn db_create(app: AppHandle, admin_user: Option<String>, admin_passwor
     .map_err(|_| "Creating the database stopped.".to_string())?
 }
 
+fn memory_folder(store: &SettingsStore) -> Result<PathBuf, String> {
+    store.get().memory_folder.map(PathBuf::from).filter(|f| f.is_dir()).ok_or_else(|| "Choose your MemoryCore folder first.".to_string())
+}
+
+/// What moving in would take: read only, nothing changed.
+#[tauri::command]
+pub async fn db_move_preview(app: AppHandle) -> Result<crate::import::Counts, String> {
+    tauri::async_runtime::spawn_blocking(move || Ok(crate::import::collect(&memory_folder(&app.state::<SettingsStore>())?).counts()))
+        .await
+        .map_err(|_| "The check stopped.".to_string())?
+}
+
+/// Moves the memory's markdown into the database: every file kept exactly, the rows made and
+/// read back, the dump written, the private backup run when there is one - and only after all
+/// of that are the files deleted. Then the companion's instructions learn the door.
+#[tauri::command]
+pub async fn db_move_in(app: AppHandle) -> Result<crate::import::Counts, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = app.state::<SettingsStore>();
+        let folder = memory_folder(&store)?;
+        let mut conn = crate::memdb::open_for(&folder)?;
+        crate::memdb::migrate(&mut conn)?;
+        let counts = crate::import::move_in(&mut conn, &folder, || {
+            // the old files stay in the backup's history; a backup that fails stops the delete
+            if crate::backup::status(&folder).ready {
+                crate::backup::back_up_now(&folder, "Memory backup before moving into the database").map(|_| ())
+            } else {
+                Ok(())
+            }
+        })?;
+        let s = store.get();
+        if let (Some(companion), Some(member)) = (s.companion_name.as_deref(), s.member_name.as_deref()) {
+            let _ = crate::setup::write_blocks(&folder, companion, member);
+        }
+        Ok(counts)
+    })
+    .await
+    .map_err(|_| "Moving in stopped.".to_string())?
+}
+
 /// Stops Castle's own engine: over SQL once root has a password, else with mariadb-admin.
 fn stop_own(home: &Path, port: u16) -> Result<(), String> {
     if probe_port(port) != PortUse::MySql {
