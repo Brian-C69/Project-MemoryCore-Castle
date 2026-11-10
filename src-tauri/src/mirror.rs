@@ -106,6 +106,110 @@ pub fn skill_description(skill_md: &str) -> Option<String> {
     None
 }
 
+// ---------- a skill as a stub ----------
+
+/// The line that marks a SKILL.md as Castle's stub.
+pub const STUB_MARK: &str = "<!-- castle:skill-stub";
+/// A skill this short is printed whole; a longer one prints its opening and its sections.
+pub const WHOLE_LIMIT: usize = 8000;
+
+pub fn is_stub(skill_md: &str) -> bool {
+    skill_md.contains(STUB_MARK)
+}
+
+/// The front matter block of a SKILL.md, both `---` lines included, exactly as written.
+pub fn front_matter(skill_md: &str) -> Option<&str> {
+    let rest = skill_md.strip_prefix("---")?;
+    let end = rest.find("\n---")?;
+    let after = end + "\n---".len();
+    // the closing line must end there
+    matches!(rest[after..].chars().next(), None | Some('\n') | Some('\r')).then(|| &skill_md[..3 + after])
+}
+
+/// The stub written to disk for a skill served from the database: the same front matter (so
+/// it is listed and triggered exactly as before), the one command that loads the instructions,
+/// and the rules that hold even when they cannot be loaded.
+pub fn stub_of(plugin: &str, name: &str, master: &str) -> String {
+    let front = front_matter(master).map(str::to_string).unwrap_or_else(|| format!("---\nname: {name}\n---"));
+    format!(
+        "{front}\n\
+         {STUB_MARK} - written by MemoryCore Castle. This skill's instructions live in the memory database; change them there, never here. -->\n\
+         \n\
+         # {name}\n\
+         \n\
+         The instructions for this skill are kept in the memory database, not in this file.\n\
+         \n\
+         **Before you do anything for this skill, load them** by running:\n\
+         \n\
+         ```\n\
+         castle-memory skill show --plugin \"{plugin}\" --name \"{name}\"\n\
+         ```\n\
+         \n\
+         (in PowerShell: `& \"$env:CASTLE_TOOLS\\castle-memory.cmd\" skill show --plugin \"{plugin}\" --name \"{name}\"`)\n\
+         \n\
+         Then follow what it prints exactly as if it were written here. A long skill prints its opening and a list of its sections: load a section with `--section <key>` when you reach it, or everything with `--all`.\n\
+         \n\
+         Rules that hold even when the instructions cannot be loaded:\n\
+         - If the command says the database could not be reached, tell your person kindly that the memory database is stopped and that **Start** in Castle's Settings > Database brings it back. Do not guess the instructions, and do not act on this skill until they load.\n\
+         - Never write the instructions back into this file. To change this skill, prepare its folder and run `castle-memory skill save --plugin \"{plugin}\" --name \"{name}\" --dir <that folder>`.\n"
+    )
+}
+
+/// A section's key from its heading: lowercase letters, digits and dashes ("Step 2: Render" -> "step-2-render").
+pub fn section_key(heading: &str) -> String {
+    let mut out = String::new();
+    for c in heading.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c.to_ascii_lowercase());
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    let out = out.trim_matches('-').to_string();
+    if out.is_empty() { "section".into() } else { out }
+}
+
+/// A skill's text as (key, heading, body) parts; the part before the first "## " is "top".
+/// Keys are unique: a repeated one gets -2, -3.
+pub fn skill_sections(master: &str) -> Vec<(String, String, String)> {
+    let mut seen: BTreeMap<String, u32> = BTreeMap::new();
+    split_sections(master)
+        .into_iter()
+        .map(|(heading, body)| {
+            let base = if heading == TOP { "top".to_string() } else { section_key(&heading) };
+            let n = seen.entry(base.clone()).or_insert(0);
+            *n += 1;
+            let key = if *n > 1 { format!("{base}-{n}") } else { base };
+            (key, heading, body)
+        })
+        .collect()
+}
+
+/// What `skill show` prints: the whole text for a short skill or `all`; one section when asked;
+/// else the opening and the list of sections to load as they are needed.
+pub fn skill_view(master: &str, section: Option<&str>, all: bool) -> Result<String, String> {
+    let parts = skill_sections(master);
+    if let Some(wanted) = section {
+        return parts.iter().find(|(key, _, _)| key == wanted).map(|(_, _, body)| body.trim_end().to_string()).ok_or_else(|| {
+            format!("No section `{wanted}`. Sections: {}", parts.iter().map(|(k, _, _)| k.as_str()).collect::<Vec<_>>().join(", "))
+        });
+    }
+    if all || master.len() <= WHOLE_LIMIT || parts.len() < 2 {
+        return Ok(master.trim_end().to_string());
+    }
+    let mut out = String::new();
+    if let Some((_, _, top)) = parts.iter().find(|(key, _, _)| key == "top") {
+        out.push_str(top.trim_end());
+        out.push_str("\n\n");
+    }
+    out.push_str("SECTIONS - this skill is long, so only its opening is printed. Load each section when you reach it:\n");
+    for (key, heading, body) in parts.iter().filter(|(key, _, _)| key != "top") {
+        out.push_str(&format!("- `--section {key}` - {heading} ({} characters)\n", body.len()));
+    }
+    out.push_str("(`--all` prints everything at once.)");
+    Ok(out)
+}
+
 // ---------- memory files ----------
 
 /// Saves one memory file; the text it replaces goes to history.
@@ -305,15 +409,40 @@ fn put_skill_file(conn: &mut impl Queryable, key: &SkillKey, body: &str, at: u64
 
 /// Makes the skills on disk and in the database the same. A file only on one side is copied to
 /// the other; a file that differs is taken from whichever side changed last, and the database's
-/// older text goes to history.
+/// older text goes to history. A skill switched to a stub keeps only the stub as its SKILL.md
+/// on disk: a whole SKILL.md found there is taken in as the new instructions, then the stub is
+/// written back.
 pub fn sync_skills(conn: &mut impl Queryable, folder: &Path) -> Result<SkillSync, String> {
     let disk = skills_on_disk(folder);
     let rows: Vec<(String, String, String, String, u64)> = conn
         .query("SELECT plugin, name, path, body, UNIX_TIMESTAMP(updated_at) FROM skill_files")
         .map_err(sql("Reading the skills"))?;
-    let database: BTreeMap<SkillKey, (String, u64)> = rows.into_iter().map(|(p, n, f, body, at)| ((p, n, f), (body, at))).collect();
+    let mut database: BTreeMap<SkillKey, (String, u64)> = rows.into_iter().map(|(p, n, f, body, at)| ((p, n, f), (body, at))).collect();
+    let stubbed: Vec<(String, String)> = conn.query("SELECT plugin, name FROM skills WHERE stubbed = 1").map_err(sql("Reading the skills"))?;
+    let is_stubbed = |key: &SkillKey| key.2 == "SKILL.md" && stubbed.iter().any(|(p, n)| *p == key.0 && *n == key.1);
     let mut report = SkillSync::default();
     for (key, (body, at)) in &disk {
+        if is_stubbed(key) {
+            // the file on disk is the stub; a whole SKILL.md there is new instructions to take in
+            if !is_stub(body) && database.get(key).map(|(kept, _)| kept.as_str()) != Some(body.as_str()) {
+                if let Some((kept, _)) = database.get(key) {
+                    conn.exec_drop("INSERT INTO skill_file_history (plugin, name, path, body) VALUES (?, ?, ?, ?)", (&key.0, &key.1, &key.2, kept))
+                        .map_err(sql("Keeping a skill's older text"))?;
+                }
+                put_skill_file(conn, key, body, *at)?;
+                database.insert(key.clone(), (body.clone(), *at));
+                report.to_database += 1;
+            }
+            let Some((master, _)) = database.get(key) else { continue };
+            let stub = stub_of(&key.0, &key.1, master);
+            if *body == stub {
+                report.same += 1;
+            } else {
+                write_skill_file(folder, key, &stub)?;
+                report.to_disk += 1;
+            }
+            continue;
+        }
         match database.get(key) {
             None => {
                 put_skill_file(conn, key, body, *at)?;
@@ -334,17 +463,19 @@ pub fn sync_skills(conn: &mut impl Queryable, folder: &Path) -> Result<SkillSync
     }
     for (key, (body, _)) in &database {
         if !disk.contains_key(key) {
-            write_skill_file(folder, key, body)?;
+            let text = if is_stubbed(key) { stub_of(&key.0, &key.1, body) } else { body.clone() };
+            write_skill_file(folder, key, &text)?;
             report.to_disk += 1;
         }
     }
 
-    // the catalog: one row per skill, described by its SKILL.md
+    // the catalog: one row per skill, described by its SKILL.md (a stub carries the same front matter)
     let mut skills: BTreeMap<(String, String), Option<String>> = BTreeMap::new();
     for (key, (body, _)) in database.iter().chain(disk.iter()) {
         let entry = skills.entry((key.0.clone(), key.1.clone())).or_insert(None);
-        if key.2 == "SKILL.md" {
-            // the disk's copy comes last in the chain, so the newest reading is the one kept
+        // the disk's copy comes last in the chain, so the newest reading counts - unless it
+        // is a stub, whose front matter is the database's own
+        if key.2 == "SKILL.md" && (entry.is_none() || !is_stub(body)) {
             *entry = skill_description(body);
         }
     }
@@ -357,6 +488,22 @@ pub fn sync_skills(conn: &mut impl Queryable, folder: &Path) -> Result<SkillSync
     }
     report.skills = skills.len();
     Ok(report)
+}
+
+/// Switches one skill between a whole SKILL.md on disk and a stub whose instructions are
+/// loaded from the database. The instructions themselves are never changed by the switch.
+pub fn set_stub(conn: &mut impl Queryable, folder: &Path, plugin: &str, name: &str, on: bool) -> Result<(), String> {
+    if !folder_name_ok(plugin) || !folder_name_ok(name) {
+        return Err("That is not a skill name.".into());
+    }
+    let master: Option<String> = conn
+        .exec_first("SELECT body FROM skill_files WHERE plugin = ? AND name = ? AND path = 'SKILL.md'", (plugin, name))
+        .map_err(sql("Reading the skill"))?;
+    let master = master.ok_or_else(|| format!("No skill {plugin}/{name} in the database. Run `castle-memory skill sync` first."))?;
+    conn.exec_drop("UPDATE skills SET stubbed = ? WHERE plugin = ? AND name = ?", (on, plugin, name)).map_err(sql("Switching the skill"))?;
+    let key = (plugin.to_string(), name.to_string(), "SKILL.md".to_string());
+    let text = if on { stub_of(plugin, name, &master) } else { master };
+    write_skill_file(folder, &key, &text)
 }
 
 /// Removes a skill from the database and its mirror from disk (its text stays in history).
@@ -424,6 +571,41 @@ mod tests {
         assert_eq!(skill_description("---\nname: save-diary\ndescription: \"Writes today into the diary\"\n---\n# Save\n").as_deref(), Some("Writes today into the diary"));
         assert_eq!(skill_description("# no front matter\ndescription: x\n"), None);
         assert_eq!(skill_description("---\nname: x\n---\ndescription: later\n"), None);
+    }
+
+    #[test]
+    fn a_stub_keeps_the_front_matter_and_names_the_one_command() {
+        let master = "---\nname: image-generation\ndescription: MUST use when the user wants an image. Triggers on \"render this\".\n---\n\n# Image Generation\n\n## Overview\nRenders.\n";
+        assert_eq!(front_matter(master), Some("---\nname: image-generation\ndescription: MUST use when the user wants an image. Triggers on \"render this\".\n---"));
+        assert_eq!(front_matter("# no front matter\n"), None);
+        assert_eq!(front_matter("---\nname: x\n---more\n"), None);
+        let stub = stub_of("lyra-skills", "image-generation", master);
+        assert!(stub.starts_with("---\nname: image-generation\ndescription: MUST use when the user wants an image. Triggers on \"render this\".\n---\n<!-- castle:skill-stub"));
+        assert!(stub.contains("castle-memory skill show --plugin \"lyra-skills\" --name \"image-generation\""));
+        assert!(stub.contains("$env:CASTLE_TOOLS\\castle-memory.cmd"));
+        assert!(stub.contains("Do not guess the instructions"));
+        assert!(!stub.contains("Renders."));
+        assert!(is_stub(&stub) && !is_stub(master));
+        // the CLI reads the same name and description from the stub
+        assert_eq!(skill_description(&stub), skill_description(master));
+        // a skill without front matter still gets a name
+        assert!(stub_of("p", "notes", "# Notes\n").starts_with("---\nname: notes\n---\n"));
+    }
+
+    #[test]
+    fn a_short_skill_prints_whole_and_a_long_one_prints_its_sections() {
+        let short = "---\nname: x\n---\n# X\n\n## Steps\n1. do\n";
+        assert_eq!(skill_view(short, None, false).unwrap(), short.trim_end());
+        let long = format!("---\nname: x\n---\n# X\nintro\n\n## Step 1: Gather\n{}\n## Step 2: Render\nrender it\n## Step 2: Render\nagain\n", "g".repeat(WHOLE_LIMIT));
+        let keys: Vec<String> = skill_sections(&long).into_iter().map(|(k, _, _)| k).collect();
+        assert_eq!(keys, vec!["top", "step-1-gather", "step-2-render", "step-2-render-2"]);
+        let index = skill_view(&long, None, false).unwrap();
+        assert!(index.starts_with("---\nname: x\n---\n# X\nintro\n\nSECTIONS"));
+        assert!(index.contains("- `--section step-2-render` - Step 2: Render (") && !index.contains("ggggg"));
+        assert_eq!(skill_view(&long, Some("step-2-render"), false).unwrap(), "## Step 2: Render\nrender it");
+        assert_eq!(skill_view(&long, None, true).unwrap(), long.trim_end());
+        assert!(skill_view(&long, Some("nope"), false).unwrap_err().contains("Sections: top, step-1-gather"));
+        assert_eq!(section_key("  ## !! "), "section");
     }
 
     #[test]

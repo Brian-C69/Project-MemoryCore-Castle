@@ -626,6 +626,38 @@ mod tests {
         assert_eq!(described.as_deref(), Some("Edited by hand"));
         let older: Option<u64> = conn.query_first("SELECT COUNT(*) FROM skill_file_history").unwrap();
         assert_eq!(older, Some(1));
+
+        // one skill switched to a stub: the disk keeps the front matter and the command, the
+        // database keeps the instructions, and nothing else about the skill changes
+        let master = std::fs::read_to_string(skill.join("SKILL.md")).unwrap();
+        let door = |conn: &mut Conn, line: &[&str]| crate::door::run(conn, &crate::door::parse(&line.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap(), &root);
+        assert!(door(&mut conn, &["skill", "stub", "--plugin", "rin-skills", "--name", "save-diary"]).unwrap().starts_with("SKILL is a stub now"));
+        let on_disk = std::fs::read_to_string(skill.join("SKILL.md")).unwrap();
+        assert!(crate::mirror::is_stub(&on_disk) && on_disk.starts_with("---\nname: save-diary\ndescription: Edited by hand\n---\n"));
+        assert!(on_disk.contains("castle-memory skill show --plugin \"rin-skills\" --name \"save-diary\"") && !on_disk.contains("# Save diary v2"));
+        assert_eq!(door(&mut conn, &["skill", "show", "--plugin", "rin-skills", "--name", "save-diary"]).unwrap(), master.trim_end());
+        assert!(door(&mut conn, &["skill", "list"]).unwrap().starts_with("rin-skills/save-diary [stub] · Edited by hand"));
+        // a sync leaves the stub alone and the instructions untouched
+        assert_eq!(crate::mirror::sync_skills(&mut conn, &root).unwrap(), crate::mirror::SkillSync { to_database: 0, to_disk: 0, same: 2, skills: 1 });
+        let kept: Option<String> = conn.query_first("SELECT body FROM skill_files WHERE name = 'save-diary' AND path = 'SKILL.md'").unwrap();
+        assert_eq!(kept.as_deref(), Some(master.as_str()));
+        // a stub someone edited or deleted is written back; the other files still mirror
+        std::fs::write(skill.join("SKILL.md"), format!("{on_disk}\nextra by hand\n")).unwrap();
+        assert_eq!(crate::mirror::sync_skills(&mut conn, &root).unwrap().to_disk, 1);
+        assert_eq!(std::fs::read_to_string(skill.join("SKILL.md")).unwrap(), on_disk);
+        // a whole new SKILL.md dropped in (an update) becomes the instructions, then the stub returns
+        std::fs::write(skill.join("SKILL.md"), "---\nname: save-diary\ndescription: Version three\n---\n# Save diary v3\n").unwrap();
+        let taken = crate::mirror::sync_skills(&mut conn, &root).unwrap();
+        assert_eq!((taken.to_database, taken.to_disk), (1, 1));
+        let now_disk = std::fs::read_to_string(skill.join("SKILL.md")).unwrap();
+        assert!(crate::mirror::is_stub(&now_disk) && now_disk.contains("description: Version three"));
+        assert_eq!(door(&mut conn, &["skill", "show", "--plugin", "rin-skills", "--name", "save-diary"]).unwrap(), "---\nname: save-diary\ndescription: Version three\n---\n# Save diary v3");
+        // and back to a whole file
+        assert!(door(&mut conn, &["skill", "full", "--plugin", "rin-skills", "--name", "save-diary"]).unwrap().starts_with("SKILL is a whole file again"));
+        assert_eq!(std::fs::read_to_string(skill.join("SKILL.md")).unwrap(), "---\nname: save-diary\ndescription: Version three\n---\n# Save diary v3\n");
+        assert_eq!(crate::mirror::sync_skills(&mut conn, &root).unwrap().same, 2);
+        assert!(door(&mut conn, &["skill", "stub", "--plugin", "rin-skills", "--name", "nope"]).is_err());
+
         assert!(crate::mirror::remove_skill(&mut conn, &root, "rin-skills", "save-diary").unwrap());
         assert!(!skill.exists());
         assert!(!root.join("daily-diary/current/2026-11-08.md").exists() && !root.join("projects").exists());

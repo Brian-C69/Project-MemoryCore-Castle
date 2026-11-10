@@ -585,6 +585,52 @@ pub async fn db_export(app: AppHandle, to: String) -> Result<String, String> {
     .map_err(|_| "The export stopped.".to_string())?
 }
 
+/// One skill, for Settings > Database.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillRow {
+    pub plugin: String,
+    pub name: String,
+    pub description: Option<String>,
+    /// served as a stub: a small SKILL.md on disk, the instructions loaded from the database
+    pub stubbed: bool,
+}
+
+fn skill_rows(conn: &mut mysql::Conn) -> Result<Vec<SkillRow>, String> {
+    use mysql::prelude::Queryable;
+    let rows: Vec<(String, String, Option<String>, bool)> =
+        conn.query("SELECT plugin, name, description, stubbed FROM skills ORDER BY plugin, name").map_err(|_| "The skills could not be read.".to_string())?;
+    Ok(rows.into_iter().map(|(plugin, name, description, stubbed)| SkillRow { plugin, name, description, stubbed }).collect())
+}
+
+/// The memory's skills (disk and database made the same first, so a skill just installed shows).
+#[tauri::command]
+pub async fn db_skills(app: AppHandle) -> Result<Vec<SkillRow>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let folder = memory_folder(&app.state::<SettingsStore>())?;
+        let mut conn = crate::memdb::open_for(&folder)?;
+        crate::memdb::migrate(&mut conn)?;
+        crate::mirror::sync_skills(&mut conn, &folder)?;
+        skill_rows(&mut conn)
+    })
+    .await
+    .map_err(|_| "Reading the skills stopped.".to_string())?
+}
+
+/// Switches one skill between a whole SKILL.md and a stub served from the database.
+#[tauri::command]
+pub async fn db_skill_stub(app: AppHandle, plugin: String, name: String, on: bool) -> Result<Vec<SkillRow>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let folder = memory_folder(&app.state::<SettingsStore>())?;
+        let mut conn = crate::memdb::open_for(&folder)?;
+        crate::mirror::sync_skills(&mut conn, &folder)?;
+        crate::mirror::set_stub(&mut conn, &folder, &plugin, &name, on)?;
+        skill_rows(&mut conn)
+    })
+    .await
+    .map_err(|_| "Switching the skill stopped.".to_string())?
+}
+
 /// Stops Castle's own engine: over SQL once root has a password, else with mariadb-admin.
 fn stop_own(home: &Path, port: u16) -> Result<(), String> {
     if probe_port(port) != PortUse::MySql {

@@ -4,7 +4,7 @@
 // HOME card's sheet and setup's last step. Optional: a memory kept in files works as before.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
-  chooseFolder, dbCreate, dbExport, dbInstall, dbMemory, dbMoveIn, dbMovePreview, dbRestore, dbStart, dbStatus, dbStop, dbUseExisting,
+  chooseFolder, dbCreate, dbExport, dbInstall, dbMemory, dbMoveIn, dbMovePreview, dbRestore, dbSkills, dbSkillStub, dbStart, dbStatus, dbStop, dbUseExisting,
   getSettings, onDbInstall, saveSettings,
 } from '../api/castle.js'
 import { megabytes, moveLine, nextStep, progressLine, steps as stepsOf } from './database.js'
@@ -17,6 +17,7 @@ const emit = defineEmits(['changed'])
 const view = ref(null) // { engine, version, downloadBytes, keepRunning }
 const memory = ref(null) // { name, reachable, movedIn, canRestore }
 const preview = ref(null) // Counts
+const skills = ref([]) // [{ plugin, name, description, stubbed }]
 const busy = ref('')
 const problem = ref('')
 const done = ref('')
@@ -52,6 +53,7 @@ async function check() {
     memory.value = await dbMemory()
     keepRunning.value = view.value.keepRunning
     preview.value = next.value === 'move' ? await dbMovePreview() : null
+    skills.value = next.value === null ? await dbSkills() : []
   } catch {
     // outside Castle's window
   }
@@ -107,6 +109,17 @@ async function exportOut() {
   if (!folder) return
   const line = await attempt('Writing the markdown…', () => dbExport(folder))
   if (line) done.value = `Written to ${folder}.`
+}
+
+// One skill between a whole SKILL.md on disk and a stub served from the database.
+async function toggleStub(skill) {
+  const rows = await attempt('Switching the skill…', () => dbSkillStub(skill.plugin, skill.name, !skill.stubbed))
+  if (rows) {
+    skills.value = rows
+    done.value = skill.stubbed
+      ? `${skill.name} is a whole file again.`
+      : `${skill.name} is served from the database now. Start a new session with ${props.companion} to pick it up.`
+  }
 }
 
 async function toggleKeep() {
@@ -202,6 +215,25 @@ onBeforeUnmount(() => stopListening?.())
         <button :disabled="!!busy" @click="exportOut">Export to markdown…</button>
         <button v-if="own" :disabled="!!busy" @click="stop">Stop</button>
       </div>
+
+      <h4>Skills</h4>
+      <p v-if="!skills.length" class="hint">No skills installed yet. Once {{ companion }} installs one, it shows here.</p>
+      <template v-else>
+        <p class="hint">
+          Every skill is kept in the database and stays on disk as a file. Tick one to <strong>serve it from the database</strong>:
+          its file becomes a short note that tells {{ companion }} how to load the instructions, a section at a time.
+          It needs the database running; untick to put the whole file back.
+        </p>
+        <ul class="skills">
+          <li v-for="skill in skills" :key="`${skill.plugin}/${skill.name}`">
+            <label class="toggle" :title="skill.description ?? ''">
+              <input type="checkbox" :checked="skill.stubbed" :disabled="!!busy" @change="toggleStub(skill)" />
+              <span class="skill-name">{{ skill.name }}</span>
+              <span class="hint">{{ skill.plugin }}{{ skill.stubbed ? ' · from the database' : '' }}</span>
+            </label>
+          </li>
+        </ul>
+      </template>
     </template>
 
     <label v-if="own && next !== 'install'" class="toggle">
@@ -257,6 +289,23 @@ onBeforeUnmount(() => stopListening?.())
   margin: 0;
   font-size: 13px;
   color: var(--text-dim);
+}
+h4 {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.skills {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.skill-name {
+  min-width: 180px;
 }
 .row {
   display: flex;

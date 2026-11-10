@@ -166,6 +166,10 @@ export const dbMovePreview = () => invoke('db_move_preview')
 export const dbMoveIn = () => invoke('db_move_in')
 export const dbRestore = () => invoke('db_restore')
 export const dbExport = (to) => invoke('db_export', { to })
+// the memory's skills -> [{ plugin, name, description, stubbed }]; a stubbed skill keeps a small
+// SKILL.md on disk and its instructions are loaded from the database when it fires
+export const dbSkills = () => invoke('db_skills')
+export const dbSkillStub = (plugin, name, on) => invoke('db_skill_stub', { plugin, name, on })
 // while the engine downloads: { done, total } in bytes
 export const onDbInstall = on('castle://db-install')
 

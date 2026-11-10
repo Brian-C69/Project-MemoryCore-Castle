@@ -289,7 +289,9 @@ pub fn run() {
             db::db_move_in,
             db::db_memory,
             db::db_restore,
-            db::db_export
+            db::db_export,
+            db::db_skills,
+            db::db_skill_stub
         ])
         .setup(|app| {
             let config = match settings::test_override(settings::TEST_CONFIG_VAR) {

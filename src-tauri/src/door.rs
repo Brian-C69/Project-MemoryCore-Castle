@@ -12,7 +12,10 @@
 //!  castle-memory boot                         the memory to read at the start of a session
 //!  castle-memory memory list | memory show --path master-memory.md | memory save --path .. --file ..
 //!  castle-memory session show [--section "Open threads"] | session set --section ".." --file .. | session clear --section ".."
-//!  castle-memory skill list | skill show --plugin p --name n | skill sync | skill save --plugin p --name n --dir <folder> | skill remove --plugin p --name n
+//!  castle-memory skill list | skill show --plugin p --name n [--section key | --all] | skill sync
+//!  castle-memory skill save --plugin p --name n --dir <folder> | skill remove --plugin p --name n
+//!  castle-memory skill stub --plugin p --name n      a small SKILL.md on disk, the instructions loaded from here
+//!  castle-memory skill full --plugin p --name n      back to the whole SKILL.md on disk
 //!  castle-memory export --to <folder>        the memory back out as markdown
 //!  castle-memory dump --to backup/memory.sql | restore --from backup/memory.sql
 //! ```
@@ -138,6 +141,15 @@ pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> 
         ["skill", "show"] => skill_show(conn, ask),
         ["skill", "sync"] => skill_sync(conn, memory),
         ["skill", "save"] => skill_save(conn, ask, memory),
+        ["skill", "stub"] | ["skill", "full"] => {
+            let on = words[1] == "stub";
+            mirror::set_stub(conn, memory, ask.need("plugin")?, ask.need("name")?, on)?;
+            Ok(if on {
+                "SKILL is a stub now: its SKILL.md on disk only says how to load it, and `skill show` prints the instructions. Start a new session to pick it up.".into()
+            } else {
+                "SKILL is a whole file again: its SKILL.md on disk holds the instructions.".into()
+            })
+        }
         ["skill", "remove"] => Ok(if mirror::remove_skill(conn, memory, ask.need("plugin")?, ask.need("name")?)? { "SKILL removed".into() } else { "SKILL not found".into() }),
         ["export"] => export(conn, Path::new(ask.need("to")?)),
         ["dump"] => dump(conn, Path::new(ask.need("to")?)),
@@ -406,18 +418,25 @@ fn session_show(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
 }
 
 fn skill_list(conn: &mut Conn) -> Result<String, String> {
-    let rows: Vec<(String, String, Option<String>)> = conn.query("SELECT plugin, name, description FROM skills ORDER BY plugin, name").map_err(sql("Reading the skills"))?;
+    let rows: Vec<(String, String, Option<String>, bool)> = conn.query("SELECT plugin, name, description, stubbed FROM skills ORDER BY plugin, name").map_err(sql("Reading the skills"))?;
     if rows.is_empty() {
         return Ok("SKILLS none in the database".into());
     }
-    Ok(rows.into_iter().map(|(plugin, name, description)| format!("{plugin}/{name} · {}", description.unwrap_or_else(|| "-".into()))).collect::<Vec<_>>().join("\n"))
+    Ok(rows
+        .into_iter()
+        .map(|(plugin, name, description, stubbed)| format!("{plugin}/{name}{} · {}", if stubbed { " [stub]" } else { "" }, description.unwrap_or_else(|| "-".into())))
+        .collect::<Vec<_>>()
+        .join("\n"))
 }
 
 fn skill_show(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+    let path = ask.get("path").unwrap_or("SKILL.md");
     let body: Option<String> = conn
-        .exec_first("SELECT body FROM skill_files WHERE plugin = ? AND name = ? AND path = ?", (ask.need("plugin")?, ask.need("name")?, ask.get("path").unwrap_or("SKILL.md")))
+        .exec_first("SELECT body FROM skill_files WHERE plugin = ? AND name = ? AND path = ?", (ask.need("plugin")?, ask.need("name")?, path))
         .map_err(sql("Reading the skill"))?;
-    body.ok_or_else(|| "SKILL not found".to_string())
+    let body = body.ok_or_else(|| "SKILL not found".to_string())?;
+    // the skill's own instructions print by section when they are long; its other files print whole
+    if path == "SKILL.md" { mirror::skill_view(&body, ask.get("section"), ask.get("all").is_some()) } else { Ok(body) }
 }
 
 fn skill_sync(conn: &mut Conn, memory: &Path) -> Result<String, String> {
