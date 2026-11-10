@@ -283,10 +283,16 @@ pub fn terminal_start(
     Ok(view(&store, host, room))
 }
 
-/// The terminal answering a question the console asked (where the cursor is, what it is, whether
-/// it is ready), not the member typing. Windows' console waits for the cursor answer before it
-/// starts the CLI, so these must never be held back.
+/// The terminal talking to the console on its own, not the member typing: answers to the
+/// console's questions (where the cursor is, what it is, whether it is ready) and the focus
+/// reports the CLI asked for (`ESC [ I` / `ESC [ O`). Windows' console waits for the cursor answer
+/// before it starts the CLI, so these are never held back, and they never count as the member's
+/// last input - otherwise clicking the provider picker (a focus-out) would look like new typing
+/// and a provider switch would wait forever for a turn that is already over.
 pub fn is_terminal_reply(data: &str) -> bool {
+    if data == "\x1b[I" || data == "\x1b[O" {
+        return true;
+    }
     let Some(body) = data.strip_prefix("\x1b[") else { return false };
     let Some(last) = body.chars().last() else { return false };
     data.len() <= 32 && matches!(last, 'R' | 'c' | 'n') && body[..body.len() - 1].chars().all(|c| c.is_ascii_digit() || c == ';' || c == '?' || c == '>')
@@ -432,7 +438,7 @@ MEMORY_DB_PASSWORD=x
 
     #[test]
     fn the_terminal_answering_the_console_is_told_apart_from_typing() {
-        for reply in ["\x1b[1;1R", "\x1b[24;80R", "\x1b[?1;2c", "\x1b[>0;10;1c", "\x1b[0n"] {
+        for reply in ["\x1b[1;1R", "\x1b[24;80R", "\x1b[?1;2c", "\x1b[>0;10;1c", "\x1b[0n", "\x1b[I", "\x1b[O"] {
             assert!(is_terminal_reply(reply), "{reply:?}");
         }
         for typed in ["hello", "\r", "\x1b[A", "\x1b[200~paste\x1b[201~", "\x1b[1;1Rmore", "\x1b[", "R", "\x1b[1;1H"] {
