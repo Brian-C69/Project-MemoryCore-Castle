@@ -111,6 +111,82 @@ export function spreadLabel(start, total) {
   return start + 1 < total ? `pages ${start + 1}-${start + 2} of ${total}` : `page ${start + 1} of ${total}`
 }
 
+// ---------- the reading page ----------
+
+// Which reading page each way of browsing uses (Kiyo, Nov 10 2026: Book A, Calendar B, List C).
+export const PAGE_DESIGNS = { book: 'letter', calendar: 'journal', list: 'notebook' }
+
+// A diary entry as plain paragraphs, or null when it holds markdown structure (headings,
+// lists, tables, code) and should be shown by the markdown reader instead.
+export function plainParagraphs(text) {
+  const body = String(text ?? '').replace(/\r/g, '').trim()
+  if (!body) return []
+  if (/^\s*(#{1,6}\s|[-*+]\s|\d+\.\s|\||```|>)/m.test(body)) return null
+  return body.split(/\n\s*\n/).map((p) => p.replace(/\n/g, ' ').trim()).filter(Boolean)
+}
+
+// "a 2 minute read" at an easy reading pace; never less than one.
+export function readMinutes(text) {
+  const words = String(text ?? '').trim().split(/\s+/).filter(Boolean).length
+  return Math.max(1, Math.round(words / 200))
+}
+
+// The sentence lifted out as a pull quote: the first one spoken in the first person that is
+// neither too short nor too long, looked for after the opening paragraph. Null when none fits.
+export function pullQuote(paragraphs) {
+  for (const paragraph of (paragraphs ?? []).slice(1)) {
+    const sentences = paragraph.match(/[^.!?]+[.!?]+/g) ?? []
+    const found = sentences.map((s) => s.trim()).find((s) => /^I\b/.test(s) && s.length >= 30 && s.length <= 120)
+    if (found) return found
+  }
+  return null
+}
+
+// { day: '5', month: 'NOV', weekday: 'Thursday' } for a date; null without one.
+export function dateParts(date, locale = 'en-US') {
+  if (!isDate(date)) return null
+  const d = new Date(`${date}T00:00:00`)
+  return {
+    day: String(d.getDate()),
+    month: d.toLocaleDateString(locale, { month: 'short' }).toUpperCase(),
+    weekday: d.toLocaleDateString(locale, { weekday: 'long' }),
+  }
+}
+
+// A small constellation that belongs to one date: five points in a 0..1 box, always the same
+// for the same date, different between dates.
+export function emblemPoints(date) {
+  let seed = 0
+  for (const c of String(date ?? '')) seed = (seed * 31 + c.charCodeAt(0)) >>> 0
+  const next = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0
+    return seed / 4294967296
+  }
+  return Array.from({ length: 5 }, (_, i) => ({
+    // spread left to right so the joining line reads as a constellation, not a scribble
+    x: Math.round((0.1 + i * 0.2 + (next() - 0.5) * 0.12) * 1000) / 1000,
+    y: Math.round((0.15 + next() * 0.7) * 1000) / 1000,
+  }))
+}
+
+// The entries around one page, oldest first: up to `span` either side, the page itself marked.
+export function neighbours(pages, file, span = 2) {
+  const at = (pages ?? []).findIndex((p) => p.file === file)
+  if (at < 0) return { around: [], previous: null, next: null }
+  const from = Math.max(0, at - span)
+  return {
+    around: pages.slice(from, at + span + 1).map((p) => ({ ...p, here: p.file === file })),
+    previous: pages[at - 1] ?? null,
+    next: pages[at + 1] ?? null,
+  }
+}
+
+// "Nov 3" for a neighbouring entry's label.
+export function shortDate(date, locale = 'en-US') {
+  if (!isDate(date)) return ''
+  return new Date(`${date}T00:00:00`).toLocaleDateString(locale, { month: 'short', day: 'numeric' })
+}
+
 // "Tuesday, November 10" for a page's date; '' for a page without one.
 export function longDate(date, locale = 'en-US') {
   if (!isDate(date)) return ''

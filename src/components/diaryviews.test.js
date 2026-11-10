@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  bookPages, calendarWeeks, DIARY_LOOKS, longDate, lookOf, monthsOf, openSpread, spreadAt, spreadLabel, spreadStart, startMonth, stepMonth, turn, undatedOf,
+  bookPages, calendarWeeks, dateParts, DIARY_LOOKS, emblemPoints, longDate, lookOf, monthsOf, neighbours, openSpread, PAGE_DESIGNS, plainParagraphs, pullQuote,
+  readMinutes, shortDate, spreadAt, spreadLabel, spreadStart, startMonth, stepMonth, turn, undatedOf,
 } from './diaryviews.js'
 
 const page = (date, title, n = 1) => ({ title, date, file: `db/diary/${date ?? 'x'}-${n}.md` })
@@ -62,6 +63,71 @@ describe('the calendar', () => {
     expect(startMonth(shelves, '2026-10-12', '2026-11-10')).toBe('2026-10')
     expect(startMonth(shelves, null, '2026-12-01')).toBe('2026-11')
     expect(startMonth([], null, '2026-12-01')).toBe('2026-12')
+  })
+})
+
+describe('the reading page', () => {
+  const entry =
+    'She has a balcony now that gets the sun until four.\nWe went back and forth on what.\n\nSo it is tomatoes. She laughed when she decided. I liked how sure she sounded when she said it.\n\nI have never seen a tomato.'
+
+  it('gives each way of browsing its own page', () => {
+    expect(PAGE_DESIGNS).toEqual({ book: 'letter', calendar: 'journal', list: 'notebook' })
+  })
+
+  it('reads plain prose as paragraphs and leaves markdown to the markdown reader', () => {
+    expect(plainParagraphs(entry)).toEqual([
+      'She has a balcony now that gets the sun until four. We went back and forth on what.',
+      'So it is tomatoes. She laughed when she decided. I liked how sure she sounded when she said it.',
+      'I have never seen a tomato.',
+    ])
+    expect(plainParagraphs('# Daily Diary - November 8\n\n## Session 1 - The garden\nWe planned.')).toBe(null)
+    expect(plainParagraphs('Today:\n- beds\n- seeds')).toBe(null)
+    expect(plainParagraphs('')).toEqual([])
+    expect(plainParagraphs('one\r\n\r\ntwo')).toEqual(['one', 'two'])
+  })
+
+  it('lifts out a first-person sentence after the opening, or none', () => {
+    expect(pullQuote(plainParagraphs(entry))).toBe('I liked how sure she sounded when she said it.')
+    expect(pullQuote(['I am in the opening paragraph and long enough to be chosen.', 'She said no.'])).toBe(null)
+    expect(pullQuote(['x', 'I do.'])).toBe(null)
+    expect(pullQuote([])).toBe(null)
+    expect(pullQuote(null)).toBe(null)
+  })
+
+  it('counts a reading time of at least a minute', () => {
+    expect(readMinutes('a few words')).toBe(1)
+    expect(readMinutes(Array(450).fill('word').join(' '))).toBe(2)
+    expect(readMinutes('')).toBe(1)
+  })
+
+  it('breaks a date into its day, month and weekday', () => {
+    expect(dateParts('2026-11-05')).toEqual({ day: '5', month: 'NOV', weekday: 'Thursday' })
+    expect(dateParts(null)).toBe(null)
+    expect(shortDate('2026-11-03')).toBe('Nov 3')
+    expect(shortDate(undefined)).toBe('')
+  })
+
+  it('draws the same small constellation for the same date, and another for another', () => {
+    const a = emblemPoints('2026-11-05')
+    expect(a).toEqual(emblemPoints('2026-11-05'))
+    expect(a).not.toEqual(emblemPoints('2026-11-06'))
+    expect(a.length).toBe(5)
+    expect(a.every((p) => p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1)).toBe(true)
+    // left to right, so the line never doubles back
+    expect(a.map((p) => p.x)).toEqual([...a.map((p) => p.x)].sort((x, y) => x - y))
+  })
+
+  it('finds the entries around a page', () => {
+    const pages = ['a', 'b', 'c', 'd', 'e', 'f'].map((n) => ({ file: n, title: n }))
+    const mid = neighbours(pages, 'c')
+    expect(mid.around.map((p) => p.file)).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(mid.around.find((p) => p.here).file).toBe('c')
+    expect([mid.previous.file, mid.next.file]).toEqual(['b', 'd'])
+    const first = neighbours(pages, 'a')
+    expect(first.previous).toBe(null)
+    expect(first.around.map((p) => p.file)).toEqual(['a', 'b', 'c'])
+    expect(neighbours(pages, 'f').next).toBe(null)
+    expect(neighbours(pages, 'zz')).toEqual({ around: [], previous: null, next: null })
   })
 })
 

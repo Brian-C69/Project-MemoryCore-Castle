@@ -22,7 +22,13 @@ const view = devWorld
   : window.__CASTLE_VIEW__
 // Dev only: ?stage=classic|cinema|book|messenger|jrpg shows the STORY stage with a sample beat.
 const devStage = import.meta.env.DEV ? new URLSearchParams(location.search).get('stage') : null
-if (devStage) {
+// Dev only: ?diary=all|letter|journal|notebook shows the DIARY room's reading pages with a sample entry.
+const devDiary = import.meta.env.DEV ? new URLSearchParams(location.search).get('diary') : null
+if (devDiary) {
+  import('./components/DiaryDemo.vue').then(({ default: DiaryDemo }) =>
+    createApp(DiaryDemo, { design: devDiary, theme: new URLSearchParams(location.search).get('theme') ?? '' }).mount('#app'),
+  )
+} else if (devStage) {
   import('./components/stage/StageDemo.vue').then(({ default: StageDemo }) =>
     createApp(StageDemo, { look: devStage, faces: new URLSearchParams(location.search).get('faces') ?? '' }).mount('#app'),
   )

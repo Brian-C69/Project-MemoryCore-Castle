@@ -2,14 +2,16 @@
 // The DIARY room as a book: two pages side by side, oldest to newest, opening at the newest.
 // The arrows (and the left and right keys) turn a spread at a time.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import MarkdownText from './MarkdownText.vue'
+import DiaryPage from './DiaryPage.vue'
 import { memoryRead } from '../api/castle.js'
-import { bookPages, longDate, openSpread, spreadAt, spreadLabel, turn } from './diaryviews.js'
+import { bookPages, openSpread, spreadAt, spreadLabel, turn } from './diaryviews.js'
 
 const props = defineProps({
   shelves: { type: Array, default: () => [] },
   // a page to open at (from a HOME card)
   openFile: { type: String, default: '' },
+  // signs each page
+  companion: { type: String, default: '' },
 })
 const emit = defineEmits(['open'])
 
@@ -75,14 +77,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   <div class="book">
     <div class="spread">
       <article v-for="(page, side) in [spread.left, spread.right]" :key="side" class="leaf" :class="side ? 'right' : 'left'">
-        <template v-if="page">
-          <p class="date">{{ longDate(page.date) || 'Earlier' }}</p>
-          <h2>{{ page.title }}</h2>
-          <div class="text">
-            <p v-if="texts[page.file]?.problem" class="problem">{{ texts[page.file].problem }}</p>
-            <MarkdownText v-else :text="typeof texts[page.file] === 'string' ? texts[page.file] : ''" />
-          </div>
-        </template>
+        <DiaryPage
+          v-if="page"
+          design="letter"
+          compact
+          :page="page"
+          :text="typeof texts[page.file] === 'string' ? texts[page.file] : ''"
+          :problem="texts[page.file]?.problem ?? ''"
+          :companion="companion"
+        />
         <p v-else class="blank">{{ pages.length ? 'The next page is not written yet.' : 'No diary pages yet. Press Save diary after a talk with your companion.' }}</p>
       </article>
     </div>
@@ -116,7 +119,26 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 26px 30px;
+  padding: 14px 16px;
+}
+/* a soft shadow where the two pages meet, and a ribbon on the right-hand page */
+.leaf.left {
+  box-shadow: inset -18px 0 22px -18px rgba(0, 0, 0, 0.55);
+}
+.leaf.right {
+  position: relative;
+  box-shadow: inset 18px 0 22px -18px rgba(0, 0, 0, 0.55);
+}
+.leaf.right::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 34px;
+  width: 12px;
+  height: 46px;
+  background: var(--accent);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+  opacity: 0.85;
 }
 .leaf.left {
   border-right: 1px solid var(--line);

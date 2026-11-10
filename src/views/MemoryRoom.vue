@@ -7,7 +7,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import MarkdownText from '../components/MarkdownText.vue'
 import DiaryBook from '../components/DiaryBook.vue'
 import DiaryCalendar from '../components/DiaryCalendar.vue'
-import { DIARY_LOOKS, lookOf } from '../components/diaryviews.js'
+import DiaryPage from '../components/DiaryPage.vue'
+import { bookPages, DIARY_LOOKS, lookOf, PAGE_DESIGNS } from '../components/diaryviews.js'
 import { chatMediaOpen, getSettings, memoryRead, memoryShelves, saveSettings } from '../api/castle.js'
 
 const props = defineProps({
@@ -34,6 +35,9 @@ const memoryFolder = ref('')
 // how the DIARY is read: list | calendar | book (the other rooms are always a list)
 const diaryLook = ref('list')
 const look = computed(() => (props.room === 'diary' ? diaryLook.value : 'list'))
+// the companion's name signs a diary page; every diary page oldest first, for the days around one
+const companion = ref('')
+const diaryPages = computed(() => (props.room === 'diary' ? bookPages(shelves.value) : []))
 
 async function chooseLook(id) {
   diaryLook.value = lookOf(id)
@@ -87,6 +91,7 @@ async function load() {
     const settings = (await getSettings()).settings
     memoryFolder.value = settings.memoryFolder ?? ''
     diaryLook.value = lookOf(settings.diaryLook)
+    companion.value = settings.companionName ?? ''
   } catch {
     shelves.value = []
   }
@@ -109,7 +114,7 @@ watch(() => [props.room, props.stamp, props.openFile], load)
       <h2>{{ TITLES[room] }}</h2>
       <button v-for="l in DIARY_LOOKS" :key="l.id" :class="{ on: look === l.id }" :title="l.line" @click="chooseLook(l.id)">{{ l.label }}</button>
     </div>
-    <DiaryBook :shelves="shelves" :open-file="openFile" @open="open" />
+    <DiaryBook :shelves="shelves" :open-file="openFile" :companion="companion" @open="open" />
   </div>
   <div v-else class="memory-room">
     <aside class="list widget">
@@ -136,7 +141,12 @@ watch(() => [props.room, props.stamp, props.openFile], load)
       </template>
     </aside>
     <article class="page widget">
-      <template v-if="current">
+      <!-- a diary entry wears the page that goes with the way it is browsed -->
+      <template v-if="current && room === 'diary'">
+        <button v-if="!current.file.startsWith('db/')" class="small show-file" title="Show the file in its folder" @click="openOutside">Show file</button>
+        <DiaryPage :design="PAGE_DESIGNS[look]" :page="current" :text="text" :problem="problem" :pages="diaryPages" :companion="companion" @open="open" />
+      </template>
+      <template v-else-if="current">
         <header>
           <h1>{{ current.title }}</h1>
           <!-- a page of the database has no file to show -->
@@ -157,6 +167,10 @@ watch(() => [props.room, props.stamp, props.openFile], load)
   display: grid;
   grid-template-columns: minmax(260px, 30%) 1fr;
   gap: 18px;
+}
+.show-file {
+  align-self: flex-end;
+  margin-bottom: 6px;
 }
 .book-room {
   grid-template-columns: 1fr;
