@@ -5,6 +5,7 @@
 // theme: Castle drafts a working one from a picture at once, then the companion may polish it
 // or paint a wallpaper for it. Castle's loader checks every theme before it is used.
 import { computed, onMounted, ref } from 'vue'
+import { typeLine } from '../components/typeline.js'
 import {
   choosePicture,
   getSettings,
@@ -168,8 +169,9 @@ async function askCompanion(theme, paint) {
         'Keep text easy to read on the background. Tell me when you are done.',
       ]
   const text = lines.join('\n')
-  await terminalWrite(`\u001b[200~${text}\u001b[201~`)
-  await terminalWrite('\r')
+  // Codex reads an Enter that arrives together with the text as part of the paste and leaves the
+  // text in its box unsent; typeLine's pause before Enter is the same fix the quick actions use.
+  await typeLine(terminalWrite, `\u001b[200~${text}\u001b[201~`)
   done.value = `Asked ${props.companion}. When it is done, press Reload themes.`
   emit('show-chat')
 }

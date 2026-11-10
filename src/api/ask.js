@@ -2,6 +2,7 @@
 // member typed it in Chat (several lines go in as one paste, so nothing is sent early).
 import { terminalState, terminalWrite } from './castle.js'
 import { imageRequest } from './castle.js'
+import { typeLine } from '../components/typeline.js'
 
 export async function askImage(lines) {
   const outputLine = lines.find(line => line.startsWith('Save it as '))
@@ -14,6 +15,7 @@ export async function askCompanion(lines, companion = 'your companion') {
   const state = await terminalState().catch(() => null)
   if (!state?.running) throw new Error(`Wake ${companion} first, then ask again.`)
   const text = Array.isArray(lines) ? lines.join('\n') : String(lines)
-  await terminalWrite(`\u001b[200~${text}\u001b[201~`)
-  await terminalWrite('\r')
+  // Codex reads an Enter that arrives together with the text as part of the paste and leaves the
+  // text in its box unsent; typeLine's pause before Enter is the same fix the quick actions use.
+  await typeLine(terminalWrite, `\u001b[200~${text}\u001b[201~`)
 }

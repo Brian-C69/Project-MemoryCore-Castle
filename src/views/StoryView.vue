@@ -5,6 +5,7 @@
 // runs behind it - its terminal stays alive behind Log, and opens by itself when the companion
 // needs waking.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { typeLine } from '../components/typeline.js'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import TerminalPanel from '../components/TerminalPanel.vue'
 import ModalSheet from '../components/ModalSheet.vue'
@@ -82,8 +83,9 @@ async function say(text) {
     return false
   }
   problem.value = ''
-  await terminalWrite(text, 'story')
-  await terminalWrite('\r', 'story')
+  // Codex reads an Enter that arrives together with the text as part of the paste and leaves the
+  // text in its box unsent; typeLine's pause before Enter is the same fix the quick actions use.
+  await typeLine((t) => terminalWrite(t, 'story'), text)
   return true
 }
 

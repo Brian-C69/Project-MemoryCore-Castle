@@ -5,6 +5,7 @@
 // signature is checked, it installs and Castle restarts. A member's own build: a quiet "X is out"
 // that opens Settings > About (it updates with git pull, never by itself).
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { typeLine } from './typeline.js'
 import { diaryStamp, terminalState, terminalWrite, updateCheck, updateInstall } from '../api/castle.js'
 import MarkdownText from './MarkdownText.vue'
 
@@ -31,8 +32,7 @@ async function saveDiaryFirst() {
   if (!state?.running) return
   const before = await diaryStamp()
   step.value = 'Saving the diary first…'
-  await terminalWrite('save diary')
-  await terminalWrite('\r')
+  await typeLine(terminalWrite, 'save diary')
   for (let waited = 0; waited < 180 && !skip; waited += 3) {
     await sleep(3000)
     if ((await diaryStamp()) > before) {

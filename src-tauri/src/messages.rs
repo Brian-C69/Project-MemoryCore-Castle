@@ -41,8 +41,40 @@ fn save(store: &SettingsStore, messages: &[Message]) -> Result<(), String> {
     .map_err(|_| "Message queue could not be saved.")?;
     std::fs::rename(temp, path).map_err(|_| "Message queue could not be published.".into())
 }
-fn payload(text: &str) -> String {
-    format!("\u{1b}[200~{}\u{1b}[201~\r", text)
+/// The text as one bracketed paste, so a new line never sends the message early.
+fn paste(text: &str) -> String {
+    format!("\u{1b}[200~{}\u{1b}[201~", text)
+}
+
+/// Codex reads an Enter that arrives together with text as part of a paste and leaves the text in
+/// its box unsent, so Enter follows after a short pause (Codex needs more than 50 ms; this leaves
+/// margin for a busy PC). The wait is on its own thread: commands must not hold the window.
+const ENTER_DELAY: std::time::Duration = std::time::Duration::from_millis(250);
+
+fn send_main(app: &AppHandle, text: &str) -> Result<(), String> {
+    let host = &app.state::<MainHost>().0;
+    // Captured before the paste, so the delayed Enter below can tell this session apart from
+    // whatever a switch or restart might replace it with in the next ENTER_DELAY.
+    let id = host.started().map(|(id, _)| id).ok_or("Your companion's session is not running.")?;
+    host.write(paste(text).as_bytes())?;
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(ENTER_DELAY);
+        let _ = app.state::<MainHost>().0.write_if_current(id, b"\r");
+    });
+    Ok(())
+}
+
+fn send_story(app: &AppHandle, text: &str) -> Result<(), String> {
+    let host = &app.state::<StoryHost>().0;
+    let id = host.started().map(|(id, _)| id).ok_or("Your companion's session is not running.")?;
+    host.write(paste(text).as_bytes())?;
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(ENTER_DELAY);
+        let _ = app.state::<StoryHost>().0.write_if_current(id, b"\r");
+    });
+    Ok(())
 }
 
 #[tauri::command]
@@ -51,9 +83,7 @@ pub fn send_message(text: String, room: Option<String>, app: AppHandle) -> Resul
         return Err("Use a nonempty message shorter than 128 KB.".into());
     }
     if room.as_deref() == Some("story") {
-        app.state::<StoryHost>()
-            .0
-            .write(payload(&text).as_bytes())?;
+        send_story(&app, &text)?;
         return Ok(Sent { queued: false });
     }
     let store = app.state::<SettingsStore>();
@@ -94,7 +124,7 @@ pub fn send_message(text: String, room: Option<String>, app: AppHandle) -> Resul
         }
         return Ok(Sent { queued: true });
     }
-    app.state::<MainHost>().0.write(payload(&text).as_bytes())?;
+    send_main(&app, &text)?;
     Ok(Sent { queued: false })
 }
 
@@ -180,7 +210,7 @@ pub fn start(app: &AppHandle) {
         else {
             continue;
         };
-        if main.0.write(payload(&messages[at].text).as_bytes()).is_ok() {
+        if send_main(&app, &messages[at].text).is_ok() {
             // Retain as held if queue publication fails; do not resend on a subsequent tick.
             messages[at].state = "sent".into();
             let sent = messages.remove(at);
@@ -198,6 +228,9 @@ mod tests {
     use super::*;
     #[test]
     fn sends_multiline_text_as_one_bracketed_paste() {
-        assert_eq!(payload("one\ntwo"), "\u{1b}[200~one\ntwo\u{1b}[201~\r");
+        // Enter is not part of it: it follows after ENTER_DELAY, because Codex ignores an Enter
+        // that arrives with the text.
+        assert_eq!(paste("one\ntwo"), "\u{1b}[200~one\ntwo\u{1b}[201~");
+        assert!(ENTER_DELAY >= std::time::Duration::from_millis(100));
     }
 }

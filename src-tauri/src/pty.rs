@@ -228,6 +228,23 @@ impl PtyHost {
         self.write_quietly(data)
     }
 
+    /// Writes only if the running session is still the one with this id - a stray write, silently
+    /// skipped once it is not. For a delayed write queued against today's session (the Enter that
+    /// follows a pasted message after `ENTER_DELAY_MS`, in messages.rs): if a provider switch or a
+    /// restart replaced the session in the meantime, that Enter must not land on the new one, where
+    /// it could accept a startup prompt such as Claude's folder-trust dialog.
+    pub fn write_if_current(&self, id: u64, data: &[u8]) -> Result<(), String> {
+        let mut slot = self.session.lock().unwrap();
+        match slot.as_mut() {
+            Some((current, session)) if *current == id => {
+                *self.input_time.lock().unwrap() = Some(std::time::SystemTime::now());
+                *self.last_input.lock().unwrap() = Some(std::time::Instant::now());
+                session.write(data)
+            }
+            _ => Ok(()),
+        }
+    }
+
     /// Something was handed to the session as if typed (a provider handoff prompt).
     pub fn mark_input(&self) {
         *self.input_time.lock().unwrap() = Some(std::time::SystemTime::now());
@@ -375,6 +392,53 @@ mod tests {
         }
         assert!(seen.contains("castle-console-test-\u{65E5}\u{672C}"), "output was: {seen:?}");
         assert!(host.snapshot().contains("castle-console-test-"));
+    }
+
+    #[test]
+    fn write_if_current_is_a_silent_no_op_when_nothing_is_running() {
+        let host = PtyHost::default();
+        // No session exists, so no id can ever match; this must not error - just skip quietly.
+        assert!(host.write_if_current(1, b"\r").is_ok());
+    }
+
+    #[test]
+    fn a_stale_id_is_ignored_even_while_the_right_session_is_running() {
+        let host = PtyHost::default();
+        let mut command = CommandBuilder::new("cmd.exe");
+        command.args(["/c", "echo castle-write-if-current-test"]);
+        command.cwd(std::env::temp_dir());
+
+        let (text_tx, text_rx) = mpsc::channel::<String>();
+        let (exit_tx, exit_rx) = mpsc::channel::<(u64, Option<u32>)>();
+        let started = host
+            .start(command, 80, 24, move |t| { let _ = text_tx.send(t); }, move |id, code| {
+                let _ = exit_tx.send((id, code));
+            })
+            .unwrap();
+        assert!(started);
+        let (id, _) = host.started().unwrap();
+
+        // A write for a different id (what a replaced session's delayed Enter would carry) must not
+        // error and must not reach this console - only the matching id's write below answers it.
+        assert!(host.write_if_current(id + 1, b"\x1b[1;1R").is_ok());
+
+        let mut seen = String::new();
+        let deadline = std::time::Instant::now() + Duration::from_secs(20);
+        let (exit_id, code) = loop {
+            if let Ok(ending) = exit_rx.try_recv() {
+                break ending;
+            }
+            assert!(std::time::Instant::now() < deadline, "the program never ended; output was: {seen:?}");
+            if let Ok(piece) = text_rx.recv_timeout(Duration::from_millis(200)) {
+                seen.push_str(&piece);
+                if seen.contains("\x1b[6n") {
+                    assert!(host.write_if_current(id, b"\x1b[1;1R").is_ok());
+                }
+            }
+        };
+        assert_eq!(code, Some(0));
+        assert_eq!(exit_id, id);
+        host.finished(id);
     }
 
     #[test]
