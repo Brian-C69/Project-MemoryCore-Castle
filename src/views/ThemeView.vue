@@ -487,9 +487,9 @@ input {
   backdrop-filter: blur(var(--glass-blur));
 }
 .pick {
-  display: flex;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
   align-items: center;
-  justify-content: center;
   gap: 14px;
   margin-top: 6px;
   padding: 10px 12px 4px;
@@ -499,7 +499,6 @@ input {
 }
 .pick strong {
   min-width: 0;
-  flex: 0 1 auto;
   font-family: 'Palatino Linotype', Palatino, Georgia, serif;
   font-style: italic;
   font-weight: 400;
@@ -509,6 +508,9 @@ input {
   text-overflow: ellipsis;
 }
 .arrow {
+  width: 36px;
+  height: 36px;
+  box-sizing: border-box;
   padding: 0 8px;
   border: none;
   background: none;
