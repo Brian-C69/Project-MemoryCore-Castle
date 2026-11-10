@@ -12,6 +12,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 - Changed your mind? **Move my memory back to files** (Settings > Database) writes everything out as files again and empties the database.
 - The **backup** carries the database (a dump is written before every backup), and a new PC can **Restore from my backup**.
 - A new **DATABASE** card on HOME shows whether it is running, with one button for the next step.
+- **The THEME room is a showroom now**: three cases side by side - your main theme, your diary theme and your story theme - each showing the look you are wearing, with arrows to walk through the others and one line that says the whole outfit. Create theme, Polish, Paint and Delete are where they were.
+- Each way of reading the diary wears its own page: the **List** is a handwritten notebook, the **Calendar** a constellation journal, the **Book** a letter under starlight.
 - **Three ways to read your diary.** The DIARY room can be a **List** (by month, as before), a **Calendar** (days with a page are marked) or a **Book** (two pages side by side, turned with the arrows). Choose at the top of the room or in Settings > Rooms; your choice is remembered.
 - Your companion now writes the diary **the way a person writes one**: in the first person, in paragraphs, about what happened and how it felt - not a report with headings and bullet points.
 - **Only your companion in Castle** (Settings > Companion): leaves your personal Claude Code setup out of Castle's session, for a PC where that setup is another companion. Off unless you turn it on.

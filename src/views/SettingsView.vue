@@ -332,7 +332,7 @@ onMounted(async () => {
         <p class="hint">Turning STORY off ends the story session; turning WORLD off closes the world screens; CHAT stops reading the room. Their files stay.</p>
 
         <h3>Diary</h3>
-        <p class="hint">How the DIARY room is read. The pages are the same; only the design changes.</p>
+        <p class="hint">How the DIARY room is read. The pages are the same; only the design changes. The THEME room shows each one with the page it wears.</p>
         <div class="row">
           <button v-for="l in DIARY_LOOKS" :key="l.id" :class="{ primary: lookOf(settings.diaryLook) === l.id }" :title="l.line" @click="save({ diaryLook: l.id })">{{ l.label }}</button>
         </div>
@@ -350,7 +350,7 @@ onMounted(async () => {
       </section>
 
       <section v-else-if="tab === 'story'" class="pane">
-        <p class="hint">How the STORY room shows your adventures. Change it any time - even in the middle of a story, with Look on the STORY bar.</p>
+        <p class="hint">How the STORY room shows your adventures. Change it any time - even in the middle of a story, with Look on the STORY bar. The THEME room shows it beside your main theme and your diary theme.</p>
         <div class="looks">
           <button v-for="l in LOOKS" :key="l.id" class="look" :class="{ chosen: (settings.storyLook ?? 'classic') === l.id }" @click="save({ storyLook: l.id })">
             <img :src="`/story-looks/${l.id}.jpg`" alt="" />

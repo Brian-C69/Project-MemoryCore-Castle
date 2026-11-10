@@ -1,7 +1,9 @@
 <script setup>
-// THEME: every theme (built-in and the member's own) as a card, Use / Delete, and Create theme -
-// Castle drafts a working theme from a picture at once, then the companion may polish it or
-// paint a wallpaper for it. Castle's loader checks every theme before it is used.
+// THEME: a showroom with three cases - the main theme (the whole Castle), the diary theme (how
+// the DIARY is browsed and the page it wears) and the story theme (the STORY stage). Each case
+// shows the look that is worn; its arrows walk through the others. Create theme makes a main
+// theme: Castle drafts a working one from a picture at once, then the companion may polish it
+// or paint a wallpaper for it. Castle's loader checks every theme before it is used.
 import { computed, onMounted, ref } from 'vue'
 import {
   choosePicture,
@@ -14,6 +16,10 @@ import {
   themeFolder,
   userThemes,
 } from '../api/castle.js'
+import DiaryPage from '../components/DiaryPage.vue'
+import StoryMini from '../components/StoryMini.vue'
+import { lookOf } from '../components/diaryviews.js'
+import { DIARY_THEMES, indexOf, SAMPLE_PAGE, SAMPLE_PAGES, SAMPLE_TEXT, step, STORY_THEMES, wearingLine } from '../components/themeroom.js'
 import { builtInThemes, fromUserFolders, problemWith } from '../themes/loader.js'
 
 const props = defineProps({
@@ -23,7 +29,11 @@ const emit = defineEmits(['changed', 'show-chat'])
 
 const themes = ref([])
 const broken = ref([])
-const currentId = ref('')
+const currentId = ref('constellation')
+// the main theme standing in the case (walked with the arrows; worn only after Use)
+const shownAt = ref(0)
+const diaryLook = ref('list')
+const storyLook = ref('classic')
 const busy = ref('')
 const problem = ref('')
 const done = ref('')
@@ -32,18 +42,28 @@ const lastCreated = ref('')
 let settings = null
 
 const pictureName = computed(() => form.value.picture.split(/[\\/]/).pop())
+const shown = computed(() => themes.value[shownAt.value] ?? null)
+const worn = computed(() => themes.value.find((t) => t.id === currentId.value) ?? null)
+const diaryAt = computed(() => indexOf(DIARY_THEMES, diaryLook.value))
+const storyAt = computed(() => indexOf(STORY_THEMES, storyLook.value))
+const diary = computed(() => DIARY_THEMES[diaryAt.value])
+const story = computed(() => STORY_THEMES[storyAt.value])
+const wearing = computed(() => wearingLine(worn.value?.name, diaryLook.value, storyLook.value))
 
 async function load() {
   try {
     const view = await getSettings()
     settings = view.settings
     currentId.value = view.settings.theme ?? 'constellation'
+    diaryLook.value = lookOf(view.settings.diaryLook)
+    storyLook.value = view.settings.storyLook ?? 'classic'
     const yours = fromUserFolders(await userThemes())
     themes.value = [...builtInThemes(), ...yours.themes]
     broken.value = yours.broken
   } catch {
     themes.value = builtInThemes()
   }
+  shownAt.value = indexOf(themes.value, currentId.value)
 }
 
 async function attempt(label, work) {
@@ -74,6 +94,28 @@ async function use(theme) {
   }
 }
 
+// The diary and story cases change what is worn as the arrows turn: they are light to change
+// and nothing else on the screen moves.
+async function wear(patch, apply) {
+  apply()
+  if (!settings) return // outside Castle's window: the case still turns
+  const saved = await attempt('Saving…', () => saveSettings({ ...settings, ...patch }))
+  if (saved) {
+    settings = saved.settings
+    emit('changed')
+  }
+}
+
+function turnDiary(by) {
+  const next = DIARY_THEMES[step(diaryAt.value, by, DIARY_THEMES.length)].id
+  wear({ diaryLook: next }, () => (diaryLook.value = next))
+}
+
+function turnStory(by) {
+  const next = STORY_THEMES[step(storyAt.value, by, STORY_THEMES.length)].id
+  wear({ storyLook: next }, () => (storyLook.value = next))
+}
+
 async function remove(theme) {
   if (theme.id === currentId.value) {
     problem.value = 'Choose another theme first - this one is in use.'
@@ -94,6 +136,7 @@ async function create() {
   await load()
   const made = themes.value.find((t) => t.id === id)
   if (made) await use(made)
+  shownAt.value = indexOf(themes.value, id)
   done.value = `${made?.name ?? 'Your theme'} is ready.`
   form.value = { open: false, name: '', mood: '', picture: '' }
 }
@@ -139,7 +182,6 @@ onMounted(load)
       <span v-else-if="problem" class="problem">{{ problem }}</span>
       <span v-else-if="done" class="good">{{ done }}</span>
       <button @click="load">Reload themes</button>
-      <button class="primary" @click="form.open = !form.open">+ Create theme</button>
     </header>
 
     <section v-if="form.open" class="create widget">
@@ -157,27 +199,79 @@ onMounted(load)
       <p class="hint">Castle takes the colours from your picture so the theme works right away. Then you can ask {{ companion }} to polish it.</p>
     </section>
 
-    <div class="grid">
-      <article v-for="theme in themes" :key="theme.id" class="card widget" :class="{ current: theme.id === currentId }">
-        <div class="preview" :style="theme.wallpaperUrl ? { backgroundImage: `url(&quot;${theme.wallpaperUrl}&quot;)` } : { background: theme.colors?.['--background'] ?? '#050b1f' }">
-          <span class="swatch" :style="{ background: theme.colors?.['--accent'] }"></span>
-          <span v-if="theme.id === currentId" class="badge">In use</span>
+    <div class="showroom">
+      <!-- the main theme: the whole Castle -->
+      <section class="case">
+        <h3>MAIN THEME</h3>
+        <div class="glass">
+          <span class="lamp" aria-hidden="true" />
+          <div
+            v-if="shown"
+            class="stage picture"
+            :style="shown.wallpaperUrl ? { backgroundImage: `url(&quot;${shown.wallpaperUrl}&quot;)` } : { background: shown.colors?.['--background'] ?? '#050b1f' }"
+          >
+            <span class="swatch" :style="{ background: shown.colors?.['--accent'] }"></span>
+            <span v-if="shown.id === currentId" class="badge">In use</span>
+            <span class="source">{{ shown.source === 'yours' ? 'Yours' : 'Built in' }}</span>
+          </div>
         </div>
-        <div class="info">
-          <strong>{{ theme.name }}</strong>
-          <span class="source">{{ theme.source === 'yours' ? 'Yours' : 'Built in' }}</span>
+        <div class="pick">
+          <button class="arrow" aria-label="Earlier theme" :disabled="themes.length < 2" @click="shownAt = step(shownAt, -1, themes.length)">‹</button>
+          <strong>{{ shown?.name ?? '' }}</strong>
+          <button class="arrow" aria-label="Later theme" :disabled="themes.length < 2" @click="shownAt = step(shownAt, 1, themes.length)">›</button>
         </div>
-        <p class="desc">{{ theme.description }}</p>
-        <div class="row">
-          <button v-if="theme.id !== currentId" class="primary" @click="use(theme)">Use</button>
-          <template v-if="theme.source === 'yours'">
-            <button :title="`Ask ${companion} to polish the colours and layout`" @click="askCompanion(theme, false)">Polish</button>
-            <button :title="`Ask ${companion} to paint a wallpaper`" @click="askCompanion(theme, true)">Paint</button>
-            <button class="danger" @click="remove(theme)">Delete</button>
+        <p class="dots" aria-hidden="true"><i v-for="(t, i) in themes" :key="t.id" :class="{ on: i === shownAt, worn: t.id === currentId }" /></p>
+        <p class="line">{{ shown?.description }}</p>
+        <div v-if="shown" class="row centre">
+          <button v-if="shown.id !== currentId" class="primary" @click="use(shown)">Use</button>
+          <template v-if="shown.source === 'yours'">
+            <button :title="`Ask ${companion} to polish the colours and layout`" @click="askCompanion(shown, false)">Polish</button>
+            <button :title="`Ask ${companion} to paint a wallpaper`" @click="askCompanion(shown, true)">Paint</button>
+            <button class="danger" @click="remove(shown)">Delete</button>
           </template>
         </div>
-      </article>
+      </section>
+
+      <!-- the diary theme: how the DIARY is browsed, and the page it wears -->
+      <section class="case">
+        <h3>DIARY THEME</h3>
+        <div class="glass">
+          <span class="lamp" aria-hidden="true" />
+          <div class="stage page">
+            <DiaryPage :design="diary.page" compact :page="SAMPLE_PAGE" :text="SAMPLE_TEXT" :pages="SAMPLE_PAGES" :companion="companion" />
+          </div>
+        </div>
+        <div class="pick">
+          <button class="arrow" aria-label="Earlier diary theme" @click="turnDiary(-1)">‹</button>
+          <strong>{{ diary.name }}</strong>
+          <button class="arrow" aria-label="Later diary theme" @click="turnDiary(1)">›</button>
+        </div>
+        <p class="dots" aria-hidden="true"><i v-for="(t, i) in DIARY_THEMES" :key="t.id" :class="{ on: i === diaryAt, worn: i === diaryAt }" /></p>
+        <p class="line">{{ diary.line }}</p>
+      </section>
+
+      <!-- the story theme: the STORY stage -->
+      <section class="case">
+        <h3>STORY THEME</h3>
+        <div class="glass">
+          <span class="lamp" aria-hidden="true" />
+          <div class="stage"><StoryMini :look="story.id" :scene="worn?.wallpaperUrl ?? ''" /></div>
+        </div>
+        <div class="pick">
+          <button class="arrow" aria-label="Earlier story theme" @click="turnStory(-1)">‹</button>
+          <strong>{{ story.name }}</strong>
+          <button class="arrow" aria-label="Later story theme" @click="turnStory(1)">›</button>
+        </div>
+        <p class="dots" aria-hidden="true"><i v-for="(t, i) in STORY_THEMES" :key="t.id" :class="{ on: i === storyAt, worn: i === storyAt }" /></p>
+        <p class="line">{{ story.line }}</p>
+      </section>
     </div>
+
+    <footer class="foot">
+      <span class="spacer"></span>
+      <p class="wearing">{{ wearing }}</p>
+      <span class="spacer end"><button class="primary" @click="form.open = !form.open">+ Create theme</button></span>
+    </footer>
 
     <div v-if="broken.length" class="broken widget">
       <h3>Themes that could not be read</h3>
@@ -192,7 +286,7 @@ onMounted(load)
   inset: 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   overflow-y: auto;
 }
 .widget {
@@ -208,6 +302,9 @@ onMounted(load)
   gap: 10px;
   align-items: center;
 }
+.row.centre {
+  justify-content: center;
+}
 h2 {
   margin: 0;
   font-size: 13px;
@@ -215,7 +312,8 @@ h2 {
   letter-spacing: 0.2em;
   color: var(--accent);
 }
-h3 {
+.create h3,
+.broken h3 {
   margin: 0 0 10px;
   font-size: 15px;
   font-weight: 500;
@@ -244,31 +342,83 @@ input {
   font: inherit;
   font-size: 14px;
 }
-.grid {
+
+/* ---------- the showroom ---------- */
+.showroom {
+  flex: 1;
+  min-height: 420px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(18px, 4vw, 64px);
+  align-items: stretch;
+  padding: 6px clamp(8px, 3vw, 48px) 0;
 }
-.card {
+.case {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   gap: 8px;
-  padding: 12px;
+  text-align: center;
 }
-.card.current {
-  border-color: var(--accent);
+.case h3 {
+  margin: 0 0 4px;
+  font-family: 'Palatino Linotype', Palatino, Georgia, serif;
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: 0.34em;
+  color: var(--text);
 }
-.preview {
+/* a display case: a frame of glass lit from above, the look standing inside it */
+.glass {
   position: relative;
-  height: 150px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: 26px 18px 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
   border-radius: 10px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 34%),
+    color-mix(in srgb, var(--panel-background) 82%, transparent);
+  box-shadow:
+    inset 0 0 0 5px color-mix(in srgb, var(--accent) 7%, transparent),
+    inset 0 -30px 40px -26px color-mix(in srgb, var(--accent) 30%, transparent),
+    0 18px 40px -18px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(var(--glass-blur));
+}
+.lamp {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 46px;
+  height: 6px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 14px 4px color-mix(in srgb, var(--accent) 70%, #fff), 0 10px 46px 18px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-align: left;
+}
+.stage.picture {
   background-size: cover;
   background-position: center;
 }
+.stage.page {
+  background: color-mix(in srgb, #04081c 55%, transparent);
+  padding: 4px 6px;
+}
 .swatch {
   position: absolute;
-  bottom: 10px;
-  left: 10px;
+  bottom: 12px;
+  left: 12px;
   width: 22px;
   height: 22px;
   border: 2px solid rgba(255, 255, 255, 0.7);
@@ -276,8 +426,8 @@ input {
 }
 .badge {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 12px;
+  right: 12px;
   padding: 3px 10px;
   border-radius: 999px;
   background: var(--accent);
@@ -285,13 +435,111 @@ input {
   font-size: 12px;
   font-weight: 600;
 }
-.info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.source {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 11px;
+  color: var(--text);
 }
-.source,
-.desc,
+/* the plinth under a case: the name, the dots and one line, on glass so they read over any wallpaper */
+.pick,
+.dots,
+.line {
+  background: color-mix(in srgb, var(--panel-background) 88%, #04081c);
+  backdrop-filter: blur(var(--glass-blur));
+}
+.pick {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 6px;
+  padding: 10px 12px 4px;
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+}
+.pick strong {
+  min-width: 0;
+  flex: 0 1 auto;
+  font-family: 'Palatino Linotype', Palatino, Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 19px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.arrow {
+  padding: 0 8px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+.arrow:hover {
+  color: var(--accent);
+}
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  margin: -8px 0 0;
+  padding: 6px 0;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+.dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 28%, transparent);
+}
+.dots i.worn {
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.dots i.on {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+.line {
+  min-height: 2.9em;
+  margin: -8px 0 0;
+  padding: 2px 14px 10px;
+  border: 1px solid var(--line);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.foot .end {
+  display: flex;
+  justify-content: flex-end;
+}
+.wearing {
+  margin: 0;
+  padding: 6px 22px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-background) 88%, #04081c);
+  backdrop-filter: blur(var(--glass-blur));
+  font-family: 'Palatino Linotype', Palatino, Georgia, serif;
+  font-style: italic;
+  font-size: 17px;
+  text-align: center;
+}
 .hint {
   margin: 0;
   font-size: 12px;
