@@ -191,6 +191,13 @@ pub struct Settings {
     pub link_on: bool,
     /// The room companion may pass the member's own words to the workspace (off until ticked).
     pub room_may_pass: bool,
+    /// The port of the member's database, fixed once chosen (None until the engine is installed
+    /// or an existing one is chosen). Rust's to keep: the page never writes it.
+    pub db_port: Option<u16>,
+    /// True when the member uses a MySQL / MariaDB that was already on this PC (XAMPP).
+    pub db_external: bool,
+    /// Leave Castle's database engine running after Castle closes (off: it stops with Castle).
+    pub db_keep_running: bool,
 }
 
 pub const STORY_LOOKS: [&str; 5] = ["classic", "cinema", "book", "messenger", "jrpg"];
@@ -222,6 +229,9 @@ impl Default for Settings {
             last_seen_version: None,
             link_on: true,
             room_may_pass: false,
+            db_port: None,
+            db_external: false,
+            db_keep_running: false,
         }
     }
 }
@@ -394,6 +404,9 @@ mod tests {
             last_seen_version: Some("0.2.0".into()),
             link_on: false,
             room_may_pass: true,
+            db_port: Some(3307),
+            db_external: false,
+            db_keep_running: true,
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));

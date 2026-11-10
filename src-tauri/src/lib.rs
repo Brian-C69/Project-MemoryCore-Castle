@@ -96,6 +96,9 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
         let current = store.get();
         settings.room_companion_key_id = current.room_companion_key_id;
         settings.room_companion_name = current.room_companion_name;
+        // the database's port and kind are set by the engine's own buttons
+        settings.db_port = current.db_port;
+        settings.db_external = current.db_external;
     }
     settings::save(&store.path, &settings).map_err(|_| "The settings could not be saved.".to_string())?;
     *store.startup_note.lock().unwrap() = startup::sync(&app, settings.start_with_windows);
@@ -264,7 +267,12 @@ pub fn run() {
             take_auto_wake,
             chat::chat_poll,
             chat::chat_media,
-            chat::chat_attach
+            chat::chat_attach,
+            db::db_status,
+            db::db_install,
+            db::db_start,
+            db::db_stop,
+            db::db_use_existing
         ])
         .setup(|app| {
             let config = match settings::test_override(settings::TEST_CONFIG_VAR) {
@@ -313,6 +321,7 @@ pub fn run() {
             world::watch_covered(app.handle());
             roomread::start(app.handle());
             link::start(app.handle());
+            db::start_with_castle(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -331,6 +340,7 @@ pub fn run() {
             // The companion's sessions belong to Castle: when Castle ends, so do they.
             if let RunEvent::Exit = event {
                 session::end_all(app);
+                db::stop_with_castle(app);
             }
         });
 }

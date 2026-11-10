@@ -13,6 +13,7 @@
 //! the member may use that one instead. Otherwise Castle's own engine takes the first free port
 //! from 3307 and keeps it for good (saved in settings), so the companion's connection never moves.
 
+use crate::settings::SettingsStore;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::io::Read;
@@ -20,6 +21,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// The MariaDB release Castle installs: 11.4 is the long-term-support line.
 pub const VERSION: &str = "11.4.13";
@@ -113,6 +115,16 @@ pub fn port_busy_line(port: u16) -> String {
         "Port {port} is being used by another program, so the database cannot start. \
          See which one with `netstat -ano | findstr :{port}` and close it (or end it with `taskkill /PID <number>`), then press Start again."
     )
+}
+
+/// What Castle keeps from the release zip: everything a running server and its tools need.
+/// Debug symbols, link libraries and C headers (about 150 MB) are for developers of MariaDB.
+pub fn keep_in_unpack(relative: &Path) -> bool {
+    let first = relative.components().next().map(|c| c.as_os_str().to_string_lossy().to_lowercase());
+    if first.as_deref() == Some("include") {
+        return false;
+    }
+    !matches!(relative.extension().and_then(|e| e.to_str()).map(str::to_lowercase).as_deref(), Some("pdb") | Some("lib"))
 }
 
 // ---------- where things live ----------
@@ -257,7 +269,7 @@ fn unpack(bytes: &[u8], target: &Path) -> Result<(), String> {
         let mut file = archive.by_index(i).map_err(|_| "The zip could not be read.".to_string())?;
         let Some(inside) = file.enclosed_name() else { continue };
         let relative: PathBuf = inside.components().skip(1).collect();
-        if relative.as_os_str().is_empty() {
+        if relative.as_os_str().is_empty() || !keep_in_unpack(&relative) {
             continue;
         }
         let out = partial.join(relative);
@@ -339,6 +351,127 @@ pub fn stop(home: &Path, port: u16) -> Result<(), String> {
     Err("The database is still stopping.".into())
 }
 
+// ---------- what Castle does with it ----------
+
+/// What Settings and the HOME card show.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DbView {
+    pub engine: Engine,
+    pub version: &'static str,
+    /// The size of the download, for the Install button.
+    pub download_bytes: u64,
+    pub keep_running: bool,
+}
+
+fn view_of(store: &SettingsStore) -> DbView {
+    let s = store.get();
+    DbView { engine: detect(&home(), s.db_port, s.db_external), version: VERSION, download_bytes: ZIP_BYTES, keep_running: s.db_keep_running }
+}
+
+/// Keeps the engine's port and kind in settings.json (the page never writes these two).
+fn remember(store: &SettingsStore, port: Option<u16>, external: bool) -> Result<(), String> {
+    let mut settings = store.get();
+    settings.db_port = port;
+    settings.db_external = external;
+    crate::settings::save(&store.path, &settings).map_err(|_| "The settings could not be saved.".to_string())?;
+    *store.current.lock().unwrap() = settings;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn db_status(app: AppHandle) -> DbView {
+    tauri::async_runtime::spawn_blocking(move || view_of(&app.state::<SettingsStore>())).await.expect("db status")
+}
+
+/// Install: download, check, unpack, make the data folder, then start. The port is chosen once.
+#[tauri::command]
+pub async fn db_install(app: AppHandle) -> Result<DbView, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = app.state::<SettingsStore>();
+        let home = home();
+        let port = match store.get().db_port.filter(|_| !store.get().db_external) {
+            Some(port) => port,
+            None => choose_port(probe_port).ok_or("No free port was found for the database between 3306 and 3399.")?,
+        };
+        if !installed(&home) {
+            let emitter = app.clone();
+            install(&home, port, move |done, total| {
+                let _ = emitter.emit(INSTALL_EVENT, serde_json::json!({ "done": done, "total": total }));
+            })?;
+        }
+        remember(&store, Some(port), false)?;
+        start(&home, port)?;
+        Ok(view_of(&store))
+    })
+    .await
+    .map_err(|_| "The install stopped.".to_string())?
+}
+
+#[tauri::command]
+pub async fn db_start(app: AppHandle) -> Result<DbView, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = app.state::<SettingsStore>();
+        let s = store.get();
+        if s.db_external {
+            return Err("This database belongs to another program on this PC (XAMPP, for example). Start it there.".into());
+        }
+        start(&home(), s.db_port.unwrap_or(PREFERRED_PORT))?;
+        Ok(view_of(&store))
+    })
+    .await
+    .map_err(|_| "The start stopped.".to_string())?
+}
+
+#[tauri::command]
+pub async fn db_stop(app: AppHandle) -> Result<DbView, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = app.state::<SettingsStore>();
+        let s = store.get();
+        if s.db_external {
+            return Err("This database belongs to another program on this PC. Stop it there.".into());
+        }
+        stop(&home(), s.db_port.unwrap_or(PREFERRED_PORT))?;
+        Ok(view_of(&store))
+    })
+    .await
+    .map_err(|_| "The stop did not finish.".to_string())?
+}
+
+/// The member chooses the MySQL / MariaDB already answering on 3306 instead of installing one.
+#[tauri::command]
+pub fn db_use_existing(store: State<SettingsStore>) -> Result<DbView, String> {
+    if probe_port(PREFERRED_PORT) != PortUse::MySql {
+        return Err("No database is answering on port 3306 right now. Start it (XAMPP's MySQL, for example) and try again.".into());
+    }
+    remember(&store, Some(PREFERRED_PORT), true)?;
+    Ok(view_of(&store))
+}
+
+/// When Castle opens: its own installed engine starts by itself, quietly, off the main thread.
+pub fn start_with_castle(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let s = app.state::<SettingsStore>().get();
+        let home = home();
+        if s.db_external || !installed(&home) {
+            return;
+        }
+        if let Err(why) = start(&home, s.db_port.unwrap_or(PREFERRED_PORT)) {
+            eprintln!("MemoryCore Castle: the database did not start: {why}");
+        }
+    });
+}
+
+/// When Castle ends: its own engine stops with it, unless the member keeps it running.
+pub fn stop_with_castle(app: &AppHandle) {
+    let s = app.state::<SettingsStore>().get();
+    if s.db_external || s.db_keep_running || !installed(&home()) {
+        return;
+    }
+    let _ = stop(&home(), s.db_port.unwrap_or(PREFERRED_PORT));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -405,5 +538,34 @@ mod tests {
         });
         assert_eq!(probe_port(port), PortUse::Other);
         handle.join().unwrap();
+    }
+
+    #[test]
+    fn the_unpack_leaves_out_what_only_mariadb_developers_need() {
+        assert!(keep_in_unpack(Path::new("bin/mariadbd.exe")));
+        assert!(keep_in_unpack(Path::new("bin/server.dll")));
+        assert!(keep_in_unpack(Path::new("share/english/errmsg.sys")));
+        assert!(keep_in_unpack(Path::new("lib/plugin/auth_ed25519.dll")));
+        assert!(!keep_in_unpack(Path::new("bin/server.pdb")));
+        assert!(!keep_in_unpack(Path::new("lib/server.lib")));
+        assert!(!keep_in_unpack(Path::new("include/mysql/mysql.h")));
+    }
+
+    /// The real thing, on demand: `cargo test --lib db::tests::live -- --ignored` with
+    /// CASTLE_DB_LIVE_HOME set to an empty scratch folder. Downloads about 95 MB.
+    #[test]
+    #[ignore]
+    fn live_install_start_stop() {
+        let home = PathBuf::from(std::env::var_os("CASTLE_DB_LIVE_HOME").expect("set CASTLE_DB_LIVE_HOME"));
+        let port = (3307..=3399).find(|p| probe_port(*p) == PortUse::Free).unwrap();
+        if !installed(&home) {
+            install(&home, port, |_, _| {}).unwrap();
+        }
+        assert!(installed(&home));
+        assert_eq!(detect(&home, Some(port), false), Engine::Stopped { port });
+        start(&home, port).unwrap();
+        assert_eq!(detect(&home, Some(port), false), Engine::Running { port });
+        stop(&home, port).unwrap();
+        assert_eq!(detect(&home, Some(port), false), Engine::Stopped { port });
     }
 }
