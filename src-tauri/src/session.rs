@@ -101,15 +101,18 @@ pub fn tools_folder(app: &AppHandle) -> PathBuf {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalView {
+    provider: Option<Cli>,
     running: bool,
     status: SessionStatus,
     snapshot: String,
 }
 
 fn view(store: &SettingsStore, host: &PtyHost, room: Room) -> TerminalView {
-    let settings = store.get();
+    let mut settings = store.get();
+    settings.cli = host.provider().unwrap_or(settings.cli);
     let program = env::find_on_path(settings.cli.command());
     TerminalView {
+        provider: host.provider(),
         running: host.is_running(),
         status: status(&settings, room, program.as_deref()),
         snapshot: host.snapshot(),
@@ -193,7 +196,11 @@ fn prepare_boot(store: &SettingsStore, settings: &Settings, room: Room, folder: 
 
 /// Starts the room's session unless it is already running. The screen hears it through that
 /// room's output and exit events.
-fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols: u16, rows: u16) -> Result<(), String> {
+pub(crate) fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols: u16, rows: u16) -> Result<(), String> {
+    wake_with_prompt(app, store, host, room, cols, rows, None)
+}
+
+pub(crate) fn wake_with_prompt(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols: u16, rows: u16, prompt: Option<&str>) -> Result<(), String> {
     let settings = store.get();
     let program = env::find_on_path(settings.cli.command());
     let ready = status(&settings, room, program.as_deref());
@@ -218,8 +225,10 @@ fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols
     let (output_event, exit_event) = room.events();
     let output = app.clone();
     let ending = app.clone();
-    host.start(
-        pty::launch_command(&program, &folder, &vars, &wake_args(settings.cli, boot.as_ref())),
+    let mut args = wake_args(settings.cli, boot.as_ref());
+    if let Some(prompt) = prompt { args.push(prompt.to_owned()); }
+    let started = host.start(
+        pty::launch_command(&program, &folder, &vars, &args),
         cols.max(20),
         rows.max(5),
         move |text| {
@@ -236,6 +245,7 @@ fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols
             let _ = ending.emit(exit_event, code);
         },
     )?;
+    if started { host.bind_provider(settings.cli); }
     Ok(())
 }
 
@@ -274,7 +284,12 @@ pub fn terminal_start(
 }
 
 #[tauri::command]
-pub fn terminal_write(data: String, room: Option<String>, main: State<MainHost>, story: State<StoryHost>) -> Result<(), String> {
+pub fn terminal_write(data: String, room: Option<String>, main: State<MainHost>, story: State<StoryHost>, images: State<crate::providers::Images>, control: State<crate::providers::Control>) -> Result<(), String> {
+    let switching = control.0.try_lock().map_err(|_| "Provider is changing. Your message has not been sent.")?;
+    if Room::named(room.as_deref()) == Room::Main && switching.phase == "switching" { return Err("Provider is switching. Your message has not been sent.".into()); }
+    if Room::named(room.as_deref()) == Room::Main && images.0.lock().unwrap().iter().any(|j| j.phase == "working") {
+        return Err("An image job is using this memory. Your message has not been sent; retry when it finishes.".into());
+    }
     host(Room::named(room.as_deref()), &main, &story).write(data.as_bytes())
 }
 

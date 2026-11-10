@@ -4,6 +4,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
+import ImageJobs from '../components/ImageJobs.vue'
+import { imageRequest } from '../api/castle.js'
+const imageBrief = ref('')
+const imageProblem = ref('')
+async function drawImage() {
+  try { await imageRequest(imageBrief.value); imageBrief.value = ''; imageProblem.value = '' } catch (e) { imageProblem.value = String(e) }
+}
 import { chatMediaOpen, studioLibrary, studioPowers } from '../api/castle.js'
 
 const props = defineProps({
@@ -20,7 +27,7 @@ const POWERS = [
 ]
 const STATE = {
   ready: { text: 'Ready', cls: 'ready' },
-  builtin: { text: 'Built in (Codex)', cls: 'ready' },
+  builtin: { text: 'Codex available — checked on request', cls: 'ready' },
   prompt: { text: 'Prompt only - add a key', cls: 'prompt' },
 }
 
@@ -58,12 +65,16 @@ watch(() => props.stamp, load)
 
 <template>
   <div class="studio">
+    <label>Picture request <textarea v-model="imageBrief" placeholder="Describe the picture for Codex…"></textarea></label>
+    <button :disabled="!imageBrief.trim()" @click="drawImage">Create picture with Codex</button>
+    <p v-if="imageProblem" role="alert">{{ imageProblem }}</p>
+    <ImageJobs />
     <section class="powers">
       <article v-for="p in POWERS" :key="p.id" class="power widget">
         <h3>{{ p.label }}</h3>
-        <span class="state" :class="STATE[powers[p.id]]?.cls">{{ STATE[powers[p.id]]?.text ?? '…' }}</span>
+        <span class="state" :class="STATE[powers[p.id]]?.cls">{{ p.id === 'image' && powers.image === 'prompt' ? 'Prompt only — install/sign in to Codex' : STATE[powers[p.id]]?.text ?? '…' }}</span>
         <p class="hint">Ask {{ companion }}: <em>"{{ p.ask }} …"</em></p>
-        <button v-if="powers[p.id] === 'prompt'" @click="emit('keys')">Add the {{ p.key }} key</button>
+        <button v-if="p.id !== 'image' && powers[p.id] === 'prompt'" @click="emit('keys')">Add the {{ p.key }} key</button>
       </article>
     </section>
 

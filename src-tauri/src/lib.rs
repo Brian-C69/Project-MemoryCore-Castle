@@ -19,6 +19,8 @@ mod memdb;
 mod memory;
 mod mirror;
 mod pty;
+mod providers;
+mod messages;
 mod quota;
 mod roomread;
 mod rooms;
@@ -95,7 +97,14 @@ fn get_settings(store: State<SettingsStore>) -> SettingsView {
 
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>) -> Result<SettingsView, String> {
+    if settings.memory_folder != store.get().memory_folder && (sessions_running(&app) || app.state::<providers::Images>().0.lock().unwrap().iter().any(|j| j.phase == "working")) {
+        return Err("End active sessions and image work before changing the MemoryCore folder.".into());
+    }
     let mut settings = settings.normalized();
+    if app.state::<session::MainHost>().0.is_running() {
+        // Provider changes go through the queued handoff, not stale room/settings snapshots.
+        settings.cli = store.get().cli;
+    }
     // the companion's room key is Rust's to keep: a page holding an older copy never writes it back
     {
         let current = store.get();
@@ -181,6 +190,9 @@ pub fn run() {
             Some(vec![startup::SIGN_IN_ARG]),
         ))
         .manage(session::MainHost::default())
+        .manage(providers::Control::default())
+        .manage(providers::Images::default())
+        .manage(messages::Pending::default())
         .manage(session::StoryHost::default())
         .manage(system::SystemMeters::default())
         .manage(chat::MainChat::default())
@@ -189,6 +201,17 @@ pub fn run() {
         .manage(roomread::RoomReader::default())
         .invoke_handler(tauri::generate_handler![
             get_settings,
+            providers::providers_list,
+            providers::image_request,
+            providers::image_jobs,
+            messages::send_message,
+            messages::queued_messages,
+            messages::queued_message_action,
+            providers::image_retry,
+            providers::provider_switch,
+            providers::provider_switch_status,
+            providers::provider_switch_cancel,
+            chat::chat_history,
             save_settings,
             choose_folder,
             key_status,
@@ -341,6 +364,9 @@ pub fn run() {
                 window.show()?;
             }
             screen::watch_desktop(app.handle());
+            providers::start(app.handle());
+            providers::start_images(app.handle());
+            messages::start(app.handle());
             world::restore(app.handle());
             world::watch_covered(app.handle());
             roomread::start(app.handle());

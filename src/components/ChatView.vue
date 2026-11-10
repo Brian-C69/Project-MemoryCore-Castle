@@ -9,6 +9,14 @@ import MarkdownText from './MarkdownText.vue'
 import PlanViewer from './PlanViewer.vue'
 import { firstHeading } from './markdown.js'
 import { worldSignals } from '../world3d/signals.js'
+import { chatHistory } from '../api/castle.js'
+import { sendMessage, queuedMessages, queuedMessageAction } from '../api/castle.js'
+const pendingMessages = ref([])
+const sendProblem = ref('')
+async function queueAction(id, retry) { try { await queuedMessageAction(id, retry); pendingMessages.value = await queuedMessages() } catch (e) { sendProblem.value = String(e) } }
+onMounted(async () => {
+  try { entries.value = resetEntries(entries.value, await chatHistory(props.room)) } catch {}
+})
 
 const props = defineProps({
   // Whether the session is running.
@@ -262,6 +270,7 @@ function nearBottom() {
 let lastPollAt = 0
 
 async function poll() {
+  if (!props.room) { try { pendingMessages.value = await queuedMessages() } catch {} }
   if (document.visibilityState !== 'visible') return
   // A voice plays by itself only when it arrives while Castle was in view; one made while
   // Castle was hidden arrives in a catch-up read and waits for "play".
@@ -310,18 +319,19 @@ async function send() {
   const text = draft.value.replace(/\s+$/, '')
   if (!text || !props.running) return
   // Several lines go in as one paste, so a new line never sends the message early.
-  const payload = text.includes('\n') ? `\u001b[200~${text}\u001b[201~` : text
   try {
-    await props.write(payload)
-    await props.write('\r')
+    const sent = await sendMessage(text, props.room)
     worldSignals.sentAt = Date.now() // in the WORLD the crystal brightens
     draft.value = ''
     // the member's bubble at once, one grey tick until the companion's record holds it
-    entries.value = [...entries.value, localSend(text)]
+    if (sent.queued) pendingMessages.value = await queuedMessages()
+    else entries.value = [...entries.value, localSend(text)]
+    sendProblem.value = ''
     await nextTick()
     grow()
     if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
-  } catch {
+  } catch (reason) {
+    sendProblem.value = String(reason)
     // The words stay in the box to try again.
   }
 }
@@ -408,6 +418,14 @@ defineExpose({ poll, addPaths })
 
 <template>
   <div class="chat">
+    <div v-if="pendingMessages.length" class="pending-messages" aria-live="polite">
+      <p v-for="message in pendingMessages" :key="message.id">
+        <strong>{{ message.state === 'queued' ? 'Queued until work finishes' : 'Check chat before retrying this interrupted message' }}</strong>: {{ message.text }}
+        <button v-if="message.state !== 'queued'" @click="queueAction(message.id, true)">Retry</button>
+        <button @click="queueAction(message.id, false)">Cancel</button>
+      </p>
+    </div>
+    <p v-if="sendProblem" role="alert">{{ sendProblem }}</p>
     <div ref="scroller" class="messages" aria-live="polite">
       <p v-if="status === 'waiting'" class="quiet">The chat appears as soon as {{ companion }} starts talking.</p>
       <p v-else-if="status === 'unreadable'" class="quiet">

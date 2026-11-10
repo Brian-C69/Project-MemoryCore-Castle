@@ -266,19 +266,19 @@ Everything lives in your MemoryCore folder (`media-generation/`, `music/`, and t
 
 ### How drawing works here
 
-Your companion draws the pictures. The top of the room says whether it can:
+Castle sends Appearance and Studio picture requests to a separate Codex job, even when the main conversation uses Claude Code. Codex must be installed and signed in with ChatGPT. An installed CLI is not proof that image generation is available for that account; the actual request is checked when it runs.
 
-- **Ready to draw** - Claude Code with a ChatGPT (OpenAI) key.
-- **Codex draws by itself** - no key needed.
-- **No ChatGPT key - prompts are saved** - the picture's description is saved instead; press **Add the ChatGPT key** to draw for real.
+- **Codex available — checked when drawing** means Castle found the CLI.
+- **Codex unavailable — prompts are saved** means you can keep the request and retry after installing/signing in.
+- Image jobs show queued, working, completed, or prompt-saved status. Failure never silently falls back to an API key. Video, music and voice keep their separate key requirements.
 
-Your companion tells you the cost first and asks before drawing. When a picture is saved, press **Refresh**.
+Submitting an image request starts a Codex task once the main conversation reaches a confirmed turn boundary. Normal Codex permissions remain in effect; if the noninteractive job cannot proceed, Castle saves the prompt. Press **Refresh** after completion. Saved prompts can be retried from the room. Interrupted jobs are not automatically rerun after Castle restarts.
 
 ### The standard look
 
 Press **Upload image** to use artwork you already have, or **Draw the standard look** to start from `appearance/companion.md`. Uploads accept PNG, JPEG and WebP up to 25 MB and are copied into your MemoryCore as PNG. Replacing an imported image preserves the previous file. Uploading does not generate an image or call a paid API.
 
-Write what you want changed in **Changes for the next drawing**, then press **Improve from image**. Castle asks your companion to edit using the existing image as a reference and preserve its face and body proportions. The existing drawing flow still applies: Claude Code uses your stored OpenAI API key; Codex uses its native image tool. Your companion confirms cost before drawing. Press **Refresh** after the result is saved.
+Write what you want changed in **Changes for the next drawing**, then press **Improve from image**. Castle sends the existing image as a reference to the separate Codex job and asks it to preserve the face and body proportions. The selected conversation provider stays unchanged. Press **Refresh** after the result is saved.
 
 The standard look also becomes your companion's picture in the panel, unless you chose your own picture in setup.
 

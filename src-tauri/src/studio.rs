@@ -124,7 +124,9 @@ pub fn studio_library(store: State<SettingsStore>) -> Library {
 
 #[tauri::command]
 pub fn studio_powers(store: State<SettingsStore>) -> Powers {
-    powers(store.get().cli, &|name| key::load(name).is_some())
+    let mut available = powers(store.get().cli, &|name| key::load(name).is_some());
+    available.image = if crate::env::find_on_path("codex").is_some() { "builtin" } else { "prompt" };
+    available
 }
 
 /// Lets the page show files from the memory folder (and only there) through the asset protocol.

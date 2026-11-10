@@ -6,9 +6,10 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
+import ImageJobs from '../components/ImageJobs.vue'
 import { appearanceImport, appearanceLook, appearanceNew, appearanceWear, choosePicture, studioPowers } from '../api/castle.js'
 import { referenceLine, improvementLine } from '../components/appearance.js'
-import { askCompanion } from '../api/ask.js'
+import { askImage as askCompanion } from '../api/ask.js'
 
 const props = defineProps({
   companion: { type: String, default: 'Your companion' },
@@ -28,7 +29,7 @@ const revision = ref(0)
 const formPicture = ref('')
 const src = (path) => convertFileSrc(path) + `?v=${props.stamp}-${revision.value}`
 
-const STATE = { ready: 'Ready to draw', builtin: 'Codex draws by itself', prompt: 'No ChatGPT key - prompts are saved' }
+const STATE = { ready: 'Ready to draw', builtin: 'Codex available — checked when drawing', prompt: 'Codex unavailable — prompts are saved' }
 const sep = computed(() => (look.value?.folder?.includes('/') ? '/' : '\\'))
 const path = (...parts) => [look.value.folder, ...parts].join(sep.value)
 
@@ -128,8 +129,7 @@ async function tryOn() {
 }
 
 function after() {
-  done.value = `Asked ${props.companion}. The picture shows here when it is saved - press Refresh.`
-  emit('show-chat')
+  done.value = 'Image request queued for Codex. If it cannot run, the prompt is saved without API fallback. Refresh after completion.'
 }
 
 // Adds the outfit or hairstyle folder with its words, then asks the companion to draw its sheet.
@@ -192,7 +192,6 @@ watch(() => props.stamp, load)
     <header class="bar">
       <h2>APPEARANCE</h2>
       <span class="state" :class="image">{{ STATE[image] ?? '…' }}</span>
-      <button v-if="image === 'prompt'" @click="emit('keys')">Add the ChatGPT key</button>
       <span class="spacer"></span>
       <span v-if="busy" class="busy">{{ busy }}</span>
       <span v-else-if="problem" class="problem">{{ problem }}</span>
@@ -204,6 +203,7 @@ watch(() => props.stamp, load)
       <textarea v-model="changes" rows="2" placeholder="For example: keep the face and proportions, change only the jacket colour." :disabled="!!busy"></textarea>
     </label>
 
+    <ImageJobs />
     <div v-if="look" class="columns">
       <section class="standard widget">
         <h3>STANDARD LOOK</h3>
@@ -214,7 +214,7 @@ watch(() => props.stamp, load)
         <button :disabled="!!busy" @click="upload('standard')">{{ look.portrait ? 'Replace image' : 'Upload image' }}</button>
         <button class="primary" :disabled="!!busy" @click="drawPortrait">{{ look.portrait ? 'Improve from image' : 'Draw the standard look' }}</button>
         <button :disabled="!!busy" @click="tryOn">Try on today's look</button>
-        <p class="hint">Upload PNG, JPEG or WebP (up to 25 MB). Uploading is free. Drawing uses your companion; API generation requires your ChatGPT key and cost confirmation.</p>
+        <p class="hint">Upload PNG, JPEG or WebP (up to 25 MB). Drawing uses Codex separately from your conversation. If unavailable, the prompt is saved; there is no automatic API fallback.</p>
         <p class="hint">The look in words lives in <code>appearance/companion.md</code> - ask {{ companion }} to change it, or edit it yourself.</p>
       </section>
 

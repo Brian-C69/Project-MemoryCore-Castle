@@ -42,6 +42,7 @@ const MAX_WIDTH = 75
 const surface = ref(null)
 const panel = ref(null)
 const running = ref(false)
+const activeProvider = ref(null)
 const ended = ref(false)
 const status = ref({ ready: false, message: '', fix: null })
 const problem = ref('')
@@ -111,6 +112,7 @@ function cssVar(name) {
 }
 
 function show(state) {
+  activeProvider.value = state.provider ?? null
   running.value = state.running
   status.value = state.status
 }
@@ -276,6 +278,8 @@ async function recheck() {
   }
 }
 watch(() => props.settingsStamp, recheck)
+window.addEventListener('castle-provider-changed', recheck)
+onBeforeUnmount(() => window.removeEventListener('castle-provider-changed', recheck))
 const whenShown = () => {
   if (document.visibilityState === 'visible' && !running.value) recheck()
 }
@@ -352,7 +356,7 @@ defineExpose({ wake, screenLines, writeToSession })
         :read-screen="screenLines"
         :companion="companion"
         :room="room"
-        :cli="cli"
+        :cli="activeProvider || cli"
         @show-log="setView('log')"
       />
     </div>
