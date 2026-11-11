@@ -48,6 +48,8 @@ export const terminalState = (room) => invoke('terminal_state', { room })
 export const providersList = () => invoke('providers_list')
 export const imageJobs = () => invoke('image_jobs')
 export const imageRetry = (id) => invoke('image_retry', { id })
+// Takes finished requests off the list: the one with this id, or all of them with no id.
+export const imageDismiss = (id = null) => invoke('image_dismiss', { id })
 export const imageRequest = (brief, output = null, references = [], room = 'studio') => invoke('image_request', { brief, output, references, room })
 export const providerSwitch = (target) => invoke('provider_switch', { target })
 export const providerSwitchStatus = () => invoke('provider_switch_status')

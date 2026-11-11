@@ -241,6 +241,56 @@ fn persist_jobs(store: &SettingsStore, jobs: &[ImageJob]) -> Result<(), String> 
     std::fs::rename(pending, file).map_err(|_| "Image queue could not be published.".into())
 }
 
+/// A request that is not being worked on: it can be cleared from the list. An allow-list, not a
+/// deny-list, so a phase added later is kept (not silently clearable) until this says otherwise.
+fn finished(phase: &str) -> bool {
+    matches!(phase, "completed" | "prompt-saved")
+}
+
+/// Splits `jobs` into what stays and the prompt files of what would be dismissed, for `memory` and
+/// `id` (None for `id` dismisses every finished job for that memory). A plain function so the
+/// selection itself can be tested without a Tauri State.
+fn dismiss_finished(jobs: Vec<ImageJob>, memory: Option<&Path>, id: Option<&str>) -> (Vec<ImageJob>, Vec<PathBuf>) {
+    let mut kept = Vec::with_capacity(jobs.len());
+    let mut removed_prompts = Vec::new();
+    for j in jobs {
+        let mine = memory.is_some_and(|m| j.memory == m);
+        let wanted = id.is_none_or(|id| id == j.id);
+        if mine && wanted && finished(&j.phase) {
+            removed_prompts.push(j.prompt.clone());
+        } else {
+            kept.push(j);
+        }
+    }
+    (kept, removed_prompts)
+}
+
+/// Takes finished requests off the list: the one named, or all of them when no id is given. A
+/// request that is still queued or drawing stays.
+#[tauri::command]
+pub fn image_dismiss(
+    id: Option<String>,
+    images: State<Images>,
+    store: State<SettingsStore>,
+) -> Result<(), String> {
+    let mut jobs = images.0.lock().unwrap();
+    let current = store
+        .get()
+        .memory_folder
+        .and_then(|p| PathBuf::from(p).canonicalize().ok());
+    let (kept, removed_prompts) = dismiss_finished(std::mem::take(&mut *jobs), current.as_deref(), id.as_deref());
+    *jobs = kept;
+    let result = persist_jobs(&store, &jobs);
+    // Best-effort: the saved prompt file (image-jobs/<id>.prompt.md) is leftover once the job it
+    // belongs to is gone - removed only once the job list itself is known to have saved.
+    if result.is_ok() {
+        for prompt in removed_prompts {
+            let _ = std::fs::remove_file(prompt);
+        }
+    }
+    result
+}
+
 #[tauri::command]
 pub fn image_retry(
     id: String,
@@ -381,25 +431,34 @@ pub fn start_images(app: &AppHandle) {
     std::thread::spawn(move || loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
         let images = app.state::<Images>();
-        let next = images
+        let next_id = images
             .0
             .lock()
             .unwrap()
             .iter()
-            .position(|j| j.phase == "queued");
-        let Some(index) = next else { continue };
+            .find(|j| j.phase == "queued")
+            .map(|j| j.id.clone());
+        let Some(job_id) = next_id else { continue };
         let control = app.state::<Control>();
         let switch = control.0.lock().unwrap();
         if switch.target.is_some() {
             continue;
         }
         let store = app.state::<SettingsStore>();
+        // A dismiss (image_dismiss) can only remove a finished job, never one that is "queued" or
+        // "working" - but it can still remove an *earlier* finished job while this one sits further
+        // down the list, which shifts every later index. A positional index captured before any
+        // lock is reacquired (including across the long run_image() call below) can then point at
+        // the wrong job, or go out of bounds and panic while holding this lock - poisoning it for
+        // every later image call. Re-finding by id at each lock reacquisition avoids that.
+        let find = |jobs: &[ImageJob]| jobs.iter().position(|j| j.id == job_id);
         {
             let current = store
                 .get()
                 .memory_folder
                 .and_then(|p| PathBuf::from(p).canonicalize().ok());
             let mut jobs = images.0.lock().unwrap();
+            let Some(index) = find(&jobs) else { continue };
             if current.as_ref() != Some(&jobs[index].memory) {
                 jobs[index].phase = "prompt-saved".into();
                 jobs[index].message =
@@ -413,6 +472,7 @@ pub fn start_images(app: &AppHandle) {
         }
         let job = {
             let mut jobs = images.0.lock().unwrap();
+            let Some(index) = find(&jobs) else { continue };
             jobs[index].phase = "working".into();
             jobs[index].message =
                 "Codex image job is running; main-chat submissions wait until it finishes.".into();
@@ -422,6 +482,7 @@ pub fn start_images(app: &AppHandle) {
         let styles = app.path().resource_dir().ok().map(|d| d.join("styles"));
         let result = run_image(&job, styles.as_deref());
         let mut jobs = images.0.lock().unwrap();
+        let Some(index) = find(&jobs) else { continue };
         jobs[index].phase = if result.is_ok() {
             "completed"
         } else {
@@ -770,6 +831,57 @@ pub fn start(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_requests_not_being_worked_on_can_be_cleared() {
+        for phase in ["completed", "prompt-saved"] {
+            assert!(super::finished(phase), "{phase}");
+        }
+        // An allow-list, not a deny-list: "failed" is not a real ImageJob phase today (a failed
+        // draw becomes "prompt-saved"), and an unrecognised phase added later must stay un-
+        // clearable until this list says otherwise, rather than being swept up by default.
+        for phase in ["queued", "working", "switching", "failed"] {
+            assert!(!super::finished(phase), "{phase}");
+        }
+    }
+
+    #[test]
+    fn dismiss_only_clears_finished_jobs_for_this_memory_and_collects_their_prompts() {
+        use super::dismiss_finished;
+        fn job(id: &str, phase: &str, memory: &str) -> super::ImageJob {
+            super::ImageJob {
+                id: id.into(),
+                phase: phase.into(),
+                message: String::new(),
+                output: String::new(),
+                brief: String::new(),
+                references: vec![],
+                memory: PathBuf::from(memory),
+                prompt: PathBuf::from(format!("{id}.prompt.md")),
+            }
+        }
+        let jobs = vec![
+            job("working-a", "working", "mem-a"),
+            job("done-a", "completed", "mem-a"),
+            job("done-b", "completed", "mem-b"),
+            job("saved-a", "prompt-saved", "mem-a"),
+        ];
+
+        // dismiss all finished jobs for mem-a: the working one and the other memory's job stay
+        let (kept, removed) = dismiss_finished(jobs.clone(), Some(Path::new("mem-a")), None);
+        assert_eq!(kept.iter().map(|j| j.id.as_str()).collect::<Vec<_>>(), vec!["working-a", "done-b"]);
+        assert_eq!(removed, vec![PathBuf::from("done-a.prompt.md"), PathBuf::from("saved-a.prompt.md")]);
+
+        // dismiss one named job: only that one goes, even though others also qualify
+        let (kept, removed) = dismiss_finished(jobs.clone(), Some(Path::new("mem-a")), Some("saved-a"));
+        assert_eq!(kept.iter().map(|j| j.id.as_str()).collect::<Vec<_>>(), vec!["working-a", "done-a", "done-b"]);
+        assert_eq!(removed, vec![PathBuf::from("saved-a.prompt.md")]);
+
+        // no chosen memory: nothing is "mine", so nothing is ever cleared
+        let (kept, removed) = dismiss_finished(jobs.clone(), None, None);
+        assert_eq!(kept.len(), jobs.len());
+        assert!(removed.is_empty());
+    }
+
     use super::*;
     fn temp(name: &str) -> PathBuf {
         let p = std::env::temp_dir().join(format!("castle-provider-{name}-{}", std::process::id()));
