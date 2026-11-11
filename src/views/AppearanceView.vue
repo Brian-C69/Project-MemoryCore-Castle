@@ -29,6 +29,20 @@ const revision = ref(0)
 const formPicture = ref('')
 const src = (path) => convertFileSrc(path) + `?v=${props.stamp}-${revision.value}`
 
+// What a request is for, named the way the member sees it: which outfit, which hairstyle.
+const nameOf = (list, id, usual) => list.find((i) => i.id === id)?.name ?? usual
+const worn = computed(() => ({
+  outfit: nameOf(look.value?.wardrobe ?? [], look.value?.current?.outfit, 'usual clothes'),
+  hair: nameOf(look.value?.hairstyles ?? [], look.value?.current?.hair, 'usual hair'),
+}))
+const tryOnLine = computed(() => {
+  const saved = look.value?.tryOn
+  if (!saved) return ''
+  const what = `${worn.value.outfit} + ${worn.value.hair}`
+  if (!saved.exists) return `${what}: not drawn yet.`
+  return saved.stale ? `${what}: saved, but the outfit, hair or standard look changed since - draw it again.` : `${what}: saved - no need to draw it again.`
+})
+
 const STATE = { ready: 'Ready to draw', builtin: 'Codex available — checked when drawing', prompt: 'Codex unavailable — prompts are saved' }
 const sep = computed(() => (look.value?.folder?.includes('/') ? '/' : '\\'))
 const path = (...parts) => [look.value.folder, ...parts].join(sep.value)
@@ -63,6 +77,7 @@ function styleLine(file) {
 }
 
 async function drawPortrait() {
+  const label = 'Standard look'
   const ok = await attempt('Asking…', () =>
     askCompanion(
       [
@@ -74,13 +89,14 @@ async function drawPortrait() {
         `Save it as ${path('portrait.png')}.`,
         'Tell me the cost first and ask before you draw.',
       ],
-      props.companion,
+      label,
     ),
   )
-  if (ok) after()
+  if (ok) after(label)
 }
 
 async function drawSheet(kind, item) {
+  const label = `${kind === 'outfit' ? 'Outfit' : 'Hairstyle'} turnaround: ${item.name}`
   const dir = kind === 'outfit' ? 'wardrobe' : 'hairstyles'
   const note = kind === 'outfit' ? 'outfit.md' : 'hair.md'
   const style = kind === 'outfit' ? 'outfit-turnaround.md' : 'hair-turnaround.md'
@@ -97,17 +113,28 @@ async function drawSheet(kind, item) {
         `Save it as ${path(dir, item.id, 'turnaround.png')}.`,
         'Tell me the cost first and ask before you draw.',
       ],
-      props.companion,
+      label,
     ),
   )
-  if (ok) after()
+  if (ok) after(label)
 }
 
-async function tryOn() {
+// A picture already drawn for this outfit and hairstyle is shown, not drawn again - unless one of
+// them (or the standard look) changed since, or `again` is true.
+async function tryOn(again = false) {
   const outfit = look.value.wardrobe.find((w) => w.id === look.value.current.outfit)
   const hair = look.value.hairstyles.find((h) => h.id === look.value.current.hair)
   if (!outfit && !hair) {
     problem.value = 'Choose an outfit or a hairstyle to wear first.'
+    return
+  }
+  const saved = look.value.tryOn
+  const label = `Try-on: ${worn.value.outfit} + ${worn.value.hair}`
+  // A typed Changes request is itself a reason to draw again, the same as "Draw again" or a stale
+  // picture - otherwise it is silently dropped and the old saved picture shows instead.
+  if (saved?.exists && !saved.stale && again !== true && !changes.value.trim()) {
+    openSheet(saved.path, label)
+    done.value = 'Already drawn for this outfit and hairstyle - showing the saved picture. Use Draw again for a new one.'
     return
   }
   const ok = await attempt('Asking…', () =>
@@ -119,17 +146,17 @@ async function tryOn() {
         outfit?.reference ? `Inspect outfit reference: ${JSON.stringify(outfit.reference)}.` : '',
         hair?.reference ? `Inspect hairstyle reference: ${JSON.stringify(hair.reference)}.` : '',
         improvementLine(changes.value),
-        `Save it as ${path('try-on.png')}.`,
+        `Save it as ${saved.path}.`,
         'Tell me the cost first and ask before you draw.',
       ].filter(Boolean),
-      props.companion,
+      label,
     ),
   )
-  if (ok) after()
+  if (ok) after(label)
 }
 
-function after() {
-  done.value = 'Image request queued for Codex. If it cannot run, the prompt is saved without API fallback. Refresh after completion.'
+function after(label) {
+  done.value = `Queued for Codex: ${label}. Watch it under Image requests; the picture appears here when it is done.`
 }
 
 // Adds the outfit or hairstyle folder with its words, then asks the companion to draw its sheet.
@@ -203,7 +230,7 @@ watch(() => props.stamp, load)
       <textarea v-model="changes" rows="2" placeholder="For example: keep the face and proportions, change only the jacket colour." :disabled="!!busy"></textarea>
     </label>
 
-    <ImageJobs />
+    <ImageJobs @finished="load" />
     <div v-if="look" class="columns">
       <section class="standard widget">
         <h3>STANDARD LOOK</h3>
@@ -213,7 +240,10 @@ watch(() => props.stamp, load)
         <div v-else class="portrait empty"><span class="crystal">◆</span></div>
         <button :disabled="!!busy" @click="upload('standard')">{{ look.portrait ? 'Replace image' : 'Upload image' }}</button>
         <button class="primary" :disabled="!!busy" @click="drawPortrait">{{ look.portrait ? 'Improve from image' : 'Draw the standard look' }}</button>
-        <button :disabled="!!busy" @click="tryOn">Try on today's look</button>
+        <button v-if="look.tryOn?.exists" class="sheet saved" @click="openSheet(look.tryOn.path, 'Today\'s look')"><img :src="src(look.tryOn.path)" alt="Today's look" /></button>
+        <p v-if="tryOnLine" class="hint">{{ tryOnLine }}</p>
+        <button :disabled="!!busy" @click="tryOn()">{{ !look.tryOn?.exists || look.tryOn.stale ? "Try on today's look" : "Show today's look" }}</button>
+        <button v-if="look.tryOn?.exists && !look.tryOn.stale" :disabled="!!busy" @click="tryOn(true)">Draw again</button>
         <p class="hint">Upload PNG, JPEG or WebP (up to 25 MB). Drawing uses Codex separately from your conversation. If unavailable, the prompt is saved; there is no automatic API fallback.</p>
         <p class="hint">The look in words lives in <code>appearance/companion.md</code> - ask {{ companion }} to change it, or edit it yourself.</p>
       </section>

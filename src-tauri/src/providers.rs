@@ -205,6 +205,9 @@ pub struct Images(pub Mutex<Vec<ImageJob>>);
 #[serde(rename_all = "camelCase")]
 pub struct ImageJob {
     id: String,
+    /// What it is for, in the member's words ("Outfit turnaround: Winter coat"); empty if unsaid.
+    #[serde(default)]
+    label: String,
     pub(crate) phase: String,
     message: String,
     output: String,
@@ -323,6 +326,7 @@ pub fn image_request(
     output: Option<String>,
     references: Vec<String>,
     room: String,
+    label: Option<String>,
     store: State<SettingsStore>,
     images: State<Images>,
 ) -> Result<ImageJob, String> {
@@ -398,6 +402,7 @@ pub fn image_request(
     .map_err(|_| "The image prompt could not be saved.")?;
     let job = ImageJob {
         id,
+        label: label.unwrap_or_default().chars().take(120).collect(),
         phase: "queued".into(),
         message: "Waiting for the main conversation to finish its turn.".into(),
         output: target.display().to_string(),
@@ -850,6 +855,7 @@ mod tests {
         fn job(id: &str, phase: &str, memory: &str) -> super::ImageJob {
             super::ImageJob {
                 id: id.into(),
+                label: String::new(),
                 phase: phase.into(),
                 message: String::new(),
                 output: String::new(),
@@ -991,6 +997,7 @@ mod tests {
         std::fs::write(&program, "@echo off\r\nif defined OPENAI_API_KEY exit /b 9\r\ncopy /y \"%~dp0source.png\" \"%~dp0output.png\" >nul\r\nexit /b 0\r\n").unwrap();
         let job = ImageJob {
             id: "fake".into(),
+            label: String::new(),
             phase: "working".into(),
             message: String::new(),
             output: root.join("output.png").display().to_string(),
@@ -1017,6 +1024,7 @@ mod tests {
         std::fs::write(&program, "@echo off\r\nping -n 120 127.0.0.1 >nul\r\n").unwrap();
         let job = ImageJob {
             id: "hung".into(),
+            label: String::new(),
             phase: "working".into(),
             message: String::new(),
             output: root.join("output.png").display().to_string(),
@@ -1043,6 +1051,7 @@ mod tests {
         std::fs::write(&program, "@echo off\r\n>\"%~dp0seen.txt\" echo %CASTLE_STYLES%\r\ncopy /y nul \"%~dp0output.png\" >nul\r\nexit /b 0\r\n").unwrap();
         let job = ImageJob {
             id: "styles".into(),
+            label: String::new(),
             phase: "working".into(),
             message: String::new(),
             output: root.join("output.png").display().to_string(),

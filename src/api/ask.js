@@ -3,11 +3,11 @@
 import { terminalState, terminalWrite } from './castle.js'
 import { imageRequest } from './castle.js'
 
-export async function askImage(lines) {
+export async function askImage(lines, label = null) {
   const outputLine = lines.find(line => line.startsWith('Save it as '))
   const output = outputLine ? outputLine.slice(11).replace(/\.$/, '') : null
   const references = lines.filter(line => line.startsWith('Use this existing image as')).map(line => JSON.parse(line.slice(line.indexOf(': ') + 2).split('. Preserve')[0]))
-  return imageRequest(lines.filter(line => line && !line.startsWith('Tell me the cost first')).join('\n'), output, references, 'appearance')
+  return imageRequest(lines.filter(line => line && !line.startsWith('Tell me the cost first')).join('\n'), output, references, 'appearance', label)
 }
 
 export async function askCompanion(lines, companion = 'your companion') {

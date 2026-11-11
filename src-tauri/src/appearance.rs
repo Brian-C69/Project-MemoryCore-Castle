@@ -5,6 +5,9 @@
 //!   appearance/current.json          { outfit, hair } worn today
 //!   appearance/wardrobe/<id>/        outfit.md + turnaround.png
 //!   appearance/hairstyles/<id>/      hair.md + turnaround.png
+//!   appearance/try-on/<outfit>__<hair>.png   the drawn picture of one outfit with one hairstyle,
+//!                                    kept so it is never drawn twice unless something it is made
+//!                                    from has changed since
 
 use crate::settings::SettingsStore;
 use serde::{Deserialize, Serialize};
@@ -31,6 +34,17 @@ pub struct Current {
     pub hair: Option<String>,
 }
 
+/// The saved try-on picture for what is worn today.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TryOn {
+    /// where the picture is (or will be) kept, absolute
+    pub path: String,
+    pub exists: bool,
+    /// the outfit, hairstyle or standard look changed after the picture was drawn
+    pub stale: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Look {
@@ -40,6 +54,8 @@ pub struct Look {
     pub wardrobe: Vec<Item>,
     pub hairstyles: Vec<Item>,
     pub current: Current,
+    /// None until an outfit or a hairstyle is worn
+    pub try_on: Option<TryOn>,
 }
 
 fn root(memory: &Path) -> PathBuf {
@@ -111,8 +127,52 @@ fn items(dir: &Path, note_file: &str) -> Vec<Item> {
     found
 }
 
+/// The newest change to anything in a folder (the words, the reference, the drawn sheet).
+fn newest_in(dir: &Path) -> Option<std::time::SystemTime> {
+    std::fs::read_dir(dir).ok()?.flatten().filter_map(|e| e.metadata().ok()?.modified().ok()).max()
+}
+
+/// The same shape import_picture already requires of a wardrobe/hairstyle id, reused here: these
+/// ids come straight from current.json, which writes already fence (import_picture, image_request),
+/// but a read built from an unchecked id - try_on_path's filename, or a folder to scan for changes
+/// in try_on() - could still point outside the memory if current.json ever held something else.
+fn valid_id(id: &Option<String>) -> Option<&str> {
+    id.as_deref().filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
+}
+
+/// Where the picture of this outfit with this hairstyle is kept: one file per combination.
+pub fn try_on_path(memory: &Path, current: &Current) -> PathBuf {
+    let part = |id: &Option<String>, none: &str| valid_id(id).unwrap_or(none).to_string();
+    root(memory).join("try-on").join(format!("{}__{}.png", part(&current.outfit, "no-outfit"), part(&current.hair, "no-hair")))
+}
+
+/// The saved try-on for what is worn, and whether it is still good. It is out of date once the
+/// outfit, the hairstyle or the standard look has changed after it was drawn.
+pub fn try_on(memory: &Path, current: &Current) -> Option<TryOn> {
+    if current.outfit.is_none() && current.hair.is_none() {
+        return None;
+    }
+    let root = root(memory);
+    let path = try_on_path(memory, current);
+    let drawn = std::fs::metadata(&path).ok().and_then(|m| m.modified().ok());
+    let mut inputs = vec![];
+    if let Some(id) = valid_id(&current.outfit) {
+        inputs.push(newest_in(&root.join("wardrobe").join(id)));
+    }
+    if let Some(id) = valid_id(&current.hair) {
+        inputs.push(newest_in(&root.join("hairstyles").join(id)));
+    }
+    for name in ["portrait.png", "portrait.jpg", "portrait.webp"] {
+        inputs.push(std::fs::metadata(root.join(name)).ok().and_then(|m| m.modified().ok()));
+    }
+    let changed = inputs.into_iter().flatten().max();
+    let stale = matches!((drawn, changed), (Some(drawn), Some(changed)) if changed > drawn);
+    Some(TryOn { path: path.display().to_string(), exists: drawn.is_some(), stale })
+}
+
 pub fn look(memory: &Path) -> Look {
     let root = root(memory);
+    let current: Current = std::fs::read_to_string(root.join("current.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
     let portrait = ["portrait.png", "portrait.jpg", "portrait.webp"].iter().map(|n| root.join(n)).find(|p| p.is_file());
     Look {
         folder: root.display().to_string(),
@@ -120,7 +180,8 @@ pub fn look(memory: &Path) -> Look {
         portrait: portrait.map(|p| p.display().to_string()),
         wardrobe: items(&root.join("wardrobe"), "outfit.md"),
         hairstyles: items(&root.join("hairstyles"), "hair.md"),
-        current: std::fs::read_to_string(root.join("current.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default(),
+        try_on: try_on(memory, &current),
+        current,
     }
 }
 
@@ -316,6 +377,58 @@ mod tests {
         assert_eq!(look.hairstyles[0].note, "high twin tails");
         assert_eq!(look.current.outfit.as_deref(), Some("winter-coat"));
         assert!(look.portrait.is_none());
+        let _ = std::fs::remove_dir_all(memory);
+    }
+
+    #[test]
+    fn a_drawn_try_on_is_kept_per_combination_and_goes_stale_only_when_its_parts_change() {
+        use std::time::{Duration, SystemTime};
+        let memory = temp("tryon");
+        ensure(&memory, "Lyra").unwrap();
+        let outfit = new_item(&memory, "outfit", "Winter Coat", "a navy coat").unwrap();
+        let hair = new_item(&memory, "hair", "Twin Tails", "high twin tails").unwrap();
+        let both = Current { outfit: Some(outfit.clone()), hair: Some(hair.clone()) };
+        assert!(try_on(&memory, &Current::default()).is_none(), "nothing worn, nothing to try on");
+
+        let none_yet = try_on(&memory, &both).unwrap();
+        assert!(!none_yet.exists && !none_yet.stale);
+        assert!(none_yet.path.replace('\\', "/").ends_with("appearance/try-on/winter-coat__twin-tails.png"));
+        assert_ne!(try_on_path(&memory, &both), try_on_path(&memory, &Current { outfit: Some(outfit.clone()), hair: None }));
+
+        // the picture is drawn after its parts were written
+        let picture = std::path::PathBuf::from(&none_yet.path);
+        std::fs::create_dir_all(picture.parent().unwrap()).unwrap();
+        std::fs::write(&picture, b"png").unwrap();
+        let now = SystemTime::now();
+        let set = |p: &Path, t: SystemTime| std::fs::File::options().write(true).open(p).unwrap().set_modified(t).unwrap();
+        set(&memory.join("appearance/wardrobe").join(&outfit).join("outfit.md"), now - Duration::from_secs(300));
+        set(&memory.join("appearance/hairstyles").join(&hair).join("hair.md"), now - Duration::from_secs(300));
+        set(&picture, now - Duration::from_secs(100));
+        let kept = try_on(&memory, &both).unwrap();
+        assert!(kept.exists && !kept.stale, "same outfit and hair: reuse the picture");
+
+        // the outfit changes after the picture
+        set(&memory.join("appearance/wardrobe").join(&outfit).join("outfit.md"), now);
+        assert!(try_on(&memory, &both).unwrap().stale);
+        // a different outfit is a different picture, not a stale one
+        let other = new_item(&memory, "outfit", "Summer Dress", "a light dress").unwrap();
+        let different = try_on(&memory, &Current { outfit: Some(other), hair: Some(hair) }).unwrap();
+        assert!(!different.exists);
+        let _ = std::fs::remove_dir_all(memory);
+    }
+
+    #[test]
+    fn an_id_outside_the_allowed_shape_in_current_json_is_never_used_to_build_a_path() {
+        let memory = temp("tryon-fenced");
+        ensure(&memory, "Lyra").unwrap();
+        // current.json is Castle's own file, but appearance_wear writes it with no id validation;
+        // try_on_path and try_on must not trust it blindly when they turn it into a real path.
+        let hostile = Current { outfit: Some("../../elsewhere".into()), hair: Some("ok-id".into()) };
+        let path = try_on_path(&memory, &hostile).display().to_string().replace('\\', "/");
+        assert!(path.ends_with("appearance/try-on/no-outfit__ok-id.png"), "{path}");
+        assert!(!path.contains(".."));
+        // try_on() must not even attempt to scan a folder built from the bad id
+        assert!(try_on(&memory, &hostile).is_some());
         let _ = std::fs::remove_dir_all(memory);
     }
 
