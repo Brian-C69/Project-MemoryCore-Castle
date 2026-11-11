@@ -105,6 +105,7 @@ pub fn handoff(entries: &[ChatEntry], memory: &Path) -> String {
         .iter()
         .rev()
         .filter(|e| matches!(e.role.as_str(), "member" | "companion"))
+        .filter(|e| !(e.role == "member" && e.text.trim_start().starts_with(crate::session::WAKE_PROMPT)))
     {
         if remaining == 0 {
             break;
@@ -804,6 +805,17 @@ mod tests {
         assert!(nothing_typed_since(Some(before), started), "input belonged to an earlier session");
         assert!(!nothing_typed_since(Some(after), started), "typed after it started: a turn may be running");
         assert!(!nothing_typed_since(Some(started), started), "typed the moment it started counts as typed");
+    }
+
+    #[test]
+    fn handoff_leaves_out_the_wake_greeting_prompt() {
+        let mut real = entry("real");
+        real.text = "Plan the Encore invoice.".into();
+        let mut wake = entry("wake");
+        wake.text = crate::session::WAKE_PROMPT.into();
+        let value = handoff(&[wake, real], Path::new("memory"));
+        assert!(value.contains("Plan the Encore invoice."));
+        assert!(!value.contains(crate::session::WAKE_PROMPT));
     }
 
     #[test]

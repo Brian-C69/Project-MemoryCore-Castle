@@ -266,12 +266,26 @@ pub fn terminal_state(room: Option<String>, store: State<SettingsStore>, main: S
     view(&store, host(room, &main, &story), room)
 }
 
+/// The opening line Castle gives a session when the member presses Wake: neither CLI does anything
+/// until its first message, so without it a fresh session sits blank instead of greeting. The
+/// companion's own instructions (CLAUDE.md / AGENTS.md) say what to do on a first turn; this only
+/// starts one. It lands in the conversation record like something the member said, so the provider
+/// handoff leaves it out.
+pub const WAKE_PROMPT: &str = "Hi, I just woke you. Please load your memory and greet me.";
+
+/// What to start the CLI with: only the Wake button asks for the greeting, and only for the main
+/// session - not a wake Castle does itself at launch, and not the STORY room.
+pub fn opening_prompt(room: Room, greet: Option<bool>) -> Option<&'static str> {
+    (room == Room::Main && greet == Some(true)).then_some(WAKE_PROMPT)
+}
+
 #[tauri::command]
 pub fn terminal_start(
     app: AppHandle,
     cols: u16,
     rows: u16,
     room: Option<String>,
+    greet: Option<bool>,
     store: State<SettingsStore>,
     main: State<MainHost>,
     story: State<StoryHost>,
@@ -281,7 +295,7 @@ pub fn terminal_start(
         crate::rooms::need(&store, "story")?;
     }
     let host = host(room, &main, &story);
-    wake(&app, &store, host, room, cols, rows)?;
+    wake_with_prompt(&app, &store, host, room, cols, rows, opening_prompt(room, greet))?;
     Ok(view(&store, host, room))
 }
 
@@ -457,6 +471,14 @@ MEMORY_DB_PASSWORD=x
         std::fs::write(&file, "old").unwrap();
         forget_boot_file(&store);
         assert!(!file.exists());
+    }
+
+    #[test]
+    fn only_the_wake_button_greets_and_only_in_the_main_session() {
+        assert_eq!(opening_prompt(Room::Main, Some(true)), Some(WAKE_PROMPT));
+        assert_eq!(opening_prompt(Room::Main, Some(false)), None, "a wake Castle does itself");
+        assert_eq!(opening_prompt(Room::Main, None), None, "no answer means no greeting");
+        assert_eq!(opening_prompt(Room::Story, Some(true)), None, "the STORY room has its own opening");
     }
 
     #[test]

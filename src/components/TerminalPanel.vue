@@ -173,7 +173,9 @@ function onRightClick(event) {
   else pasteIntoSession()
 }
 
-async function wake() {
+// `greet`: true only when the member pressed Wake, so Castle opens the conversation. A wake Castle
+// does itself (at launch, or on a request from elsewhere) starts a blank session as before.
+async function wake({ greet = false } = {}) {
   if (running.value) {
     term.focus()
     return
@@ -184,7 +186,7 @@ async function wake() {
   // the session is running; the answer must still reach it or the CLI never begins.
   starting = true
   try {
-    show(await terminalStart(term.cols, term.rows, props.room))
+    show(await terminalStart(term.cols, term.rows, props.room, greet === true))
     ended.value = false
     term.focus()
   } catch (reason) {
@@ -374,7 +376,7 @@ defineExpose({ wake, screenLines, writeToSession })
       <p class="title">{{ ended ? `${companion}'s session ended.` : `${companion} is resting.` }}</p>
       <p class="message">{{ problem || status.message }}</p>
       <div class="buttons">
-        <button class="primary" :disabled="!status.ready" @click="wake">Wake {{ companion === 'Your companion' ? 'your companion' : companion }}</button>
+        <button class="primary" :disabled="!status.ready" @click="wake({ greet: true })">Wake {{ companion === 'Your companion' ? 'your companion' : companion }}</button>
         <button v-if="status.fix === 'setup'" @click="emit('setup')">Open setup</button>
         <button v-if="status.fix === 'settings' || status.fix === 'install'" @click="emit('settings')">Settings</button>
       </div>
