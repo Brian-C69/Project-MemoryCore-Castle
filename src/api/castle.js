@@ -50,7 +50,8 @@ export const imageJobs = () => invoke('image_jobs')
 export const imageRetry = (id) => invoke('image_retry', { id })
 // Takes finished requests off the list: the one with this id, or all of them with no id.
 export const imageDismiss = (id = null) => invoke('image_dismiss', { id })
-export const imageRequest = (brief, output = null, references = [], room = 'studio') => invoke('image_request', { brief, output, references, room })
+// `label`: what the picture is for, shown in the Image requests list ("Try-on: Winter coat + Twin tails").
+export const imageRequest = (brief, output = null, references = [], room = 'studio', label = null) => invoke('image_request', { brief, output, references, room, label })
 export const providerSwitch = (target) => invoke('provider_switch', { target })
 export const providerSwitchStatus = () => invoke('provider_switch_status')
 export const providerSwitchCancel = () => invoke('provider_switch_cancel')
