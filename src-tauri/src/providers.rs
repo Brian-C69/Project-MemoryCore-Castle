@@ -236,6 +236,32 @@ fn persist_jobs(store: &SettingsStore, jobs: &[ImageJob]) -> Result<(), String> 
     std::fs::rename(pending, file).map_err(|_| "Image queue could not be published.".into())
 }
 
+/// A request that is not being worked on: it can be cleared from the list.
+fn finished(phase: &str) -> bool {
+    !matches!(phase, "queued" | "working" | "switching")
+}
+
+/// Takes finished requests off the list: the one named, or all of them when no id is given. A
+/// request that is still queued or drawing stays.
+#[tauri::command]
+pub fn image_dismiss(
+    id: Option<String>,
+    images: State<Images>,
+    store: State<SettingsStore>,
+) -> Result<(), String> {
+    let mut jobs = images.0.lock().unwrap();
+    let current = store
+        .get()
+        .memory_folder
+        .and_then(|p| PathBuf::from(p).canonicalize().ok());
+    jobs.retain(|j| {
+        let mine = Some(&j.memory) == current.as_ref();
+        let wanted = id.as_deref().is_none_or(|id| id == j.id);
+        !(mine && wanted && finished(&j.phase))
+    });
+    persist_jobs(&store, &jobs)
+}
+
 #[tauri::command]
 pub fn image_retry(
     id: String,
@@ -747,6 +773,16 @@ pub fn start(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_requests_not_being_worked_on_can_be_cleared() {
+        for phase in ["completed", "prompt-saved", "failed"] {
+            assert!(super::finished(phase), "{phase}");
+        }
+        for phase in ["queued", "working", "switching"] {
+            assert!(!super::finished(phase), "{phase}");
+        }
+    }
+
     use super::*;
     fn temp(name: &str) -> PathBuf {
         let p = std::env::temp_dir().join(format!("castle-provider-{name}-{}", std::process::id()));
