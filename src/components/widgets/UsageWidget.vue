@@ -1,9 +1,13 @@
 <script setup>
 // HOME's USAGE card: Claude Code's and Codex's five-hour and weekly limits, side by side, whichever
 // one the companion is using. Castle asks the CLIs at most every five minutes.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { cliUsage } from '../../api/castle.js'
 import { rows } from './usage.js'
+
+// Changes whenever Settings saves, so a CLI switched on or off there shows or goes at once.
+const props = defineProps({ stamp: { type: Number, default: 0 } })
+watch(() => props.stamp, () => read())
 
 const usage = ref(null)
 const now = ref(Date.now())
@@ -32,6 +36,7 @@ onBeforeUnmount(() => clearInterval(timer))
   <section class="widget card usage">
     <h3><span class="icon">◔</span>USAGE</h3>
     <p v-if="!usage" class="empty">Checking…</p>
+    <p v-else-if="!clis.length" class="empty">Usage is off. Turn on Claude Code or Codex under Settings &gt; Companion.</p>
     <div v-for="u in clis" :key="u.cli" class="cli">
       <p class="name">{{ u.label }}<span v-if="u.card.stale" class="stale">{{ u.card.stale }}</span></p>
       <div class="bars">

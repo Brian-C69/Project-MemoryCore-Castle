@@ -347,7 +347,7 @@ watch(settingsStamp, () => {
         </TerminalPanel>
         <div class="widget-slot" :style="placeStyle(widgets.clock)"><ClockWidget :size="widgets.clock?.size ?? 'm'" /></div>
         <div class="widget-slot" :style="placeStyle(widgets.gauges)"><GaugeWidget /></div>
-        <div v-if="widgets.usage" class="widget-slot" :style="placeStyle(widgets.usage)"><UsageWidget /></div>
+        <div v-if="widgets.usage" class="widget-slot" :style="placeStyle(widgets.usage)"><UsageWidget :stamp="settingsStamp" /></div>
         <div v-for="kind in ['today', 'projects', 'diary', 'growth', 'backup', 'database']" :key="kind" class="widget-slot" :style="placeStyle(widgets[kind])">
           <HomeCards v-if="widgets[kind]" :kind="kind" :data="home" :backup="backup" :database="database" @open="openMemoryFile" @backup="onBackupCard" @database="onDatabaseCard" />
         </div>
