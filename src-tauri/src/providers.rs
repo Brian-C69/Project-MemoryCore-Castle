@@ -810,11 +810,11 @@ mod tests {
     #[test]
     fn handoff_leaves_out_the_wake_greeting_prompt() {
         let mut real = entry("real");
-        real.text = "Plan the Encore invoice.".into();
+        real.text = "Plan the quarterly invoice.".into();
         let mut wake = entry("wake");
         wake.text = crate::session::WAKE_PROMPT.into();
         let value = handoff(&[wake, real], Path::new("memory"));
-        assert!(value.contains("Plan the Encore invoice."));
+        assert!(value.contains("Plan the quarterly invoice."));
         assert!(!value.contains(crate::session::WAKE_PROMPT));
     }
 

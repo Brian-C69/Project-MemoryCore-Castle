@@ -6,8 +6,8 @@ import { referenceLine } from '../components/appearance.js'
 describe('Codex image routing', () => {
   beforeEach(() => vi.clearAllMocks())
   it('passes output, reference and changes without writing to the conversation', async () => {
-    await askImage(['Keep the face.', referenceLine('C:\\My Pictures\\Mira.png'), 'Save it as C:\\Memory\\appearance\\portrait.png.', 'Tell me the cost first and ask before you draw.'])
-    expect(imageRequest).toHaveBeenCalledWith(expect.stringContaining('Keep the face.'), 'C:\\Memory\\appearance\\portrait.png', ['C:\\My Pictures\\Mira.png'], 'appearance')
+    await askImage(['Keep the face.', referenceLine('C:\\My Pictures\\Companion.png'), 'Save it as C:\\Memory\\appearance\\portrait.png.', 'Tell me the cost first and ask before you draw.'])
+    expect(imageRequest).toHaveBeenCalledWith(expect.stringContaining('Keep the face.'), 'C:\\Memory\\appearance\\portrait.png', ['C:\\My Pictures\\Companion.png'], 'appearance')
     expect(imageRequest.mock.calls[0][0]).not.toContain('Tell me the cost first')
     expect(terminalWrite).not.toHaveBeenCalled()
   })
