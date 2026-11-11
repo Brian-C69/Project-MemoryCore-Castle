@@ -145,6 +145,14 @@ pub fn complete_record(text: &str, cli: Cli) -> bool {
     false
 }
 
+/// Nothing was typed or handed to the session since it started (a fresh wake). It has no turn to
+/// finish, so replacing it loses nothing. Both CLIs write a record at startup that holds only
+/// their session metadata, which `complete_record` cannot tell from a turn still running, so this
+/// is decided before any record is read.
+pub(crate) fn nothing_typed_since(input: Option<std::time::SystemTime>, since: std::time::SystemTime) -> bool {
+    input.is_none_or(|input| input < since)
+}
+
 pub(crate) fn safe_boundary(store: &SettingsStore, host: &crate::pty::PtyHost) -> bool {
     if !host.is_running() {
         return true;
@@ -152,15 +160,16 @@ pub(crate) fn safe_boundary(store: &SettingsStore, host: &crate::pty::PtyHost) -
     let Some((_, since)) = host.started() else {
         return false;
     };
+    if nothing_typed_since(host.last_input_time(), since) {
+        return true;
+    }
     let cli = host.provider().unwrap_or(store.get().cli);
     let Some(folder) = Room::Main.folder(&store.get()) else {
         return false;
     };
     let Some((record, _)) = chat::newest_record(cli, &folder, since) else {
-        // No conversation record yet. A session nobody has typed into since it started (a fresh
-        // wake) has no turn to finish, so it can be switched; one that was given something has not
-        // written its first turn yet, so wait for it.
-        return host.last_input_time().is_none_or(|input| input < since);
+        // Something was typed or handed over, but the CLI has not written its first turn yet.
+        return false;
     };
     if let Some(input) = host.last_input_time() {
         if record
@@ -785,6 +794,18 @@ mod tests {
         assert_eq!(std::fs::read(file).unwrap(), b"broken");
         let _ = std::fs::remove_dir_all(root);
     }
+    #[test]
+    fn a_session_nobody_typed_into_can_be_switched_but_a_started_turn_cannot() {
+        use std::time::{Duration, SystemTime};
+        let started = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000);
+        let before = started - Duration::from_secs(5);
+        let after = started + Duration::from_secs(5);
+        assert!(nothing_typed_since(None, started), "fresh wake: no input at all");
+        assert!(nothing_typed_since(Some(before), started), "input belonged to an earlier session");
+        assert!(!nothing_typed_since(Some(after), started), "typed after it started: a turn may be running");
+        assert!(!nothing_typed_since(Some(started), started), "typed the moment it started counts as typed");
+    }
+
     #[test]
     fn handoff_does_not_carry_tool_output_and_limits_large_dialogue() {
         let mut e = entry("large");
