@@ -286,18 +286,39 @@ pub fn terminal_start(
 }
 
 /// The terminal talking to the console on its own, not the member typing: answers to the
-/// console's questions (where the cursor is, what it is, whether it is ready) and the focus
-/// reports the CLI asked for (`ESC [ I` / `ESC [ O`). Windows' console waits for the cursor answer
-/// before it starts the CLI, so these are never held back, and they never count as the member's
-/// last input - otherwise clicking the provider picker (a focus-out) would look like new typing
-/// and a provider switch would wait forever for a turn that is already over.
+/// console's questions and the focus reports the CLI asked for. Windows' console waits for the
+/// cursor answer before it starts the CLI, so these are never held back, and they never count as
+/// the member's last input - otherwise a fresh session would look typed into (Codex asks for the
+/// screen's colours the moment it starts) and a provider switch would wait for a turn that never
+/// began. What it knows, with the bytes Castle's screen really sends back:
+///   cursor position `ESC [ 1;1 R`, device attributes `ESC [ ? 1;2 c` and `ESC [ > 0;276;0 c`,
+///   status `ESC [ 0 n`, keyboard mode `ESC [ ? 0 u`, mode reports `ESC [ ? 2026;2 $ y`,
+///   colours `ESC ] 10;rgb:ee/f3/ff ESC \`, and focus `ESC [ I` / `ESC [ O`.
+/// A key press is never one of these (arrows end in A-D, F-keys in ~, a kitty key in u without `?`).
 pub fn is_terminal_reply(data: &str) -> bool {
+    if data.len() > 128 {
+        return false;
+    }
     if data == "\x1b[I" || data == "\x1b[O" {
         return true;
     }
+    // OSC (colours) and DCS (version) replies: ESC ] or ESC P, then text, then ST (ESC \) or BEL
+    if let Some(rest) = data.strip_prefix("\x1b]").or_else(|| data.strip_prefix("\x1bP")) {
+        let text = rest.strip_suffix("\x1b\\").or_else(|| rest.strip_suffix('\x07'));
+        return text.is_some_and(|t| !t.contains('\x1b') && t.starts_with(|c: char| c.is_ascii_digit() || c == '>'));
+    }
     let Some(body) = data.strip_prefix("\x1b[") else { return false };
-    let Some(last) = body.chars().last() else { return false };
-    data.len() <= 32 && matches!(last, 'R' | 'c' | 'n') && body[..body.len() - 1].chars().all(|c| c.is_ascii_digit() || c == ';' || c == '?' || c == '>')
+    let Some(last) = body.chars().last().filter(char::is_ascii) else { return false };
+    let params = &body[..body.len() - 1];
+    if !params.chars().all(|c| c.is_ascii_digit() || matches!(c, ';' | '?' | '>' | '$')) {
+        return false;
+    }
+    match last {
+        'R' | 'c' | 'n' => !params.contains('$'),
+        'u' => params.starts_with('?') && !params.contains('$'),
+        'y' => params.starts_with('?') && params.ends_with('$'),
+        _ => false,
+    }
 }
 
 #[tauri::command]
@@ -440,10 +461,21 @@ MEMORY_DB_PASSWORD=x
 
     #[test]
     fn the_terminal_answering_the_console_is_told_apart_from_typing() {
-        for reply in ["\x1b[1;1R", "\x1b[24;80R", "\x1b[?1;2c", "\x1b[>0;10;1c", "\x1b[0n", "\x1b[I", "\x1b[O"] {
+        // the bytes Castle's screen (xterm.js) sent back to real Codex and Claude Code queries, plus the same
+        // shapes ending in BEL and as a DCS version reply (not captured, but the same kind of reply)
+        for reply in [
+            "\x1b[1;1R", "\x1b[24;80R", "\x1b[?1;2c", "\x1b[>0;276;0c", "\x1b[0n", "\x1b[I", "\x1b[O",
+            "\x1b[?0u", "\x1b[?2026;2$y", "\x1b[?1;2$y",
+            "\x1b]10;rgb:eeee/f3f3/ffff\x1b\\", "\x1b]11;rgb:0000/0000/0000\x1b\\", "\x1b]4;1;rgb:cccc/0000/0000\x1b\\",
+            "\x1b]11;rgb:0000/0000/0000\x07", "\x1bP>|xterm.js(5.5.0)\x1b\\",
+        ] {
             assert!(is_terminal_reply(reply), "{reply:?}");
         }
-        for typed in ["hello", "\r", "\x1b[A", "\x1b[200~paste\x1b[201~", "\x1b[1;1Rmore", "\x1b[", "R", "\x1b[1;1H"] {
+        for typed in [
+            "hello", "\r", "\x7f", "\t", "\x1b", "\x1b[A", "\x1b[1;5C", "\x1b[3~", "\x1b[Z", "\x1bOP", "\x1b[200~paste\x1b[201~",
+            "\x1b[1;1Rmore", "\x1b[", "R", "\x1b[1;1H", "\x1b[97;5u", "\x1b[<0;10;5M", "\x1b]\x1b\\", "\x1b]11;rgb:0/0/0\x1b\\x",
+            "\x1b[?2026;2$u", "\x1bb", "\x1b]hello\x07",
+        ] {
             assert!(!is_terminal_reply(typed), "{typed:?}");
         }
     }
