@@ -355,6 +355,13 @@ pub fn run() {
                     world::set_visible(window.app_handle(), false);
                 }
             }
+            // Castle minimised to the taskbar comes back with a click there: the WORLD on the other
+            // screens, hidden when it went, comes back with it.
+            if let WindowEvent::Focused(true) = event {
+                if window.label() == "main" && window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false) {
+                    world::set_visible(window.app_handle(), true);
+                }
+            }
         })
         .build(tauri::generate_context!())
         .expect("MemoryCore Castle could not start")

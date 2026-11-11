@@ -351,6 +351,8 @@ onMounted(async () => {
         <label class="toggle"><input type="checkbox" :checked="settings.startWithWindows" @change="save({ startWithWindows: $event.target.checked })" /> Start Castle when Windows starts</label>
         <p v-if="view?.startupNote" class="hint">{{ view.startupNote }}</p>
         <label class="toggle"><input type="checkbox" :checked="settings.startSessionOnLaunch" @change="save({ startSessionOnLaunch: $event.target.checked })" /> Wake {{ settings.companionName ?? 'your companion' }} when Castle starts with Windows</label>
+        <label class="toggle"><input type="checkbox" :checked="settings.minimizeToTaskbar" @change="save({ minimizeToTaskbar: $event.target.checked })" /> Minimise to the taskbar instead of the tray</label>
+        <p class="hint">The minus button in the top bar then minimises Castle to the taskbar, where one click brings it back. With this off, it hides Castle to the tray icon.</p>
         <p class="hint">Change the look in the THEME room.</p>
       </section>
 

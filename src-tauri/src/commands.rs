@@ -72,11 +72,13 @@ pub fn user_themes(store: State<SettingsStore>) -> Vec<themes::UserTheme> {
     themes::list(&store.folder())
 }
 
-/// Hides Castle to the tray (the top bar's minus button).
+/// The top bar's minus button: hides Castle to the tray, or minimises it to the taskbar when the
+/// member chose that in Settings > Start-up. The WORLD on the other screens goes either way, and
+/// comes back when Castle does (the tray, or the window getting focus again from the taskbar).
 #[tauri::command]
-pub fn hide_castle(app: AppHandle) {
+pub fn hide_castle(app: AppHandle, store: State<SettingsStore>) {
     if let Some(window) = app.get_webview_window("main") {
-        let _ = window.hide();
+        let _ = if store.get().minimize_to_taskbar { window.minimize() } else { window.hide() };
     }
     crate::world::set_visible(&app, false);
 }

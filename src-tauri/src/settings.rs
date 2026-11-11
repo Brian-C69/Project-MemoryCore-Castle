@@ -167,6 +167,9 @@ pub struct Settings {
     pub start_with_windows: bool,
     /// Start the companion's session when Castle opens.
     pub start_session_on_launch: bool,
+    /// The top bar's minus button minimises Castle to the taskbar. Off (the default), it hides
+    /// Castle to the tray icon, as before.
+    pub minimize_to_taskbar: bool,
     /// The id of the companion's room key Castle made on the Portfolio (so it can be removed again).
     pub room_companion_key_id: Option<String>,
     /// The name that key carries in the room (a rename in Settings remakes the key).
@@ -230,6 +233,7 @@ impl Default for Settings {
             theme: None,
             start_with_windows: false,
             start_session_on_launch: true,
+            minimize_to_taskbar: false,
             room_companion_key_id: None,
             room_companion_name: None,
             world: WorldSettings::default(),
@@ -389,6 +393,7 @@ mod tests {
         let (settings, warning) = load(&folder.join(FILE_NAME));
         assert_eq!(settings, Settings::default());
         assert!(!settings.start_with_windows);
+        assert!(!settings.minimize_to_taskbar, "the minus button hides to the tray unless the member chooses the taskbar");
         assert!(!settings.setup_done);
         assert_eq!(settings.cli, Cli::Claude);
         assert!(warning.is_none());
@@ -407,6 +412,7 @@ mod tests {
             theme: Some("constellation".into()),
             start_with_windows: true,
             start_session_on_launch: false,
+            minimize_to_taskbar: true,
             room_companion_key_id: Some("17".into()),
             room_companion_name: Some("Lyra".into()),
             world: WorldSettings {
@@ -463,6 +469,7 @@ mod tests {
         let (settings, _) = load(&path);
         assert_eq!(settings.memory_folder.as_deref(), Some("D:\\MemoryCore"));
         assert!(settings.start_session_on_launch);
+        assert!(!settings.minimize_to_taskbar, "a settings file from before this option keeps the tray behaviour");
         assert_eq!(settings.world, WorldSettings::default());
     }
 
