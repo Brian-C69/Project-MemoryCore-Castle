@@ -276,14 +276,17 @@ Your companion tells you the cost first and asks before drawing. When a picture 
 
 ### The standard look
 
-Press **Draw the standard look**. Your companion draws a front portrait from `appearance/companion.md` - its look in words. If your MemoryCore already describes your companion's appearance (MemoryCore's Image Prompt feature), Castle starts from those words. Change the words any time (ask your companion, or edit the file), then **Redraw**.
+Press **Upload image** to use artwork you already have, or **Draw the standard look** to start from `appearance/companion.md`. Uploads accept PNG, JPEG and WebP up to 25 MB and are copied into your MemoryCore as PNG. Replacing an imported image preserves the previous file. Uploading does not generate an image or call a paid API.
+
+Write what you want changed in **Changes for the next drawing**, then press **Improve from image**. Castle asks your companion to edit using the existing image as a reference and preserve its face and body proportions. The existing drawing flow still applies: Claude Code uses your stored OpenAI API key; Codex uses its native image tool. Your companion confirms cost before drawing. Press **Refresh** after the result is saved.
 
 The standard look also becomes your companion's picture in the panel, unless you chose your own picture in setup.
 
 ### Wardrobe and hair
 
-- Press **+ New** on **WARDROBE** or **HAIR**, give it a name and describe it, then **Add and draw**. Your companion draws a turnaround sheet - front, side and back - using the standard look so the face stays the same.
-- Click a sheet to see it large. **Redraw** asks for a new one.
+- Press **+ New** on **WARDROBE** or **HAIR**, give it a name and description, optionally **Add reference image**, then **Add**. This saves the item without starting generation.
+- **Upload reference** also adds existing artwork to a saved item. The copied `reference.png` remains separate from the generated `turnaround.png`.
+- Click an image to see it large. **Improve / draw turnaround** asks your companion to use the reference (or existing sheet, then standard portrait) to draw front, side and back views with your requested changes.
 - **Wear** chooses today's outfit or hairstyle (press again to take it off). Your companion reads today's look from `appearance/current.json`.
 - **Try on today's look** asks for a portrait in today's outfit and hair.
 

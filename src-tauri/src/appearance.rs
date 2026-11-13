@@ -19,6 +19,7 @@ pub struct Item {
     pub note: String,
     /// the turnaround sheet, when it has been drawn (absolute path)
     pub sheet: Option<String>,
+    pub reference: Option<String>,
     /// a saved prompt waiting for a key (absolute path)
     pub saved_prompt: Option<String>,
 }
@@ -99,6 +100,7 @@ fn items(dir: &Path, note_file: &str) -> Vec<Item> {
                         name,
                         note: body,
                         sheet: sheet.map(|s| s.display().to_string()),
+                        reference: p.join("reference.png").is_file().then(|| p.join("reference.png").display().to_string()),
                         saved_prompt: prompt.is_file().then(|| prompt.display().to_string()),
                     }
                 })
@@ -150,6 +152,91 @@ pub fn set_current(memory: &Path, current: &Current) -> Result<(), String> {
     std::fs::create_dir_all(root(memory)).map_err(|_| "The appearance folder could not be created.".to_string())?;
     std::fs::write(root(memory).join("current.json"), serde_json::to_string_pretty(current).unwrap_or_default())
         .map_err(|_| "Today's look could not be saved.".to_string())
+}
+
+/// Validate and keep a local PNG copy. Replacements retain the previous image as a backup.
+pub fn import_picture(memory: &Path, kind: &str, id: Option<&str>, source: &Path) -> Result<(), String> {
+    let target = match kind {
+        "standard" if id.is_none() => root(memory).join("portrait.png"),
+        "outfit" | "hair" => {
+            let id = id.filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
+                .ok_or("Choose an existing outfit or hairstyle.")?;
+            let dir = if kind == "outfit" { "wardrobe" } else { "hairstyles" };
+            root(memory).join(dir).join(id).join("reference.png")
+        }
+        _ => return Err("Choose a standard look, outfit or hairstyle.".into()),
+    };
+    let fence = memory.canonicalize().map_err(|_| "The memory folder is gone.")?;
+    let parent = target.parent().unwrap().canonicalize().map_err(|_| "The appearance item is gone.")?;
+    if !parent.starts_with(&fence) { return Err("The image destination is outside your memory.".into()); }
+    if target.exists() {
+        crate::files::fenced(memory, &target.display().to_string())?;
+    }
+    let size = std::fs::metadata(source).map_err(|_| "The picture is gone.")?.len();
+    if size > 25 * 1024 * 1024 { return Err("Choose a picture smaller than 25 MB.".into()); }
+    let mut reader = image::ImageReader::open(source).map_err(|_| "The picture could not be opened.")?
+        .with_guessed_format().map_err(|_| "That file is not a supported picture.")?;
+    if !matches!(reader.format(), Some(image::ImageFormat::Png | image::ImageFormat::Jpeg | image::ImageFormat::WebP)) {
+        return Err("Choose a PNG, JPEG or WebP picture.".into());
+    }
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(8192);
+    limits.max_image_height = Some(8192);
+    limits.max_alloc = Some(128 * 1024 * 1024);
+    reader.limits(limits);
+    let picture = reader.decode().map_err(|_| "The picture is damaged or too large to decode.")?;
+    let mut encoded = std::io::Cursor::new(Vec::new());
+    picture.write_to(&mut encoded, image::ImageFormat::Png).map_err(|_| "The picture could not be converted.")?;
+    if target.exists() {
+        let mut n = 1;
+        loop {
+            let backup = parent.join(format!("{}-previous-{n}.png", target.file_stem().unwrap().to_string_lossy()));
+            match std::fs::OpenOptions::new().write(true).create_new(true).open(backup) {
+                Ok(mut file) => {
+                    use std::io::Write;
+                    let old = std::fs::read(&target).map_err(|_| "The previous image could not be read.")?;
+                    file.write_all(&old).map_err(|_| "The previous image could not be preserved.")?;
+                    break;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => n += 1,
+                Err(_) => return Err("The previous image could not be preserved.".into()),
+            }
+        }
+    }
+    // Write fully before publishing, so an interrupted import does not truncate the old image.
+    let mut n = 1;
+    loop {
+        let pending = parent.join(format!("{}-import-{n}.tmp", target.file_stem().unwrap().to_string_lossy()));
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&pending) {
+            Ok(mut file) => {
+                use std::io::Write;
+                let result = file.write_all(encoded.get_ref()).and_then(|_| file.sync_all());
+                drop(file);
+                if result.is_err() {
+                    let _ = std::fs::remove_file(&pending);
+                    return Err("The picture could not be saved.".into());
+                }
+                if std::fs::rename(&pending, &target).is_err() {
+                    let _ = std::fs::remove_file(&pending);
+                    return Err("The picture could not be replaced. Close any app holding it and try again.".into());
+                }
+                return Ok(());
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => n += 1,
+            Err(_) => return Err("The picture could not be saved.".into()),
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn appearance_import(kind: String, id: Option<String>, source: String, store: State<'_, SettingsStore>) -> Result<Look, String> {
+    crate::rooms::need(&store, "appearance")?;
+    let (memory, companion) = memory_of(&store)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        ensure(&memory, &companion).map_err(|_| "The appearance folder could not be created.")?;
+        import_picture(&memory, &kind, id.as_deref(), Path::new(&source))?;
+        Ok(look(&memory))
+    }).await.map_err(|_| "The picture import could not finish.".to_string())?
 }
 
 fn memory_of(store: &SettingsStore) -> Result<(PathBuf, String), String> {
@@ -229,6 +316,45 @@ mod tests {
         assert_eq!(look.hairstyles[0].note, "high twin tails");
         assert_eq!(look.current.outfit.as_deref(), Some("winter-coat"));
         assert!(look.portrait.is_none());
+        let _ = std::fs::remove_dir_all(memory);
+    }
+
+    #[test]
+    fn imported_images_survive_replacement_and_are_listed_as_references() {
+        let memory = temp("import");
+        ensure(&memory, "Lyra").unwrap();
+        let source = memory.join("source.png");
+        image::RgbaImage::from_pixel(2, 2, image::Rgba([12, 34, 56, 255])).save(&source).unwrap();
+        import_picture(&memory, "standard", None, &source).unwrap();
+        let original = std::fs::read(memory.join("appearance/portrait.png")).unwrap();
+        import_picture(&memory, "standard", None, &source).unwrap();
+        assert_eq!(std::fs::read(memory.join("appearance/portrait-previous-1.png")).unwrap(), original);
+        assert!(look(&memory).portrait.is_some());
+        for kind in ["outfit", "hair"] {
+            let id = new_item(&memory, kind, "Imported", "Existing artwork").unwrap();
+            import_picture(&memory, kind, Some(&id), &source).unwrap();
+        }
+        let view = look(&memory);
+        assert!(view.wardrobe[0].reference.is_some());
+        assert!(view.hairstyles[0].reference.is_some());
+        assert!(view.wardrobe[0].sheet.is_none());
+        assert!(source.exists());
+        let _ = std::fs::remove_dir_all(memory);
+    }
+
+    #[test]
+    fn invalid_images_and_destinations_do_not_replace_the_portrait() {
+        let memory = temp("invalid-import");
+        ensure(&memory, "Lyra").unwrap();
+        let source = memory.join("not-a-picture.png");
+        std::fs::write(&source, b"not an image").unwrap();
+        let target = memory.join("appearance/portrait.png");
+        std::fs::write(&target, b"original").unwrap();
+        assert!(import_picture(&memory, "standard", None, &source).is_err());
+        assert!(import_picture(&memory, "outfit", Some("../escape"), &source).is_err());
+        assert!(import_picture(&memory, "outfit", Some("missing"), &source).is_err());
+        assert!(import_picture(&memory, "invalid", None, &source).is_err());
+        assert_eq!(std::fs::read(target).unwrap(), b"original");
         let _ = std::fs::remove_dir_all(memory);
     }
 }

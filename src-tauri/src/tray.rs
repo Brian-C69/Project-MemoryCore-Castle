@@ -16,6 +16,7 @@ pub fn show_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
         let _ = window.show();
         let _ = window.unminimize();
+        let _ = crate::screen::fill_desktop(&window);
         let _ = window.set_focus();
     }
     // the WORLD on the other screens comes back with Castle
