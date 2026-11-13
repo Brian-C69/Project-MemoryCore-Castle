@@ -46,7 +46,7 @@ pub struct QuickAction {
 
 /// The rooms the member may switch off in Settings (HOME is always on). Off = not available:
 /// the tab is gone and nothing runs for it, but nothing is removed.
-pub const ROOMS: [&str; 10] = ["theme", "apps", "diary", "projects", "library", "appearance", "studio", "story", "world", "chat"];
+pub const ROOMS: [&str; 11] = ["theme", "apps", "diary", "projects", "library", "appearance", "studio", "story", "world", "chat", "dev"];
 
 pub const DEFAULT_WORLD: &str = "3d/floating-isles";
 pub const CAMERAS: [&str; 4] = ["director", "follow", "wide", "orbit"];
@@ -214,6 +214,10 @@ pub struct Settings {
     /// True once the member has answered the one-time offer to move the memory into a database
     /// (either button), or finished a setup that showed it.
     pub db_offer_seen: bool,
+    /// The DEV tab's open projects, one folder per tab (at most `dev_tabs::SLOTS`); empty = closed.
+    pub dev_tabs: Vec<Option<String>>,
+    /// The DEV tab's recent projects, newest first (at most `dev_tabs::RECENT`).
+    pub dev_projects: Vec<String>,
     /// Castle's session is only this companion: the member's personal Claude Code setup (its
     /// own CLAUDE.md, hooks and plugins) is left out, and Castle hands the companion her
     /// instructions itself. Off by default; for a PC where that setup is another companion.
@@ -261,6 +265,8 @@ impl Default for Settings {
             db_keep_running: false,
             db_boot_at_wake: true,
             db_offer_seen: false,
+            dev_tabs: Vec::new(),
+            dev_projects: Vec::new(),
             only_this_companion: false,
             diary_look: "list".into(),
         }
@@ -448,6 +454,8 @@ mod tests {
             db_keep_running: true,
             db_boot_at_wake: false,
             db_offer_seen: true,
+            dev_tabs: vec![Some("D:/Projects/shop".into()), None],
+            dev_projects: vec!["D:/Projects/shop".into()],
             only_this_companion: true,
             diary_look: "book".into(),
         };

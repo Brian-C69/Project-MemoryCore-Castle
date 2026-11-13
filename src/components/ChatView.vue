@@ -109,9 +109,11 @@ const typing = computed(() => {
   return Number.isNaN(at) || now.value - at < TYPING_FOR_MS
 })
 
-// The WORLD on the other screens knows when the companion works and when it rests.
-watch(typing, (on) => (worldSignals.busy = on), { immediate: true })
-watch(() => props.running, (on) => (worldSignals.asleep = !on), { immediate: true })
+// The WORLD on the other screens knows when the companion works and when it rests - in the main
+// room only: a DEV tab's session is work in a project, not her presence in the WORLD.
+const signalsWorld = () => !String(props.room ?? '').startsWith('dev:')
+watch(typing, (on) => { if (signalsWorld()) worldSignals.busy = on }, { immediate: true })
+watch(() => props.running, (on) => { if (signalsWorld()) worldSignals.asleep = !on }, { immediate: true })
 
 // ---------- The companion's plans ----------
 
@@ -321,7 +323,7 @@ async function send() {
   // Several lines go in as one paste, so a new line never sends the message early.
   try {
     const sent = await sendMessage(text, props.room)
-    worldSignals.sentAt = Date.now() // in the WORLD the crystal brightens
+    if (signalsWorld()) worldSignals.sentAt = Date.now() // in the WORLD the crystal brightens
     draft.value = ''
     // the member's bubble at once, one grey tick until the companion's record holds it
     if (sent.queued) pendingMessages.value = await queuedMessages()

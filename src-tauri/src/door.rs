@@ -17,22 +17,37 @@
 //!  castle-memory skill save --plugin p --name n --dir <folder> | skill remove --plugin p --name n
 //!  castle-memory skill stub --plugin p --name n      a small SKILL.md on disk, the instructions loaded from here
 //!  castle-memory skill full --plugin p --name n      back to the whole SKILL.md on disk
+//!  castle-memory plan copy [--plan <file.md>] [--folder <dir>]   an approved plan into the project's rows
+//!  castle-memory plan status | plan next | plan show [--id N]    the project folder's open plans
+//!  castle-memory plan mark [--next | --item N] [--state done|carried|flagged] [--note ".."] [--id N]
 //!  castle-memory export --to <folder>        the memory back out as markdown
 //!  castle-memory dump --to backup/memory.sql | restore --from backup/memory.sql
 //! ```
 //!
 //! `castle-memory` is Castle's own program started with `--memory` (the tools folder holds the
-//! small launcher). It finds the database through the memory folder's .env.
+//! small launcher). It finds the database through the memory folder's .env, and the memory
+//! folder by `--memory-folder <dir>`, else the CASTLE_MEMORY environment variable, else the
+//! nearest folder upward from where it was started.
+//!
+//! The `plan` verbs work for a project folder: `--folder <dir>`, else the folder the door was
+//! started in (so a door started in a project needs CASTLE_MEMORY or `--memory-folder`).
+//! `plan copy` without `--plan` takes the newest `*.md` in `%USERPROFILE%\.claude\plans`.
 
 use crate::memdb;
 use crate::mirror;
+use crate::plans;
 use mysql::prelude::Queryable;
 use mysql::{Conn, Row, Value};
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 /// The argument that turns Castle's program into the door.
 pub const FLAG: &str = "--memory";
+
+/// The environment variable that names the memory folder, for a door started somewhere else
+/// (a project folder).
+pub const MEMORY_ENV: &str = "CASTLE_MEMORY";
 
 /// The words after `castle-memory`: plain words in order, and `--name value` pairs
 /// (`--no-wake` style flags carry "true").
@@ -42,7 +57,7 @@ pub struct Ask {
     pub flags: BTreeMap<String, String>,
 }
 
-const BARE_FLAGS: [&str; 2] = ["no-wake", "all"];
+const BARE_FLAGS: [&str; 3] = ["no-wake", "all", "next"];
 
 pub fn parse(args: &[String]) -> Result<Ask, String> {
     let mut ask = Ask::default();
@@ -94,10 +109,17 @@ fn sql(what: &'static str) -> impl Fn(mysql::Error) -> String {
     move |_| format!("{what} did not work.")
 }
 
-/// The memory folder: `--memory-folder`, else the nearest folder upward from here whose .env
-/// names a memory database.
+/// The memory folder: `--memory-folder`, else CASTLE_MEMORY, else the nearest folder upward
+/// from here whose .env names a memory database.
 pub fn find_memory(ask: &Ask, from: &Path) -> Result<PathBuf, String> {
+    find_memory_with(ask, std::env::var_os(MEMORY_ENV), from)
+}
+
+fn find_memory_with(ask: &Ask, named: Option<OsString>, from: &Path) -> Result<PathBuf, String> {
     if let Some(folder) = ask.get("memory-folder") {
+        return Ok(PathBuf::from(folder));
+    }
+    if let Some(folder) = named.filter(|f| !f.is_empty()) {
         return Ok(PathBuf::from(folder));
     }
     let mut at = Some(from);
@@ -107,7 +129,7 @@ pub fn find_memory(ask: &Ask, from: &Path) -> Result<PathBuf, String> {
         }
         at = folder.parent();
     }
-    Err("No memory database was found from this folder. Run this inside your MemoryCore folder.".into())
+    Err(format!("No memory database was found from this folder. Run this inside your MemoryCore folder, or name it with --memory-folder <dir> or {MEMORY_ENV}."))
 }
 
 /// Runs one ask against an open database; the text to print. `memory` is the memory folder
@@ -157,10 +179,15 @@ pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> 
             })
         }
         ["skill", "remove"] => Ok(if mirror::remove_skill(conn, memory, ask.need("plugin")?, ask.need("name")?)? { "SKILL removed".into() } else { "SKILL not found".into() }),
+        ["plan", "copy"] => plan_copy(conn, ask),
+        ["plan", "status"] => plan_status(conn, ask),
+        ["plan", "next"] => next_line(conn, &project_folder(ask)?),
+        ["plan", "mark"] => plan_mark(conn, ask),
+        ["plan", "show"] => plan_show(conn, ask),
         ["export"] => export(conn, Path::new(ask.need("to")?)),
         ["dump"] => dump(conn, Path::new(ask.need("to")?)),
         ["restore"] => restore(conn, Path::new(ask.need("from")?)),
-        _ => Err(format!("castle-memory does not know `{}`. Verbs: boot, memory, session, skill, diary, reminder, project, link, export, dump, restore.", words.join(" "))),
+        _ => Err(format!("castle-memory does not know `{}`. Verbs: boot, memory, session, skill, diary, reminder, project, link, plan, export, dump, restore.", words.join(" "))),
     }
 }
 
@@ -518,6 +545,115 @@ fn copy_folder(from: &Path, to: &Path) -> Result<(), String> {
     Ok(())
 }
 
+// ---------- plans for a project folder ----------
+
+/// The project folder: `--folder`, else the folder the door was started in; made whole.
+fn project_folder(ask: &Ask) -> Result<String, String> {
+    let folder = match ask.get("folder").map(str::trim).filter(|f| !f.is_empty()) {
+        Some(folder) => PathBuf::from(folder),
+        None => std::env::current_dir().map_err(|_| "This folder could not be read.".to_string())?,
+    };
+    let folder = std::path::absolute(&folder).unwrap_or(folder);
+    Ok(folder.display().to_string())
+}
+
+/// The newest `*.md` in a folder.
+pub fn newest_md(folder: &Path) -> Option<PathBuf> {
+    std::fs::read_dir(folder)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file() && p.extension().is_some_and(|x| x.eq_ignore_ascii_case("md")))
+        .max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok())
+}
+
+/// The plan the CLI approved last: the newest `*.md` in `%USERPROFILE%\.claude\plans`.
+fn newest_plan() -> Result<PathBuf, String> {
+    let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")).ok_or("Your home folder could not be found. Name the plan with --plan <file>.")?;
+    newest_md(&PathBuf::from(home).join(".claude").join("plans")).ok_or_else(|| "No plan was found in ~/.claude/plans. Name one with --plan <file>.".to_string())
+}
+
+/// The box in turn, and what is left.
+fn next_line(conn: &mut Conn, folder: &str) -> Result<String, String> {
+    let left = plans::left(conn, folder)?;
+    // carried and flagged boxes are the member's to decide: said, never walked
+    let waiting: Vec<String> = [(left.carried, "carried"), (left.flagged, "flagged")].iter().filter(|(n, _)| *n > 0).map(|(n, what)| format!("{n} {what}")).collect();
+    let waiting = if waiting.is_empty() { String::new() } else { format!(" ({} waiting for you)", waiting.join(", ")) };
+    Ok(match plans::next_item(conn, folder)? {
+        Some(next) => format!("NEXT #{} item {} [{}] {}\nLEFT {} open{waiting}", next.plan_id, next.item.ordinal, next.item.kind, next.item.text, left.open),
+        None => format!("NEXT nothing - every open box is walked{waiting}"),
+    })
+}
+
+fn plan_copy(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+    let file = match ask.get("plan") {
+        Some(file) => PathBuf::from(file),
+        None => newest_plan()?,
+    };
+    let markdown = std::fs::read_to_string(&file).map_err(|_| format!("The plan {} could not be read.", file.display()))?;
+    let folder = project_folder(ask)?;
+    let (id, boxes, duplicate) = plans::copy_plan(conn, &folder, &markdown, Some(&file.display().to_string()))?;
+    if duplicate {
+        return Ok(format!("PLAN #{id} is already here ({boxes} items): the same plan was copied before"));
+    }
+    let parsed = plans::parse_plan(&markdown);
+    let phase = parsed.phase().map(|p| format!("{p} · ")).unwrap_or_default();
+    let title = if parsed.title.is_empty() { "untitled".to_string() } else { parsed.title };
+    Ok(format!("PLAN copied #{id} · {phase}{title} · {boxes} items\n{}", next_line(conn, &folder)?))
+}
+
+fn plan_status(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+    let folder = project_folder(ask)?;
+    let open = plans::open_plans(conn, &folder)?;
+    if open.is_empty() {
+        return Ok("PLAN none open here - copy an approved plan with `castle-memory plan copy`".into());
+    }
+    // oldest first: the order they are walked in
+    let mut lines: Vec<String> = open
+        .iter()
+        .rev()
+        .map(|plan| {
+            let boxes: Vec<_> = plan.items.iter().filter(|i| i.kind != "phase").collect();
+            let done = boxes.iter().filter(|i| i.state == "done").count();
+            let phase = plan.phase.as_ref().map(|p| format!("{p} · ")).unwrap_or_default();
+            format!("PLAN #{} · {phase}{} · {done}/{} done", plan.id, plan.title, boxes.len())
+        })
+        .collect();
+    lines.push(next_line(conn, &folder)?);
+    Ok(lines.join("\n"))
+}
+
+/// A `--name 3` flag as a number (a leading # is fine).
+fn number<T: std::str::FromStr>(ask: &Ask, name: &str) -> Result<Option<T>, String> {
+    ask.get(name).map(|v| v.trim().trim_start_matches('#').parse().map_err(|_| format!("--{name} is a number, like 3."))).transpose()
+}
+
+fn plan_mark(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+    let folder = project_folder(ask)?;
+    let which = match (number::<u32>(ask, "item")?, ask.get("next")) {
+        (Some(_), Some(_)) => return Err("Name one box: --next or --item N.".into()),
+        (Some(n), None) => plans::Which::Ordinal(n),
+        (None, _) => plans::Which::Next,
+    };
+    let state = ask.get("state").unwrap_or("done");
+    let marked = plans::mark(conn, &folder, number(ask, "id")?, which, state, ask.get("note"))?;
+    let mut out = format!("MARKED #{} item {} {}: {}", marked.plan_id, marked.ordinal, marked.state, plans::first_line(&marked.text));
+    if marked.plan_done {
+        out.push_str(&format!("\nPLAN #{} done - every box is ticked", marked.plan_id));
+    }
+    out.push('\n');
+    out.push_str(&next_line(conn, &folder)?);
+    Ok(out)
+}
+
+fn plan_show(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+    let id = match number(ask, "id")? {
+        Some(id) => id,
+        None => plans::current_plan(conn, &project_folder(ask)?)?.ok_or("PLAN none open here - name one with --id N.")?,
+    };
+    Ok(plans::plan_body(conn, id)?.trim_end().to_string())
+}
+
 // ---------- export: the memory back out as markdown ----------
 
 fn write(path: &Path, text: &str) -> Result<(), String> {
@@ -669,7 +805,7 @@ pub fn main(args: &[String]) -> i32 {
     let result = (|| {
         let ask = parse(args)?;
         if ask.words.is_empty() {
-            return Err("castle-memory needs a verb: diary, reminder, project, link, export, dump, restore.".to_string());
+            return Err("castle-memory needs a verb: diary, reminder, project, link, plan, export, dump, restore.".to_string());
         }
         let memory = find_memory(&ask, &std::env::current_dir().map_err(|_| "This folder could not be read.".to_string())?)?;
         let mut conn = memdb::open_for(&memory)?;
@@ -732,12 +868,52 @@ mod tests {
         let root = std::env::temp_dir().join(format!("castle-door-{}", std::process::id()));
         let deep = root.join("adventures").join("world");
         std::fs::create_dir_all(&deep).unwrap();
-        assert!(find_memory(&Ask::default(), &deep).is_err() || find_memory(&Ask::default(), &deep).unwrap() != root);
+        assert!(find_memory_with(&Ask::default(), None, &deep).is_err() || find_memory_with(&Ask::default(), None, &deep).unwrap() != root);
         std::fs::write(root.join(".env"), "MEMORY_DB_HOST=127.0.0.1\nMEMORY_DB_PORT=3307\nMEMORY_DB_NAME=lyra_memorycoredb\nMEMORY_DB_USER=castle_lyra\nMEMORY_DB_PASSWORD=x\n").unwrap();
-        assert_eq!(find_memory(&Ask::default(), &deep).unwrap(), root);
+        assert_eq!(find_memory_with(&Ask::default(), None, &deep).unwrap(), root);
         let named = parse(&args(&["diary", "list", "--memory-folder", "D:\\Mem"])).unwrap();
-        assert_eq!(find_memory(&named, &deep).unwrap(), PathBuf::from("D:\\Mem"));
+        assert_eq!(find_memory_with(&named, None, &deep).unwrap(), PathBuf::from("D:\\Mem"));
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn castle_memory_names_the_memory_folder_from_a_project() {
+        let project = std::env::temp_dir().join(format!("castle-door-project-{}", std::process::id()));
+        std::fs::create_dir_all(&project).unwrap();
+        let env = Some(OsString::from("D:\\Mem"));
+        assert_eq!(find_memory_with(&Ask::default(), env.clone(), &project).unwrap(), PathBuf::from("D:\\Mem"));
+        // --memory-folder wins over the variable; an empty variable is no name
+        let named = parse(&args(&["plan", "next", "--memory-folder", "E:\\Other"])).unwrap();
+        assert_eq!(find_memory_with(&named, env, &project).unwrap(), PathBuf::from("E:\\Other"));
+        assert_ne!(find_memory_with(&Ask::default(), Some(OsString::new()), &project).ok(), Some(PathBuf::new()));
+        std::fs::remove_dir_all(&project).unwrap();
+    }
+
+    #[test]
+    fn plan_words_and_the_newest_plan_file() {
+        let ask = parse(&args(&["plan", "mark", "--next", "--state", "flagged", "--item", "#4"])).unwrap();
+        assert_eq!(ask.get("next"), Some("true"));
+        assert_eq!(number::<u32>(&ask, "item").unwrap(), Some(4));
+        assert_eq!(number::<u32>(&ask, "id").unwrap(), None);
+        assert_eq!(number::<u32>(&parse(&args(&["--id", "four"])).unwrap(), "id").unwrap_err(), "--id is a number, like 3.");
+        let here = parse(&args(&["plan", "status", "--folder", "D:\\Work\\Castle"])).unwrap();
+        if cfg!(windows) {
+            assert_eq!(project_folder(&here).unwrap(), "D:\\Work\\Castle");
+        }
+        assert!(Path::new(&project_folder(&Ask::default()).unwrap()).is_absolute());
+
+        let plans = std::env::temp_dir().join(format!("castle-door-plans-{}", std::process::id()));
+        std::fs::create_dir_all(&plans).unwrap();
+        assert_eq!(newest_md(&plans), None);
+        std::fs::write(plans.join("old-plan.md"), "# Old\n").unwrap();
+        std::fs::write(plans.join("new-plan.MD"), "# New\n").unwrap();
+        std::fs::write(plans.join("notes.txt"), "not a plan").unwrap();
+        let old = std::fs::File::options().write(true).open(plans.join("old-plan.md")).unwrap();
+        old.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(3600)).unwrap();
+        drop(old);
+        assert_eq!(newest_md(&plans), Some(plans.join("new-plan.MD")));
+        assert_eq!(newest_md(&plans.join("missing")), None);
+        std::fs::remove_dir_all(&plans).unwrap();
     }
 
     /// Against a real server, on demand (CASTLE_TEST_DB="<port>:<admin>:<password>"): every verb
@@ -818,13 +994,13 @@ mod tests {
         assert_eq!(crate::memory::projects(&out)[0].name, "Portfolio site");
 
         let file = folder.join("backup").join("memory.sql");
-        assert!(go(&["dump", "--to", file.to_str().unwrap()]).unwrap().starts_with("DUMP 15 table(s), "));
+        assert!(go(&["dump", "--to", file.to_str().unwrap()]).unwrap().starts_with("DUMP 17 table(s), "));
         let before = go(&["diary", "show", "--date", "2026-11-10"]).unwrap();
         drop(go);
         // the record of the note: sent once, read once
         let recorded: Option<(u64, u64)> = conn.query_first("SELECT COUNT(*), COUNT(read_at) FROM link_notes").unwrap();
         assert_eq!(recorded, Some((1, 1)));
-        conn.query_drop("DROP TABLE diary_entries, reminders, projects, link_notes, link_terminals, imported_files, memory_files, memory_file_history, session_sections, session_section_history, skills, skill_files, skill_file_history, diary_entry_history, schema_migrations").unwrap();
+        conn.query_drop("DROP TABLE diary_entries, reminders, projects, link_notes, link_terminals, imported_files, memory_files, memory_file_history, session_sections, session_section_history, skills, skill_files, skill_file_history, diary_entry_history, project_plan_items, project_plans, schema_migrations").unwrap();
         let mut go =|line: &[&str]| run(&mut conn, &parse(&args(line)).unwrap(), &folder);
         assert!(go(&["diary", "list"]).is_err());
         assert!(go(&["restore", "--from", file.to_str().unwrap()]).unwrap().starts_with("RESTORE "));
@@ -832,6 +1008,56 @@ mod tests {
         assert_eq!(go(&["reminder", "list"]).unwrap(), "#2 Water plants");
         drop(go);
         assert!(memdb::migrate(&mut conn).unwrap().is_empty());
+
+        std::fs::remove_dir_all(&folder).unwrap();
+        let mut root = mysql::Conn::new(mysql::Opts::from(
+            mysql::OptsBuilder::new().ip_or_hostname(Some("127.0.0.1")).tcp_port(port).user(Some(admin)).pass(Some(admin_pw)).prefer_socket(false),
+        ))
+        .unwrap();
+        root.query_drop(format!("DROP DATABASE `{}`", access.name)).unwrap();
+        for host in ["localhost", "127.0.0.1"] {
+            root.query_drop(format!("DROP USER '{}'@'{host}'", access.user)).unwrap();
+        }
+    }
+
+    /// Against a real server, on demand (CASTLE_TEST_DB="<port>:<admin>:<password>"): a plan
+    /// copied into a project folder, copied again, walked with the plan verbs, and done.
+    #[test]
+    #[ignore]
+    fn live_plan_verbs_walk_a_plan_to_done() {
+        let spec = std::env::var("CASTLE_TEST_DB").expect("set CASTLE_TEST_DB");
+        let mut parts = spec.splitn(3, ':');
+        let port: u16 = parts.next().unwrap().parse().unwrap();
+        let (admin, admin_pw) = (parts.next().unwrap().to_string(), parts.next().unwrap_or("").to_string());
+        let access = memdb::provision(port, &admin, &admin_pw, &format!("Plan Door Test {}", std::process::id())).unwrap();
+        let mut conn = memdb::open(&access).unwrap();
+        let folder = std::env::temp_dir().join(format!("castle-door-plan-live-{}", std::process::id()));
+        let project = folder.join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        let plan = folder.join("approved.md");
+        std::fs::write(&plan, "# The DEV tab\n## Phase 1: Rows\n- [ ] Task 1.1 The table\n  - with a key\n- [ ] Seal\n").unwrap();
+        let (plan, at) = (plan.to_str().unwrap().to_string(), project.to_str().unwrap().to_string());
+        let mut go = |line: &[&str]| run(&mut conn, &parse(&args(line)).unwrap(), &folder);
+
+        assert_eq!(go(&["plan", "status", "--folder", &at]).unwrap(), "PLAN none open here - copy an approved plan with `castle-memory plan copy`");
+        let copied = go(&["plan", "copy", "--plan", &plan, "--folder", &at]).unwrap();
+        assert!(copied.starts_with("PLAN copied #1 · Phase 1 · The DEV tab · 2 items\nNEXT #1 item 2 [task] Task 1.1 The table\n  - with a key\nLEFT 2 open"), "{copied}");
+        // the same plan again, the folder named with a trailing slash: not a second plan
+        assert_eq!(go(&["plan", "copy", "--plan", &plan, "--folder", &format!("{at}/")]).unwrap(), "PLAN #1 is already here (2 items): the same plan was copied before");
+        assert!(go(&["plan", "copy", "--plan", &folder.join("missing.md").to_string_lossy(), "--folder", &at]).is_err());
+        assert_eq!(go(&["plan", "status", "--folder", &at]).unwrap(), "PLAN #1 · Phase 1 · The DEV tab · 0/2 done\nNEXT #1 item 2 [task] Task 1.1 The table\n  - with a key\nLEFT 2 open");
+        assert!(go(&["plan", "show", "--folder", &at]).unwrap().starts_with("# The DEV tab\n## Phase 1: Rows"));
+        assert!(go(&["plan", "show", "--id", "9"]).is_err());
+
+        assert!(go(&["plan", "mark", "--next", "--item", "2", "--folder", &at]).is_err());
+        assert!(go(&["plan", "mark", "--item", "2", "--state", "open", "--folder", &at]).is_err());
+        assert_eq!(go(&["plan", "mark", "--next", "--folder", &at]).unwrap(), "MARKED #1 item 2 done: Task 1.1 The table\nNEXT #1 item 3 [seal] Seal\nLEFT 1 open");
+        assert_eq!(go(&["plan", "mark", "--item", "3", "--state", "flagged", "--note", "no commit yet", "--folder", &at]).unwrap(), "MARKED #1 item 3 flagged: Seal\nNEXT nothing - every open box is walked (1 flagged waiting for you)");
+        assert_eq!(go(&["plan", "next", "--folder", &at]).unwrap(), "NEXT nothing - every open box is walked (1 flagged waiting for you)");
+        assert_eq!(go(&["plan", "mark", "--item", "3", "--folder", &at]).unwrap(), "MARKED #1 item 3 done: Seal\nPLAN #1 done - every box is ticked\nNEXT nothing - every open box is walked");
+        assert!(go(&["plan", "status", "--folder", &at]).unwrap().starts_with("PLAN none open here"));
+        assert!(go(&["plan", "show", "--id", "1"]).unwrap().ends_with("- [ ] Seal"));
+        drop(go);
 
         std::fs::remove_dir_all(&folder).unwrap();
         let mut root = mysql::Conn::new(mysql::Opts::from(

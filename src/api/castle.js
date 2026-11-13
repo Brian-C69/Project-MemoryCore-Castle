@@ -1,6 +1,8 @@
 // The only file that talks to Castle's Rust core.
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { typeLine } from '../components/typeline.js'
+import { devSlotOf, pasted } from '../views/dev/devtabs.js'
 
 export const hideCastle = () => invoke('hide_castle')
 
@@ -57,8 +59,15 @@ export const providerSwitch = (target) => invoke('provider_switch', { target })
 export const providerSwitchStatus = () => invoke('provider_switch_status')
 export const providerSwitchCancel = () => invoke('provider_switch_cancel')
 export const onProviderChanged = (handler) => listen('provider-changed', handler)
-export const chatHistory = (room) => invoke('chat_history', { room })
-export const sendMessage = (text, room) => invoke('send_message', { text, room })
+// A DEV tab's chat uses the room `dev:<slot>` (devRoom): its history, reads, sends and media are routed
+// to the dev_* commands below; every other room goes to the core exactly as before.
+export const chatHistory = (room) => (devSlotOf(room) !== null ? Promise.resolve([]) : invoke('chat_history', { room }))
+export const sendMessage = (text, room) => {
+  const slot = devSlotOf(room)
+  if (slot === null) return invoke('send_message', { text, room })
+  // as typed: one bracketed paste, then Enter after a pause (Codex needs it)
+  return typeLine((data) => devWrite(slot, data), pasted(text)).then(() => ({ queued: false }))
+}
 export const queuedMessages = () => invoke('queued_messages')
 export const queuedMessageAction = (id, retry = false) => invoke('queued_message_action', { id, retry })
 // `greet`: only the Wake button asks for it - Castle then opens the conversation so the companion greets.
@@ -70,9 +79,14 @@ export const storyClose = () => invoke('story_close')
 export const takeAutoWake = () => invoke('take_auto_wake')
 
 // Chat: new entries from the session's own record. -> { entries: [{ id, role, text, at, path, pictures, state }], reset, status }
-export const chatPoll = (room) => invoke('chat_poll', { room })
-// A picture or voice Chat showed this session, as a data URL.
-export const chatMedia = (path, room) => invoke('chat_media', { path, room })
+// A DEV tab's chat is read only while that tab shows (devChatShown); a hidden one answers nothing yet.
+export const chatPoll = (room) => {
+  const slot = devSlotOf(room)
+  if (slot === null) return invoke('chat_poll', { room })
+  return devShownSlots.has(slot) ? devChatPoll(slot) : Promise.reject(new Error('not shown'))
+}
+// A picture or voice Chat showed this session, as a data URL. (A DEV tab has no media door yet.)
+export const chatMedia = (path, room) => (devSlotOf(room) !== null ? Promise.reject(new Error('not available')) : invoke('chat_media', { path, room }))
 // Pictures the member dropped or pasted; returns the ones Chat may show.
 export const chatAttach = (paths) => invoke('chat_attach', { paths })
 
@@ -208,3 +222,28 @@ export const studioPowers = () => invoke('studio_powers')
 export const onNotice = on('castle-notice')
 // The tray's Wake companion.
 export const onWakeRequest = (handler) => listen('castle-wake', () => handler())
+
+// DEV: a session per project folder, up to 8 tabs (slot 0-7). Each state call answers
+// { tabs: [{ slot, folder, name, running, status: { ready, message, fix } }], projects: [{ folder, name }], memoryFolder }.
+// A refusal comes back as a plain message string.
+export const devState = () => invoke('dev_state')
+export const devOpen = (folder) => invoke('dev_open', { folder })
+export const devCloseTab = (slot) => invoke('dev_close_tab', { slot })
+export const devForget = (folder) => invoke('dev_forget', { folder })
+export const devWake = (slot, cols, rows) => invoke('dev_wake', { slot, cols, rows })
+export const devWrite = (slot, data) => invoke('dev_write', { slot, data })
+export const devResize = (slot, cols, rows) => invoke('dev_resize', { slot, cols, rows })
+// the tab's screen so far, to draw the Log again
+export const devSnapshot = (slot) => invoke('dev_snapshot', { slot })
+// -> { entries, reset, status }, the same as chatPoll
+export const devChatPoll = (slot) => invoke('dev_chat_poll', { slot })
+// true when the project has changes not yet committed
+export const devGitDirty = (slot) => invoke('dev_git_dirty', { slot })
+// -> { available, message, plans: [{ id, title, phase, status, items: [{ ordinal, kind, text, state }] }] }
+export const devPlanItems = (slot) => invoke('dev_plan_items', { slot })
+export const devPlanBody = (slot, id) => invoke('dev_plan_body', { slot, id })
+export const onDevOutput = (slot, handler) => listen(`dev-output-${slot}`, (event) => handler(event.payload))
+export const onDevExit = (slot, handler) => listen(`dev-exit-${slot}`, (event) => handler(event.payload))
+// Which DEV tabs' chats are showing (their chat is read about once a second only then).
+const devShownSlots = new Set()
+export const devChatShown = (slot, on) => (on ? devShownSlots.add(slot) : devShownSlots.delete(slot))

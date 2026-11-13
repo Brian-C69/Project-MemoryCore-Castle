@@ -9,6 +9,8 @@ mod chatroom;
 mod clipboard;
 mod commands;
 mod db;
+mod dev;
+mod dev_tabs;
 mod door;
 mod env;
 mod files;
@@ -18,6 +20,7 @@ mod link;
 mod memdb;
 mod memory;
 mod mirror;
+mod plans;
 mod pty;
 mod providers;
 mod messages;
@@ -51,7 +54,7 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 
 /// Whether any companion session is running (asked before quitting).
 pub fn sessions_running(app: &AppHandle) -> bool {
-    session::any_running(app)
+    session::any_running(app) || dev::any_running(app)
 }
 
 /// Whether this launch came from the Windows sign-in entry.
@@ -199,6 +202,8 @@ pub fn run() {
         .manage(providers::Images::default())
         .manage(messages::Pending::default())
         .manage(session::StoryHost::default())
+        .manage(dev::DevHosts::default())
+        .manage(dev::DevChats::default())
         .manage(system::SystemMeters::default())
         .manage(chat::MainChat::default())
         .manage(chat::StoryChat::default())
@@ -215,6 +220,18 @@ pub fn run() {
             providers::image_retry,
             providers::image_dismiss,
             providers::image_cancel,
+            dev::dev_state,
+            dev::dev_open,
+            dev::dev_close_tab,
+            dev::dev_forget,
+            dev::dev_wake,
+            dev::dev_write,
+            dev::dev_resize,
+            dev::dev_snapshot,
+            dev::dev_chat_poll,
+            dev::dev_git_dirty,
+            dev::dev_plan_items,
+            dev::dev_plan_body,
             providers::provider_switch,
             providers::provider_switch_status,
             providers::provider_switch_cancel,
@@ -409,6 +426,7 @@ pub fn run() {
             // The companion's sessions belong to Castle: when Castle ends, so do they.
             if let RunEvent::Exit = event {
                 session::end_all(app);
+                dev::end_all(app);
                 db::stop_with_castle(app);
             }
         });

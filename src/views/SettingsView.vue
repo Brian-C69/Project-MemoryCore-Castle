@@ -85,6 +85,7 @@ const ROOM_SWITCHES = [
   { id: 'story', label: 'STORY' },
   { id: 'world', label: 'WORLD' },
   { id: 'chat', label: 'CHAT' },
+  { id: 'dev', label: 'DEV' },
 ]
 
 async function switchRoom(id, on) {

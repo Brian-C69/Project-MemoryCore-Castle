@@ -11,6 +11,14 @@ import QuickActions from './QuickActions.vue'
 import {
   clipboardCopy,
   clipboardPaste,
+  devChatShown,
+  devResize,
+  devSnapshot,
+  devState,
+  devWake,
+  devWrite,
+  onDevExit,
+  onDevOutput,
   onStoryExit,
   onStoryOutput,
   onTerminalExit,
@@ -22,6 +30,7 @@ import {
   terminalState,
   terminalWrite,
 } from '../api/castle.js'
+import { devRoom, sessionView, tabForSlot } from '../views/dev/devtabs.js'
 
 const props = defineProps({
   // Changes whenever Settings saves, so the session status is read again.
@@ -32,8 +41,48 @@ const props = defineProps({
   companion: { type: String, default: 'Your companion' },
   // 'claude' or 'codex'
   cli: { type: String, default: 'claude' },
+  // A DEV tab's slot (0-7): the panel then serves that tab's session, sits inside the tab (no
+  // header, quick actions or drag handle) and its CHAT / LOG is chosen by `showLog`.
+  devSlot: { type: Number, default: null },
+  // (DEV) the tab is the one showing: its chat is read only then
+  shown: { type: Boolean, default: true },
+  // (DEV) the Log shows instead of the chat
+  showLog: { type: Boolean, default: false },
 })
-const emit = defineEmits(['settings', 'setup'])
+// (DEV) `view`: 'chat' | 'log' when the panel switched itself; `running`: the session started or
+// ended; `state`: a fresh dev state from Wake
+const emit = defineEmits(['settings', 'setup', 'view', 'running', 'state'])
+
+const isDev = props.devSlot !== null && props.devSlot !== undefined
+// the room Chat reads: a DEV tab's is routed to its own session (see castle.js)
+const chatRoom = isDev ? devRoom(props.devSlot) : props.room
+
+// The one session this panel serves: the companion's (main or STORY) or a DEV tab's.
+const session = isDev
+  ? {
+      async state() {
+        return sessionView(tabForSlot((await devState()).tabs, props.devSlot))
+      },
+      snapshot: () => devSnapshot(props.devSlot),
+      async start(cols, rows) {
+        const state = await devWake(props.devSlot, cols, rows)
+        emit('state', state)
+        return sessionView(tabForSlot(state.tabs, props.devSlot))
+      },
+      write: (data) => devWrite(props.devSlot, data),
+      resize: (cols, rows) => devResize(props.devSlot, cols, rows),
+      onOutput: (handler) => onDevOutput(props.devSlot, handler),
+      onExit: (handler) => onDevExit(props.devSlot, handler),
+    }
+  : {
+      state: () => terminalState(props.room),
+      snapshot: null,
+      start: (cols, rows, greet) => terminalStart(cols, rows, props.room, greet),
+      write: (data) => terminalWrite(data, props.room),
+      resize: (cols, rows) => terminalResize(cols, rows, props.room),
+      onOutput: props.room === 'story' ? onStoryOutput : onTerminalOutput,
+      onExit: props.room === 'story' ? onStoryExit : onTerminalExit,
+    }
 
 const WIDTH_KEY = 'castle.panelWidth'
 const VIEW_KEY = 'castle.panelView'
@@ -75,6 +124,7 @@ function onDragDrop(event) {
 }
 
 function readView() {
+  if (isDev) return props.showLog ? 'log' : 'chat'
   try {
     const saved = localStorage.getItem(VIEW_KEY)
     if (saved === 'chat' || saved === 'log') return saved
@@ -86,6 +136,11 @@ function readView() {
 
 function setView(next) {
   view.value = next
+  if (isDev) {
+    // the DEV tab's own Log button follows
+    emit('view', next)
+    return
+  }
   try {
     localStorage.setItem(VIEW_KEY, next)
   } catch {
@@ -122,7 +177,7 @@ function show(state) {
 function fitNow() {
   if (!fit || !surface.value || surface.value.clientWidth === 0) return
   fit.fit()
-  if (running.value) terminalResize(term.cols, term.rows, props.room).catch(() => {})
+  if (running.value) session.resize(term.cols, term.rows).catch(() => {})
 }
 
 function scheduleFit() {
@@ -186,7 +241,7 @@ async function wake({ greet = false } = {}) {
   // the session is running; the answer must still reach it or the CLI never begins.
   starting = true
   try {
-    show(await terminalStart(term.cols, term.rows, props.room, greet === true))
+    show(await session.start(term.cols, term.rows, greet === true))
     ended.value = false
     term.focus()
   } catch (reason) {
@@ -240,18 +295,20 @@ onMounted(async () => {
   term.attachCustomKeyEventHandler(clipboardKeys)
   surface.value.addEventListener('contextmenu', onRightClick)
   term.onData((data) => {
-    if (running.value || starting || isTerminalReply(data)) terminalWrite(data, props.room).catch(() => {})
+    if (running.value || starting || isTerminalReply(data)) session.write(data).catch(() => {})
   })
 
   // Listen before anything starts: the console asks this screen a question before it runs.
-  const onOutput = props.room === 'story' ? onStoryOutput : onTerminalOutput
-  const onExit = props.room === 'story' ? onStoryExit : onTerminalExit
-  stopListening.push(await onOutput((text) => term.write(text)))
+  stopListening.push(await session.onOutput((text) => term.write(text)))
   stopListening.push(
-    await onExit(async () => {
+    await session.onExit(async () => {
       running.value = false
       ended.value = true
-      show(await terminalState(props.room))
+      try {
+        show(await session.state())
+      } catch {
+        // the last status stays
+      }
     }),
   )
 
@@ -259,19 +316,22 @@ onMounted(async () => {
   observer = new ResizeObserver(scheduleFit)
   observer.observe(surface.value)
 
-  if (props.room !== 'story') stopListening.push(await onWakeRequest(wake))
+  // the tray's Wake and the start-up wake are the companion's main session's only
+  const mainSession = !isDev && props.room !== 'story'
+  if (mainSession) stopListening.push(await onWakeRequest(wake))
   try {
     stopListening.push(await getCurrentWebview().onDragDropEvent(onDragDrop))
   } catch {
     // No drop events outside Castle's window (a browser preview).
   }
 
-  const state = await terminalState(props.room)
+  const state = await session.state()
   show(state)
-  if (state.snapshot) term.write(state.snapshot)
+  const snapshot = state.snapshot ?? (session.snapshot && state.running ? await session.snapshot().catch(() => '') : '')
+  if (snapshot) term.write(snapshot)
 
   // Once per sign-in, and only now that this screen is listening (the main session only).
-  if (props.room !== 'story' && !state.running && (await takeAutoWake())) {
+  if (mainSession && !state.running && (await takeAutoWake())) {
     if (state.status.ready) await wake()
     else problem.value = `${props.companion} could not start by itself: ${state.status.message}`
   }
@@ -280,7 +340,7 @@ onMounted(async () => {
 // The memory folder may have changed in Settings, or while Castle was hidden: read it again.
 async function recheck() {
   try {
-    show(await terminalState(props.room))
+    show(await session.state())
     problem.value = ''
   } catch {
     // The last status stays.
@@ -308,10 +368,22 @@ onBeforeUnmount(() => {
   term?.dispose()
 })
 
+// DEV: the tab's Log button chooses CHAT or LOG; its chat is read only while the tab shows (set at
+// once, before Chat's own read when it comes into view); the tab hears when the session starts or ends.
+if (isDev) {
+  watch(() => props.showLog, (on) => {
+    if ((view.value === 'log') !== on) view.value = on ? 'log' : 'chat'
+  })
+  watch(() => props.shown, (on) => devChatShown(props.devSlot, on), { immediate: true, flush: 'sync' })
+  watch(() => props.shown, (on) => on && scheduleFit())
+  watch(running, (on) => emit('running', on))
+  onBeforeUnmount(() => devChatShown(props.devSlot, false))
+}
+
 // What Chat sends goes into the same session, exactly as if typed in the Log.
 function writeToSession(data) {
   if (!running.value) return Promise.resolve()
-  return terminalWrite(data, props.room)
+  return session.write(data)
 }
 
 // Chat's answer buttons read the menu on the Log's screen.
@@ -333,11 +405,11 @@ defineExpose({ wake, screenLines, writeToSession })
   <section
     ref="panel"
     class="terminal-panel"
-    :class="{ wide: expanded }"
-    :style="!expanded && width ? { width: width + '%' } : null"
+    :class="{ wide: expanded, embedded: isDev }"
+    :style="!isDev && !expanded && width ? { width: width + '%' } : null"
     :aria-label="companion"
   >
-    <div class="header">
+    <div v-if="!isDev" class="header">
       <div v-if="$slots.header && !expanded" class="portrait"><slot name="header" :write="writeToSession" :running="running" /></div>
       <div class="tabs" role="tablist" aria-label="Chat or log">
         <button role="tab" :aria-selected="view === 'chat'" :class="{ active: view === 'chat' }" @click="setView('chat')">CHAT</button>
@@ -352,7 +424,7 @@ defineExpose({ wake, screenLines, writeToSession })
       </div>
     </div>
 
-    <QuickActions v-if="room !== 'story'" :running="running" :write="writeToSession" :settings-stamp="settingsStamp" />
+    <QuickActions v-if="!isDev && room !== 'story'" :running="running" :write="writeToSession" :settings-stamp="settingsStamp" />
 
     <div class="body">
     <div v-show="view === 'log'" ref="surface" class="surface"></div>
@@ -360,11 +432,11 @@ defineExpose({ wake, screenLines, writeToSession })
       <ChatView
         ref="chat"
         :running="running"
-        :visible="view === 'chat'"
+        :visible="view === 'chat' && shown"
         :write="writeToSession"
         :read-screen="screenLines"
         :companion="companion"
-        :room="room"
+        :room="chatRoom"
         :cli="activeProvider || cli"
         @show-log="setView('log')"
       />
@@ -373,17 +445,18 @@ defineExpose({ wake, screenLines, writeToSession })
     <div v-if="dropping" class="drop-hint">{{ view === 'chat' ? `Drop to share with ${companion}` : 'Drop to type the path into the Log' }}</div>
 
     <div v-if="!running" class="asleep">
-      <p class="title">{{ ended ? `${companion}'s session ended.` : `${companion} is resting.` }}</p>
+      <p v-if="isDev" class="title">{{ ended ? 'The session in this project ended.' : `${companion} is not working here yet.` }}</p>
+      <p v-else class="title">{{ ended ? `${companion}'s session ended.` : `${companion} is resting.` }}</p>
       <p class="message">{{ problem || status.message }}</p>
       <div class="buttons">
-        <button class="primary" :disabled="!status.ready" @click="wake({ greet: true })">Wake {{ companion === 'Your companion' ? 'your companion' : companion }}</button>
+        <button class="primary" :disabled="!status.ready" @click="wake({ greet: true })">Wake {{ companion === 'Your companion' ? 'your companion' : companion }}{{ isDev ? ' here' : '' }}</button>
         <button v-if="status.fix === 'setup'" @click="emit('setup')">Open setup</button>
         <button v-if="status.fix === 'settings' || status.fix === 'install'" @click="emit('settings')">Settings</button>
       </div>
     </div>
     </div>
 
-    <div v-if="!expanded" class="handle" title="Drag to widen" @pointerdown="startDrag"></div>
+    <div v-if="!expanded && !isDev" class="handle" title="Drag to widen" @pointerdown="startDrag"></div>
   </section>
 </template>
 
@@ -414,6 +487,18 @@ defineExpose({ wake, screenLines, writeToSession })
   right: auto;
   width: calc(100% - 32px);
   height: auto;
+}
+
+/* A DEV tab's session: it fills its place in the tab instead of floating over HOME. */
+.terminal-panel.embedded {
+  position: relative;
+  inset: auto;
+  flex: 1;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 6px 12px 14px;
 }
 
 .header {

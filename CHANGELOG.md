@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **A DEV tab.** Open your project folders (up to eight at once) and your companion works in each one in its own tab, shown as a chat with the Log beside it. She wakes there as herself, with her memory, and your personal Claude Code setup always stays out. When you approve a plan she keeps it in your memory database (`castle-memory plan copy`), walks it item by item, and the **Plan** panel shows where she is. Close session asks first if the project has changes not yet committed.
+- **Only your companion in Castle** now also leaves out your personal MCP servers and Claude Code's auto memory, in every room, even before her names are set.
 - **Sign in through the Library.** In the CHAT room, Sign in opens the Library in your browser, where you sign in with Google; back in Castle, **Connect Castle** links to that sign-in in one click. Already signed in on the Library? Connect straight away.
 - **Sign-in opens your browser again.** On some Windows PCs, clicking Sign in (the Chat room) opened your Documents folder instead of the sign-in page, and the web links in the backup screen could do the same. Castle now hands the address to Windows' own web-link opener, so the page opens in your browser.
 - **The Standard Look shows whole.** The picture on APPEARANCE's Standard Look card is no longer cropped, and today's try-on is the next picture in a small carousel: use the left and right arrows to flip between your Standard look and today's try-on, or click the picture to open it full size.

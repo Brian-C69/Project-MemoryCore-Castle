@@ -21,6 +21,7 @@ import AppearanceView from './views/AppearanceView.vue'
 import StoryView from './views/StoryView.vue'
 import WorldView from './views/WorldView.vue'
 import ChatRoomView from './views/ChatRoomView.vue'
+import DevView from './views/DevView.vue'
 import SettingsView from './views/SettingsView.vue'
 import UpdateChip from './components/UpdateChip.vue'
 import QuotaGlow from './components/QuotaGlow.vue'
@@ -47,6 +48,7 @@ const allTabs = [
   { id: 'story', label: 'STORY' },
   { id: 'world', label: 'WORLD' },
   { id: 'chat', label: 'CHAT' },
+  { id: 'dev', label: 'DEV' },
 ]
 // dev only: ?tab=<room> opens a room straight away (for checking a room in a browser)
 const devTab = import.meta.env.DEV ? new URLSearchParams(location.search).get('tab') : null
@@ -70,15 +72,18 @@ const settingsSection = ref('companion')
 // the update line for Settings > About
 const updateInfo = ref(null)
 // Rooms that are built; any other room shows its name until its phase lands.
-const BUILT = new Set(['home', 'theme', 'apps', 'diary', 'projects', 'library', 'studio', 'appearance', 'story', 'world', 'chat'])
+const BUILT = new Set(['home', 'theme', 'apps', 'diary', 'projects', 'library', 'studio', 'appearance', 'story', 'world', 'chat', 'dev'])
 // Tabs with something new waiting (the story speaking while the member is elsewhere).
 const marks = ref([])
 const memberName = ref('')
 const storyOpened = ref(active.value === 'story')
 const chatOpened = ref(active.value === 'chat')
+// DEV stays mounted once opened, so its project sessions keep going behind the other rooms
+const devOpened = ref(active.value === 'dev')
 watch(active, (room) => {
   if (room === 'story') storyOpened.value = true
   if (room === 'chat') chatOpened.value = true
+  if (room === 'dev') devOpened.value = true
 })
 // a file a HOME card asked to open in its room
 const roomFile = ref('')
@@ -94,6 +99,7 @@ watch(tabs, (list) => {
   if (!ids.has(active.value)) active.value = 'home'
   if (!ids.has('story')) storyOpened.value = false
   if (!ids.has('chat')) chatOpened.value = false
+  if (!ids.has('dev')) devOpened.value = false
   marks.value = marks.value.filter((m) => ids.has(m))
 })
 const companion = ref('Your companion')
@@ -359,6 +365,7 @@ watch(settingsStamp, () => {
       </div>
       <AppsView v-if="active === 'apps'" class="room" />
       <ChatRoomView v-show="active === 'chat'" v-if="chatOpened" :visible="active === 'chat'" :companion="companion" @fresh="!marks.includes('chat') && (marks = [...marks, 'chat'])" />
+      <DevView v-show="active === 'dev'" v-if="devOpened" :visible="active === 'dev'" :companion="companion" :cli="cli" :settings-stamp="settingsStamp" @settings="openSettings" @setup="openSetup" />
       <WorldView v-if="active === 'world'" :active="active === 'world'" :companion="companion" @show-chat="active = 'home'" />
       <StoryView v-show="active === 'story'" v-if="storyOpened" :companion="companion" :member="memberName" :cli="cli" :visible="active === 'story'" />
       <AppearanceView v-if="active === 'appearance'" :companion="companion" :stamp="memoryStamp" @keys="openKeys" @show-chat="active = 'home'" />

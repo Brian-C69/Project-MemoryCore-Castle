@@ -15,6 +15,13 @@ use tauri::State;
 /// The record a Chat follows, and the session it belongs to.
 #[derive(Default)]
 pub struct ChatState(Mutex<Option<(u64, Follower)>>);
+
+impl ChatState {
+    /// Forgets the record it was following (a DEV tab closed): the next session starts a fresh Chat.
+    pub fn clear(&self) {
+        *self.0.lock().unwrap() = None;
+    }
+}
 #[derive(Default)]
 pub struct MainChat(pub ChatState);
 #[derive(Default)]
@@ -50,6 +57,36 @@ pub(crate) fn newest_record(cli: Cli, folder: &Path, started: SystemTime) -> Opt
             claude::newest_record(&records, started).map(|path| (path, claude::follower as fn(PathBuf, SystemTime) -> Follower))
         }
         Cli::Codex => transcript::codex::newest_record(folder, started).map(|path| (path, transcript::codex::follower as fn(PathBuf, SystemTime) -> Follower)),
+    }
+}
+
+/// A DEV tab's Chat: the newest record of that project's session, followed like the main room's
+/// (a fresh record after /clear is picked up), without the main room's journal.
+pub fn follow_folder(chat: &ChatState, host: &crate::pty::PtyHost, cli: Cli, folder: &Path) -> ChatPoll {
+    let empty = |status| ChatPoll { entries: Vec::new(), reset: false, status };
+    let Some((session, started)) = host.started() else {
+        return empty("asleep");
+    };
+    let cli = host.provider().unwrap_or(cli);
+    let Some((newest, follow)) = newest_record(cli, folder, started) else {
+        return empty("waiting");
+    };
+    let mut slot = chat.0.lock().unwrap();
+    let mut reset = false;
+    if slot.as_ref().map(|(id, f)| (*id, f.path.clone())) != Some((session, newest.clone())) {
+        *slot = Some((session, follow(newest, started)));
+        reset = true;
+    }
+    let (_, follower) = slot.as_mut().expect("set above");
+    match follower.read_new() {
+        Ok(mut entries) => {
+            entries.retain(|e| !crate::providers::castle_wrote(e));
+            if reset && entries.len() > transcript::FIRST_READ_LIMIT {
+                entries = entries.split_off(entries.len() - transcript::FIRST_READ_LIMIT);
+            }
+            ChatPoll { entries, reset, status: "ok" }
+        }
+        Err(_) => ChatPoll { entries: Vec::new(), reset, status: "unreadable" },
     }
 }
 
