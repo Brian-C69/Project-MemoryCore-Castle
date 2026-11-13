@@ -55,6 +55,12 @@ const step = (direction) => {
   const count = slides.value.length
   if (count) slideIndex.value = (slideIndex.value + direction + count) % count
 }
+// A newly available slide (the standard look or today's try-on, drawn for the first time) jumps the
+// carousel to it, rather than leaving it on whatever was showing before - load() runs this on every
+// refresh, but the length only grows when something genuinely new just appeared.
+watch(() => slides.value.length, (count, before) => {
+  if (count > before) slideIndex.value = count - 1
+})
 
 const STATE = { ready: 'Ready to draw', builtin: 'Codex available — checked when drawing', prompt: 'Codex unavailable — prompts are saved' }
 const sep = computed(() => (look.value?.folder?.includes('/') ? '/' : '\\'))
@@ -247,7 +253,7 @@ watch(() => props.stamp, load)
     <div v-if="look" class="columns">
       <section class="standard widget">
         <h3>STANDARD LOOK</h3>
-        <div class="carousel">
+        <div class="carousel" tabindex="0" @keydown.left="step(-1)" @keydown.right="step(1)">
           <button v-if="slide" class="portrait" @click="openSheet(slide.path, slide.label)">
             <img :src="src(slide.path)" :alt="slide.label" />
           </button>
@@ -257,7 +263,7 @@ watch(() => props.stamp, load)
             <button class="nav next" aria-label="Next picture" @click="step(1)">›</button>
           </template>
         </div>
-        <p v-if="slide" class="hint caption">{{ slide.label }}<template v-if="slides.length > 1"> · {{ slideIndex + 1 }}/{{ slides.length }}</template></p>
+        <p v-if="slide" class="hint caption" aria-live="polite">{{ slide.label }}<template v-if="slides.length > 1"> · {{ slideIndex + 1 }}/{{ slides.length }}</template></p>
         <button :disabled="!!busy" @click="upload('standard')">{{ look.portrait ? 'Replace image' : 'Upload image' }}</button>
         <button class="primary" :disabled="!!busy" @click="drawPortrait">{{ look.portrait ? 'Improve from image' : 'Draw the standard look' }}</button>
         <p v-if="tryOnLine" class="hint">{{ tryOnLine }}</p>
