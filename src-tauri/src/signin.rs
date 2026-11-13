@@ -86,13 +86,24 @@ fn decode(text: &str) -> String {
 }
 
 fn open_in_browser(url: &str) -> Result<(), String> {
+    // explorer.exe silently fails to hand a URL to the default browser once it has a query
+    // string with "&" in it (falls back to opening a plain Explorer window instead) - rundll32's
+    // FileProtocolHandler is the long-standing reliable way to open a URL on Windows.
     #[cfg(windows)]
-    let mut command = std::process::Command::new("explorer.exe");
+    {
+        return std::process::Command::new("rundll32.exe")
+            .arg("url.dll,FileProtocolHandler")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|_| "The browser could not be opened.".to_string());
+    }
     #[cfg(target_os = "macos")]
     let mut command = std::process::Command::new("open");
     #[cfg(all(unix, not(target_os = "macos")))]
     let mut command = std::process::Command::new("xdg-open");
-    command.arg(url).spawn().map(|_| ()).map_err(|_| "The browser could not be opened.".to_string())
+    #[cfg(not(windows))]
+    return command.arg(url).spawn().map(|_| ()).map_err(|_| "The browser could not be opened.".to_string());
 }
 
 const PAGE: &str = "<!doctype html><meta charset=utf-8><title>MemoryCore Castle</title><body style=\"font:16px system-ui;background:#0b1026;color:#e8e6ff;display:grid;place-items:center;height:100vh;margin:0\"><div style=\"text-align:center\"><h2>You are signed in</h2><p>You can close this tab and go back to MemoryCore Castle.</p></div>";
