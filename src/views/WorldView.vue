@@ -60,6 +60,10 @@ const worlds = computed(() => allWorlds(mine.value))
 const others = computed(() => rows.value.filter((r) => !r.screen.isMain))
 const pickRow = computed(() => rows.value[selected.value] ?? others.value[0] ?? null)
 const previewWorld = computed(() => findWorld(worlds.value, previewId.value) ?? findWorld(worlds.value, pickRow.value?.entry.world) ?? findWorld(worlds.value, DEFAULT_WORLD))
+watch(
+  () => `${selected.value}|${pickRow.value?.entry.world}`,
+  () => (previewId.value = ''),
+)
 const previewConfig = computed(() => ({ ...DEFAULTS, ...(pickRow.value?.entry ?? {}), world: previewWorld.value.id }))
 
 const shortName = (name) => String(name).replace(/^\\\\\.\\/, '')
@@ -414,11 +418,12 @@ watch(
             v-for="w in worlds"
             :key="w.id"
             class="card"
-            :class="{ current: pickRow?.entry.world === w.id, waiting: !ready(w), chosen: previewWorld.id === w.id }"
+            :class="{ waiting: !ready(w), chosen: previewWorld.id === w.id }"
             @click="pickCard(w)"
           >
             <div class="preview" :style="w.preview ? { backgroundImage: `url(&quot;${w.preview}&quot;)` } : {}">
               <span class="kind">{{ w.kind === '2d' ? '2D' : '3D' }}</span>
+              <span v-if="pickRow?.entry.world === w.id && previewWorld.id !== w.id" class="here">on screen {{ pickRow.screen.index + 1 }}</span>
             </div>
             <strong>{{ w.title }}</strong>
             <p class="desc">{{ w.line }}</p>
@@ -593,9 +598,6 @@ input[type='number'] {
   cursor: pointer;
 }
 .card.chosen {
-  border-color: var(--text-dim);
-}
-.card.current {
   border-color: var(--accent);
 }
 .card.waiting .preview {
@@ -617,6 +619,16 @@ input[type='number'] {
   border-radius: 999px;
   background: rgba(4, 8, 23, 0.7);
   font-size: 11px;
+}
+.here {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(4, 8, 23, 0.7);
+  font-size: 11px;
+  color: var(--text-dim);
 }
 .desc,
 .status,
