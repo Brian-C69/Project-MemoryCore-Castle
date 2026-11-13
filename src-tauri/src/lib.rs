@@ -104,6 +104,8 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
         // the database's port and kind are set by the engine's own buttons
         settings.db_port = current.db_port;
         settings.db_external = current.db_external;
+        // the screen Castle lives on is changed only by its own button
+        settings.castle_screen = current.castle_screen;
     }
     settings::save(&store.path, &settings).map_err(|_| "The settings could not be saved.".to_string())?;
     *store.startup_note.lock().unwrap() = startup::sync(&app, settings.start_with_windows);
@@ -227,6 +229,7 @@ pub fn run() {
             story::story_beat,
             world::world_screens,
             world::world_apply,
+            world::castle_move_to_screen,
             world::world_music,
             world::world_identify,
             quota::cli_quota,
@@ -337,7 +340,9 @@ pub fn run() {
             }
 
             if let Some(window) = app.get_webview_window("main") {
-                screen::fill_desktop(&window)?;
+                if !world::place_saved(app.handle(), &window) {
+                    screen::fill_desktop(&window)?;
+                }
                 window.show()?;
             }
             world::restore(app.handle());

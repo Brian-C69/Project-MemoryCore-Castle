@@ -11,7 +11,7 @@ import { loadMine } from '../worlds/mine.js'
 import { askCompanion } from '../api/ask.js'
 import { listen } from '@tauri-apps/api/event'
 import { quotaWords } from '../world3d/energy.js'
-import { chatMediaOpen, choosePicture, cliQuota, getSettings, saveSettings, worldApply, worldDelete, worldIdentify, worldNew, worldPrepare, worldScreens } from '../api/castle.js'
+import { castleMoveToScreen, chatMediaOpen, choosePicture, cliQuota, getSettings, saveSettings, worldApply, worldDelete, worldIdentify, worldNew, worldPrepare, worldScreens } from '../api/castle.js'
 
 const props = defineProps({
   active: { type: Boolean, default: true },
@@ -156,6 +156,19 @@ async function identify(row) {
   }
 }
 
+// Castle itself moves to this screen (and stays there); a world on it gives way, and the screen
+// Castle left may now show one.
+async function moveCastle(row) {
+  problem.value = ''
+  try {
+    await castleMoveToScreen(row.screen.index)
+    window.dispatchEvent(new CustomEvent('castle-music', { detail: { screens: true } })) // the music hands over too
+    await refresh({ fresh: true })
+  } catch (reason) {
+    problem.value = String(reason)
+  }
+}
+
 function pickCard(world) {
   previewId.value = world.id
   const row = pickRow.value
@@ -295,11 +308,12 @@ watch(
           <div class="who">
             <strong>{{ shortName(row.screen.name) }}</strong>
             <span class="hint">{{ row.screen.width }}×{{ row.screen.height }}{{ row.screen.primary ? ' · primary' : '' }}</span>
+            <label class="castle-pick" :class="{ lives: row.screen.isMain }" :title="row.screen.isMain ? 'Castle itself lives on this screen' : 'Put Castle itself on this screen'" @click.stop>
+              <input type="radio" name="castle-screen" :checked="row.screen.isMain" @change="!row.screen.isMain && moveCastle(row)" />
+              <span>{{ row.screen.isMain ? 'Castle lives here' : 'Castle' }}</span>
+            </label>
           </div>
-          <template v-if="row.screen.isMain">
-            <span class="lives">Castle lives here</span>
-          </template>
-          <template v-else>
+          <template v-if="!row.screen.isMain">
             <label class="field">
               <span>WORLD</span>
               <select :value="row.entry.world" @change="setWorld(row, $event.target.value)">
@@ -690,6 +704,26 @@ button.primary {
   border-color: var(--accent);
   color: #07142e;
   font-weight: 600;
+}
+.castle-pick {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  margin-top: 4px;
+  gap: 6px;
+  flex: none;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.castle-pick input {
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.castle-pick:has(input:checked) {
+  color: var(--text);
 }
 .flip.push-right {
   margin-left: auto;
