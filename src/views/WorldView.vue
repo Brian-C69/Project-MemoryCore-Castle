@@ -313,9 +313,6 @@ watch(
               </select>
               <select v-else disabled><option>Slideshow</option></select>
             </label>
-            <button :class="{ primary: row.entry.on }" :title="row.entry.on ? 'Switch this screen off' : 'Show the world on this screen'" @click.stop="change(row, { on: !row.entry.on })">
-              {{ row.entry.on ? 'on' : 'off' }}
-            </button>
             <button @click.stop="identify(row)">Identify</button>
             <div class="menu-anchor">
               <button @click.stop="menu = menu === i ? -1 : i">Settings ▾</button>
@@ -351,6 +348,17 @@ watch(
                 </div>
               </div>
             </div>
+            <button
+              class="flip push-right"
+              :class="{ on: row.entry.on }"
+              role="switch"
+              :aria-checked="row.entry.on"
+              :aria-label="row.entry.on ? 'Switch this screen off' : 'Show the world on this screen'"
+              :title="row.entry.on ? 'On: click to switch this screen off' : 'Off: click to show the world on this screen'"
+              @click.stop="change(row, { on: !row.entry.on })"
+            >
+              <span class="knob"></span>
+            </button>
           </template>
         </div>
 
@@ -682,6 +690,39 @@ button.primary {
   border-color: var(--accent);
   color: #07142e;
   font-weight: 600;
+}
+.flip.push-right {
+  margin-left: auto;
+  align-self: center;
+}
+.flip {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  min-width: 42px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.2));
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.flip .knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s ease;
+}
+.flip.on {
+  background: var(--accent, #9b7dff);
+}
+.flip.on .knob {
+  transform: translateX(18px);
 }
 @media (max-width: 1100px) {
   .panels {
