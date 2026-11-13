@@ -208,6 +208,7 @@ pub fn run() {
             messages::queued_messages,
             messages::queued_message_action,
             providers::image_retry,
+            providers::image_dismiss,
             providers::provider_switch,
             providers::provider_switch_status,
             providers::provider_switch_cancel,
