@@ -8,7 +8,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
 import { appearanceImport, appearanceLook, appearanceNew, appearanceWear, choosePicture, studioPowers } from '../api/castle.js'
-import { referenceLine, improvementLine } from '../components/appearance.js'
+import { referenceLine, improvementLine, itemReferenceLine } from '../components/appearance.js'
 import { askImage as askCompanion } from '../api/ask.js'
 
 const props = defineProps({
@@ -55,6 +55,16 @@ const step = (direction) => {
   const count = slides.value.length
   if (count) slideIndex.value = (slideIndex.value + direction + count) % count
 }
+// A try-on picture that was not there before is shown straight away; otherwise the index is kept
+// inside the list when a picture goes away.
+watch(
+  () => slides.value.map((s) => s.path).join('|'),
+  (now, before) => {
+    const today = slides.value.findIndex((s) => s.path === look.value?.tryOn?.path)
+    if (today >= 0 && before && !before.split('|').includes(slides.value[today].path)) slideIndex.value = today
+    else if (slideIndex.value >= slides.value.length) slideIndex.value = 0
+  },
+)
 
 const STATE = { ready: 'Ready to draw', builtin: 'Codex available — checked when drawing', prompt: 'Codex unavailable — prompts are saved' }
 const sep = computed(() => (look.value?.folder?.includes('/') ? '/' : '\\'))
@@ -89,43 +99,52 @@ function styleLine(file) {
   return `Use the drawing style in %CASTLE_STYLES%\\${file} and fill its slots from ${path('companion.md')}.`
 }
 
-async function drawPortrait() {
-  const label = 'Standard look'
+// Redraw draws the standard look again from the words in companion.md alone; Improve from image
+// gives the current portrait as the reference and changes only what is asked.
+async function drawPortrait(fromImage = false) {
+  const label = fromImage ? 'Standard look (improved)' : 'Standard look'
+  const reference = fromImage ? look.value.portrait : null
   const ok = await attempt('Asking…', () =>
     askCompanion(
       [
         `Please draw your standard appearance for Castle's APPEARANCE room.`,
         styleLine('standard-appearance.md'),
-        referenceLine(look.value.portrait),
+        reference ? referenceLine(reference) : 'Draw it from the words in companion.md; do not use the existing portrait as a reference.',
         improvementLine(changes.value),
         'Keep the original reference unchanged; preserve a backup before replacing any existing output.',
         `Save it as ${path('portrait.png')}.`,
         'Tell me the cost first and ask before you draw.',
-      ],
+      ].filter(Boolean),
       label,
     ),
   )
   if (ok) after(label)
 }
 
+// The single -Reference is always who the companion is: the standard look, or this item's own
+// earlier turnaround when there is no standard look yet. An imported outfit or hairstyle picture
+// may show someone else, so it is only described as the source for the clothes or the hair.
 async function drawSheet(kind, item) {
   const label = `${kind === 'outfit' ? 'Outfit' : 'Hairstyle'} turnaround: ${item.name}`
   const dir = kind === 'outfit' ? 'wardrobe' : 'hairstyles'
   const note = kind === 'outfit' ? 'outfit.md' : 'hair.md'
   const style = kind === 'outfit' ? 'outfit-turnaround.md' : 'hair-turnaround.md'
+  const identity = look.value.portrait || item.sheet
   const ok = await attempt('Asking…', () =>
     askCompanion(
       [
         `Please draw the ${kind === 'outfit' ? 'outfit' : 'hairstyle'} turnaround (front, side, back) for "${item.name}".`,
         styleLine(style),
         `The ${kind === 'outfit' ? 'outfit' : 'hairstyle'} is described in ${path(dir, item.id, note)}.`,
-        referenceLine(item.reference || item.sheet || look.value.portrait),
+        referenceLine(identity),
+        item.sheet && item.sheet !== identity ? `Also inspect the earlier turnaround to improve on: ${JSON.stringify(item.sheet)}.` : '',
+        itemReferenceLine(kind, item.reference),
         improvementLine(changes.value),
-        look.value.portrait ? `Also inspect the standard look for identity: ${JSON.stringify(look.value.portrait)}.` : 'Keep the face as companion.md describes it.',
+        identity ? '' : 'Keep the face as companion.md describes it.',
         'Keep imported references unchanged and preserve a backup before replacing any existing output.',
         `Save it as ${path(dir, item.id, 'turnaround.png')}.`,
         'Tell me the cost first and ask before you draw.',
-      ],
+      ].filter(Boolean),
       label,
     ),
   )
@@ -154,8 +173,8 @@ async function tryOn(again = false) {
         `Please draw a try-on picture: you in ${outfit ? `the outfit "${outfit.name}" (${path('wardrobe', outfit.id, 'outfit.md')})` : 'your usual clothes'} with ${hair ? `the hairstyle "${hair.name}" (${path('hairstyles', hair.id, 'hair.md')})` : 'your usual hair'}.`,
         styleLine('try-on.md'),
         referenceLine(look.value.portrait),
-        outfit?.reference ? `Inspect outfit reference: ${JSON.stringify(outfit.reference)}.` : '',
-        hair?.reference ? `Inspect hairstyle reference: ${JSON.stringify(hair.reference)}.` : '',
+        itemReferenceLine('outfit', outfit?.reference),
+        itemReferenceLine('hair', hair?.reference),
         improvementLine(changes.value),
         `Save it as ${saved.path}.`,
         'Tell me the cost first and ask before you draw.',
@@ -170,19 +189,29 @@ function after(label) {
   done.value = `Queued for Codex: ${label}. Watch it under Image requests; the picture appears here when it is done.`
 }
 
-// Adds the outfit or hairstyle folder with its words, then asks the companion to draw its sheet.
+// Adds the outfit or hairstyle folder with its words and, when one was chosen, its reference image.
 async function create() {
   const kind = form.value.kind
-  let item = null
+  const name = form.value.name.trim()
+  const picture = formPicture.value
+  let importProblem = ''
   const ok = await attempt('Adding…', async () => {
     const id = await appearanceNew(kind, form.value.name, form.value.description)
-    if (formPicture.value) await appearanceImport(kind, id, formPicture.value)
-    await load()
-    item = (kind === 'outfit' ? look.value.wardrobe : look.value.hairstyles).find((i) => i.id === id)
+    // The item exists from here on, so the form closes: a second Add would make a "-2" copy.
     form.value = { kind: '', name: '', description: '' }
     formPicture.value = ''
+    if (picture) {
+      try {
+        await appearanceImport(kind, id, picture)
+      } catch (reason) {
+        importProblem = String(reason?.message ?? reason)
+      }
+    }
+    await load()
   })
-  if (ok && item) done.value = 'Added. You can wear this item or draw its turnaround when ready.'
+  if (!ok) return
+  if (importProblem) problem.value = `"${name}" was added, but its reference image could not be imported: ${importProblem} Use Upload reference on it to try again.`
+  else done.value = 'Added. You can wear this item or draw its turnaround when ready.'
 }
 
 async function upload(kind, id = null) {
@@ -245,7 +274,7 @@ watch(() => props.stamp, load)
     <div v-if="look" class="columns">
       <section class="standard widget">
         <h3>STANDARD LOOK</h3>
-        <div class="carousel">
+        <div class="carousel" @keydown.left.prevent="step(-1)" @keydown.right.prevent="step(1)">
           <button v-if="slide" class="portrait" @click="openSheet(slide.path, slide.label)">
             <img :src="src(slide.path)" :alt="slide.label" />
           </button>
@@ -257,7 +286,8 @@ watch(() => props.stamp, load)
         </div>
         <p v-if="slide" class="hint caption">{{ slide.label }}<template v-if="slides.length > 1"> · {{ slideIndex + 1 }}/{{ slides.length }}</template></p>
         <button :disabled="!!busy" @click="upload('standard')">{{ look.portrait ? 'Replace image' : 'Upload image' }}</button>
-        <button class="primary" :disabled="!!busy" @click="drawPortrait">{{ look.portrait ? 'Improve from image' : 'Draw the standard look' }}</button>
+        <button class="primary" :disabled="!!busy" @click="drawPortrait(false)">{{ look.portrait ? 'Redraw' : 'Draw the standard look' }}</button>
+        <button v-if="look.portrait" :disabled="!!busy" @click="drawPortrait(true)">Improve from image</button>
         <p v-if="tryOnLine" class="hint">{{ tryOnLine }}</p>
         <button :disabled="!!busy" @click="tryOn()">{{ !look.tryOn?.exists || look.tryOn.stale ? "Try on today's look" : "Show today's look" }}</button>
         <button v-if="look.tryOn?.exists && !look.tryOn.stale" :disabled="!!busy" @click="tryOn(true)">Draw again</button>

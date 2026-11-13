@@ -132,10 +132,22 @@ fn newest_in(dir: &Path) -> Option<std::time::SystemTime> {
     std::fs::read_dir(dir).ok()?.flatten().filter_map(|e| e.metadata().ok()?.modified().ok()).max()
 }
 
+/// An outfit or hairstyle id is a folder name Castle made itself: letters, digits and dashes only,
+/// so it can never climb out of its shelf (no dots, slashes or drive letters).
+pub fn valid_id(id: &str) -> bool {
+    !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
+
 /// Where the picture of this outfit with this hairstyle is kept: one file per combination.
-pub fn try_on_path(memory: &Path, current: &Current) -> PathBuf {
-    let part = |id: &Option<String>, none: &str| id.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| none.to_string());
-    root(memory).join("try-on").join(format!("{}__{}.png", part(&current.outfit, "no-outfit"), part(&current.hair, "no-hair")))
+/// None when current.json names an id that is not a plain folder name - such a file is never read.
+pub fn try_on_path(memory: &Path, current: &Current) -> Option<PathBuf> {
+    let part = |id: &Option<String>, none: &str| match id.as_deref() {
+        None | Some("") => Some(none.to_string()),
+        Some(id) => valid_id(id).then(|| id.to_string()),
+    };
+    let outfit = part(&current.outfit, "no-outfit")?;
+    let hair = part(&current.hair, "no-hair")?;
+    Some(root(memory).join("try-on").join(format!("{outfit}__{hair}.png")))
 }
 
 /// The saved try-on for what is worn, and whether it is still good. It is out of date once the
@@ -145,7 +157,8 @@ pub fn try_on(memory: &Path, current: &Current) -> Option<TryOn> {
         return None;
     }
     let root = root(memory);
-    let path = try_on_path(memory, current);
+    // try_on_path has checked both ids, so the folders below stay inside the shelves
+    let path = try_on_path(memory, current)?;
     let drawn = std::fs::metadata(&path).ok().and_then(|m| m.modified().ok());
     let mut inputs = vec![];
     if let Some(id) = &current.outfit {
@@ -202,6 +215,9 @@ pub fn new_item(memory: &Path, kind: &str, name: &str, description: &str) -> Res
 }
 
 pub fn set_current(memory: &Path, current: &Current) -> Result<(), String> {
+    if [&current.outfit, &current.hair].into_iter().flatten().any(|id| !valid_id(id)) {
+        return Err("Choose an existing outfit or hairstyle.".into());
+    }
     std::fs::create_dir_all(root(memory)).map_err(|_| "The appearance folder could not be created.".to_string())?;
     std::fs::write(root(memory).join("current.json"), serde_json::to_string_pretty(current).unwrap_or_default())
         .map_err(|_| "Today's look could not be saved.".to_string())
@@ -212,7 +228,7 @@ pub fn import_picture(memory: &Path, kind: &str, id: Option<&str>, source: &Path
     let target = match kind {
         "standard" if id.is_none() => root(memory).join("portrait.png"),
         "outfit" | "hair" => {
-            let id = id.filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
+            let id = id.filter(|s| valid_id(s))
                 .ok_or("Choose an existing outfit or hairstyle.")?;
             let dir = if kind == "outfit" { "wardrobe" } else { "hairstyles" };
             root(memory).join(dir).join(id).join("reference.png")
@@ -386,6 +402,7 @@ mod tests {
         assert!(!none_yet.exists && !none_yet.stale);
         assert!(none_yet.path.replace('\\', "/").ends_with("appearance/try-on/winter-coat__twin-tails.png"));
         assert_ne!(try_on_path(&memory, &both), try_on_path(&memory, &Current { outfit: Some(outfit.clone()), hair: None }));
+        assert!(try_on_path(&memory, &both).is_some());
 
         // the picture is drawn after its parts were written
         let picture = std::path::PathBuf::from(&none_yet.path);
@@ -445,6 +462,28 @@ mod tests {
         assert!(import_picture(&memory, "outfit", Some("missing"), &source).is_err());
         assert!(import_picture(&memory, "invalid", None, &source).is_err());
         assert_eq!(std::fs::read(target).unwrap(), b"original");
+        let _ = std::fs::remove_dir_all(memory);
+    }
+
+    #[test]
+    fn a_crafted_id_in_current_json_never_becomes_a_try_on_path() {
+        let memory = temp("crafted-id");
+        ensure(&memory, "Lyra").unwrap();
+        for bad in ["../../secret", "..", "a/b", "a\\b", "C:", "coat.png", "x y"] {
+            let outfit = Current { outfit: Some(bad.into()), hair: None };
+            let hair = Current { outfit: None, hair: Some(bad.into()) };
+            assert!(try_on_path(&memory, &outfit).is_none(), "{bad} as an outfit");
+            assert!(try_on_path(&memory, &hair).is_none(), "{bad} as a hairstyle");
+            assert!(try_on(&memory, &outfit).is_none() && try_on(&memory, &hair).is_none());
+            assert!(set_current(&memory, &outfit).is_err() && set_current(&memory, &hair).is_err());
+        }
+        // a hand-edited current.json is read, but its crafted id shows no try-on
+        std::fs::write(memory.join("appearance/current.json"), r#"{ "outfit": "../../secret", "hair": null }"#).unwrap();
+        assert!(look(&memory).try_on.is_none());
+        // plain ids still work, and an empty id counts as nothing worn
+        let fine = Current { outfit: Some("winter-coat-2".into()), hair: Some(String::new()) };
+        assert!(try_on_path(&memory, &fine).unwrap().ends_with("winter-coat-2__no-hair.png"));
+        assert!(set_current(&memory, &Current { outfit: Some("winter-coat".into()), hair: None }).is_ok());
         let _ = std::fs::remove_dir_all(memory);
     }
 }
