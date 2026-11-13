@@ -161,7 +161,14 @@ function pickCard(world) {
   if (row && !row.screen.isMain && ready(world)) setWorld(row, world.id)
 }
 
+// The music follows the controls at once (the player listens for this); saving happens after.
+function liveMusic(patch) {
+  if (settings.value) settings.value = { ...settings.value, world: { ...settings.value.world, ...patch } }
+  window.dispatchEvent(new CustomEvent('castle-music', { detail: patch }))
+}
+
 async function saveMusic(patch) {
+  liveMusic(patch)
   const next = { ...settings.value, world: { ...settings.value.world, ...patch } }
   try {
     settings.value = (await saveSettings(next)).settings
@@ -300,7 +307,7 @@ watch(
           <span v-if="settings" class="music" title="Plays on the first screen showing a world: Castle's own music, then the songs your companion makes.">
             <span class="music-label">MUSIC</span>
             <button :class="{ primary: settings.world.music }" @click="saveMusic({ music: !settings.world.music })">{{ settings.world.music ? 'on' : 'off' }}</button>
-            <input type="range" min="0" max="1" step="0.05" :value="settings.world.volume" aria-label="Music volume" @change="saveMusic({ volume: +$event.target.value })" />
+            <input type="range" min="0" max="1" step="0.05" :value="settings.world.volume" aria-label="Music volume" @input="liveMusic({ volume: +$event.target.value })" @change="saveMusic({ volume: +$event.target.value })" />
           </span>
           <button @click="refresh({ fresh: true })">Look for screens</button>
         </div>

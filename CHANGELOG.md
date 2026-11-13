@@ -7,6 +7,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 - **Sign-in opens your browser again.** On some Windows PCs, clicking Sign in (the Chat room) opened your Documents folder instead of the sign-in page, and the web links in the backup screen could do the same. Castle now hands the address to Windows' own web-link opener, so the page opens in your browser.
 - **The Standard Look shows whole.** The picture on APPEARANCE's Standard Look card is no longer cropped, and today's try-on is the next picture in a small carousel: use the left and right arrows to flip between your Standard look and today's try-on, or click the picture to open it full size.
 - A new **USAGE** card on HOME shows how much of your **five-hour** and **weekly** limits you have used on **Claude Code and Codex**, side by side, and when each one starts over. It sits above DATABASE and BACKUP in the built-in themes and moves nothing else.
+- **The music plays on every tab.** With MUSIC on in the WORLD room, Castle's music now starts as soon as Castle opens and keeps playing on any tab, even when Castle is minimised or in the tray. It stays quiet only if a world on another screen is already playing it. The volume slider also follows your hand at once instead of a few seconds later.
 
 ## 0.2.2 - 2026-11-10
 
