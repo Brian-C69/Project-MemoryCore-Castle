@@ -163,6 +163,36 @@ pub async fn world_apply(app: AppHandle, screens: Vec<WorldScreen>, store: State
     Ok(saved)
 }
 
+/// Moves Castle itself to another screen and keeps it there (the next start too). The screen it
+/// left may now show a world; the one it joined cannot, so any world window there closes.
+#[tauri::command]
+pub async fn castle_move_to_screen(app: AppHandle, index: usize, store: State<'_, SettingsStore>) -> Result<(), String> {
+    let monitors = app.available_monitors().map_err(|_| "The screens could not be read.".to_string())?;
+    let monitor = monitors.get(index).ok_or("That screen is not connected.")?.clone();
+    let window = app.get_webview_window("main").ok_or("Castle's window is not open.")?;
+    let mut next = store.get();
+    next.castle_screen = monitor.name().cloned().unwrap_or_default();
+    settings::save(&store.path, &next).map_err(|_| "The screen could not be saved.".to_string())?;
+    let entries = next.world.screens.clone();
+    *store.current.lock().unwrap() = next;
+    screen::fill_work_area(&window, &monitor).map_err(|_| "Castle could not be moved.".to_string())?;
+    if entries.iter().any(|e| e.on) {
+        apply(&app, &entries).await?;
+    }
+    Ok(())
+}
+
+/// At start: puts Castle on the screen the member chose, if it is still connected. False when
+/// there is none (the caller then fills the screen it opened on).
+pub fn place_saved(app: &AppHandle, window: &tauri::WebviewWindow) -> bool {
+    let chosen = app.state::<SettingsStore>().get().castle_screen;
+    if chosen.is_empty() {
+        return false;
+    }
+    let Ok(monitors) = app.available_monitors() else { return false };
+    monitors.iter().find(|m| m.name().is_some_and(|n| *n == chosen)).is_some_and(|m| screen::fill_work_area(window, m).is_ok())
+}
+
 /// The WORLD music: on / off and how loud. Saves only these two, so it can never write an older
 /// copy of the screens back; the open world windows hear it at once.
 #[tauri::command]

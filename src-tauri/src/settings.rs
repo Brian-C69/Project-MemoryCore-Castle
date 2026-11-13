@@ -175,6 +175,8 @@ pub struct Settings {
     /// The name that key carries in the room (a rename in Settings remakes the key).
     pub room_companion_name: Option<String>,
     pub world: WorldSettings,
+    /// The name of the screen Castle itself lives on ("" = wherever it opens, the primary screen).
+    pub castle_screen: String,
     /// True once the first-run setup has finished.
     pub setup_done: bool,
     /// The member's own quick-action buttons, after Castle's built-in ones.
@@ -236,6 +238,7 @@ impl Default for Settings {
             room_companion_key_id: None,
             room_companion_name: None,
             world: WorldSettings::default(),
+            castle_screen: String::new(),
             setup_done: false,
             quick_actions: Vec::new(),
             backup_after_diary: false,
