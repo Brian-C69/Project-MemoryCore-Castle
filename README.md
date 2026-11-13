@@ -51,6 +51,12 @@ The media helpers have an offline test too: `powershell -File src-tauri/resource
 
 Castle is MIT licensed - fork it and change anything. [MAKE-IT-YOURS.md](MAKE-IT-YOURS.md) shows how to make a theme, add a room, rename the app and build your own installer. A build you make yourself never updates itself over your changes.
 
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Use the
+[PR template](.github/pull_request_template.md) to describe the problem, changes,
+validation, and risks consistently.
+
 ## Credits
 
 - **Deep Space** world - recipe by Ashran Helmi · [ashranhelmi.com](https://ashranhelmi.com) (Space Playbook Ch.1, "Nebula & Starfield"), written for Castle in `src/world3d/space.js`.
