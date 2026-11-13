@@ -131,6 +131,9 @@ async fn apply(app: &AppHandle, entries: &[WorldScreen]) -> Result<(), String> {
         let payload = WorldConfig { view: "world", screen: index, lead: Some(index) == lead, music: sound.music, volume: sound.volume, config: entry };
         if let Some(existing) = app.get_webview_window(&label(index)) {
             let _ = app.emit_to(label(index), "castle-world-config", &payload);
+            // re-fit every time, not just at creation: an older window kept open across settings
+            // changes must not keep whatever bounds it had before, or it stays mis-sized/mis-placed
+            let _ = screen::fill_monitor(&existing, &monitors[index]);
             let _ = existing.show();
             continue;
         }
