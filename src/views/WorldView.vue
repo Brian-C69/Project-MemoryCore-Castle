@@ -11,7 +11,7 @@ import { loadMine } from '../worlds/mine.js'
 import { askCompanion } from '../api/ask.js'
 import { listen } from '@tauri-apps/api/event'
 import { quotaWords } from '../world3d/energy.js'
-import { chatMediaOpen, choosePicture, cliQuota, getSettings, saveSettings, worldApply, worldDelete, worldIdentify, worldNew, worldPrepare, worldScreens } from '../api/castle.js'
+import { castleMoveToScreen, chatMediaOpen, choosePicture, cliQuota, getSettings, saveSettings, worldApply, worldDelete, worldIdentify, worldNew, worldPrepare, worldScreens } from '../api/castle.js'
 
 const props = defineProps({
   active: { type: Boolean, default: true },
@@ -115,6 +115,7 @@ async function apply() {
     settings.value = { ...settings.value, world: { ...settings.value.world, screens: list } }
     screens.value = await worldScreens()
     buildRows(true)
+    window.dispatchEvent(new CustomEvent('castle-music', { detail: { screens: true } })) // hand the music over
     saved.value = 'Saved'
     clearTimeout(savedTimer)
     savedTimer = setTimeout(() => (saved.value = ''), 4000)
@@ -155,27 +156,23 @@ async function identify(row) {
   }
 }
 
+// Castle itself moves to this screen (and stays there); a world on it gives way, and the screen
+// Castle left may now show one.
+async function moveCastle(row) {
+  problem.value = ''
+  try {
+    await castleMoveToScreen(row.screen.index)
+    window.dispatchEvent(new CustomEvent('castle-music', { detail: { screens: true } })) // the music hands over too
+    await refresh({ fresh: true })
+  } catch (reason) {
+    problem.value = String(reason)
+  }
+}
+
 function pickCard(world) {
   previewId.value = world.id
   const row = pickRow.value
   if (row && !row.screen.isMain && ready(world)) setWorld(row, world.id)
-}
-
-// The music follows the controls at once (the player listens for this); saving happens after.
-function liveMusic(patch) {
-  if (settings.value) settings.value = { ...settings.value, world: { ...settings.value.world, ...patch } }
-  window.dispatchEvent(new CustomEvent('castle-music', { detail: patch }))
-}
-
-async function saveMusic(patch) {
-  liveMusic(patch)
-  const next = { ...settings.value, world: { ...settings.value.world, ...patch } }
-  try {
-    settings.value = (await saveSettings(next)).settings
-    if (rows.value.some((r) => r.entry.on)) await apply() // the open screens hear it at once
-  } catch (reason) {
-    problem.value = String(reason)
-  }
 }
 
 // ---------- the member's own worlds ----------
@@ -303,12 +300,6 @@ watch(
           <h2>YOUR SCREENS</h2>
           <span class="spacer"></span>
           <span v-if="saved" class="good">{{ saved }}</span>
-          <!-- the world's music: on / off and how loud, beside the screens it plays on -->
-          <span v-if="settings" class="music" title="Plays on the first screen showing a world: Castle's own music, then the songs your companion makes.">
-            <span class="music-label">MUSIC</span>
-            <button :class="{ primary: settings.world.music }" @click="saveMusic({ music: !settings.world.music })">{{ settings.world.music ? 'on' : 'off' }}</button>
-            <input type="range" min="0" max="1" step="0.05" :value="settings.world.volume" aria-label="Music volume" @input="liveMusic({ volume: +$event.target.value })" @change="saveMusic({ volume: +$event.target.value })" />
-          </span>
           <button @click="refresh({ fresh: true })">Look for screens</button>
         </div>
 
@@ -317,11 +308,12 @@ watch(
           <div class="who">
             <strong>{{ shortName(row.screen.name) }}</strong>
             <span class="hint">{{ row.screen.width }}×{{ row.screen.height }}{{ row.screen.primary ? ' · primary' : '' }}</span>
+            <label class="castle-pick" :class="{ lives: row.screen.isMain }" :title="row.screen.isMain ? 'Castle itself lives on this screen' : 'Put Castle itself on this screen'" @click.stop>
+              <input type="radio" name="castle-screen" :checked="row.screen.isMain" @change="!row.screen.isMain && moveCastle(row)" />
+              <span>{{ row.screen.isMain ? 'Castle lives here' : 'Castle' }}</span>
+            </label>
           </div>
-          <template v-if="row.screen.isMain">
-            <span class="lives">Castle lives here</span>
-          </template>
-          <template v-else>
+          <template v-if="!row.screen.isMain">
             <label class="field">
               <span>WORLD</span>
               <select :value="row.entry.world" @change="setWorld(row, $event.target.value)">
@@ -335,9 +327,6 @@ watch(
               </select>
               <select v-else disabled><option>Slideshow</option></select>
             </label>
-            <button :class="{ primary: row.entry.on }" :title="row.entry.on ? 'Switch this screen off' : 'Show the world on this screen'" @click.stop="change(row, { on: !row.entry.on })">
-              {{ row.entry.on ? 'on' : 'off' }}
-            </button>
             <button @click.stop="identify(row)">Identify</button>
             <div class="menu-anchor">
               <button @click.stop="menu = menu === i ? -1 : i">Settings ▾</button>
@@ -373,13 +362,24 @@ watch(
                 </div>
               </div>
             </div>
+            <button
+              class="flip push-right"
+              :class="{ on: row.entry.on }"
+              role="switch"
+              :aria-checked="row.entry.on"
+              :aria-label="row.entry.on ? 'Switch this screen off' : 'Show the world on this screen'"
+              :title="row.entry.on ? 'On: click to switch this screen off' : 'Off: click to show the world on this screen'"
+              @click.stop="change(row, { on: !row.entry.on })"
+            >
+              <span class="knob"></span>
+            </button>
           </template>
         </div>
 
         <p v-if="!others.length && rows.length" class="hint">Only one screen is connected. Plug in another screen to give it a world, or preview a world here.</p>
         <p v-else-if="others.length" class="hint">Click a screen, then a world on the right to show it there.</p>
         <p v-if="problem" class="problem">{{ problem }}</p>
-        <p v-if="settings" class="hint">Music plays on the first screen showing a world: Castle's own music, then the songs your companion makes.</p>
+        <p v-if="settings" class="hint">The music switch is at the top right, next to Settings. A screen showing a world plays that world's own music; Castle's music steps aside while one is open.</p>
         <p v-if="quotaLine" class="hint">{{ quotaLine }}</p>
       </section>
 
@@ -674,19 +674,6 @@ button.danger {
   border-color: var(--warn);
   color: var(--warn);
 }
-.music {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-}
-.music-label {
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  color: var(--text-dim);
-}
-.music input[type='range'] {
-  width: 110px;
-}
 .preview-panel {
   position: relative;
   flex: 0 0 auto;
@@ -717,6 +704,59 @@ button.primary {
   border-color: var(--accent);
   color: #07142e;
   font-weight: 600;
+}
+.castle-pick {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  margin-top: 4px;
+  gap: 6px;
+  flex: none;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.castle-pick input {
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.castle-pick:has(input:checked) {
+  color: var(--text);
+}
+.flip.push-right {
+  margin-left: auto;
+  align-self: center;
+}
+.flip {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  min-width: 42px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.2));
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.flip .knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s ease;
+}
+.flip.on {
+  background: var(--accent, #9b7dff);
+}
+.flip.on .knob {
+  transform: translateX(18px);
 }
 @media (max-width: 1100px) {
   .panels {
