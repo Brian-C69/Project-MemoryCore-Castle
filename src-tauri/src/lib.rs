@@ -254,6 +254,7 @@ pub fn run() {
             world::world_apply,
             world::world_identify,
             quota::cli_quota,
+            quota::cli_usage,
             rooms::rooms_apply,
             signin::member_sign_in,
             signin::member_status,

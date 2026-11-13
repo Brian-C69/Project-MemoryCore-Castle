@@ -124,6 +124,8 @@ export const worldIdentify = (index) => invoke('world_identify', { index })
 export const roomsApply = (rooms) => invoke('rooms_apply', { rooms })
 export const worldsMine = () => invoke('worlds_mine')
 export const cliQuota = () => invoke('cli_quota')
+// Both CLIs' five-hour and weekly limits for HOME's USAGE card.
+export const cliUsage = () => invoke('cli_usage')
 export const worldNew = (name, description, layout, picture) => invoke('world_new', { name, description, layout, picture })
 export const worldDelete = (slug) => invoke('world_delete', { slug })
 export const worldPrepare = (slug) => invoke('world_prepare', { slug })

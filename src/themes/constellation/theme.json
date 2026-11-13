@@ -34,6 +34,11 @@
       "right": "2%",
       "top": "4%"
     },
+    "usage": {
+      "right": "31%",
+      "bottom": "calc(4% + 150px)",
+      "width": "33%"
+    },
     "today": {
       "right": "2%",
       "top": "22%",
