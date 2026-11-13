@@ -4,6 +4,7 @@
 // the features the memory folder holds; the member's own buttons come after them.
 import { computed, onMounted, ref, watch } from 'vue'
 import { getSettings, memoryFeatures } from '../api/castle.js'
+import { typeLine } from './typeline.js'
 
 const props = defineProps({
   running: { type: Boolean, default: false },
@@ -37,8 +38,7 @@ async function load() {
 async function run(button) {
   if (!props.running) return
   try {
-    await props.write(button.command)
-    await props.write('\r')
+    await typeLine(props.write, button.command)
     sentLabel.value = button.label
     clearTimeout(sentTimer)
     sentTimer = setTimeout(() => (sentLabel.value = ''), 2500)
