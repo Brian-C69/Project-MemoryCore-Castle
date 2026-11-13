@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import DevTab from './dev/DevTab.vue'
 import FileTree from './dev/FileTree.vue'
 import FileView from './dev/FileView.vue'
+import NewProject from './dev/NewProject.vue'
 import { chooseFolder, devForget, devOpen, devState } from '../api/castle.js'
 import { MAX_TABS, folderName, nextActive, orderTabs, recentProjects, tabForFolder } from './dev/devtabs.js'
 
@@ -90,6 +91,13 @@ async function openFolder() {
   if (folder) await openProject(folder)
 }
 
+// New project: the sheet clones or creates the repo, then the new folder opens as a tab
+const making = ref(false)
+async function made(folder) {
+  making.value = false
+  if (folder) await openProject(folder)
+}
+
 async function forget(folder) {
   problem.value = ''
   try {
@@ -138,6 +146,7 @@ onBeforeUnmount(() => clearInterval(timer))
         @open="reading = $event"
       />
       <template v-if="side === 'projects'">
+      <button class="open-folder new-project" :disabled="busy" title="Clone a repo from a link, or create a new one on GitHub" @click="making = true">+ New project</button>
       <button class="open-folder" :disabled="busy" :title="full ? `All ${MAX_TABS} tabs are in use - close a session to open another project` : ''" @click="openFolder">
         {{ busy ? 'Opening…' : 'Open a folder…' }}
       </button>
@@ -196,9 +205,11 @@ onBeforeUnmount(() => clearInterval(timer))
 
       <div v-if="!tabs.length" class="nothing widget">
         <p class="title">No project is open.</p>
-        <p>Choose one on the left, or open a folder, and {{ companion }} works there in a session of its own.</p>
+        <p>Choose one on the left, open a folder, or start a new project, and {{ companion }} works there in a session of its own.</p>
       </div>
     </div>
+
+    <NewProject v-if="making" @made="made" @close="making = false" />
   </div>
 </template>
 

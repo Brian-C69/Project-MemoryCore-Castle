@@ -224,6 +224,9 @@ pub struct Settings {
     pub only_this_companion: bool,
     /// How the DIARY room is read: one of DIARY_LOOKS.
     pub diary_look: String,
+    /// The DEV tab's projects folder: new projects are cloned or made in it (or in one of its
+    /// folders). None until the member chooses one; there is no default.
+    pub dev_root: Option<String>,
 }
 
 pub const DIARY_LOOKS: [&str; 3] = ["list", "calendar", "book"];
@@ -269,6 +272,7 @@ impl Default for Settings {
             dev_projects: Vec::new(),
             only_this_companion: false,
             diary_look: "list".into(),
+            dev_root: None,
         }
     }
 }
@@ -287,6 +291,7 @@ impl Settings {
         self.room_companion_key_id = clean(self.room_companion_key_id);
         self.room_companion_name = clean(self.room_companion_name);
         self.last_seen_version = clean(self.last_seen_version);
+        self.dev_root = clean(self.dev_root);
         self.world.volume = self.world.volume.clamp(0.0, 1.0);
         self.quick_actions.retain(|a| !a.label.trim().is_empty() && !a.command.trim().is_empty());
         for action in &mut self.quick_actions {
@@ -458,6 +463,7 @@ mod tests {
             dev_projects: vec!["D:/Projects/shop".into()],
             only_this_companion: true,
             diary_look: "book".into(),
+            dev_root: Some("D:/Projects".into()),
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));

@@ -1,6 +1,7 @@
 // The Source panel's small decisions, plain and tested: what a file's letter means, how long ago a
 // commit was, the order of a commit's badges, a diff's lines, which paths a commit of the ticked
-// files takes, which files stay ticked after a fresh read, and what the push question says.
+// files takes, which files stay ticked after a fresh read, what the push question says, and which
+// card shows first (Start git here, Connect to GitHub, or the normal view).
 
 const WORDS = { M: 'modified', A: 'added', D: 'deleted', R: 'renamed', C: 'copied', U: 'conflict', '??': 'new', T: 'type changed' }
 
@@ -107,4 +108,28 @@ export function pushQuestion(status) {
 export function canPush(status) {
   if (!status || !status.branch || status.branch === 'HEAD') return false
   return !status.upstream || status.ahead > 0
+}
+
+/** git's own words when the folder is not a repository ("fatal: not a git repository ..."). */
+export function isNotRepo(problem) {
+  return /not a git repository/i.test(String(problem ?? ''))
+}
+
+/** Some commit in the graph carries an origin/... badge (the repo already has an origin). */
+function hasOriginRef(commits) {
+  return (commits ?? []).some((commit) => (commit.refs ?? []).some((ref) => /^origin\//.test(ref)))
+}
+
+/**
+ * Which view the Source panel shows: 'init' (the folder is not a git repo: Start git here),
+ * 'connect' (a repo with no origin: the Connect to GitHub card), 'normal' (everything else,
+ * including still reading). `remote` is dev_git_remote's answer and `remoteRead` says it came
+ * back; a remote it cannot read as GitHub's is still a remote when the branch tracks one or a
+ * commit carries an origin/ badge, so those never ask to connect.
+ */
+export function sourceCard({ status, problem, remote, remoteRead, commits }) {
+  if (!status && isNotRepo(problem)) return 'init'
+  if (!status || !remoteRead || remote) return 'normal'
+  if (status.upstream || hasOriginRef(commits)) return 'normal'
+  return 'connect'
 }

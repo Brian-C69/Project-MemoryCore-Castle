@@ -12,6 +12,7 @@ mod db;
 mod dev;
 mod dev_files;
 mod dev_git;
+mod dev_new;
 mod dev_tabs;
 mod door;
 mod door_plan;
@@ -126,6 +127,11 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
         // the WORLD room's screens and the music are changed only by their own commands (world_apply,
         // world_music): a Settings page holding an older copy must not bring an old music state back
         settings.world = current.world;
+        // the DEV tab's projects folder is chosen only by its own command (dev_set_root)
+        settings.dev_root = current.dev_root;
+        // the DEV tabs and the recent list are kept by the DEV room's own commands, never by the Settings page
+        settings.dev_tabs = current.dev_tabs.clone();
+        settings.dev_projects = current.dev_projects.clone();
     }
     settings::save(&store.path, &settings).map_err(|_| "The settings could not be saved.".to_string())?;
     *store.startup_note.lock().unwrap() = startup::sync(&app, settings.start_with_windows);
@@ -247,6 +253,14 @@ pub fn run() {
             dev_git::dev_git_push,
             dev_git::dev_git_remote,
             dev_git::dev_open_link,
+            dev_new::dev_github,
+            dev_new::dev_root,
+            dev_new::dev_set_root,
+            dev_new::dev_kinds,
+            dev_new::dev_clone,
+            dev_new::dev_create,
+            dev_new::dev_connect,
+            dev_new::dev_git_init,
             dev_files::dev_tree,
             dev_files::dev_file,
             dev_files::dev_reveal,

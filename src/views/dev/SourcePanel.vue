@@ -1,14 +1,19 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { devGitCommit, devGitDiff, devGitLog, devGitPush, devGitRemote, devGitShow, devGitStatus } from '../../api/devgit.js'
+import { devConnect, devGitInit, devGithub } from '../../api/devnew.js'
+import { backupSignIn, devState, openUrl } from '../../api/castle.js'
 import CommitCard from './CommitCard.vue'
 import DiffView from './DiffView.vue'
-import { ASK_TO_COMMIT, LOG_PAGE, ago, badges, canPush, codeOf, commitPaths, nextTicks, pushQuestion, withNewestPage } from './git.js'
+import { ASK_TO_COMMIT, LOG_PAGE, ago, badges, canPush, codeOf, commitPaths, isNotRepo, nextTicks, pushQuestion, sourceCard, withNewestPage } from './git.js'
+import { folderName, tabForSlot } from './devtabs.js'
+import { cleanRepoName, githubLine, validRepoName } from './newproject.js'
 
 // A DEV tab's Source panel: the changed files (each with its diff), the member's commit of the
 // ticked files, a button that asks the companion to commit instead, Push with one question first
 // (never forced), and the commit graph whose commits open as cards. It reads git every 10 seconds
-// while it shows, so the companion's own commits appear by themselves.
+// while it shows, so the companion's own commits appear by themselves. A folder that is not a git
+// repo offers Start git here first; a repo with no origin offers the Connect to GitHub card.
 const props = defineProps({
   // the DEV tab's slot
   slot: { type: Number, required: true },
@@ -16,6 +21,8 @@ const props = defineProps({
   companion: { type: String, default: 'your companion' },
   // the panel is showing (it reads git only then)
   shown: { type: Boolean, default: false },
+  // the tab's project folder (the Connect card's default repo name); read from the tabs when empty
+  folder: { type: String, default: '' },
 })
 // `ask`: words for the parent to type into this tab's session
 const emit = defineEmits(['ask'])
@@ -35,6 +42,14 @@ const cancelPush = ref(null)
 const remote = ref(null)
 const diff = ref(null)
 const card = ref(null)
+// dev_git_remote came back at least once (the Connect card waits for it)
+const remoteRead = ref(false)
+// the Connect to GitHub card: dev_github's answer and the member's choices
+const github = ref(null)
+const checking = ref(false)
+const connectOwner = ref('')
+const connectName = ref('')
+const connectPrivate = ref(true)
 let timer
 let reading = false
 
@@ -42,6 +57,11 @@ const files = computed(() => status.value?.files ?? [])
 const tickedCount = computed(() => files.value.filter((file) => ticked.value.has(file.path)).length)
 const allTicked = computed(() => files.value.length > 0 && tickedCount.value === files.value.length)
 const pushReady = computed(() => !working.value && canPush(status.value))
+const view = computed(() => sourceCard({ status: status.value, problem: problem.value, remote: remote.value, remoteRead: remoteRead.value, commits: commits.value }))
+const ghLine = computed(() => githubLine(github.value))
+const owners = computed(() => github.value?.owners ?? [])
+const connectNameBad = computed(() => !validRepoName(connectName.value.trim()))
+const connectReady = computed(() => !working.value && ghLine.value === 'ready' && Boolean(connectOwner.value) && !connectNameBad.value)
 
 async function refresh() {
   if (reading) return
@@ -61,8 +81,82 @@ async function refresh() {
     problem.value = ''
   } catch (reason) {
     problem.value = String(reason)
+    // the folder is (no longer) a repo: nothing of git stays on show
+    if (isNotRepo(reason)) {
+      status.value = null
+      commits.value = []
+    }
   } finally {
     reading = false
+  }
+}
+
+async function readRemote() {
+  remote.value = await devGitRemote(props.slot).catch(() => null)
+  remoteRead.value = true
+}
+
+async function readGithub() {
+  checking.value = true
+  try {
+    github.value = await devGithub()
+  } catch {
+    github.value = { installed: false, signedIn: false, login: null, owners: [] }
+  } finally {
+    checking.value = false
+  }
+  if (!owners.value.includes(connectOwner.value)) connectOwner.value = owners.value[0] ?? ''
+}
+
+// the Connect card's first look: who is signed in, and the folder's own name as the repo name
+watch(view, async (now) => {
+  if (now !== 'connect') return
+  if (!github.value) readGithub()
+  if (connectName.value) return
+  let folder = props.folder
+  if (!folder) folder = tabForSlot((await devState().catch(() => null))?.tabs, props.slot)?.folder ?? ''
+  if (!connectName.value) connectName.value = cleanRepoName(folderName(folder))
+})
+
+async function startGit() {
+  if (working.value) return
+  working.value = true
+  notice.value = ''
+  try {
+    await devGitInit(props.slot)
+    problem.value = ''
+    notice.value = 'Git started here.'
+    await refresh()
+    await readRemote()
+  } catch (reason) {
+    problem.value = String(reason)
+  } finally {
+    working.value = false
+  }
+}
+
+async function connect() {
+  if (!connectReady.value) return
+  working.value = true
+  notice.value = ''
+  try {
+    const url = await devConnect(props.slot, connectOwner.value, connectName.value.trim(), connectPrivate.value)
+    problem.value = ''
+    notice.value = url ? `Connected to ${url}` : 'Connected to GitHub.'
+    await refresh()
+    await readRemote()
+  } catch (reason) {
+    problem.value = String(reason)
+  } finally {
+    working.value = false
+  }
+}
+
+async function signIn() {
+  try {
+    await backupSignIn()
+  } catch (reason) {
+    problem.value = String(reason)
   }
 }
 
@@ -174,7 +268,7 @@ watch(
     if (!on) return
     timer = setInterval(refresh, READ_EVERY_MS)
     await refresh()
-    if (remote.value === null) remote.value = await devGitRemote(props.slot).catch(() => null)
+    if (remote.value === null && status.value) await readRemote()
   },
   { immediate: true },
 )
@@ -189,7 +283,7 @@ defineExpose({ refresh })
       <span v-if="status" class="branch" :title="status.upstream ? `Tracking ${status.upstream}` : 'No upstream yet'">{{ status.branch }}</span>
       <span v-if="status?.upstream" class="sync" :title="`${status.ahead} to push, ${status.behind} to pull`">&#8593;{{ status.ahead }} &#8595;{{ status.behind }}</span>
       <span class="spacer"></span>
-      <button class="small" :disabled="!pushReady" :title="status?.upstream ? `Push to ${status.upstream}` : 'Push and set the upstream'" @click="askPush">
+      <button v-if="view === 'normal'" class="small" :disabled="!pushReady" :title="status?.upstream ? `Push to ${status.upstream}` : 'Push and set the upstream'" @click="askPush">
         Push{{ status?.ahead ? ` ↑${status.ahead}` : '' }}
       </button>
       <button class="small" title="Read again" aria-label="Read again" @click="refresh">&#8635;</button>
@@ -203,9 +297,56 @@ defineExpose({ refresh })
           <button ref="cancelPush" class="small" @click="askingPush = false">Cancel</button>
         </div>
       </div>
-      <p v-if="problem" class="problem" role="alert">{{ problem }}</p>
+      <p v-if="problem && view !== 'init'" class="problem" role="alert">{{ problem }}</p>
       <p v-if="notice" class="notice">{{ notice }}</p>
       <p v-if="!status && !problem" class="quiet">Reading git…</p>
+
+      <div v-if="view === 'init'" class="start-card">
+        <p>This folder is not a git repository yet.</p>
+        <div class="row">
+          <button class="small primary" :disabled="working" @click="startGit">{{ working ? 'Starting…' : 'Start git here' }}</button>
+        </div>
+      </div>
+
+      <div v-if="view === 'connect'" class="start-card" role="group" aria-label="Connect to GitHub">
+        <h4>Connect to GitHub</h4>
+        <p class="quiet">This repo has no origin yet. Make one on GitHub and push to it.</p>
+        <p v-if="ghLine === 'asking'" class="quiet">Asking GitHub…</p>
+        <template v-else-if="ghLine === 'install'">
+          <p>The GitHub CLI is not on this computer.</p>
+          <div class="row">
+            <button class="link" @click="openUrl('https://cli.github.com')">Install the GitHub CLI</button>
+            <button class="small" :disabled="checking" @click="readGithub">{{ checking ? 'Checking…' : 'Check again' }}</button>
+          </div>
+        </template>
+        <template v-else-if="ghLine === 'signin'">
+          <p>Not signed in to GitHub.</p>
+          <div class="row">
+            <button class="small primary" @click="signIn">Sign in to GitHub</button>
+            <button class="small" :disabled="checking" @click="readGithub">{{ checking ? 'Checking…' : 'Check again' }}</button>
+          </div>
+        </template>
+        <template v-else>
+          <label class="field">
+            <span>Owner</span>
+            <select v-model="connectOwner" :disabled="working || !owners.length">
+              <option v-for="o in owners" :key="o" :value="o">{{ o }}</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Name</span>
+            <input v-model="connectName" autocomplete="off" spellcheck="false" :disabled="working" :aria-invalid="connectNameBad" />
+          </label>
+          <p v-if="connectName.trim() && connectNameBad" class="hint">Letters, digits, "-", "_" and "." only, and not starting with ".".</p>
+          <label class="check">
+            <input v-model="connectPrivate" type="checkbox" :disabled="working" />
+            Private
+          </label>
+          <div class="row">
+            <button class="small primary" :disabled="!connectReady" @click="connect">{{ working ? 'Creating…' : 'Create and push' }}</button>
+          </div>
+        </template>
+      </div>
 
       <template v-if="status">
         <div class="section-head">
@@ -589,5 +730,76 @@ ul {
 .more {
   align-self: flex-start;
   margin: 4px 0 8px;
+}
+
+.start-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--hover);
+}
+
+.start-card p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field > span {
+  width: 46px;
+  flex: none;
+  color: var(--text-dim);
+}
+
+.field input,
+.field select {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  font: inherit;
+}
+
+.field select option {
+  background: #14103a;
+  color: var(--text);
+}
+
+.field input[aria-invalid='true'] {
+  border-color: var(--warn);
+}
+
+.field input:focus-visible,
+.field select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.check input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--warn);
 }
 </style>

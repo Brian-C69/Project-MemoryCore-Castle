@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ASK_TO_COMMIT, ago, badges, canPush, codeOf, commitPaths, diffLines, nextTicks, pushQuestion, withNewestPage } from './git.js'
+import { ASK_TO_COMMIT, ago, badges, canPush, codeOf, commitPaths, diffLines, isNotRepo, nextTicks, pushQuestion, sourceCard, withNewestPage } from './git.js'
 
 describe('the Source panel helpers', () => {
   it('reads a file letter', () => {
@@ -82,5 +82,32 @@ describe('the Source panel helpers', () => {
 
   it('asks the companion in plain words', () => {
     expect(ASK_TO_COMMIT).toBe('Please commit the current changes with a clear message.')
+  })
+
+  it('knows git saying the folder is not a repository', () => {
+    expect(isNotRepo('fatal: not a git repository (or any of the parent directories): .git')).toBe(true)
+    expect(isNotRepo('Not a git repository')).toBe(true)
+    expect(isNotRepo('git took too long.')).toBe(false)
+    expect(isNotRepo(null)).toBe(false)
+  })
+
+  it('picks the card the Source panel shows', () => {
+    const status = { branch: 'main', upstream: null, ahead: 0, behind: 0, files: [] }
+    const notRepo = 'fatal: not a git repository (or any of the parent directories): .git'
+    // not a repo: Start git here
+    expect(sourceCard({ status: null, problem: notRepo, remote: null, remoteRead: false, commits: [] })).toBe('init')
+    // still reading, or another problem: the normal view
+    expect(sourceCard({ status: null, problem: '', remote: null, remoteRead: false, commits: [] })).toBe('normal')
+    expect(sourceCard({ status: null, problem: 'git took too long.', remote: null, remoteRead: true, commits: [] })).toBe('normal')
+    // a repo whose remote is not read yet: the normal view, no flash of the card
+    expect(sourceCard({ status, problem: '', remote: null, remoteRead: false, commits: [] })).toBe('normal')
+    // a repo with no origin: Connect to GitHub
+    expect(sourceCard({ status, problem: '', remote: null, remoteRead: true, commits: [] })).toBe('connect')
+    expect(sourceCard({ status, problem: '', remote: null, remoteRead: true, commits: [{ refs: ['HEAD -> main', 'main'] }] })).toBe('connect')
+    // a GitHub origin: unchanged
+    expect(sourceCard({ status, problem: '', remote: 'https://github.com/o/r/commit/', remoteRead: true, commits: [] })).toBe('normal')
+    // an origin that is not GitHub still counts: tracked, or an origin/ badge in the graph
+    expect(sourceCard({ status: { ...status, upstream: 'origin/main' }, problem: '', remote: null, remoteRead: true, commits: [] })).toBe('normal')
+    expect(sourceCard({ status, problem: '', remote: null, remoteRead: true, commits: [{ refs: ['origin/main'] }] })).toBe('normal')
   })
 })

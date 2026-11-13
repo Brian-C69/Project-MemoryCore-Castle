@@ -638,8 +638,9 @@ pub fn remote_commit_base(folder: &Path) -> Option<String> {
     github_commit_base(url.trim())
 }
 
-/// A link the Source panel may open in the browser: a GitHub page, or a server on this PC
-/// (http://localhost:<port> or http://127.0.0.1:<port>). Nothing else.
+/// A link the Source panel may open in the browser: a GitHub page, the GitHub CLI's own page
+/// (https://cli.github.com, where the New project screen sends a member without it), or a server
+/// on this PC (http://localhost:<port> or http://127.0.0.1:<port>). Nothing else.
 pub fn is_openable_link(url: &str) -> bool {
     if url.len() > 500 || url.chars().any(|c| c.is_whitespace() || c.is_control() || c == '"' || c == '\'') {
         return false;
@@ -648,6 +649,9 @@ pub fn is_openable_link(url: &str) -> bool {
         let port: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
         let after = &rest[port.len()..];
         return !port.is_empty() && port.len() <= 5 && (after.is_empty() || after.starts_with('/'));
+    }
+    if let Some(rest) = url.strip_prefix("https://cli.github.com") {
+        return rest.is_empty() || rest.starts_with('/');
     }
     url.starts_with("https://github.com/")
 }
@@ -862,6 +866,18 @@ mod tests {
         assert!(!is_openable_link("https://github.com/a\"&calc"));
         assert!(!is_openable_link("C:\\Windows\\notepad.exe"));
         assert!(!is_openable_link(""));
+    }
+
+    #[test]
+    fn the_github_cli_page_opens_and_nothing_that_only_looks_like_it() {
+        assert!(is_openable_link("https://cli.github.com"));
+        assert!(is_openable_link("https://cli.github.com/"));
+        assert!(is_openable_link("https://cli.github.com/manual/gh_auth_login"));
+        assert!(!is_openable_link("https://cli.github.com.evil.io/"));
+        assert!(!is_openable_link("https://cli.github.comevil.io"));
+        assert!(!is_openable_link("https://cli.github.com@evil.io/"));
+        assert!(!is_openable_link("http://cli.github.com"));
+        assert!(!is_openable_link("https://cli.github.com/a b"));
     }
 
     #[test]

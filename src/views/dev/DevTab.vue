@@ -161,7 +161,7 @@ async function closeNow() {
         @settings="emit('settings', $event)"
         @setup="emit('setup')"
       />
-      <SourcePanel v-if="sourceOpen" class="plan-side" :slot="tab.slot" :companion="companion" :shown="shown && sourceOpen" @ask="say" />
+      <SourcePanel v-if="sourceOpen" class="plan-side" :slot="tab.slot" :folder="tab.folder" :companion="companion" :shown="shown && sourceOpen" @ask="say" />
       <PlanPanel v-if="planOpen" class="plan-side" :index="tab.slot" :shown="shown && planOpen" />
     </div>
 
