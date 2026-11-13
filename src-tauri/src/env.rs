@@ -4,12 +4,21 @@
 use crate::settings::Cli;
 use std::path::{Path, PathBuf};
 
-/// Finds a command on PATH the way Windows would: each PATH folder in order, and in each folder
-/// the PATHEXT endings in order (.EXE before .CMD by default).
+/// Finds a command on PATH. A real program (.exe / .com) anywhere on PATH is taken before a script
+/// (.cmd / .bat) that comes earlier: a script in front of a CLI is often someone's own wrapper that
+/// adds words of its own (a model, a first message), and Castle must start the CLI itself, exactly
+/// as it means to. With no program on PATH (an npm install is only a .cmd), the script is used.
 pub fn find_on_path(command: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
-    find_in(command, std::env::split_paths(&path), &exts)
+    find_program_first(command, std::env::split_paths(&path).collect::<Vec<_>>(), &exts)
+}
+
+/// `find_in`, but a program anywhere on PATH before a script anywhere on PATH.
+pub fn find_program_first(command: &str, folders: Vec<PathBuf>, pathext: &str) -> Option<PathBuf> {
+    let is_program = |e: &&str| matches!(e.to_ascii_lowercase().as_str(), ".exe" | ".com");
+    let programs: String = pathext.split(';').filter(is_program).collect::<Vec<_>>().join(";");
+    find_in(command, folders.clone(), &programs).or_else(|| find_in(command, folders, pathext))
 }
 
 pub fn find_in(command: &str, folders: impl IntoIterator<Item = PathBuf>, pathext: &str) -> Option<PathBuf> {
@@ -130,6 +139,23 @@ mod tests {
         // inside one folder .EXE comes before .CMD
         assert_eq!(find_in("tool", [first.clone(), second], ".EXE;.CMD"), Some(first.join("tool.exe")));
         assert_eq!(find_in("missing", [first], ".EXE"), None);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn the_cli_itself_is_started_not_a_wrapper_script_in_front_of_it() {
+        let root = std::env::temp_dir().join(format!("castle-path-wrapper-{}", std::process::id()));
+        let (wrappers, real) = (root.join("bin"), root.join("local"));
+        std::fs::create_dir_all(&wrappers).unwrap();
+        std::fs::create_dir_all(&real).unwrap();
+        // someone's own launcher earlier on PATH, adding words of its own; the real program later
+        std::fs::write(wrappers.join("claude.cmd"), "@echo off\r\nclaude.exe \"alice\" %*\r\n").unwrap();
+        std::fs::write(real.join("claude.exe"), "").unwrap();
+        let folders = vec![wrappers.clone(), real.clone()];
+        assert_eq!(find_program_first("claude", folders.clone(), ".COM;.EXE;.BAT;.CMD"), Some(real.join("claude.exe")));
+        // only a script installed (npm): the script is used
+        std::fs::remove_file(real.join("claude.exe")).unwrap();
+        assert_eq!(find_program_first("claude", folders, ".COM;.EXE;.BAT;.CMD"), Some(wrappers.join("claude.cmd")));
         let _ = std::fs::remove_dir_all(root);
     }
 }

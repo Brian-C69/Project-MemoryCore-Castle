@@ -173,12 +173,14 @@ pub fn isolation_args(cli: Cli, mcp_config: &Path) -> Vec<String> {
     if cli != Cli::Claude {
         return Vec::new();
     }
+    // `--mcp-config` takes several files, so it must never be last: a wake greeting after it would be
+    // read as one more config file and the CLI would refuse to start. `--strict-mcp-config` closes it.
     vec![
         "--setting-sources".to_string(),
         "project,local".to_string(),
-        "--strict-mcp-config".to_string(),
         "--mcp-config".to_string(),
         mcp_config.display().to_string(),
+        "--strict-mcp-config".to_string(),
     ]
 }
 
@@ -491,8 +493,11 @@ mod tests {
         let mcp = PathBuf::from("C:/castle/mcp.json");
         let args = isolation_args(Cli::Claude, &mcp);
         assert_eq!(args[..2], ["--setting-sources".to_string(), "project,local".to_string()]);
-        assert!(args.contains(&"--strict-mcp-config".to_string()));
-        assert_eq!(args.last(), Some(&mcp.display().to_string()));
+        // the file follows --mcp-config, and a flag (not the file) comes last, so a prompt after the
+        // isolation can never be taken for a second config file
+        let at = args.iter().position(|a| a == "--mcp-config").unwrap();
+        assert_eq!(args[at + 1], mcp.display().to_string());
+        assert_eq!(args.last(), Some(&"--strict-mcp-config".to_string()));
         assert_eq!(isolation_vars(Cli::Claude), vec![("CLAUDE_CODE_DISABLE_AUTO_MEMORY".to_string(), "1".to_string())]);
         assert!(isolation_args(Cli::Codex, &mcp).is_empty() && isolation_vars(Cli::Codex).is_empty());
 
