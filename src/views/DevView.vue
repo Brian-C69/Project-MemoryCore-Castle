@@ -24,6 +24,12 @@ const state = ref({ tabs: [], projects: [], memoryFolder: '' })
 const activeSlot = ref(null)
 const problem = ref('')
 const busy = ref(false)
+let timer
+
+const tabs = computed(() => orderTabs(state.value.tabs).map((t) => ({ ...t, name: t.name || folderName(t.folder) })))
+const projects = computed(() => recentProjects(state.value.projects, state.value.tabs, state.value.memoryFolder))
+const full = computed(() => tabs.value.length >= MAX_TABS)
+
 // the left column: the recent PROJECTS, or the open project's FILES
 const side = ref('projects')
 // the file open in the reader ({ name, rel }), for the active tab
@@ -39,11 +45,6 @@ function putInChat(path) {
   reading.value = null
   tabViews[activeSlot.value]?.putInChat(path)
 }
-let timer
-
-const tabs = computed(() => orderTabs(state.value.tabs).map((t) => ({ ...t, name: t.name || folderName(t.folder) })))
-const projects = computed(() => recentProjects(state.value.projects, state.value.tabs, state.value.memoryFolder))
-const full = computed(() => tabs.value.length >= MAX_TABS)
 
 function apply(next, wantedFolder = null) {
   if (!next) return
