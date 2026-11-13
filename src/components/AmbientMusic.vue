@@ -3,12 +3,15 @@
 // is on, and keeps playing when Castle is minimised or hidden in the tray. A world window on another
 // screen plays its own music (its kind's: Castle Theme for 2D worlds, Floating Isles for 3D ones), so
 // this player steps aside exactly while such a window is open - never two tunes at once - and takes
-// over again the moment the last one closes. It is also quiet when the WORLD room is switched off.
+// over again the moment the last one closes. "Open" means a window that really exists (world.rs makes
+// one only for a connected screen that is not Castle's own), never just a screen saved as on; the
+// lead world window keeps its player even when its world is let go after being covered a long time.
+// It is also quiet when the WORLD room is switched off (the top-bar switch still saves the choice).
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import MusicPlayer from '../world2d/MusicPlayer.vue'
 import { getSettings, studioLibrary, worldScreens } from '../api/castle.js'
-import { ambienceFor, songTitle } from '../worlds/ambience.js'
+import { musicFrom, tracksFor, worldWindowOpen } from './music.js'
 
 const POLL_MS = 4000
 const music = ref(false)
@@ -19,19 +22,20 @@ const songs = ref([])
 let timer = 0
 let liveUntil = 0 // the World tab's controls just changed things: the saved copy may still be old
 
-const tracks = computed(() => [...ambienceFor('2d'), ...songs.value])
+const tracks = computed(() => tracksFor('2d', songs.value, convertFileSrc))
 const enabled = computed(() => music.value && roomOn.value && !screensOn.value)
 
 async function read() {
   try {
     const view = await getSettings()
-    const s = view.settings ?? view
-    const fresh = Date.now() > liveUntil
-    if (fresh) music.value = !!s.world?.music
-    if (fresh) volume.value = s.world?.volume ?? 0.5
-    roomOn.value = s.rooms?.world !== false
+    const saved = musicFrom(view.settings ?? view)
+    if (Date.now() > liveUntil) {
+      music.value = saved.music
+      volume.value = saved.volume
+    }
+    roomOn.value = saved.roomOn
     // a window that is really open (a screen saved as on but unplugged has none, so this player stays)
-    screensOn.value = roomOn.value && (await worldScreens()).some((screen) => screen.open && !screen.isMain)
+    screensOn.value = roomOn.value && worldWindowOpen(await worldScreens())
   } catch {
     // outside Castle: no music
   }
@@ -40,7 +44,7 @@ async function read() {
 async function readSongs() {
   try {
     const lib = await studioLibrary()
-    songs.value = (lib.songs ?? []).map((m) => ({ title: songTitle(m.name), url: convertFileSrc(m.path) }))
+    songs.value = lib.songs ?? []
   } catch {
     // no memory folder yet: Castle's own music only
   }

@@ -11,6 +11,7 @@ import { loadMine } from '../worlds/mine.js'
 import { askCompanion } from '../api/ask.js'
 import { listen } from '@tauri-apps/api/event'
 import { quotaWords } from '../world3d/energy.js'
+import { sendLatest } from '../components/sendlatest.js'
 import { castleMoveToScreen, chatMediaOpen, choosePicture, cliQuota, getSettings, saveSettings, worldApply, worldDelete, worldIdentify, worldNew, worldPrepare, worldScreens } from '../api/castle.js'
 
 const props = defineProps({
@@ -112,37 +113,25 @@ async function refresh({ fresh = false } = {}) {
 // that are unplugged right now (so they come back as they were).
 // Only one send runs at a time. Click fast through the world cards and the screen would otherwise
 // reload every world in between, one after another, and trail far behind: while one send is out, the
-// newer choices only mark "again", and the loop sends the latest rows once - the stale ones are skipped.
-let sending = false
-let again = false
-async function apply() {
-  if (sending) {
-    again = true
-    return
-  }
-  sending = true
-  try {
-    do {
-      again = false
-      problem.value = ''
-      const here = rows.value.map((r) => r.entry)
-      const away = (settings.value?.world?.screens ?? []).filter((e) => !rows.value.some((r) => r.screen.name === e.screen))
-      const list = await worldApply([...here, ...away])
-      settings.value = { ...settings.value, world: { ...settings.value.world, screens: list } }
-      if (again) continue // newer choices are waiting: send those, no need to redraw the old ones
-      screens.value = await worldScreens()
-      buildRows(true)
-      window.dispatchEvent(new CustomEvent('castle-music', { detail: { screens: true } })) // hand the music over
-      saved.value = 'Saved'
-      clearTimeout(savedTimer)
-      savedTimer = setTimeout(() => (saved.value = ''), 4000)
-    } while (again)
-  } catch (reason) {
-    problem.value = String(reason)
-  } finally {
-    sending = false
-  }
-}
+// newer choices only mark "again", and the latest rows are sent once - the stale ones are skipped.
+// A send that fails while newer choices wait does not drop them: the latest is still sent.
+const apply = sendLatest(
+  async (newer) => {
+    problem.value = ''
+    const here = rows.value.map((r) => r.entry)
+    const away = (settings.value?.world?.screens ?? []).filter((e) => !rows.value.some((r) => r.screen.name === e.screen))
+    const list = await worldApply([...here, ...away])
+    settings.value = { ...settings.value, world: { ...settings.value.world, screens: list } }
+    if (newer()) return // newer choices are waiting: send those, no need to redraw the old ones
+    screens.value = await worldScreens()
+    buildRows(true)
+    window.dispatchEvent(new CustomEvent('castle-music', { detail: { screens: true } })) // hand the music over
+    saved.value = 'Saved'
+    clearTimeout(savedTimer)
+    savedTimer = setTimeout(() => (saved.value = ''), 4000)
+  },
+  (reason) => (problem.value = String(reason)),
+)
 
 function change(row, patch) {
   row.entry = { ...row.entry, ...patch }

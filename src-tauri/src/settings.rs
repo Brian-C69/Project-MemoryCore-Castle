@@ -149,7 +149,8 @@ pub struct WorldSettings {
 
 impl Default for WorldSettings {
     fn default() -> Self {
-        Self { music: true, volume: 0.5, folders: Vec::new(), screens: Vec::new() }
+        // a fresh install starts quiet: the member turns the music on (a saved file keeps its choice)
+        Self { music: false, volume: 0.5, folders: Vec::new(), screens: Vec::new() }
     }
 }
 

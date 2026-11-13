@@ -5,7 +5,7 @@
 //! hide and show with Castle. Castle's own screen never gets a world window.
 
 use crate::screen;
-use crate::settings::{self, SettingsStore, WorldScreen};
+use crate::settings::{self, Settings, SettingsStore, WorldScreen};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Monitor, State, WebviewUrl, WebviewWindowBuilder};
 
@@ -72,6 +72,12 @@ pub fn wanted(entries: &[WorldScreen], screens: &[ScreenBox], main: Option<usize
         .filter(|(i, _)| Some(*i) != main)
         .filter_map(|(i, s)| matches(entries, s).filter(|e| e.on).map(|e| (i, e.clone())))
         .collect()
+}
+
+/// Should the world windows be brought in line with these settings? Only while the WORLD room is
+/// on and at least one screen is switched on: with the room off, nothing may open a world window.
+pub fn windows_wanted(settings: &Settings) -> bool {
+    settings.room_on("world") && settings.world.screens.iter().any(|e| e.on)
 }
 
 fn boxes(monitors: &[Monitor]) -> Vec<ScreenBox> {
@@ -170,7 +176,8 @@ pub async fn world_apply(app: AppHandle, screens: Vec<WorldScreen>, store: State
 }
 
 /// Moves Castle itself to another screen and keeps it there (the next start too). The screen it
-/// left may now show a world; the one it joined cannot, so any world window there closes.
+/// left may now show a world; the one it joined cannot, so any world window there closes. With the
+/// WORLD room off Castle just moves: no world window opens.
 #[tauri::command]
 pub async fn castle_move_to_screen(app: AppHandle, index: usize, store: State<'_, SettingsStore>) -> Result<(), String> {
     let monitors = app.available_monitors().map_err(|_| "The screens could not be read.".to_string())?;
@@ -180,9 +187,10 @@ pub async fn castle_move_to_screen(app: AppHandle, index: usize, store: State<'_
     next.castle_screen = monitor.name().cloned().unwrap_or_default();
     settings::save(&store.path, &next).map_err(|_| "The screen could not be saved.".to_string())?;
     let entries = next.world.screens.clone();
+    let worlds = windows_wanted(&next);
     *store.current.lock().unwrap() = next;
     screen::fill_work_area(&window, &monitor).map_err(|_| "Castle could not be moved.".to_string())?;
-    if entries.iter().any(|e| e.on) {
+    if worlds {
         apply(&app, &entries).await?;
     }
     Ok(())
@@ -200,7 +208,8 @@ pub fn place_saved(app: &AppHandle, window: &tauri::WebviewWindow) -> bool {
 }
 
 /// The WORLD music: on / off and how loud. Saves only these two, so it can never write an older
-/// copy of the screens back; the open world windows hear it at once.
+/// copy of the screens back; the open world windows hear it at once. With the WORLD room off the
+/// choice is still saved, but no world window opens for it.
 #[tauri::command]
 pub async fn world_music(app: AppHandle, music: Option<bool>, volume: Option<f32>, store: State<'_, SettingsStore>) -> Result<(), String> {
     let mut next = store.get();
@@ -212,8 +221,9 @@ pub async fn world_music(app: AppHandle, music: Option<bool>, volume: Option<f32
     }
     settings::save(&store.path, &next).map_err(|_| "The music setting could not be saved.".to_string())?;
     let entries = next.world.screens.clone();
+    let worlds = windows_wanted(&next);
     *store.current.lock().unwrap() = next;
-    if entries.iter().any(|e| e.on) {
+    if worlds {
         apply(&app, &entries).await?;
     }
     Ok(())
@@ -319,14 +329,11 @@ pub fn restore(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let settings = app.state::<SettingsStore>().get();
-        if !settings.room_on("world") {
+        if !windows_wanted(&settings) {
             return;
         }
-        let entries = settings.world.screens;
-        if entries.iter().any(|e| e.on) {
-            if let Err(error) = apply(&app, &entries).await {
-                eprintln!("MemoryCore Castle: the world screens could not be restored: {error}");
-            }
+        if let Err(error) = apply(&app, &settings.world.screens).await {
+            eprintln!("MemoryCore Castle: the world screens could not be restored: {error}");
         }
     });
 }
@@ -382,5 +389,25 @@ mod tests {
     fn nothing_saved_means_every_screen_stays_off() {
         let screens = vec![screen("A", 0), screen("B", 1920)];
         assert!(wanted(&[], &screens, Some(0)).is_empty());
+    }
+
+    #[test]
+    fn with_the_world_room_off_no_world_window_is_opened() {
+        let mut settings = Settings::default();
+        assert!(!windows_wanted(&settings), "nothing switched on");
+        settings.world.screens = vec![entry("B", 1920, true, "2d/mine")];
+        assert!(windows_wanted(&settings));
+        settings.rooms.insert("world".into(), false);
+        assert!(!windows_wanted(&settings), "the music switch or a Castle move must not reopen worlds while the room is off");
+    }
+
+    #[test]
+    fn a_new_member_hears_no_music_until_they_turn_it_on_but_a_saved_choice_stays() {
+        assert!(!Settings::default().world.music, "a fresh install starts quiet");
+        let missing: Settings = serde_json::from_str(r#"{"world":{"volume":0.4}}"#).unwrap();
+        assert!(!missing.world.music);
+        let on: Settings = serde_json::from_str(r#"{"world":{"music":true,"volume":0.4}}"#).unwrap();
+        assert!(on.world.music, "a settings file that saved the music on keeps it on");
+        assert_eq!(on.world.volume, 0.4);
     }
 }
