@@ -34,7 +34,8 @@ function seen(on) {
   visible.value = on
   clearTimeout(unloadTimer)
   if (on) unloaded.value = false
-  else unloadTimer = setTimeout(() => (unloaded.value = true), UNLOAD_MS)
+  // the window that plays the music stays loaded, or the music would stop with it
+  else unloadTimer = setTimeout(() => (unloaded.value = !(lead.value && music.enabled)), UNLOAD_MS)
 }
 
 onMounted(async () => {

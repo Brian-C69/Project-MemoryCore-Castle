@@ -115,6 +115,7 @@ async function apply() {
     settings.value = { ...settings.value, world: { ...settings.value.world, screens: list } }
     screens.value = await worldScreens()
     buildRows(true)
+    window.dispatchEvent(new CustomEvent('castle-music', { detail: { screens: true } })) // hand the music over
     saved.value = 'Saved'
     clearTimeout(savedTimer)
     savedTimer = setTimeout(() => (saved.value = ''), 4000)

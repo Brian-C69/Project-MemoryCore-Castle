@@ -1,11 +1,13 @@
 <script setup>
 // Castle's own music, on every tab: it plays from the moment Castle opens while MUSIC (WORLD room)
-// is on, and keeps playing when Castle is minimised or hidden in the tray. It stays quiet only when
-// a world window on another screen is already playing the music, or the WORLD room is switched off.
+// is on, and keeps playing when Castle is minimised or hidden in the tray. A world window on another
+// screen plays its own music (its kind's: Castle Theme for 2D worlds, Floating Isles for 3D ones), so
+// this player steps aside exactly while such a window is open - never two tunes at once - and takes
+// over again the moment the last one closes. It is also quiet when the WORLD room is switched off.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import MusicPlayer from '../world2d/MusicPlayer.vue'
-import { getSettings, studioLibrary } from '../api/castle.js'
+import { getSettings, studioLibrary, worldScreens } from '../api/castle.js'
 import { ambienceFor, songTitle } from '../worlds/ambience.js'
 
 const POLL_MS = 4000
@@ -27,8 +29,9 @@ async function read() {
     const fresh = Date.now() > liveUntil
     if (fresh) music.value = !!s.world?.music
     if (fresh) volume.value = s.world?.volume ?? 0.5
-    screensOn.value = !!s.world?.screens?.some((screen) => screen.on) && s.rooms?.world !== false
     roomOn.value = s.rooms?.world !== false
+    // a window that is really open (a screen saved as on but unplugged has none, so this player stays)
+    screensOn.value = roomOn.value && (await worldScreens()).some((screen) => screen.open && !screen.isMain)
   } catch {
     // outside Castle: no music
   }
@@ -46,6 +49,8 @@ async function readSongs() {
 // The WORLD room's MUSIC controls: follow them at once, without waiting for the saved copy.
 function live(event) {
   const patch = event.detail ?? {}
+  if (patch.screens) read() // the screens just changed: hand over at once, not at the next check
+  if (typeof patch.music !== 'boolean' && typeof patch.volume !== 'number') return
   liveUntil = Date.now() + 5000
   if (typeof patch.music === 'boolean') music.value = patch.music
   if (typeof patch.volume === 'number') volume.value = patch.volume
