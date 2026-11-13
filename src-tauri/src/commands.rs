@@ -177,5 +177,12 @@ pub fn open_url(url: String) -> Result<(), String> {
     if !url.starts_with("https://") || url.contains(char::is_whitespace) {
         return Err("Only https addresses can be opened.".into());
     }
-    std::process::Command::new("explorer.exe").arg(&url).spawn().map(|_| ()).map_err(|_| "The browser could not be opened.".to_string())
+    // explorer.exe silently fails to hand off a URL with "&" in its query string (opens a plain
+    // Explorer window instead); rundll32's FileProtocolHandler is the reliable way to do this.
+    std::process::Command::new("rundll32.exe")
+        .arg("url.dll,FileProtocolHandler")
+        .arg(&url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|_| "The browser could not be opened.".to_string())
 }
