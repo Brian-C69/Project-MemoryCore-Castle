@@ -6,6 +6,7 @@
 // Castle's core (roomturn.rs: a room-only run with no tools) - nothing from the room ever reaches
 // its private main session; LOG shows those turns.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../components/roomsteps.js'
 import { listen } from '@tauri-apps/api/event'
 import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCard, roomCardSave, roomCompanionIn, roomFaceSet, roomFile, roomLog, roomMe, roomMine, roomPost, roomPresence, roomReset, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
 import { initial, isMine, ticks } from '../components/roomchat.js'
@@ -159,36 +160,8 @@ async function setMode(next) {
 // ---------- The door: a guide that opens by itself ----------
 
 const STEP = { done: '✓', wait: '…', todo: '' }
-const steps = computed(() => {
-  const m = member.value
-  const signed = !!m?.signedIn
-  const card = m?.card === 'active'
-  const f = m?.foundation ?? 'NONE'
-  const foundationLine = !signed || !card
-    ? 'After your Library card, join the MemoryCore Foundation on its MemoryCore tab.'
-    : {
-        NONE: 'Join the MemoryCore Foundation on your Library card (the MemoryCore tab).',
-        PENDING: 'Waiting for Kiyo to promote you - Castle checks by itself, nothing to paste.',
-        APPROVED: m?.roomOpen ? 'You are in.' : 'Promoted - opening the room…',
-        REJECTED: 'This request was not accepted. You can ask again on your Library card.',
-        REVOKED: 'Your Foundation place was removed, so the room is closed to you.',
-      }[f] ?? 'Castle is checking your Foundation place…'
-  return [
-    {
-      n: 1,
-      title: 'Sign in with Google',
-      line: signed ? `Signed in${m?.name ? ` as ${m.name}` : ''}.` : m?.expired ? 'Your sign-in ran out - sign in again.' : 'Castle opens your browser; you sign in there once.',
-      state: signed ? 'done' : 'todo',
-    },
-    {
-      n: 2,
-      title: 'Your Library card',
-      line: !signed ? 'Made for you when you sign in.' : card ? 'Your card is active.' : m?.card === 'inactive' ? 'Your Library card is not active yet - open the Library to set it up.' : 'Castle is checking your card…',
-      state: card ? 'done' : signed ? 'wait' : 'todo',
-    },
-    { n: 3, title: 'The MemoryCore Foundation', line: foundationLine, state: f === 'APPROVED' ? 'done' : f === 'PENDING' ? 'wait' : 'todo' },
-  ]
-})
+const libraryOpened = ref(rememberedLibraryOpened())
+const steps = computed(() => roomSteps(member.value, libraryOpened.value))
 
 async function checkDoor() {
   try {
@@ -244,6 +217,14 @@ async function setCompanionIn(on) {
 }
 
 const openLibrary = () => openUrl(`${PORTFOLIO}/alice/library`).catch(() => {})
+// Sign in happens on the Library page; Castle then connects to that sign-in (the desktop page shows
+// "Continue as <name>", one click).
+function signInOnLibrary() {
+  doorProblem.value = ''
+  openLibrary()
+  libraryOpened.value = true
+  rememberLibraryOpened()
+}
 
 // The member's face in the room (their Google picture by default), and their companion's.
 async function setFace(companion, reset = false) {
@@ -336,7 +317,16 @@ watch(() => props.visible, (on) => {
             <strong>{{ st.title }}</strong>
             <p class="hint">{{ st.line }}</p>
           </div>
-          <button v-if="st.n === 1 && !member?.signedIn" class="primary" :disabled="signing" @click="signIn">{{ signing ? 'Waiting for your browser…' : 'Sign in' }}</button>
+          <div v-if="st.n === 1 && !member?.signedIn" class="sign-buttons">
+            <template v-if="libraryOpened || member?.expired">
+              <button class="primary" :disabled="signing" @click="signIn">{{ signing ? 'Waiting for your browser…' : 'Connect Castle' }}</button>
+              <button class="link" :disabled="signing" @click="signInOnLibrary">Open the Library again</button>
+            </template>
+            <template v-else>
+              <button class="primary" @click="signInOnLibrary">Sign in</button>
+              <button class="link" :disabled="signing" @click="signIn">{{ signing ? 'Waiting for your browser…' : 'Already signed in on the Library? Connect Castle' }}</button>
+            </template>
+          </div>
           <button v-if="st.n === 2 && member?.signedIn" @click="openLibrary">Open the Library</button>
         </li>
       </ol>
@@ -731,6 +721,21 @@ button {
   color: var(--text);
   font: inherit;
   font-size: 13px;
+  cursor: pointer;
+}
+.sign-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.sign-buttons button.link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  opacity: 0.8;
+  text-decoration: underline;
   cursor: pointer;
 }
 button.primary {
