@@ -138,6 +138,9 @@ async fn apply(app: &AppHandle, entries: &[WorldScreen]) -> Result<(), String> {
         let window = WebviewWindowBuilder::new(app, label(index), WebviewUrl::App("index.html".into()))
             .title("MemoryCore Castle - World")
             .decorations(false)
+            // like Castle's own window: no resize border or shadow, or Windows grows the window past the screen
+            .resizable(false)
+            .shadow(false)
             .skip_taskbar(true)
             .visible(false)
             .initialization_script(&format!("window.__CASTLE_VIEW__ = {init};"))
@@ -235,6 +238,8 @@ pub async fn world_identify(app: AppHandle, index: usize) -> Result<(), String> 
     let window = builder
         .title("MemoryCore Castle - Identify")
         .decorations(false)
+        .resizable(false)
+        .shadow(false)
         .always_on_top(true)
         .skip_taskbar(true)
         .focused(false)
