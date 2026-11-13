@@ -43,6 +43,19 @@ const tryOnLine = computed(() => {
   return saved.stale ? `${what}: saved, but the outfit, hair or standard look changed since - draw it again.` : `${what}: saved - no need to draw it again.`
 })
 
+const slideIndex = ref(0)
+const slides = computed(() => {
+  const list = []
+  if (look.value?.portrait) list.push({ label: 'Standard look', path: look.value.portrait })
+  if (look.value?.tryOn?.exists) list.push({ label: "Today's look", path: look.value.tryOn.path })
+  return list
+})
+const slide = computed(() => slides.value[Math.min(slideIndex.value, slides.value.length - 1)] ?? null)
+const step = (direction) => {
+  const count = slides.value.length
+  if (count) slideIndex.value = (slideIndex.value + direction + count) % count
+}
+
 const STATE = { ready: 'Ready to draw', builtin: 'Codex available — checked when drawing', prompt: 'Codex unavailable — prompts are saved' }
 const sep = computed(() => (look.value?.folder?.includes('/') ? '/' : '\\'))
 const path = (...parts) => [look.value.folder, ...parts].join(sep.value)
@@ -234,13 +247,19 @@ watch(() => props.stamp, load)
     <div v-if="look" class="columns">
       <section class="standard widget">
         <h3>STANDARD LOOK</h3>
-        <button v-if="look.portrait" class="portrait" @click="openSheet(look.portrait, 'Standard look')">
-          <img :src="src(look.portrait)" alt="Standard look" />
-        </button>
-        <div v-else class="portrait empty"><span class="crystal">◆</span></div>
+        <div class="carousel">
+          <button v-if="slide" class="portrait" @click="openSheet(slide.path, slide.label)">
+            <img :src="src(slide.path)" :alt="slide.label" />
+          </button>
+          <div v-else class="portrait empty"><span class="crystal">◆</span></div>
+          <template v-if="slides.length > 1">
+            <button class="nav prev" aria-label="Previous picture" @click="step(-1)">‹</button>
+            <button class="nav next" aria-label="Next picture" @click="step(1)">›</button>
+          </template>
+        </div>
+        <p v-if="slide" class="hint caption">{{ slide.label }}<template v-if="slides.length > 1"> · {{ slideIndex + 1 }}/{{ slides.length }}</template></p>
         <button :disabled="!!busy" @click="upload('standard')">{{ look.portrait ? 'Replace image' : 'Upload image' }}</button>
         <button class="primary" :disabled="!!busy" @click="drawPortrait">{{ look.portrait ? 'Improve from image' : 'Draw the standard look' }}</button>
-        <button v-if="look.tryOn?.exists" class="sheet saved" @click="openSheet(look.tryOn.path, 'Today\'s look')"><img :src="src(look.tryOn.path)" alt="Today's look" /></button>
         <p v-if="tryOnLine" class="hint">{{ tryOnLine }}</p>
         <button :disabled="!!busy" @click="tryOn()">{{ !look.tryOn?.exists || look.tryOn.stale ? "Try on today's look" : "Show today's look" }}</button>
         <button v-if="look.tryOn?.exists && !look.tryOn.stale" :disabled="!!busy" @click="tryOn(true)">Draw again</button>
@@ -365,6 +384,31 @@ h3 {
   height: 100%;
   object-fit: cover;
 }
+.carousel {
+  position: relative;
+  flex-shrink: 0;
+}
+.carousel .portrait {
+  display: block;
+  width: 100%;
+}
+.carousel .portrait img {
+  object-fit: contain;
+}
+.carousel .nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 20px;
+  line-height: 1;
+}
+.carousel .prev { left: 8px; }
+.carousel .next { right: 8px; }
+.caption { text-align: center; }
 .portrait.empty {
   display: grid;
   place-items: center;
