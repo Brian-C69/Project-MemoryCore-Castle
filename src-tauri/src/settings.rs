@@ -432,6 +432,7 @@ mod tests {
                 folders: vec!["D:\\Pictures".into()],
                 screens: vec![WorldScreen { screen: "\\\\.\\DISPLAY5".into(), world: "3d/crystal-isle".into(), camera: "orbit".into(), on: true, ..WorldScreen::default() }],
             },
+            castle_screen: "\\\\.\\DISPLAY1".into(),
             setup_done: true,
             quick_actions: vec![QuickAction { label: "Plan my day".into(), command: "plan my day".into() }],
             backup_after_diary: true,

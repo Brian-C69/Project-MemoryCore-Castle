@@ -60,6 +60,10 @@ const worlds = computed(() => allWorlds(mine.value))
 const others = computed(() => rows.value.filter((r) => !r.screen.isMain))
 const pickRow = computed(() => rows.value[selected.value] ?? others.value[0] ?? null)
 const previewWorld = computed(() => findWorld(worlds.value, previewId.value) ?? findWorld(worlds.value, pickRow.value?.entry.world) ?? findWorld(worlds.value, DEFAULT_WORLD))
+watch(
+  () => `${selected.value}|${pickRow.value?.entry.world}`,
+  () => (previewId.value = ''),
+)
 const previewConfig = computed(() => ({ ...DEFAULTS, ...(pickRow.value?.entry ?? {}), world: previewWorld.value.id }))
 
 const shortName = (name) => String(name).replace(/^\\\\\.\\/, '')
@@ -106,21 +110,37 @@ async function refresh({ fresh = false } = {}) {
 
 // Every change goes out whole: the rows for the screens here, plus the saved ones for screens
 // that are unplugged right now (so they come back as they were).
+// Only one send runs at a time. Click fast through the world cards and the screen would otherwise
+// reload every world in between, one after another, and trail far behind: while one send is out, the
+// newer choices only mark "again", and the loop sends the latest rows once - the stale ones are skipped.
+let sending = false
+let again = false
 async function apply() {
-  problem.value = ''
-  const here = rows.value.map((r) => r.entry)
-  const away = (settings.value?.world?.screens ?? []).filter((e) => !rows.value.some((r) => r.screen.name === e.screen))
+  if (sending) {
+    again = true
+    return
+  }
+  sending = true
   try {
-    const list = await worldApply([...here, ...away])
-    settings.value = { ...settings.value, world: { ...settings.value.world, screens: list } }
-    screens.value = await worldScreens()
-    buildRows(true)
-    window.dispatchEvent(new CustomEvent('castle-music', { detail: { screens: true } })) // hand the music over
-    saved.value = 'Saved'
-    clearTimeout(savedTimer)
-    savedTimer = setTimeout(() => (saved.value = ''), 4000)
+    do {
+      again = false
+      problem.value = ''
+      const here = rows.value.map((r) => r.entry)
+      const away = (settings.value?.world?.screens ?? []).filter((e) => !rows.value.some((r) => r.screen.name === e.screen))
+      const list = await worldApply([...here, ...away])
+      settings.value = { ...settings.value, world: { ...settings.value.world, screens: list } }
+      if (again) continue // newer choices are waiting: send those, no need to redraw the old ones
+      screens.value = await worldScreens()
+      buildRows(true)
+      window.dispatchEvent(new CustomEvent('castle-music', { detail: { screens: true } })) // hand the music over
+      saved.value = 'Saved'
+      clearTimeout(savedTimer)
+      savedTimer = setTimeout(() => (saved.value = ''), 4000)
+    } while (again)
   } catch (reason) {
     problem.value = String(reason)
+  } finally {
+    sending = false
   }
 }
 
@@ -414,11 +434,12 @@ watch(
             v-for="w in worlds"
             :key="w.id"
             class="card"
-            :class="{ current: pickRow?.entry.world === w.id, waiting: !ready(w), chosen: previewWorld.id === w.id }"
+            :class="{ waiting: !ready(w), chosen: previewWorld.id === w.id }"
             @click="pickCard(w)"
           >
             <div class="preview" :style="w.preview ? { backgroundImage: `url(&quot;${w.preview}&quot;)` } : {}">
               <span class="kind">{{ w.kind === '2d' ? '2D' : '3D' }}</span>
+              <span v-if="pickRow?.entry.world === w.id && previewWorld.id !== w.id" class="here">on screen {{ pickRow.screen.index + 1 }}</span>
             </div>
             <strong>{{ w.title }}</strong>
             <p class="desc">{{ w.line }}</p>
@@ -593,9 +614,6 @@ input[type='number'] {
   cursor: pointer;
 }
 .card.chosen {
-  border-color: var(--text-dim);
-}
-.card.current {
   border-color: var(--accent);
 }
 .card.waiting .preview {
@@ -617,6 +635,16 @@ input[type='number'] {
   border-radius: 999px;
   background: rgba(4, 8, 23, 0.7);
   font-size: 11px;
+}
+.here {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(4, 8, 23, 0.7);
+  font-size: 11px;
+  color: var(--text-dim);
 }
 .desc,
 .status,

@@ -131,6 +131,9 @@ async fn apply(app: &AppHandle, entries: &[WorldScreen]) -> Result<(), String> {
         let payload = WorldConfig { view: "world", screen: index, lead: Some(index) == lead, music: sound.music, volume: sound.volume, config: entry };
         if let Some(existing) = app.get_webview_window(&label(index)) {
             let _ = app.emit_to(label(index), "castle-world-config", &payload);
+            // re-fit every time, not just at creation: an older window kept open across settings
+            // changes must not keep whatever bounds it had before, or it stays mis-sized/mis-placed
+            let _ = screen::fill_monitor(&existing, &monitors[index]);
             let _ = existing.show();
             continue;
         }
@@ -138,6 +141,9 @@ async fn apply(app: &AppHandle, entries: &[WorldScreen]) -> Result<(), String> {
         let window = WebviewWindowBuilder::new(app, label(index), WebviewUrl::App("index.html".into()))
             .title("MemoryCore Castle - World")
             .decorations(false)
+            // like Castle's own window: no resize border or shadow, or Windows grows the window past the screen
+            .resizable(false)
+            .shadow(false)
             .skip_taskbar(true)
             .visible(false)
             .initialization_script(&format!("window.__CASTLE_VIEW__ = {init};"))
@@ -230,6 +236,8 @@ pub async fn world_identify(app: AppHandle, index: usize) -> Result<(), String> 
     let window = builder
         .title("MemoryCore Castle - Identify")
         .decorations(false)
+        .resizable(false)
+        .shadow(false)
         .always_on_top(true)
         .skip_taskbar(true)
         .focused(false)
