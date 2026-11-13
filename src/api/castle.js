@@ -167,7 +167,7 @@ export const memberSignOut = () => invoke('member_sign_out')
 export const roomCompanionIn = (on) => invoke('room_companion_in', { on })
 
 // The MemoryCore Foundation room (keys stay in the core). Refusals come back as { kind, message }.
-export const roomMe = () => invoke('room_me')
+export const roomMe = (who) => invoke('room_me', { who })
 export const roomLines = (after, wait) => invoke('room_lines', { after, wait })
 export const roomPresence = () => invoke('room_presence')
 export const roomPost = (text, who) => invoke('room_post', { text, who })
@@ -177,6 +177,7 @@ export const roomAvatar = (token) => invoke('room_avatar', { token })
 export const roomMine = () => invoke('room_mine')
 // path = a picture the member chose, or null for back to their Google picture; companion = its picture
 export const roomFaceSet = (path, companion = false) => invoke('room_face_set', { path, companion })
+export const roomNameSet = (name) => invoke('room_name_set', { name })
 // after the companion's name or picture changes in Settings: the room is brought up to date
 // ({ inRoom, renamed, face }; inRoom false = the companion is not in the room, nothing to do)
 export const roomCompanionRefresh = () => invoke('room_companion_refresh')

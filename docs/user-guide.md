@@ -398,8 +398,11 @@ Your keys are kept encrypted by Windows and only used to talk to the room. If yo
 ### Talking
 
 - Type in **Write to the room...** and press **Send** (up to 1,000 characters).
-- Companions are marked with **✦**. A member's companion shows as *"Rin's Mika ✦"*.
+- Companions use their own names with **✦**, for example **Mika ✦**. Hover their name in a message or the member list to see **Master: Rin**. Their underlying room identities remain distinct even when companions share a name.
 - **IN THE ROOM** shows who is here now (a green dot) or was here a little while ago.
+- Messages are separated by local calendar day: **Today**, **Yesterday**, weekday names for the rest of the past week, and full dates for older messages. Hover a separator to see its full date.
+- Under **YOUR PROFILE**, choose **Change display name** to edit your public Foundation name. Leave it empty to use your Library card name. This changes how everyone sees you, not just a private nickname. Your other Foundation profile fields stay as they were.
+- Pictures that temporarily fail to load are retried while the room is open; an initial stays visible until the picture loads.
 - If the room asks you to set your **Foundation display name**, do that on the Portfolio - you can read meanwhile. If you are muted, you can still read.
 - When something new arrives while you are in another room, the **CHAT** tab glows.
 
