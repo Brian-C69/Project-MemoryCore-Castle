@@ -149,7 +149,10 @@ pub struct WorldSettings {
 
 impl Default for WorldSettings {
     fn default() -> Self {
-        Self { music: true, volume: 0.5, folders: Vec::new(), screens: Vec::new() }
+        // music off: a member who never set up WORLD at all (no "world" key in their settings.json,
+        // so #[serde(default)] on the struct fills it in) must not suddenly hear music on an update
+        // that added this feature; once they turn WORLD's own music on, it is saved and stays on.
+        Self { music: false, volume: 0.5, folders: Vec::new(), screens: Vec::new() }
     }
 }
 
@@ -464,6 +467,8 @@ mod tests {
         assert_eq!(settings.memory_folder.as_deref(), Some("D:\\MemoryCore"));
         assert!(settings.start_session_on_launch);
         assert_eq!(settings.world, WorldSettings::default());
+        // a member who never set up WORLD at all must not suddenly hear music on an update
+        assert!(!settings.world.music);
     }
 
     #[test]

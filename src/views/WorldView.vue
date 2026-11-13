@@ -305,7 +305,7 @@ watch(
           <span class="spacer"></span>
           <span v-if="saved" class="good">{{ saved }}</span>
           <!-- the world's music: on / off and how loud, beside the screens it plays on -->
-          <span v-if="settings" class="music" title="Plays on the first screen showing a world: Castle's own music, then the songs your companion makes.">
+          <span v-if="settings" class="music" title="Plays on any Castle tab, even minimised: Castle's own music, then the songs your companion makes. Steps aside the moment a world window opens on another screen.">
             <span class="music-label">MUSIC</span>
             <button :class="{ primary: settings.world.music }" @click="saveMusic({ music: !settings.world.music })">{{ settings.world.music ? 'on' : 'off' }}</button>
             <input type="range" min="0" max="1" step="0.05" :value="settings.world.volume" aria-label="Music volume" @input="liveMusic({ volume: +$event.target.value })" @change="saveMusic({ volume: +$event.target.value })" />
