@@ -28,6 +28,10 @@ function take(payload) {
   lead.value = !!payload.lead
   music.enabled = !!payload.music
   music.volume = payload.volume ?? music.volume
+  // A window that unloaded while covered and silent (lead but music was off) only ever reloads on
+  // seen(true) otherwise - but it can stay covered forever while the member just turns music on, in
+  // which case it must reload now to actually play, not wait for the member to look at that screen.
+  if (lead.value && music.enabled) unloaded.value = false
 }
 
 function seen(on) {

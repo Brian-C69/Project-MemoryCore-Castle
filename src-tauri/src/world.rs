@@ -176,7 +176,9 @@ pub async fn castle_move_to_screen(app: AppHandle, index: usize, store: State<'_
     let entries = next.world.screens.clone();
     *store.current.lock().unwrap() = next;
     screen::fill_work_area(&window, &monitor).map_err(|_| "Castle could not be moved.".to_string())?;
-    if entries.iter().any(|e| e.on) {
+    // restore() respects the WORLD room being off; this must too, or moving Castle while the room
+    // is switched off reopens world windows that close_all() closed.
+    if store.get().room_on("world") && entries.iter().any(|e| e.on) {
         apply(&app, &entries).await?;
     }
     Ok(())
@@ -206,8 +208,11 @@ pub async fn world_music(app: AppHandle, music: Option<bool>, volume: Option<f32
     }
     settings::save(&store.path, &next).map_err(|_| "The music setting could not be saved.".to_string())?;
     let entries = next.world.screens.clone();
+    let world_room_on = next.room_on("world");
     *store.current.lock().unwrap() = next;
-    if entries.iter().any(|e| e.on) {
+    // restore() respects the WORLD room being off; this must too, or flipping the top-bar music
+    // switch while the room is off reopens world windows that close_all() closed.
+    if world_room_on && entries.iter().any(|e| e.on) {
         apply(&app, &entries).await?;
     }
     Ok(())

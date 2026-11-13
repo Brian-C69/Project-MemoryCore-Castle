@@ -106,6 +106,10 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
         settings.db_external = current.db_external;
         // the screen Castle lives on is changed only by its own button
         settings.castle_screen = current.castle_screen;
+        // the WORLD music switch and its volume are changed only by their own controls (the top bar
+        // and the WORLD room); a Settings page save holding an older copy must not bring them back
+        settings.world.music = current.world.music;
+        settings.world.volume = current.world.volume;
     }
     settings::save(&store.path, &settings).map_err(|_| "The settings could not be saved.".to_string())?;
     *store.startup_note.lock().unwrap() = startup::sync(&app, settings.start_with_windows);
