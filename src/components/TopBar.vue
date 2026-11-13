@@ -1,4 +1,6 @@
 <script setup>
+import TopMusic from './TopMusic.vue'
+
 defineProps({
   tabs: { type: Array, required: true },
   active: { type: String, required: true },
@@ -26,6 +28,7 @@ defineEmits(['select', 'settings', 'hide'])
       </button>
     </nav>
     <div class="actions">
+      <TopMusic />
       <button class="action" title="Settings" aria-label="Settings" @click="$emit('settings')">&#9881;</button>
       <button class="action" title="Hide to tray" aria-label="Hide to tray" @click="$emit('hide')">&#8211;</button>
     </div>

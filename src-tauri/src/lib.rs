@@ -227,6 +227,7 @@ pub fn run() {
             story::story_beat,
             world::world_screens,
             world::world_apply,
+            world::world_music,
             world::world_identify,
             quota::cli_quota,
             rooms::rooms_apply,
