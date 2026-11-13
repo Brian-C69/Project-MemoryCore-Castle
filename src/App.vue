@@ -346,7 +346,7 @@ watch(settingsStamp, () => {
           @settings="openSettings"
           @setup="openSetup"
         >
-          <template #header><CompanionHeader :name="companion" :cli-label="cliLabel" :avatar="avatar" /></template>
+          <template #header="{ write, running }"><CompanionHeader :name="companion" :cli-label="cliLabel" :avatar="avatar" :write="write" :running="running" /></template>
         </TerminalPanel>
         <div class="widget-slot" :style="placeStyle(widgets.clock)"><ClockWidget :size="widgets.clock?.size ?? 'm'" /></div>
         <div class="widget-slot" :style="placeStyle(widgets.gauges)"><GaugeWidget /></div>
