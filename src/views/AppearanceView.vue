@@ -61,15 +61,23 @@ function styleLine(file) {
   return `Use the drawing style in %CASTLE_STYLES%\\${file} and fill its slots from ${path('companion.md')}.`
 }
 
-async function drawPortrait() {
+// fromImage: true asks to improve the existing portrait; false (also the only option before one
+// exists) asks for a fresh drawing from companion.md's own words, ignoring any old portrait - once
+// a portrait exists these were one button that could only improve it, with no way back to the
+// words after they changed.
+async function drawPortrait(fromImage) {
   const ok = await attempt('Asking…', () =>
     askCompanion(
       [
         `Please draw your standard appearance for Castle's APPEARANCE room.`,
         styleLine('standard-appearance.md'),
-        referenceLine(look.value.portrait),
+        fromImage
+          ? referenceLine(look.value.portrait)
+          : `Draw fresh from the words in ${path('companion.md')}; do not use the existing portrait image as a reference.`,
         improvementLine(changes.value),
-        'Keep the original reference unchanged; preserve a backup before replacing any existing output.',
+        fromImage
+          ? 'Keep the original reference unchanged; preserve a backup before replacing any existing output.'
+          : 'Preserve a backup of the existing output before replacing it.',
         `Save it as ${path('portrait.png')}.`,
         'Tell me the cost first and ask before you draw.',
       ],
@@ -83,19 +91,25 @@ async function drawSheet(kind, item) {
   const dir = kind === 'outfit' ? 'wardrobe' : 'hairstyles'
   const note = kind === 'outfit' ? 'outfit.md' : 'hair.md'
   const style = kind === 'outfit' ? 'outfit-turnaround.md' : 'hair-turnaround.md'
+  const itemReference = item.reference || item.sheet
   const ok = await attempt('Asking…', () =>
     askCompanion(
       [
         `Please draw the ${kind === 'outfit' ? 'outfit' : 'hairstyle'} turnaround (front, side, back) for "${item.name}".`,
         styleLine(style),
         `The ${kind === 'outfit' ? 'outfit' : 'hairstyle'} is described in ${path(dir, item.id, note)}.`,
-        referenceLine(item.reference || item.sheet || look.value.portrait),
+        // The portrait, when there is one, is always the real image-edit reference (castle-image.ps1
+        // takes only one -Reference, and identity must win): an outfit or hairstyle photo must never
+        // replace it as the edit reference, or it can change the companion's face. The item's own
+        // photo, if any, is only ever mentioned for inspection, never passed as -Reference itself.
+        referenceLine(look.value.portrait || itemReference),
+        itemReference && look.value.portrait ? `Also inspect this image for the ${kind} itself, but do not use it as -Reference: ${JSON.stringify(itemReference)}.` : '',
         improvementLine(changes.value),
-        look.value.portrait ? `Also inspect the standard look for identity: ${JSON.stringify(look.value.portrait)}.` : 'Keep the face as companion.md describes it.',
+        look.value.portrait ? '' : 'Keep the face as companion.md describes it.',
         'Keep imported references unchanged and preserve a backup before replacing any existing output.',
         `Save it as ${path(dir, item.id, 'turnaround.png')}.`,
         'Tell me the cost first and ask before you draw.',
-      ],
+      ].filter(Boolean),
       props.companion,
     ),
   )
@@ -133,16 +147,22 @@ function after() {
 }
 
 // Adds the outfit or hairstyle folder with its words, then asks the companion to draw its sheet.
+// appearanceNew() always makes the folder before the import can fail, so once it has run for this
+// form, pressing Add again must not call it a second time - that would make a second, "-2" folder
+// for the same item. createdId remembers it across attempts, and clears once the form is reset.
+const createdId = ref(null)
 async function create() {
   const kind = form.value.kind
   let item = null
   const ok = await attempt('Adding…', async () => {
-    const id = await appearanceNew(kind, form.value.name, form.value.description)
+    const id = createdId.value ?? (await appearanceNew(kind, form.value.name, form.value.description))
+    createdId.value = id
     if (formPicture.value) await appearanceImport(kind, id, formPicture.value)
     await load()
     item = (kind === 'outfit' ? look.value.wardrobe : look.value.hairstyles).find((i) => i.id === id)
     form.value = { kind: '', name: '', description: '' }
     formPicture.value = ''
+    createdId.value = null
   })
   if (ok && item) done.value = 'Added. You can wear this item or draw its turnaround when ready.'
 }
@@ -167,6 +187,7 @@ async function pickFormPicture() {
 function newForm(kind) {
   form.value = { kind, name: '', description: '' }
   formPicture.value = ''
+  createdId.value = null
 }
 
 async function wear(kind, id) {
@@ -212,7 +233,8 @@ watch(() => props.stamp, load)
         </button>
         <div v-else class="portrait empty"><span class="crystal">◆</span></div>
         <button :disabled="!!busy" @click="upload('standard')">{{ look.portrait ? 'Replace image' : 'Upload image' }}</button>
-        <button class="primary" :disabled="!!busy" @click="drawPortrait">{{ look.portrait ? 'Improve from image' : 'Draw the standard look' }}</button>
+        <button class="primary" :disabled="!!busy" @click="drawPortrait(false)">{{ look.portrait ? 'Redraw from words' : 'Draw the standard look' }}</button>
+        <button v-if="look.portrait" :disabled="!!busy" @click="drawPortrait(true)">Improve from image</button>
         <button :disabled="!!busy" @click="tryOn">Try on today's look</button>
         <p class="hint">Upload PNG, JPEG or WebP (up to 25 MB). Uploading is free. Drawing uses your companion; API generation requires your ChatGPT key and cost confirmation.</p>
         <p class="hint">The look in words lives in <code>appearance/companion.md</code> - ask {{ companion }} to change it, or edit it yourself.</p>
