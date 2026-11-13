@@ -256,9 +256,12 @@ impl PtyHost {
         }
     }
 
-    /// Types one word and Enter, the way a quick action does - Castle's knock, which never counts
-    /// as the member typing.
+    /// Types one word and Enter, the way a quick action does - Castle's knock, which never shows as
+    /// the member typing in the idle-time UI. It still marks `input_time`: the CLI starts a real
+    /// turn from it, so a provider switch landing right after must not see an untouched session and
+    /// kill that turn mid-response (`nothing_typed_since`, used by `safe_boundary`).
     pub fn knock(&self, word: &str) -> Result<(), String> {
+        self.mark_input();
         self.write_quietly(word.as_bytes())?;
         std::thread::sleep(std::time::Duration::from_millis(150));
         self.write_quietly(b"\r")
@@ -317,6 +320,16 @@ mod tests {
         assert_eq!(shim.get_argv()[2].to_str(), Some("C:\\npm\\codex.cmd"));
         let program = launch_command(Path::new("C:\\bin\\claude.exe"), Path::new("C:\\"), &[], &[]);
         assert_eq!(program.get_argv()[0].to_str(), Some("C:\\bin\\claude.exe"));
+    }
+
+    #[test]
+    fn knock_marks_input_so_a_switch_will_not_kill_it_mid_turn() {
+        let host = PtyHost::default();
+        assert!(host.last_input_time().is_none());
+        // no session is running, so the write itself fails; input_time must still be marked, since
+        // it is `mark_input()`, not the write, that a provider switch's safe_boundary check reads
+        assert!(host.knock("plan").is_err());
+        assert!(host.last_input_time().is_some());
     }
 
     #[test]

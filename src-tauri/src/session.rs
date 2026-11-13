@@ -269,9 +269,11 @@ pub fn terminal_state(room: Option<String>, store: State<SettingsStore>, main: S
 /// The opening line Castle gives a session when the member presses Wake: neither CLI does anything
 /// until its first message, so without it a fresh session sits blank instead of greeting. The
 /// companion's own instructions (CLAUDE.md / AGENTS.md) say what to do on a first turn; this only
-/// starts one. It lands in the conversation record like something the member said, so the provider
-/// handoff leaves it out.
-pub const WAKE_PROMPT: &str = "Hi, I just woke you. Please load your memory and greet me.";
+/// starts one. Memory is already in the system prompt by the time this runs (`prepare_boot` /
+/// `wake_vars`), so it does not ask for memory to be loaded again - that would repeat real work for
+/// nothing. It lands in the conversation record like something the member said, so `remember()`
+/// keeps it out of the journal (and so out of Chat), and the provider handoff leaves it out too.
+pub const WAKE_PROMPT: &str = "Hi, please greet me.";
 
 /// What to start the CLI with: only the Wake button asks for the greeting, and only for the main
 /// session - not a wake Castle does itself at launch, and not the STORY room.
@@ -340,10 +342,16 @@ pub fn terminal_write(data: String, room: Option<String>, main: State<MainHost>,
     if is_terminal_reply(&data) {
         return host(Room::named(room.as_deref()), &main, &story).reply(data.as_bytes());
     }
-    let switching = control.0.try_lock().map_err(|_| "Provider is changing. Your message has not been sent.")?;
-    if Room::named(room.as_deref()) == Room::Main && switching.phase == "switching" { return Err("Provider is switching. Your message has not been sent.".into()); }
-    if Room::named(room.as_deref()) == Room::Main && images.0.lock().unwrap().iter().any(|j| j.phase == "working") {
-        return Err("An image job is using this memory. Your message has not been sent; retry when it finishes.".into());
+    // Only the Main room is affected by a provider switch or an image job; STORY must not share
+    // these locks at all, or a long switch/job (the switch loop holds Control through the whole
+    // auth probe, kill and wake) silently drops every STORY keystroke too, not just Main's.
+    if Room::named(room.as_deref()) == Room::Main {
+        let switching = control.0.try_lock().map_err(|_| "Provider is changing. Your message has not been sent.")?;
+        if switching.phase == "switching" { return Err("Provider is switching. Your message has not been sent.".into()); }
+        drop(switching);
+        if images.0.lock().unwrap().iter().any(|j| j.phase == "working") {
+            return Err("An image job is using this memory. Your message has not been sent; retry when it finishes.".into());
+        }
     }
     host(Room::named(room.as_deref()), &main, &story).write(data.as_bytes())
 }

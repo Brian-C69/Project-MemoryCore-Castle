@@ -81,6 +81,11 @@ pub fn remember(
         entries: read_history(store, room)?,
     };
     for entry in entries {
+        // WAKE_PROMPT is Castle's own trigger, not something the member typed; it must not appear
+        // as a member bubble in Chat, in the journal, or later in a provider handoff.
+        if entry.role == "member" && entry.text.trim_start().starts_with(crate::session::WAKE_PROMPT) {
+            continue;
+        }
         entry.id = format!("{}-{generation}-{}", provider.command(), entry.id);
         if !journal.entries.iter().any(|e| e.id == entry.id) {
             journal.entries.push(entry.clone());
@@ -319,11 +324,15 @@ pub fn image_request(
             return Err("Image output escapes the memory folder.".into());
         }
     }
+    // Fenced to the memory folder: without this, any image path on disk could be handed to Codex
+    // as a reference, regardless of where it actually came from in the member's own files.
+    let mut fenced_references = Vec::with_capacity(references.len());
     for reference in &references {
-        let p = Path::new(reference);
-        if !p.is_file() || !crate::files::mime(p).is_some_and(|m| m.starts_with("image/")) {
+        let file = crate::files::fenced(&memory, reference).map_err(|_| "A reference image is outside what Castle may use.".to_string())?;
+        if !crate::files::mime(&file).is_some_and(|m| m.starts_with("image/")) {
             return Err("A reference image is missing or unsupported.".into());
         }
+        fenced_references.push(file.display().to_string());
     }
     let folder = store.folder().join("image-jobs");
     std::fs::create_dir_all(&folder).map_err(|_| "The prompt folder could not be created.")?;
@@ -333,7 +342,7 @@ pub fn image_request(
         format!(
             "{brief}\n\nOutput: {}\nReferences: {:?}\n",
             target.display(),
-            references
+            fenced_references
         ),
     )
     .map_err(|_| "The image prompt could not be saved.")?;
@@ -343,7 +352,7 @@ pub fn image_request(
         message: "Waiting for the main conversation to finish its turn.".into(),
         output: target.display().to_string(),
         brief,
-        references,
+        references: fenced_references,
         memory,
         prompt,
     };
@@ -410,7 +419,8 @@ pub fn start_images(app: &AppHandle) {
             jobs[index].clone()
         };
         drop(switch);
-        let result = run_image(&job);
+        let styles = app.path().resource_dir().ok().map(|d| d.join("styles"));
+        let result = run_image(&job, styles.as_deref());
         let mut jobs = images.0.lock().unwrap();
         jobs[index].phase = if result.is_ok() {
             "completed"
@@ -425,7 +435,7 @@ pub fn start_images(app: &AppHandle) {
     });
 }
 
-fn run_image(job: &ImageJob) -> Result<(), String> {
+fn run_image(job: &ImageJob, styles: Option<&Path>) -> Result<(), String> {
     let auth = auth_output(Cli::Codex)
         .ok_or("Codex sign-in could not be verified. Prompt saved; no API fallback.")?;
     let mode = format!(
@@ -439,22 +449,21 @@ fn run_image(job: &ImageJob) -> Result<(), String> {
     }
     let program = crate::env::find_on_path("codex")
         .ok_or("Codex is unavailable. The prompt is saved for retry; no API fallback was used.")?;
-    run_image_with_program(job, &program)
+    run_image_with_program(job, &program, styles, IMAGE_JOB_TIMEOUT)
 }
 
-fn run_image_with_program(job: &ImageJob, program: &Path) -> Result<(), String> {
+/// A hung Codex process must not lock the main chat forever: killed and reported after this long.
+const IMAGE_JOB_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
+fn run_image_with_program(job: &ImageJob, program: &Path, styles: Option<&Path>, timeout: std::time::Duration) -> Result<(), String> {
     use std::io::Write;
-    let mut command = if program
-        .extension()
-        .is_some_and(|x| x.eq_ignore_ascii_case("cmd"))
-    {
-        let mut c = std::process::Command::new("cmd.exe");
-        c.arg("/c").arg(program);
-        c
-    } else {
-        std::process::Command::new(program)
-    };
-    command.args(["exec", "--skip-git-repo-check", "-c", "forced_login_method=chatgpt", "-c", "model_provider=openai"]);
+    // Rust's own std library escapes a .cmd/.bat target's arguments correctly for cmd.exe's second
+    // parsing pass (the class of bug fixed as CVE-2024-24576); wrapping it ourselves with a manual
+    // `cmd.exe /c <program>` bypasses that fix, since every later .arg() (including reference paths
+    // the member picked, which may contain "&" or other cmd metacharacters) would then be handed to
+    // our own unescaped cmd.exe invocation instead. Call the program directly in every case.
+    let mut command = std::process::Command::new(program);
+    command.args(["exec", "--sandbox", "workspace-write", "--skip-git-repo-check", "-c", "forced_login_method=chatgpt", "-c", "model_provider=openai"]);
     for reference in &job.references {
         command.arg("--image").arg(reference);
     }
@@ -466,6 +475,10 @@ fn run_image_with_program(job: &ImageJob, program: &Path) -> Result<(), String> 
         .stderr(std::process::Stdio::null());
     for name in crate::env::NEVER_INHERITED {
         command.env_remove(name);
+    }
+    // the drawing styles (standard appearance, turnarounds, try-on), same as a normal chat session
+    if let Some(styles) = styles {
+        command.env("CASTLE_STYLES", styles);
     }
     #[cfg(windows)]
     {
@@ -500,10 +513,20 @@ fn run_image_with_program(job: &ImageJob, program: &Path) -> Result<(), String> 
         let _ = child.wait();
         return Err("Codex did not accept the request. Prompt saved.".into());
     }
-    // No forced timeout: an active image task is never interrupted automatically.
-    let status = child
-        .wait()
-        .map_err(|_| "Codex stopped unexpectedly. Prompt saved.")?;
+    // Polled rather than a blocking wait(), so a hung Codex process cannot lock the main chat
+    // (which this job's "working" phase blocks writes to) past IMAGE_JOB_TIMEOUT.
+    let started = std::time::Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().map_err(|_| "Codex stopped unexpectedly. Prompt saved.")? {
+            break status;
+        }
+        if started.elapsed() > timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("Codex did not finish in time and was stopped. Prompt saved.".into());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    };
     if !status.success() {
         return Err("Codex could not complete the image (sign-in, capability or permissions may be needed). Prompt saved; no API fallback.".into());
     }
@@ -785,6 +808,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
     #[test]
+    fn castles_own_wake_prompt_never_reaches_the_journal_or_chat() {
+        let root = temp("wake-prompt-filtered");
+        let store = SettingsStore::open(&root);
+        store.current.lock().unwrap().memory_folder = Some("memory-wake".into());
+        let mut wake = entry("wake");
+        wake.text = crate::session::WAKE_PROMPT.into();
+        let mut real = entry("real");
+        real.text = "Plan the quarterly invoice.".into();
+        remember(&store, Room::Main, Cli::Claude, 1, &mut [wake, real]).unwrap();
+        let saved = history(&store, Room::Main);
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].text, "Plan the quarterly invoice.");
+        let _ = std::fs::remove_dir_all(root);
+    }
+    #[test]
     fn corrupt_history_is_not_overwritten() {
         let root = temp("corrupt");
         let store = SettingsStore::open(&root);
@@ -849,13 +887,62 @@ mod tests {
             memory: root.clone(),
             prompt: root.join("saved.prompt.md"),
         };
-        assert!(run_image_with_program(&job, &program).is_ok());
-        assert!(run_image_with_program(&job, &program).is_err()); // unchanged output is not success
+        assert!(run_image_with_program(&job, &program, None, IMAGE_JOB_TIMEOUT).is_ok());
+        assert!(run_image_with_program(&job, &program, None, IMAGE_JOB_TIMEOUT).is_err()); // unchanged output is not success
         std::fs::remove_file(root.join("output.png")).unwrap();
         std::fs::write(&program, "@echo off\r\nexit /b 1\r\n").unwrap();
-        assert!(run_image_with_program(&job, &program)
+        assert!(run_image_with_program(&job, &program, None, IMAGE_JOB_TIMEOUT)
             .unwrap_err()
             .contains("no API fallback"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+    #[test]
+    #[cfg(windows)]
+    fn a_hung_image_job_is_killed_and_reported_instead_of_locking_the_chat_forever() {
+        let root = temp("hanging fake codex");
+        // "ping -n" rather than a real sleep: easy to kill, needs no extra process tree handling.
+        let program = root.join("fake codex.cmd");
+        std::fs::write(&program, "@echo off\r\nping -n 120 127.0.0.1 >nul\r\n").unwrap();
+        let job = ImageJob {
+            id: "hung".into(),
+            phase: "working".into(),
+            message: String::new(),
+            output: root.join("output.png").display().to_string(),
+            brief: "Offline test only".into(),
+            references: vec![],
+            memory: root.clone(),
+            prompt: root.join("saved.prompt.md"),
+        };
+        let started = std::time::Instant::now();
+        let error = run_image_with_program(&job, &program, None, std::time::Duration::from_millis(300)).unwrap_err();
+        assert!(error.contains("did not finish in time"));
+        // generous margin over the 300ms timeout, still far under the real 5-minute ping
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        let _ = std::fs::remove_dir_all(root);
+    }
+    #[test]
+    #[cfg(windows)]
+    fn the_drawing_styles_folder_reaches_the_image_job_as_castle_styles() {
+        let root = temp("styles env fake codex");
+        let styles = root.join("styles-dir");
+        std::fs::create_dir_all(&styles).unwrap();
+        let program = root.join("fake codex.cmd");
+        // writes what the job actually saw, so the test reads CASTLE_STYLES back from the child
+        std::fs::write(&program, "@echo off\r\n>\"%~dp0seen.txt\" echo %CASTLE_STYLES%\r\ncopy /y nul \"%~dp0output.png\" >nul\r\nexit /b 0\r\n").unwrap();
+        let job = ImageJob {
+            id: "styles".into(),
+            phase: "working".into(),
+            message: String::new(),
+            output: root.join("output.png").display().to_string(),
+            brief: "Offline test only".into(),
+            references: vec![],
+            memory: root.clone(),
+            prompt: root.join("saved.prompt.md"),
+        };
+        // the output is not a real image, so this run reports an error, but the env var still lands
+        let _ = run_image_with_program(&job, &program, Some(&styles), IMAGE_JOB_TIMEOUT);
+        let seen = std::fs::read_to_string(root.join("seen.txt")).unwrap();
+        assert_eq!(seen.trim(), styles.display().to_string());
         let _ = std::fs::remove_dir_all(root);
     }
     #[test]
