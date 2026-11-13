@@ -110,21 +110,37 @@ async function refresh({ fresh = false } = {}) {
 
 // Every change goes out whole: the rows for the screens here, plus the saved ones for screens
 // that are unplugged right now (so they come back as they were).
+// Only one send runs at a time. Click fast through the world cards and the screen would otherwise
+// reload every world in between, one after another, and trail far behind: while one send is out, the
+// newer choices only mark "again", and the loop sends the latest rows once - the stale ones are skipped.
+let sending = false
+let again = false
 async function apply() {
-  problem.value = ''
-  const here = rows.value.map((r) => r.entry)
-  const away = (settings.value?.world?.screens ?? []).filter((e) => !rows.value.some((r) => r.screen.name === e.screen))
+  if (sending) {
+    again = true
+    return
+  }
+  sending = true
   try {
-    const list = await worldApply([...here, ...away])
-    settings.value = { ...settings.value, world: { ...settings.value.world, screens: list } }
-    screens.value = await worldScreens()
-    buildRows(true)
-    window.dispatchEvent(new CustomEvent('castle-music', { detail: { screens: true } })) // hand the music over
-    saved.value = 'Saved'
-    clearTimeout(savedTimer)
-    savedTimer = setTimeout(() => (saved.value = ''), 4000)
+    do {
+      again = false
+      problem.value = ''
+      const here = rows.value.map((r) => r.entry)
+      const away = (settings.value?.world?.screens ?? []).filter((e) => !rows.value.some((r) => r.screen.name === e.screen))
+      const list = await worldApply([...here, ...away])
+      settings.value = { ...settings.value, world: { ...settings.value.world, screens: list } }
+      if (again) continue // newer choices are waiting: send those, no need to redraw the old ones
+      screens.value = await worldScreens()
+      buildRows(true)
+      window.dispatchEvent(new CustomEvent('castle-music', { detail: { screens: true } })) // hand the music over
+      saved.value = 'Saved'
+      clearTimeout(savedTimer)
+      savedTimer = setTimeout(() => (saved.value = ''), 4000)
+    } while (again)
   } catch (reason) {
     problem.value = String(reason)
+  } finally {
+    sending = false
   }
 }
 
