@@ -271,7 +271,7 @@ pub fn terminal_state(room: Option<String>, store: State<SettingsStore>, main: S
 /// companion's own instructions (CLAUDE.md / AGENTS.md) say what to do on a first turn; this only
 /// starts one. It lands in the conversation record like something the member said, so the provider
 /// handoff leaves it out.
-pub const WAKE_PROMPT: &str = "Hi, I just woke you. Please load your memory and greet me.";
+pub const WAKE_PROMPT: &str = "Hi, I just woke you. Please greet me.";
 
 /// What to start the CLI with: only the Wake button asks for the greeting, and only for the main
 /// session - not a wake Castle does itself at launch, and not the STORY room.
@@ -337,15 +337,29 @@ pub fn is_terminal_reply(data: &str) -> bool {
 
 #[tauri::command]
 pub fn terminal_write(data: String, room: Option<String>, main: State<MainHost>, story: State<StoryHost>, images: State<crate::providers::Images>, control: State<crate::providers::Control>) -> Result<(), String> {
+    let room = Room::named(room.as_deref());
     if is_terminal_reply(&data) {
-        return host(Room::named(room.as_deref()), &main, &story).reply(data.as_bytes());
+        return host(room, &main, &story).reply(data.as_bytes());
     }
-    let switching = control.0.try_lock().map_err(|_| "Provider is changing. Your message has not been sent.")?;
-    if Room::named(room.as_deref()) == Room::Main && switching.phase == "switching" { return Err("Provider is switching. Your message has not been sent.".into()); }
-    if Room::named(room.as_deref()) == Room::Main && images.0.lock().unwrap().iter().any(|j| j.phase == "working") {
-        return Err("An image job is using this memory. Your message has not been sent; retry when it finishes.".into());
+    // A provider switch and a drawing only concern the main session: the STORY room never waits on them.
+    if room == Room::Main {
+        let switching = control.0.try_lock().map_err(|_| "Provider is changing. Your message has not been sent.")?;
+        if switching.phase == "switching" {
+            return Err("Provider is switching. Your message has not been sent.".into());
+        }
+        drop(switching);
+        let drawing = images.0.lock().unwrap().iter().any(|j| j.phase == "working");
+        if drawing && holds_back_while_drawing(&data) {
+            return Err("A picture is being drawn in this memory. Your message has not been sent; send it when the drawing finishes, or press Stop on the drawing.".into());
+        }
     }
-    host(Room::named(room.as_deref()), &main, &story).write(data.as_bytes())
+    host(room, &main, &story).write(data.as_bytes())
+}
+
+/// While Codex draws in the memory folder, only a message being sent (Enter) waits: typing, Ctrl+C,
+/// Esc and the arrows still reach the session, so it is never locked.
+fn holds_back_while_drawing(data: &str) -> bool {
+    data.contains('\r')
 }
 
 #[tauri::command]

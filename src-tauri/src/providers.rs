@@ -50,7 +50,16 @@ fn journal_file(store: &SettingsStore, room: Room) -> PathBuf {
 }
 
 pub fn history(store: &SettingsStore, room: Room) -> Vec<ChatEntry> {
-    read_history(store, room).unwrap_or_default()
+    let mut entries = read_history(store, room).unwrap_or_default();
+    entries.retain(|e| !castle_wrote(e));
+    entries
+}
+
+/// A line Castle typed into the session itself (the wake greeting, a provider handoff), not the
+/// member: Chat never shows it as their bubble.
+pub(crate) fn castle_wrote(entry: &ChatEntry) -> bool {
+    let text = entry.text.trim_start();
+    entry.role == "member" && (text.starts_with(crate::session::WAKE_PROMPT) || text.starts_with(HANDOFF_PROMPT))
 }
 
 fn read_history(store: &SettingsStore, room: Room) -> Result<Vec<ChatEntry>, String> {
@@ -215,6 +224,9 @@ pub struct ImageJob {
     references: Vec<String>,
     memory: PathBuf,
     prompt: PathBuf,
+    /// The member pressed Stop while it was drawing: the worker ends Codex at its next look.
+    #[serde(skip)]
+    stop_asked: bool,
 }
 
 #[tauri::command]
@@ -244,9 +256,35 @@ fn persist_jobs(store: &SettingsStore, jobs: &[ImageJob]) -> Result<(), String> 
     std::fs::rename(pending, file).map_err(|_| "Image queue could not be published.".into())
 }
 
-/// A request that is not being worked on: it can be cleared from the list.
+/// A request that is done with, drawn or not: it can be cleared from the list. Named one by one, so
+/// a phase added later stays on the list until it is named here.
 fn finished(phase: &str) -> bool {
-    !matches!(phase, "queued" | "working" | "switching")
+    matches!(phase, "completed" | "prompt-saved")
+}
+
+/// Stops the drawing that is running: Codex is ended and the prompt is kept for a retry.
+#[tauri::command]
+pub fn image_cancel(id: String, images: State<Images>) -> Result<(), String> {
+    let mut jobs = images.0.lock().unwrap();
+    let job = jobs
+        .iter_mut()
+        .find(|j| j.id == id)
+        .ok_or("Image request not found.")?;
+    if job.phase != "working" {
+        return Err("Only a drawing in progress can be stopped.".into());
+    }
+    job.stop_asked = true;
+    job.message = "Stopping the drawing...".into();
+    Ok(())
+}
+
+/// The longest a drawing may run before Castle ends it and keeps the prompt for a retry.
+const IMAGE_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
+/// Characters `cmd.exe /c` reads as its own (a path holding one would be split or run), refused
+/// when Codex is started through its `.cmd` launcher.
+fn safe_for_cmd(text: &str) -> bool {
+    !text.chars().any(|c| matches!(c, '&' | '|' | '<' | '>' | '^' | '%' | '"' | '!'))
 }
 
 /// Takes finished requests off the list: the one named, or all of them when no id is given. A
@@ -359,6 +397,10 @@ pub fn image_request(
         if !p.is_file() || !crate::files::mime(p).is_some_and(|m| m.starts_with("image/")) {
             return Err("A reference image is missing or unsupported.".into());
         }
+        // only the companion's own pictures go to Codex, never any file on the computer
+        if !p.canonicalize().is_ok_and(|real| real.starts_with(&memory)) {
+            return Err("A reference image must be inside the memory folder.".into());
+        }
     }
     let folder = store.folder().join("image-jobs");
     std::fs::create_dir_all(&folder).map_err(|_| "The prompt folder could not be created.")?;
@@ -382,6 +424,7 @@ pub fn image_request(
         references,
         memory,
         prompt,
+        stop_asked: false,
     };
     let mut jobs = images.0.lock().unwrap();
     jobs.push(job.clone());
@@ -404,7 +447,10 @@ pub fn start_images(app: &AppHandle) {
         }
         *app.state::<Images>().0.lock().unwrap() = recovered;
     }
+    let styles = app.path().resource_dir().ok().map(|dir| dir.join("styles"));
     let app = app.clone();
+    // The list can change while a picture is drawn (Dismiss, Clear finished), so the worker
+    // always finds its request again by id, never by its place in the list.
     std::thread::spawn(move || loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
         let images = app.state::<Images>();
@@ -413,11 +459,11 @@ pub fn start_images(app: &AppHandle) {
             .lock()
             .unwrap()
             .iter()
-            .position(|j| j.phase == "queued");
-        let Some(index) = next else { continue };
+            .find(|j| j.phase == "queued")
+            .map(|j| j.id.clone());
+        let Some(id) = next else { continue };
         let control = app.state::<Control>();
-        let switch = control.0.lock().unwrap();
-        if switch.target.is_some() {
+        if control.0.lock().unwrap().target.is_some() {
             continue;
         }
         let store = app.state::<SettingsStore>();
@@ -427,41 +473,67 @@ pub fn start_images(app: &AppHandle) {
                 .memory_folder
                 .and_then(|p| PathBuf::from(p).canonicalize().ok());
             let mut jobs = images.0.lock().unwrap();
-            if current.as_ref() != Some(&jobs[index].memory) {
-                jobs[index].phase = "prompt-saved".into();
-                jobs[index].message =
-                    "Selected MemoryCore changed; prompt saved for later retry.".into();
+            let Some(job) = jobs.iter_mut().find(|j| j.id == id) else { continue };
+            if current.as_ref() != Some(&job.memory) {
+                job.phase = "prompt-saved".into();
+                job.message = "Selected MemoryCore changed; prompt saved for later retry.".into();
                 let _ = persist_jobs(&store, &jobs);
                 continue;
             }
         }
+        // Reading the record can take a moment; no lock is held meanwhile, so typing is never refused for it.
         if !safe_boundary(&store, &app.state::<MainHost>().0) {
             continue;
         }
         let job = {
+            // held only while the job is marked, so a switch cannot start in between
+            let switch = control.0.lock().unwrap();
+            if switch.target.is_some() {
+                continue;
+            }
             let mut jobs = images.0.lock().unwrap();
-            jobs[index].phase = "working".into();
-            jobs[index].message =
-                "Codex image job is running; main-chat submissions wait until it finishes.".into();
-            jobs[index].clone()
+            let Some(job) = jobs.iter_mut().find(|j| j.id == id && j.phase == "queued") else { continue };
+            job.phase = "working".into();
+            job.stop_asked = false;
+            job.message = "Drawing with Codex. Messages to your companion wait until it finishes; Stop ends it.".into();
+            job.clone()
         };
-        drop(switch);
-        let result = run_image(&job);
+        let stop_asked = || {
+            images
+                .0
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|j| j.id == id && j.stop_asked)
+        };
+        let result = run_image(&job, styles.as_deref(), &stop_asked);
         let mut jobs = images.0.lock().unwrap();
-        jobs[index].phase = if result.is_ok() {
-            "completed"
-        } else {
-            "prompt-saved"
+        if let Some(entry) = jobs.iter_mut().find(|j| j.id == id) {
+            entry.phase = if result.is_ok() { "completed" } else { "prompt-saved" }.into();
+            entry.stop_asked = false;
+            entry.message = result
+                .err()
+                .unwrap_or_else(|| "Image saved. Refresh the room to view it.".into());
         }
-        .into();
-        jobs[index].message = result
-            .err()
-            .unwrap_or_else(|| "Image saved. Refresh the room to view it.".into());
         let _ = persist_jobs(&store, &jobs);
     });
 }
 
-fn run_image(job: &ImageJob) -> Result<(), String> {
+/// Ends the drawing process and everything it started (Codex runs under `cmd.exe` and node).
+fn end_process_tree(child: &mut std::process::Child) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .creation_flags(0x0800_0000)
+            .status();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+fn run_image(job: &ImageJob, styles: Option<&Path>, stop_asked: &dyn Fn() -> bool) -> Result<(), String> {
     let auth = auth_output(Cli::Codex)
         .ok_or("Codex sign-in could not be verified. Prompt saved; no API fallback.")?;
     let mode = format!(
@@ -475,22 +547,33 @@ fn run_image(job: &ImageJob) -> Result<(), String> {
     }
     let program = crate::env::find_on_path("codex")
         .ok_or("Codex is unavailable. The prompt is saved for retry; no API fallback was used.")?;
-    run_image_with_program(job, &program)
+    run_image_with_program(job, &program, styles, stop_asked, IMAGE_TIME_LIMIT)
 }
 
-fn run_image_with_program(job: &ImageJob, program: &Path) -> Result<(), String> {
+fn run_image_with_program(
+    job: &ImageJob,
+    program: &Path,
+    styles: Option<&Path>,
+    stop_asked: &dyn Fn() -> bool,
+    time_limit: std::time::Duration,
+) -> Result<(), String> {
     use std::io::Write;
-    let mut command = if program
+    let through_cmd = program
         .extension()
-        .is_some_and(|x| x.eq_ignore_ascii_case("cmd"))
-    {
+        .is_some_and(|x| x.eq_ignore_ascii_case("cmd"));
+    if through_cmd && !job.references.iter().all(|r| safe_for_cmd(r)) {
+        return Err("A reference picture's path has a character Windows' launcher cannot pass on (& | < > ^ % \" !). Rename the folder or file, then retry. Prompt saved.".into());
+    }
+    let mut command = if through_cmd {
         let mut c = std::process::Command::new("cmd.exe");
         c.arg("/c").arg(program);
         c
     } else {
         std::process::Command::new(program)
     };
-    command.args(["exec", "--skip-git-repo-check", "-c", "forced_login_method=chatgpt", "-c", "model_provider=openai"]);
+    // Codex's own default for `exec` is read-only, which could never save the picture; the memory
+    // folder (where the output must be) is the one place it may write.
+    command.args(["exec", "--skip-git-repo-check", "--sandbox", "workspace-write", "-c", "forced_login_method=chatgpt", "-c", "model_provider=openai"]);
     for reference in &job.references {
         command.arg("--image").arg(reference);
     }
@@ -502,6 +585,10 @@ fn run_image_with_program(job: &ImageJob, program: &Path) -> Result<(), String> 
         .stderr(std::process::Stdio::null());
     for name in crate::env::NEVER_INHERITED {
         command.env_remove(name);
+    }
+    // the drawing styles the brief may name (%CASTLE_STYLES%), as the companion's own session has them
+    if let Some(styles) = styles {
+        command.env("CASTLE_STYLES", styles);
     }
     #[cfg(windows)]
     {
@@ -536,10 +623,31 @@ fn run_image_with_program(job: &ImageJob, program: &Path) -> Result<(), String> 
         let _ = child.wait();
         return Err("Codex did not accept the request. Prompt saved.".into());
     }
-    // No forced timeout: an active image task is never interrupted automatically.
-    let status = child
-        .wait()
-        .map_err(|_| "Codex stopped unexpectedly. Prompt saved.")?;
+    // A drawing ends by itself, by the member's Stop, or at the time limit; the prompt stays saved
+    // either way, so nothing is lost and the main chat is never held for ever.
+    let began = std::time::Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {}
+            Err(_) => {
+                end_process_tree(&mut child);
+                return Err("Codex stopped unexpectedly. Prompt saved.".into());
+            }
+        }
+        if stop_asked() {
+            end_process_tree(&mut child);
+            return Err("Stopped. The prompt is saved; retry when you are ready.".into());
+        }
+        if began.elapsed() > time_limit {
+            end_process_tree(&mut child);
+            return Err(format!(
+                "The drawing took longer than {} minutes and was stopped. Prompt saved; retry when you are ready.",
+                time_limit.as_secs() / 60
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    };
     if !status.success() {
         return Err("Codex could not complete the image (sign-in, capability or permissions may be needed). Prompt saved; no API fallback.".into());
     }
@@ -785,11 +893,21 @@ pub fn start(app: &AppHandle) {
 mod tests {
     #[test]
     fn only_requests_not_being_worked_on_can_be_cleared() {
-        for phase in ["completed", "prompt-saved", "failed"] {
+        for phase in ["completed", "prompt-saved"] {
             assert!(super::finished(phase), "{phase}");
         }
-        for phase in ["queued", "working", "switching"] {
+        // anything else stays, including a phase nobody has named yet
+        for phase in ["queued", "working", "switching", "failed", "something-new"] {
             assert!(!super::finished(phase), "{phase}");
+        }
+    }
+
+    #[test]
+    fn a_path_cmd_would_split_is_refused_before_codex_starts() {
+        assert!(super::safe_for_cmd("C:\\Memory\\appearance\\portrait.png"));
+        assert!(super::safe_for_cmd("D:\\My Memory (copy)\\look.png"));
+        for bad in ["C:\\R&D\\x.png", "C:\\a|b.png", "C:\\100%\\x.png", "C:\\x^y.png", "C:\\say\"hi\".png", "C:\\wow!.png"] {
+            assert!(!super::safe_for_cmd(bad), "{bad}");
         }
     }
 
@@ -906,14 +1024,31 @@ mod tests {
             references: vec![],
             memory: root.clone(),
             prompt: root.join("saved.prompt.md"),
+            stop_asked: false,
         };
-        assert!(run_image_with_program(&job, &program).is_ok());
-        assert!(run_image_with_program(&job, &program).is_err()); // unchanged output is not success
+        let never = || false;
+        let limit = std::time::Duration::from_secs(60);
+        assert!(run_image_with_program(&job, &program, None, &never, limit).is_ok());
+        assert!(run_image_with_program(&job, &program, None, &never, limit).is_err()); // unchanged output is not success
         std::fs::remove_file(root.join("output.png")).unwrap();
         std::fs::write(&program, "@echo off\r\nexit /b 1\r\n").unwrap();
-        assert!(run_image_with_program(&job, &program)
+        assert!(run_image_with_program(&job, &program, None, &never, limit)
             .unwrap_err()
             .contains("no API fallback"));
+
+        // a drawing that hangs is ended by Stop, and by the time limit, and the main chat is free again
+        std::fs::write(&program, "@echo off\r\nping -n 30 127.0.0.1 >nul\r\nexit /b 0\r\n").unwrap();
+        let started = std::time::Instant::now();
+        let stop = || started.elapsed() > std::time::Duration::from_millis(700);
+        assert!(run_image_with_program(&job, &program, None, &stop, limit).unwrap_err().starts_with("Stopped."));
+        let short = std::time::Duration::from_secs(1);
+        assert!(run_image_with_program(&job, &program, None, &never, short).unwrap_err().contains("took longer than"));
+        assert!(started.elapsed() < std::time::Duration::from_secs(15), "the hung drawing was not ended");
+
+        // the variable the brief may name reaches Codex
+        std::fs::write(&program, "@echo off\r\nif not defined CASTLE_STYLES exit /b 1\r\ncopy /y \"%~dp0source.png\" \"%~dp0output.png\" >nul\r\nexit /b 0\r\n").unwrap();
+        let _ = std::fs::remove_file(root.join("output.png"));
+        assert!(run_image_with_program(&job, &program, Some(&root), &never, limit).is_ok());
         let _ = std::fs::remove_dir_all(root);
     }
     #[test]

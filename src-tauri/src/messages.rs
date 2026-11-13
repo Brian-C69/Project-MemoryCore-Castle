@@ -51,22 +51,40 @@ fn paste(text: &str) -> String {
 /// margin for a busy PC). The wait is on its own thread: commands must not hold the window.
 const ENTER_DELAY: std::time::Duration = std::time::Duration::from_millis(250);
 
+/// The delayed Enter goes only to the session the text went to: if that session ended or was
+/// replaced in the pause (a switch, a restart), a stray Enter could answer the new one's startup
+/// question, so it is dropped.
+fn enter_after_pause(session: Option<u64>, now: impl Fn() -> Option<u64>, press: impl FnOnce()) {
+    std::thread::sleep(ENTER_DELAY);
+    if session.is_some() && now() == session {
+        press();
+    }
+}
+
 fn send_main(app: &AppHandle, text: &str) -> Result<(), String> {
-    app.state::<MainHost>().0.write(paste(text).as_bytes())?;
+    let host = &app.state::<MainHost>().0;
+    let session = host.started().map(|(id, _)| id);
+    host.write(paste(text).as_bytes())?;
     let app = app.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(ENTER_DELAY);
-        let _ = app.state::<MainHost>().0.write(b"\r");
+        let host = &app.state::<MainHost>().0;
+        enter_after_pause(session, || host.started().map(|(id, _)| id), || {
+            let _ = host.write(b"\r");
+        });
     });
     Ok(())
 }
 
 fn send_story(app: &AppHandle, text: &str) -> Result<(), String> {
-    app.state::<StoryHost>().0.write(paste(text).as_bytes())?;
+    let host = &app.state::<StoryHost>().0;
+    let session = host.started().map(|(id, _)| id);
+    host.write(paste(text).as_bytes())?;
     let app = app.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(ENTER_DELAY);
-        let _ = app.state::<StoryHost>().0.write(b"\r");
+        let host = &app.state::<StoryHost>().0;
+        enter_after_pause(session, || host.started().map(|(id, _)| id), || {
+            let _ = host.write(b"\r");
+        });
     });
     Ok(())
 }
@@ -226,5 +244,18 @@ mod tests {
         // that arrives with the text.
         assert_eq!(paste("one\ntwo"), "\u{1b}[200~one\ntwo\u{1b}[201~");
         assert!(ENTER_DELAY >= std::time::Duration::from_millis(100));
+    }
+
+    #[test]
+    fn the_delayed_enter_reaches_only_the_session_the_text_went_to() {
+        use std::cell::Cell;
+        let pressed = Cell::new(0);
+        enter_after_pause(Some(7), || Some(7), || pressed.set(pressed.get() + 1));
+        assert_eq!(pressed.get(), 1, "same session: Enter is pressed");
+        enter_after_pause(Some(7), || Some(8), || pressed.set(pressed.get() + 1));
+        assert_eq!(pressed.get(), 1, "replaced in the pause: no stray Enter");
+        enter_after_pause(Some(7), || None, || pressed.set(pressed.get() + 1));
+        enter_after_pause(None, || None, || pressed.set(pressed.get() + 1));
+        assert_eq!(pressed.get(), 1, "ended, or never running: nothing is pressed");
     }
 }

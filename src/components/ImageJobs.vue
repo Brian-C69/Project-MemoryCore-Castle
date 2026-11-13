@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { imageDismiss, imageJobs, imageRetry } from '../api/castle.js'
+import { imageCancel, imageDismiss, imageJobs, imageRetry } from '../api/castle.js'
 const problem = ref('')
 const emit = defineEmits(['finished'])
 const WORDS = { queued: 'Waiting', working: 'Drawing', completed: 'Done', 'prompt-saved': 'Not drawn' }
@@ -9,6 +9,7 @@ let done = null
 const active = (job) => ['queued', 'working', 'switching'].includes(job.phase)
 async function dismiss(id = null) { try { await imageDismiss(id); problem.value = ''; await refresh() } catch (e) { problem.value = String(e) } }
 async function retry(id) { try { await imageRetry(id); problem.value = ''; await refresh() } catch (e) { problem.value = String(e) } }
+async function stop(id) { try { await imageCancel(id); problem.value = ''; await refresh() } catch (e) { problem.value = String(e) } }
 const jobs = ref([])
 let timer
 async function refresh() {
@@ -26,7 +27,7 @@ onBeforeUnmount(() => clearInterval(timer))
 <template>
   <details v-if="jobs.length" class="image-jobs" open>
     <summary>Image requests</summary>
-    <p v-for="job in jobs" :key="job.id" role="status"><strong>{{ phaseWord(job) }}</strong> — <span v-if="job.label" class="what">{{ job.label }}.</span> {{ job.message }} <button v-if="job.phase === 'prompt-saved'" @click="retry(job.id)">Retry with Codex</button> <button v-if="!active(job)" title="Take this off the list" @click="dismiss(job.id)">Dismiss</button></p>
+    <p v-for="job in jobs" :key="job.id" role="status"><strong>{{ phaseWord(job) }}</strong> — <span v-if="job.label" class="what">{{ job.label }}.</span> {{ job.message }} <button v-if="job.phase === 'prompt-saved'" @click="retry(job.id)">Retry with Codex</button> <button v-if="job.phase === 'working'" title="End this drawing; the prompt is kept for a retry" @click="stop(job.id)">Stop</button> <button v-if="!active(job)" title="Take this off the list" @click="dismiss(job.id)">Dismiss</button></p>
     <p v-if="jobs.some((j) => !active(j))"><button @click="dismiss()">Clear finished</button></p>
     <p v-if="problem" role="alert">{{ problem }}</p>
   </details>

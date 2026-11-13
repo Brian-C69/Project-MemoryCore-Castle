@@ -259,6 +259,9 @@ impl PtyHost {
     /// Types one word and Enter, the way a quick action does - Castle's knock, which never counts
     /// as the member typing.
     pub fn knock(&self, word: &str) -> Result<(), String> {
+        // the knock starts a turn: a provider switch must wait for it to end, even on a session
+        // nobody typed into (the Neural Link's idle reading, `last_input`, is left alone)
+        self.mark_input();
         self.write_quietly(word.as_bytes())?;
         std::thread::sleep(std::time::Duration::from_millis(150));
         self.write_quietly(b"\r")

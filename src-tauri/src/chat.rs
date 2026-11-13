@@ -99,6 +99,7 @@ pub fn chat_poll(
     let (_, follower) = slot.as_mut().expect("set above");
     match follower.read_new() {
         Ok(mut entries) => {
+            entries.retain(|e| !crate::providers::castle_wrote(e));
             if let Err(error) = crate::providers::remember(&store, room, settings.cli, session, &mut entries) {
                 eprintln!("MemoryCore Castle: {error}");
             }

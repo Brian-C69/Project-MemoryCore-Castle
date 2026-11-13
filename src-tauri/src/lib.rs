@@ -115,6 +115,9 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
         settings.db_external = current.db_external;
         // the screen Castle lives on is changed only by its own button
         settings.castle_screen = current.castle_screen;
+        // the WORLD room's screens and the music are changed only by their own commands (world_apply,
+        // world_music): a Settings page holding an older copy must not bring an old music state back
+        settings.world = current.world;
     }
     settings::save(&store.path, &settings).map_err(|_| "The settings could not be saved.".to_string())?;
     *store.startup_note.lock().unwrap() = startup::sync(&app, settings.start_with_windows);
@@ -211,6 +214,7 @@ pub fn run() {
             messages::queued_message_action,
             providers::image_retry,
             providers::image_dismiss,
+            providers::image_cancel,
             providers::provider_switch,
             providers::provider_switch_status,
             providers::provider_switch_cancel,
