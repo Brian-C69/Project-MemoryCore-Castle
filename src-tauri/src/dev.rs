@@ -124,10 +124,14 @@ fn prepare_boot(store: &SettingsStore, settings: &Settings, slot: usize, project
         &dev_tabs::name_of(&project.display().to_string()),
         memory.is_some(),
     );
-    let text = match &memory {
-        Some(memory) => format!("{block}\n\n{memory}"),
-        None => block,
-    };
+    // an isolated session reads no CLAUDE.md by itself, so the project's own travels here
+    let mut text = block;
+    if let Some(instructions) = session::folder_instructions(project) {
+        text = format!("{text}\n\n{instructions}");
+    }
+    if let Some(memory) = &memory {
+        text = format!("{text}\n\n{memory}");
+    }
     std::fs::create_dir_all(file.parent()?).ok()?;
     std::fs::write(&file, text).ok()?;
     Some((file, memory.is_some()))
@@ -156,7 +160,8 @@ fn wake(app: &AppHandle, store: &SettingsStore, hosts: &DevHosts, slot: usize, c
     }
     // A DEV tab is always only this companion: the personal setup never reaches a project session.
     // The project's own CLAUDE.md is still read (it describes the project).
-    let (isolation_args, isolation_vars) = session::isolation(store, settings.cli, true)?;
+    // with Castle's status line, so the tab can show how full her context is
+    let (isolation_args, isolation_vars) = session::isolation_with_status(store, settings.cli, true, &session::tools_folder(app))?;
     args.extend(isolation_args);
     vars.extend(isolation_vars);
     let output_event = format!("dev-output-{slot}");

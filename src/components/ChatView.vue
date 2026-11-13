@@ -1,23 +1,20 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { chatAttach, chatMedia, chatPoll, clipboardPaste } from '../api/castle.js'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { chatHistory, chatPoll, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
 import { localSend, mergeEntries, resetEntries } from './ticks.js'
-import { createVoiceQueue } from './voicequeue.js'
 import { readChoices } from './choices.js'
-import ImageViewer from './ImageViewer.vue'
-import MarkdownText from './MarkdownText.vue'
-import PlanViewer from './PlanViewer.vue'
 import { firstHeading } from './markdown.js'
+import { MODES, readContext, readMode, SHIFT_TAB } from './modes.js'
+import { useChatMedia } from './useChatMedia.js'
+import ChatComposer from './ChatComposer.vue'
+import ChatEntries from './ChatEntries.vue'
+import ImageViewer from './ImageViewer.vue'
+import PlanViewer from './PlanViewer.vue'
 import { worldSignals } from '../world3d/signals.js'
-import { chatHistory } from '../api/castle.js'
-import { sendMessage, queuedMessages, queuedMessageAction } from '../api/castle.js'
-const pendingMessages = ref([])
-const sendProblem = ref('')
-async function queueAction(id, retry) { try { await queuedMessageAction(id, retry); pendingMessages.value = await queuedMessages() } catch (e) { sendProblem.value = String(e) } }
-onMounted(async () => {
-  try { entries.value = resetEntries(entries.value, await chatHistory(props.room)) } catch {}
-})
 
+// CHAT: a session as a conversation between two people. This file reads the session's record and
+// the Log screen and holds the state; the conversation and the choice card (ChatEntries) and the
+// box (ChatComposer) only show and ask.
 const props = defineProps({
   // Whether the session is running.
   running: { type: Boolean, default: false },
@@ -28,14 +25,17 @@ const props = defineProps({
   write: { type: Function, required: true },
   // The last lines of the Log screen, for the answer buttons.
   readScreen: { type: Function, default: () => [] },
-  // undefined for the main session, 'story' for the STORY room's
+  // undefined for the main session, 'story' for the STORY room's, 'dev:<slot>' for a DEV tab's
   room: { type: String, default: undefined },
   // the companion's name, for labels
   companion: { type: String, default: 'Your companion' },
-  // 'claude' or 'codex': answer buttons and send-now are Claude Code's; Codex asks in the Log
+  // 'claude' or 'codex': answer buttons, send-now and the mode pills are Claude Code's; Codex asks in the Log
   cli: { type: String, default: 'claude' },
 })
-const emit = defineEmits(['show-log'])
+// busy: the companion is working or not (the typing bubble)
+// context: the context window as Castle's status line says it ({ percent, tokens }), when it
+// changes, and null once the session ends
+const emit = defineEmits(['show-log', 'busy', 'context'])
 
 const POLL_MS = 1000
 // The typing bubble gives up after this long without a new step (a long build keeps it).
@@ -43,33 +43,67 @@ const TYPING_FOR_MS = 10 * 60 * 1000
 
 const entries = ref([])
 const status = ref('asleep')
-const draft = ref('')
-const scroller = ref(null)
-const box = ref(null)
 const now = ref(Date.now())
+const conversation = ref(null)
+const composer = ref(null)
+const { media, durations, playing, loadMedia, loadPath, playVoice, toggleVoice, arrive, stop } = useChatMedia(() => props.room)
+let timer
+let menuTimer
+let clockTimer
+
+// ---------- Messages waiting for the companion's current work (main room) ----------
+
+const pendingMessages = ref([])
+const sendProblem = ref('')
+async function queueAction(id, retry) {
+  try {
+    await queuedMessageAction(id, retry)
+    pendingMessages.value = await queuedMessages()
+  } catch (e) {
+    sendProblem.value = String(e)
+  }
+}
+
+onMounted(async () => {
+  try {
+    entries.value = resetEntries(entries.value, await chatHistory(props.room))
+  } catch {
+    // The first poll fills it.
+  }
+})
+
+// ---------- The card: a choice asked in the Log ----------
+
 // A choice menu read from the Log screen (a permission prompt or a question), or null.
 const menu = ref(null)
 // Codex is asking for an approval on the Log screen (its prompts are answered there).
 const codexAsking = ref(false)
-let timer
-let menuTimer
-let clockTimer
+// Words Codex shows while it waits for an approval.
+const CODEX_ASK = /allow command|approve|apply (these )?changes|yes, proceed|\(y\/n\)|\[y\/n\]/i
+const isClaude = computed(() => props.cli !== 'codex')
 
 function readMenu() {
   if (!props.visible || !props.running) {
     menu.value = null
     return
   }
-  if (props.cli === 'codex') {
+  if (!isClaude.value) {
     menu.value = null
     codexAsking.value = CODEX_ASK.test(props.readScreen(15).join('\n'))
     return
   }
-  menu.value = readChoices(props.readScreen(40))
+  const lines = props.readScreen(40)
+  menu.value = readChoices(lines)
+  // the mode, from the same screen: the lit pill follows Claude Code's own footer
+  if (!modeBusy) mode.value = readMode(lines)
+  // the context, from Castle's status line on the same screen; the last value stays while it is hidden
+  const context = readContext(lines)
+  if (context && (context.percent !== lastContext?.percent || context.tokens !== lastContext?.tokens)) {
+    lastContext = context
+    emit('context', context)
+  }
 }
-
-// Words Codex shows while it waits for an approval.
-const CODEX_ASK = /allow command|approve|apply (these )?changes|yes, proceed|\(y\/n\)|\[y\/n\]/i
+let lastContext = null
 
 async function choose(number) {
   menu.value = null
@@ -79,6 +113,49 @@ async function choose(number) {
     // The menu comes back on the next read.
   }
 }
+
+// ---------- The mode (manual / accept edits / plan / auto, Shift+Tab in Claude Code) ----------
+
+const mode = ref(null)
+const modeProblem = ref('')
+let modeBusy = false
+const pause = (ms) => new Promise((done) => setTimeout(done, ms))
+
+/** Presses Shift+Tab, reading the footer after each press, until it shows the mode chosen. */
+async function setMode(target) {
+  if (!props.running || menu.value || modeBusy || mode.value === target) return
+  modeBusy = true
+  modeProblem.value = ''
+  try {
+    for (let press = 0; press < MODES.length; press += 1) {
+      await props.write(SHIFT_TAB)
+      await pause(300)
+      const shown = readMode(props.readScreen(40))
+      mode.value = shown
+      if (shown === target) return
+    }
+    modeProblem.value = 'The mode did not change - open Log to see.'
+  } catch {
+    modeProblem.value = 'The mode could not be changed.'
+  } finally {
+    modeBusy = false
+  }
+}
+
+// The session ended: no mode to show, and the context meter goes away.
+watch(
+  () => props.running,
+  (on) => {
+    if (on) return
+    mode.value = null
+    if (lastContext) {
+      lastContext = null
+      emit('context', null)
+    }
+  },
+)
+
+// ---------- The conversation ----------
 
 // A conversation between two people: the companion's tool steps stay in Log, and while it works Chat shows
 // only a typing bubble. Pictures made one after another sit side by side.
@@ -112,10 +189,15 @@ const typing = computed(() => {
 // The WORLD on the other screens knows when the companion works and when it rests - in the main
 // room only: a DEV tab's session is work in a project, not her presence in the WORLD.
 const signalsWorld = () => !String(props.room ?? '').startsWith('dev:')
-watch(typing, (on) => { if (signalsWorld()) worldSignals.busy = on }, { immediate: true })
+watch(
+  typing,
+  (on) => {
+    if (signalsWorld()) worldSignals.busy = on
+    emit('busy', on)
+  },
+  { immediate: true },
+)
 watch(() => props.running, (on) => { if (signalsWorld()) worldSignals.asleep = !on }, { immediate: true })
-
-// ---------- The companion's plans ----------
 
 // A plan card shows only its title and how many phases; the reader holds the whole plan.
 function planFace(text) {
@@ -126,23 +208,9 @@ function planFace(text) {
 
 const planOpen = ref(null)
 
-// ---------- The companion's pictures and voice ----------
+// ---------- Pictures in the viewer ----------
 
-// path -> data URL, loaded once from the core (which serves only files shown as the companion's)
-const media = reactive({})
-const durations = reactive({})
-const playing = ref(null)
 const viewerStart = ref(null)
-const player = new Audio()
-// one voice at a time, never cut: a voice that lands while another plays waits its turn
-const voices = createVoiceQueue()
-const isPlaying = () => !!playing.value && !player.paused && !player.ended
-player.addEventListener('ended', () => {
-  playing.value = null
-  const next = voices.ended()
-  if (next) startVoice(next)
-})
-
 const fileName = (path) => path.split(/[\\/]/).pop()
 
 // Every picture in this chat in order - the ones the companion made and the ones the member shared - for the viewer.
@@ -154,125 +222,23 @@ const allPictures = computed(() =>
   }),
 )
 
-// ---------- Pictures the member shares ----------
-
-// Picture paths in the box as the member writes: dropped, pasted or typed.
-const PICTURE_PATH = /[A-Za-z]:[\\/][^"'<>|*?\r\n]*?\.(?:png|jpe?g|webp)/gi
-const draftPictures = computed(() => [...new Set(draft.value.match(PICTURE_PATH) ?? [])])
-const draftViewer = ref(null)
-
-function loadPath(path) {
-  return loadMedia({ path, role: 'picture' })
-}
-
-// A path the member typed or pasted as text is the member's too: the core checks it is a picture, then it shows.
-watch(draftPictures, async (paths) => {
-  const fresh = paths.filter((p) => !media[p])
-  if (!fresh.length) return
-  try {
-    await chatAttach(fresh)
-  } catch {
-    // Shown by name only.
-  }
-  fresh.forEach(loadPath)
-})
-
-const quoted = (path) => (/\s/.test(path) ? `"${path}"` : path)
-
-/** Files dropped on Chat: their paths go into the box at the cursor; pictures show above it. */
-async function addPaths(paths) {
-  try {
-    await chatAttach(paths)
-  } catch {
-    // Not previewed; the paths still go in.
-  }
-  const el = box.value
-  const start = el?.selectionStart ?? draft.value.length
-  const end = el?.selectionEnd ?? draft.value.length
-  const before = draft.value.slice(0, start)
-  const insert = (before && !/\s$/.test(before) ? ' ' : '') + paths.map(quoted).join(' ') + ' '
-  draft.value = before + insert + draft.value.slice(end)
-  await nextTick()
-  grow()
-  box.value?.focus()
-}
-
-function removeDraftPicture(path) {
-  draft.value = draft.value.replace(`"${path}"`, '').replace(path, '').replace(/ {2,}/g, ' ')
-}
-
-function openSharedPicture(path) {
+function openPicture(path) {
   const at = allPictures.value.findIndex((p) => p.path === path)
   viewerStart.value = at < 0 ? 0 : at
 }
 
-async function loadMedia(entry) {
-  if (!entry.path || media[entry.path]) return media[entry.path]
-  try {
-    media[entry.path] = await chatMedia(entry.path, props.room)
-    if (entry.role === 'voice') {
-      const probe = new Audio(media[entry.path])
-      probe.addEventListener('loadedmetadata', () => (durations[entry.path] = probe.duration))
-    }
-  } catch {
-    media[entry.path] = null
-  }
-  return media[entry.path]
-}
-
-// the member's click: this voice plays now and the waiting line is cleared
-function playVoice(entry) {
-  return startVoice(voices.choose(entry))
-}
-
-async function startVoice(entry) {
-  const url = await loadMedia(entry)
-  if (!url) {
-    const next = voices.ended()
-    if (next) startVoice(next)
-    return
-  }
-  player.pause()
-  player.src = url
-  player.currentTime = 0
-  try {
-    await player.play()
-    playing.value = entry.path
-  } catch {
-    playing.value = null
-  }
-}
-
-function toggleVoice(entry) {
-  if (playing.value === entry.path) {
-    player.pause()
-    voices.stop()
-    playing.value = null
-  } else {
-    playVoice(entry)
-  }
-}
-
-function openViewer(entry) {
-  const at = allPictures.value.findIndex((p) => p.path === entry.path)
-  viewerStart.value = at < 0 ? 0 : at
-}
-
-function length(seconds) {
-  if (!seconds || !Number.isFinite(seconds)) return ''
-  const s = Math.round(seconds)
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
-
-function nearBottom() {
-  const el = scroller.value
-  return !el || el.scrollHeight - el.scrollTop - el.clientHeight < 80
-}
+// ---------- Reading the record ----------
 
 let lastPollAt = 0
 
 async function poll() {
-  if (!props.room) { try { pendingMessages.value = await queuedMessages() } catch {} }
+  if (!props.room) {
+    try {
+      pendingMessages.value = await queuedMessages()
+    } catch {
+      // the list stays as it was
+    }
+  }
   if (document.visibilityState !== 'visible') return
   // A voice plays by itself only when it arrives while Castle was in view; one made while
   // Castle was hidden arrives in a catch-up read and waits for "play".
@@ -293,49 +259,49 @@ async function poll() {
   }
   if (!answer.reset && live) {
     const newest = [...answer.entries].reverse().find((e) => e.role === 'voice')
-    if (newest) {
-      const now = voices.arrive(newest, isPlaying())
-      if (now) startVoice(now)
-    }
+    if (newest) arrive(newest)
   }
   if (answer.reset) {
     entries.value = resetEntries(entries.value, answer.entries)
   } else if (answer.entries.length) {
-    const follow = nearBottom()
+    const follow = conversation.value?.nearBottom() ?? true
     entries.value = mergeEntries(entries.value, answer.entries)
     if (!follow) return
   } else {
     return
   }
   await nextTick()
-  if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
+  conversation.value?.toBottom()
 }
 
-function clock(at) {
-  if (!at) return ''
-  const when = new Date(at)
-  return Number.isNaN(when.getTime()) ? '' : when.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-}
+// ---------- The member's words ----------
 
-async function send() {
-  const text = draft.value.replace(/\s+$/, '')
-  if (!text || !props.running) return
+const placeholder = computed(() => (props.running ? `Talk to ${props.companion}` : `${props.companion} is resting`))
+
+/** Sends the member's words; true when they went in (the box then empties). */
+async function send(text) {
+  if (!props.running) return false
   // Several lines go in as one paste, so a new line never sends the message early.
+  let sent
   try {
-    const sent = await sendMessage(text, props.room)
-    if (signalsWorld()) worldSignals.sentAt = Date.now() // in the WORLD the crystal brightens
-    draft.value = ''
+    sent = await sendMessage(text, props.room)
+  } catch (reason) {
+    sendProblem.value = String(reason)
+    // The words stay in the box to try again.
+    return false
+  }
+  if (signalsWorld()) worldSignals.sentAt = Date.now() // in the WORLD the crystal brightens
+  try {
     // the member's bubble at once, one grey tick until the companion's record holds it
     if (sent.queued) pendingMessages.value = await queuedMessages()
     else entries.value = [...entries.value, localSend(text)]
     sendProblem.value = ''
-    await nextTick()
-    grow()
-    if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
   } catch (reason) {
     sendProblem.value = String(reason)
-    // The words stay in the box to try again.
   }
+  await nextTick()
+  conversation.value?.toBottom()
+  return true
 }
 
 // A queued message goes in now instead of after the companion's current step (Claude Code's Ctrl+X Ctrl+S).
@@ -347,53 +313,12 @@ async function sendNow() {
   }
 }
 
-const TICK_TITLES = {
-  sending: 'Sent to the terminal',
-  queued: 'Waiting in the queue - read after the current step',
-  read: 'Read',
-}
-
-// Text pastes as usual; a picture or copied files come from the Windows clipboard as paths,
-// put where the cursor is.
-async function onPaste(event) {
-  const data = event.clipboardData
-  const hasText = data && Array.from(data.types).includes('text/plain') && data.getData('text/plain')
-  if (hasText) return
-  event.preventDefault()
-  try {
-    const pasted = await clipboardPaste()
-    if (pasted.kind === 'empty') return
-    const el = box.value
-    const start = el?.selectionStart ?? draft.value.length
-    const end = el?.selectionEnd ?? draft.value.length
-    draft.value = draft.value.slice(0, start) + pasted.text + draft.value.slice(end)
-    await nextTick()
-    grow()
-  } catch {
-    // Nothing pasted.
-  }
-}
-
-function onKey(event) {
-  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
-    event.preventDefault()
-    send()
-  }
-}
-
-function grow() {
-  const el = box.value
-  if (!el) return
-  el.style.height = 'auto'
-  el.style.height = `${Math.min(el.scrollHeight, 160)}px`
-}
-
 watch(
   () => props.visible,
   (shown) => {
     if (shown) {
       poll()
-      nextTick(() => box.value?.focus())
+      nextTick(() => composer.value?.focus())
     }
   },
 )
@@ -411,9 +336,11 @@ onBeforeUnmount(() => {
   clearInterval(menuTimer)
   clearInterval(clockTimer)
   document.removeEventListener('visibilitychange', poll)
-  voices.stop()
-  player.pause()
+  stop()
 })
+
+/** Files dropped on Chat: their paths go into the box. */
+const addPaths = (paths) => composer.value?.addPaths(paths)
 
 defineExpose({ poll, addPaths })
 </script>
@@ -428,127 +355,48 @@ defineExpose({ poll, addPaths })
       </p>
     </div>
     <p v-if="sendProblem" role="alert">{{ sendProblem }}</p>
-    <div ref="scroller" class="messages" aria-live="polite">
-      <p v-if="status === 'waiting'" class="quiet">The chat appears as soon as {{ companion }} starts talking.</p>
-      <p v-else-if="status === 'unreadable'" class="quiet">
-        Chat cannot read this session.
-        <button class="link" @click="emit('show-log')">Use Log</button>
-      </p>
 
-      <template v-for="item in items" :key="item.id">
-        <div v-if="item.kind === 'message'" class="row" :class="item.entry.role">
-          <div class="bubble">
-            <MarkdownText :text="item.entry.text" size="chat" />
-            <div v-if="item.entry.pictures?.length" class="shared">
-              <button
-                v-for="path in item.entry.pictures"
-                :key="path"
-                class="shared-thumb"
-                :title="fileName(path)"
-                @click="openSharedPicture(path)"
-              >
-                <img v-if="media[path]" :src="media[path]" :alt="fileName(path)" />
-                <span v-else class="thumb-wait">{{ media[path] === null ? fileName(path) : 'Loading…' }}</span>
-              </button>
-            </div>
-            <span class="time">
-              <button v-if="item.entry.state === 'queued' && cli === 'claude'" class="send-now" title="Send it now (Ctrl+X Ctrl+S)" @click="sendNow">send now</button>
-              {{ clock(item.entry.at) }}
-              <span v-if="item.entry.role === 'member' && item.entry.state" class="ticks" :class="item.entry.state" :title="TICK_TITLES[item.entry.state]">{{ item.entry.state === 'read' ? '✓✓' : '✓' }}</span>
-            </span>
-          </div>
-        </div>
-
-        <div v-else-if="item.kind === 'plan'" class="row companion">
-          <button class="plan" :title="item.title" @click="planOpen = item.entry.text">
-            <span class="plan-tag">PLAN</span>
-            <span class="plan-title">{{ item.title }}</span>
-            <span class="plan-meta">{{ item.phases ? `${item.phases} ${item.phases === 1 ? 'phase' : 'phases'} - ` : '' }}tap to read<template v-if="clock(item.entry.at)"> · {{ clock(item.entry.at) }}</template></span>
-          </button>
-        </div>
-
-        <div v-else-if="item.kind === 'pictures'" class="row companion">
-          <div class="pictures">
-            <button
-              v-for="picture in item.list"
-              :key="picture.id"
-              class="thumb"
-              :title="picture.text"
-              @click="openViewer(picture)"
-            >
-              <img v-if="media[picture.path]" :src="media[picture.path]" :alt="picture.text" />
-              <span v-else class="thumb-wait">{{ media[picture.path] === null ? 'Not available' : 'Loading…' }}</span>
-            </button>
-          </div>
-        </div>
-
-        <div v-else-if="item.kind === 'voice'" class="row companion">
-          <div class="voice" :class="{ playing: playing === item.entry.path }">
-            <button class="play" :aria-label="playing === item.entry.path ? 'Pause' : 'Play'" @click="toggleVoice(item.entry)">
-              {{ playing === item.entry.path ? '❚❚' : '▶' }}
-            </button>
-            <span class="voice-label">{{ companion }}'s voice</span>
-            <span class="voice-length">{{ length(durations[item.entry.path]) }}</span>
-            <button class="again" aria-label="Play again" title="Play again" @click="playVoice(item.entry)">↻</button>
-          </div>
-        </div>
-
-      </template>
-
-      <div v-if="codexAsking" class="codex-ask" role="status">
-        {{ companion }} is asking for your approval.
-        <button class="link" @click="emit('show-log')">Answer in Log</button>
-      </div>
-
-      <div v-if="typing" class="row companion" :aria-label="`${companion} is typing`">
-        <div class="typing" role="status"><span></span><span></span><span></span></div>
-      </div>
-    </div>
-
-    <div v-if="menu" class="choices" role="group" :aria-label="menu.question || `${companion} is asking`">
-      <p class="ask">{{ menu.question || `${companion} is asking` }}</p>
-      <div class="options">
-        <button v-for="option in menu.options" :key="option.number" class="option" :title="option.hint" @click="choose(option.number)">
-          <span class="number">{{ option.number }}</span>{{ option.label }}
-        </button>
-        <button class="option log" @click="emit('show-log')">Open Log</button>
-      </div>
-    </div>
+    <ChatEntries
+      ref="conversation"
+      :status="status"
+      :items="items"
+      :typing="typing"
+      :media="media"
+      :durations="durations"
+      :playing="playing"
+      :menu="menu"
+      :codex-asking="codexAsking"
+      :companion="companion"
+      :cli="cli"
+      @show-log="emit('show-log')"
+      @send-now="sendNow"
+      @open-plan="planOpen = $event"
+      @open-picture="openPicture"
+      @toggle-voice="toggleVoice"
+      @play-voice="playVoice"
+      @choose="choose"
+    />
 
     <ImageViewer v-if="viewerStart !== null" :pictures="allPictures" :start="viewerStart" @close="viewerStart = null" />
     <PlanViewer v-if="planOpen !== null" :plan="planOpen" @close="planOpen = null" />
 
-    <div v-if="draftPictures.length" class="attached" aria-label="Pictures in your message">
-      <div v-for="path in draftPictures" :key="path" class="attached-item">
-        <button class="attached-thumb" :title="fileName(path)" @click="draftViewer = path">
-          <img v-if="media[path]" :src="media[path]" :alt="fileName(path)" />
-          <span v-else class="thumb-wait">{{ fileName(path) }}</span>
-        </button>
-        <button class="attached-remove" aria-label="Remove this picture" @click="removeDraftPicture(path)">&times;</button>
-      </div>
-    </div>
-    <ImageViewer
-      v-if="draftViewer"
-      :pictures="draftPictures.map((p) => ({ path: p, name: fileName(p), url: media[p] }))"
-      :start="Math.max(0, draftPictures.indexOf(draftViewer))"
-      :can-open="false"
-      @close="draftViewer = null"
-    />
+    <ChatComposer ref="composer" :running="running" :placeholder="placeholder" :companion="companion" :media="media" :load-path="loadPath" :send="send" />
 
-    <form class="composer" @submit.prevent="send">
-      <textarea
-        ref="box"
-        v-model="draft"
-        rows="1"
-        :placeholder="running ? `Talk to ${companion}` : `${companion} is resting`"
-        :disabled="!running"
-        :aria-label="`Message to ${companion}`"
-        @keydown="onKey"
-        @input="grow"
-        @paste="onPaste"
-      ></textarea>
-      <button type="submit" class="send" :disabled="!running || !draft.trim()" aria-label="Send">&#10148;</button>
-    </form>
+    <div v-if="running && isClaude" class="modes" role="group" aria-label="Claude Code's mode">
+      <span class="modes-label">MODE</span>
+      <button
+        v-for="m in MODES"
+        :key="m.id"
+        class="mode"
+        :class="{ on: mode === m.id }"
+        :disabled="!!menu"
+        :title="menu ? 'Answer the question first' : `Switch to ${m.label}`"
+        @click="setMode(m.id)"
+      >
+        {{ m.label }}
+      </button>
+      <span class="modes-hint">{{ modeProblem || 'shift+tab cycles' }}</span>
+    </div>
   </div>
 </template>
 
@@ -562,486 +410,55 @@ defineExpose({ poll, addPaths })
   padding-right: 10px;
 }
 
-.messages {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 4px 4px 8px 0;
-  /* no grey bar; the wheel and touch still scroll */
-  scrollbar-width: none;
-}
-
-.row {
-  display: flex;
-}
-
-.row.member {
-  justify-content: flex-end;
-}
-
-.bubble {
-  position: relative;
-  max-width: 82%;
-  padding: 8px 12px 18px;
-  border-radius: 14px;
-  font-size: 14px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
-.companion .bubble {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--line);
-  border-top-left-radius: 4px;
-}
-
-.member .bubble {
-  background: color-mix(in srgb, var(--accent) 34%, transparent);
-  border-top-right-radius: 4px;
-}
-
-.time {
-  position: absolute;
-  right: 10px;
-  bottom: 4px;
-  font-size: 10px;
-  color: var(--text-dim);
-}
-
-/* The member's ticks: one grey while it travels, one while it waits in the queue, two blue once read. */
-.ticks {
-  margin-left: 3px;
-  font-size: 11px;
-  letter-spacing: -3px;
-}
-
-.ticks.sending {
-  opacity: 0.45;
-}
-
-.ticks.read {
-  color: #7fd8ff;
-}
-
-.send-now {
-  margin-right: 6px;
-  padding: 0 6px;
-  border: 1px solid currentColor;
-  border-radius: 8px;
-  background: none;
-  color: inherit;
-  font: inherit;
-  font-size: 10px;
-  cursor: pointer;
-}
-
-/* room for the time and the ticks (and "send now") under a short message */
-.member .bubble {
-  min-width: 96px;
-}
-
-.member .bubble:has(.send-now) {
-  min-width: 170px;
-}
-
-.send-now:hover {
-  color: var(--text);
-}
-
-/* Three dots rising in turn, as a messenger shows someone typing. */
-.typing {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 12px 16px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  border-top-left-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.typing span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-dim);
-  animation: typing 1.2s infinite ease-in-out;
-}
-
-.typing span:nth-child(2) {
-  animation-delay: 0.15s;
-}
-
-.typing span:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-@keyframes typing {
-  0%,
-  60%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.45;
-  }
-  30% {
-    transform: translateY(-5px);
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .typing span {
-    animation: none;
-  }
-}
-
-.quiet {
-  margin: auto;
-  font-size: 13px;
-  color: var(--text-dim);
-  text-align: center;
-}
-
 button {
   font: inherit;
   cursor: pointer;
 }
 
-.link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font-size: 12px;
-  text-decoration: underline;
-}
-
-
-.pictures {
+/* The mode, under the message box: the lit pill is what Claude Code's own footer says. */
+.modes {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  max-width: 82%;
-}
-
-.thumb {
-  display: grid;
-  place-items: center;
-  width: 180px;
-  height: 120px;
-  padding: 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.25);
-  cursor: zoom-in;
-}
-
-.thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.thumb-wait {
-  font-size: 11px;
-  color: var(--text-dim);
-}
-
-.plan {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  width: min(320px, 82%);
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
-  border-radius: 4px 14px 14px 14px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
-  text-align: left;
-}
-
-.plan:hover {
-  background: var(--hover);
-}
-
-.plan-tag {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  color: var(--accent);
-}
-
-.plan-title {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-
-.plan-meta {
-  font-size: 11px;
-  color: var(--text-dim);
-}
-
-.voice {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.row.companion:has(.voice-words) {
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.voice-words {
-  max-width: 82%;
-  margin-top: 6px;
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: 4px 14px 14px 14px;
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 13.5px;
-  line-height: 1.5;
-}
-
-.voice-words p {
-  margin: 0;
-  white-space: pre-wrap;
-}
-
-.voice-words .english {
-  margin-top: 6px;
-  color: var(--text-dim);
-  font-style: italic;
-}
-
-.voice.playing {
-  border-color: var(--accent);
-}
-
-.voice .play,
-.voice .again {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  font-size: 12px;
-}
-
-.voice .play {
-  background: var(--accent);
-  color: #160f33;
-}
-
-.voice .again {
-  background: none;
-  color: var(--text-dim);
-  font-size: 16px;
-}
-
-.voice-label {
-  font-size: 13px;
-}
-
-.voice-length {
-  min-width: 32px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-
-.choices {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--accent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.ask {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.option {
-  display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 100%;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.2);
-  color: var(--text);
-  font-size: 12.5px;
-  text-align: left;
+  padding: 6px 2px 0;
+  font-size: 12px;
 }
 
-.option:hover {
-  background: var(--hover);
-}
-
-.option .number {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #160f33;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.option.log {
+.modes-label {
+  letter-spacing: 0.16em;
+  font-size: 10.5px;
   color: var(--text-dim);
 }
 
-.shared {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.shared-thumb,
-.attached-thumb {
-  display: grid;
-  place-items: center;
-  padding: 0;
-  overflow: hidden;
+.mode {
+  padding: 3px 11px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.25);
-  cursor: zoom-in;
-}
-
-.shared-thumb {
-  width: 150px;
-  height: 100px;
-}
-
-.shared-thumb img,
-.attached-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.attached {
-  display: flex;
-  gap: 8px;
-  padding: 8px 2px 0;
-  overflow-x: auto;
-}
-
-.attached-item {
-  position: relative;
-  flex: none;
-}
-
-.attached-thumb {
-  width: 84px;
-  height: 64px;
-  font-size: 10px;
-  color: var(--text-dim);
-  overflow-wrap: anywhere;
-}
-
-.attached-remove {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #160f33;
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.composer {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-}
-
-textarea {
-  flex: 1;
-  min-height: 38px;
-  max-height: 160px;
-  padding: 9px 12px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: rgba(0, 0, 0, 0.22);
-  color: var(--text);
+  border-radius: 999px;
+  background: none;
+  color: inherit;
   font: inherit;
-  font-size: 14px;
-  line-height: 1.4;
-  resize: none;
-  box-sizing: border-box;
-  scrollbar-width: none;
+  cursor: pointer;
 }
 
-textarea:disabled {
-  opacity: 0.55;
+.mode.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
 }
 
-.send {
-  width: 38px;
-  height: 38px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #160f33;
-  font-size: 16px;
+.mode:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
-.send:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-textarea:focus-visible,
-button:focus-visible {
+.mode:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.codex-ask {
-  align-self: center;
-  margin: 8px 0;
-  padding: 8px 14px;
-  border: 1px solid var(--warn);
-  border-radius: 10px;
-  color: var(--text);
-  font-size: 13px;
+
+.modes-hint {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 11px;
 }
 </style>

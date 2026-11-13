@@ -85,8 +85,16 @@ export const chatPoll = (room) => {
   if (slot === null) return invoke('chat_poll', { room })
   return devShownSlots.has(slot) ? devChatPoll(slot) : Promise.reject(new Error('not shown'))
 }
-// A picture or voice Chat showed this session, as a data URL. (A DEV tab has no media door yet.)
-export const chatMedia = (path, room) => (devSlotOf(room) !== null ? Promise.reject(new Error('not available')) : invoke('chat_media', { path, room }))
+// A picture or voice Chat showed this session, as a data URL. A DEV tab's chat asks its own door
+// (only what that tab's reader showed, or a picture the member dropped), and remembers which tab
+// showed the file so the picture viewer's Open goes to the same door.
+const devMediaSlots = new Map()
+export const chatMedia = (path, room) => {
+  const slot = devSlotOf(room)
+  if (slot === null) return invoke('chat_media', { path, room })
+  devMediaSlots.set(path, slot)
+  return invoke('dev_chat_media', { slot, path })
+}
 // Pictures the member dropped or pasted; returns the ones Chat may show.
 export const chatAttach = (paths) => invoke('chat_attach', { paths })
 
@@ -111,8 +119,13 @@ export const userThemes = () => invoke('user_themes')
 export const themeCreate = (name, mood, picture) => invoke('theme_create', { name, mood, picture })
 export const themeDelete = (id) => invoke('theme_delete', { id })
 export const themeFolder = (id) => invoke('theme_folder', { id })
-// Opens a file from the memory folder in its own app, or its folder with the file selected.
-export const chatMediaOpen = (path, folder = false) => invoke('media_open', { path, folder })
+// Opens a file from the memory folder in its own app, or its folder with the file selected. A file a
+// DEV tab's chat showed (by `room`, or remembered from chatMedia) opens through that tab's door.
+export const chatMediaOpen = (path, folder = false, room = undefined) => {
+  const slot = devSlotOf(room) ?? devMediaSlots.get(path) ?? null
+  if (slot === null) return invoke('media_open', { path, folder })
+  return invoke('dev_media_open', { slot, path, folder })
+}
 
 // Events from the core.
 const on = (name) => (handler) => listen(name, (event) => handler(event.payload))

@@ -1,0 +1,593 @@
+<script setup>
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { devGitCommit, devGitDiff, devGitLog, devGitPush, devGitRemote, devGitShow, devGitStatus } from '../../api/devgit.js'
+import CommitCard from './CommitCard.vue'
+import DiffView from './DiffView.vue'
+import { ASK_TO_COMMIT, LOG_PAGE, ago, badges, canPush, codeOf, commitPaths, nextTicks, pushQuestion, withNewestPage } from './git.js'
+
+// A DEV tab's Source panel: the changed files (each with its diff), the member's commit of the
+// ticked files, a button that asks the companion to commit instead, Push with one question first
+// (never forced), and the commit graph whose commits open as cards. It reads git every 10 seconds
+// while it shows, so the companion's own commits appear by themselves.
+const props = defineProps({
+  // the DEV tab's slot
+  slot: { type: Number, required: true },
+  // the companion's name, for the ask button
+  companion: { type: String, default: 'your companion' },
+  // the panel is showing (it reads git only then)
+  shown: { type: Boolean, default: false },
+})
+// `ask`: words for the parent to type into this tab's session
+const emit = defineEmits(['ask'])
+
+const READ_EVERY_MS = 10000
+
+const status = ref(null)
+const commits = ref([])
+const more = ref(false)
+const ticked = ref(new Set())
+const message = ref('')
+const problem = ref('')
+const notice = ref('')
+const working = ref(false)
+const askingPush = ref(false)
+const cancelPush = ref(null)
+const remote = ref(null)
+const diff = ref(null)
+const card = ref(null)
+let timer
+let reading = false
+
+const files = computed(() => status.value?.files ?? [])
+const tickedCount = computed(() => files.value.filter((file) => ticked.value.has(file.path)).length)
+const allTicked = computed(() => files.value.length > 0 && tickedCount.value === files.value.length)
+const pushReady = computed(() => !working.value && canPush(status.value))
+
+async function refresh() {
+  if (reading) return
+  reading = true
+  try {
+    const fresh = await devGitStatus(props.slot)
+    ticked.value = nextTicks(status.value?.files, ticked.value, fresh.files)
+    status.value = fresh
+    const first = await devGitLog(props.slot, 0)
+    // older pages the member already opened stay; only the newest page is read again
+    const kept = commits.value.length > LOG_PAGE ? withNewestPage(first, commits.value) : null
+    if (kept) commits.value = kept
+    else {
+      commits.value = first
+      more.value = first.length === LOG_PAGE
+    }
+    problem.value = ''
+  } catch (reason) {
+    problem.value = String(reason)
+  } finally {
+    reading = false
+  }
+}
+
+async function loadMore() {
+  try {
+    const next = await devGitLog(props.slot, commits.value.length)
+    commits.value = [...commits.value, ...next]
+    more.value = next.length === LOG_PAGE
+  } catch (reason) {
+    problem.value = String(reason)
+  }
+}
+
+function toggle(path) {
+  const next = new Set(ticked.value)
+  if (next.has(path)) next.delete(path)
+  else next.add(path)
+  ticked.value = next
+}
+
+function toggleAll() {
+  ticked.value = allTicked.value ? new Set() : new Set(files.value.map((file) => file.path))
+}
+
+async function openDiff(path, hash = null) {
+  try {
+    const text = await devGitDiff(props.slot, path, hash)
+    diff.value = { title: hash ? `${path} @ ${hash.slice(0, 7)}` : path, text }
+  } catch (reason) {
+    problem.value = String(reason)
+  }
+}
+
+async function commit() {
+  if (!message.value.trim() || !tickedCount.value || working.value) return
+  working.value = true
+  notice.value = ''
+  try {
+    await devGitCommit(props.slot, commitPaths(files.value, ticked.value), message.value)
+    message.value = ''
+    notice.value = 'Committed.'
+    problem.value = ''
+    await refresh()
+  } catch (reason) {
+    problem.value = String(reason)
+  } finally {
+    working.value = false
+  }
+}
+
+function askToCommit() {
+  emit('ask', ASK_TO_COMMIT)
+  notice.value = `Asked ${props.companion} to commit. The list updates when the commit lands.`
+}
+
+// Push asks once, in the page; the safe answer has the focus.
+async function askPush() {
+  askingPush.value = true
+  await nextTick()
+  cancelPush.value?.focus()
+}
+
+async function push() {
+  askingPush.value = false
+  working.value = true
+  notice.value = ''
+  try {
+    notice.value = await devGitPush(props.slot)
+    problem.value = ''
+    await refresh()
+  } catch (reason) {
+    problem.value = String(reason)
+  } finally {
+    working.value = false
+  }
+}
+
+async function openCard(item) {
+  try {
+    card.value = await devGitShow(props.slot, item.hash)
+  } catch (reason) {
+    problem.value = String(reason)
+  }
+}
+
+// The commit box grows with the message up to about eight lines, then scrolls inside.
+const box = ref(null)
+function grow() {
+  const el = box.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(Math.max(el.scrollHeight, 72), 176)}px`
+}
+watch(message, (text) => {
+  if (!text && box.value) box.value.style.height = ''
+})
+
+function onKey(event) {
+  if (event.key === 'Enter' && event.ctrlKey) {
+    event.preventDefault()
+    commit()
+  }
+}
+
+watch(
+  () => props.shown,
+  async (on) => {
+    clearInterval(timer)
+    if (!on) return
+    timer = setInterval(refresh, READ_EVERY_MS)
+    await refresh()
+    if (remote.value === null) remote.value = await devGitRemote(props.slot).catch(() => null)
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => clearInterval(timer))
+defineExpose({ refresh })
+</script>
+
+<template>
+  <aside class="source-panel" aria-label="Source control">
+    <header>
+      <span class="tag">SOURCE</span>
+      <span v-if="status" class="branch" :title="status.upstream ? `Tracking ${status.upstream}` : 'No upstream yet'">{{ status.branch }}</span>
+      <span v-if="status?.upstream" class="sync" :title="`${status.ahead} to push, ${status.behind} to pull`">&#8593;{{ status.ahead }} &#8595;{{ status.behind }}</span>
+      <span class="spacer"></span>
+      <button class="small" :disabled="!pushReady" :title="status?.upstream ? `Push to ${status.upstream}` : 'Push and set the upstream'" @click="askPush">
+        Push{{ status?.ahead ? ` ↑${status.ahead}` : '' }}
+      </button>
+      <button class="small" title="Read again" aria-label="Read again" @click="refresh">&#8635;</button>
+    </header>
+
+    <div class="scroll">
+      <div v-if="askingPush" class="confirm" role="group" aria-label="Push" @keydown.esc.stop="askingPush = false">
+        <p>{{ pushQuestion(status) }}</p>
+        <div class="row">
+          <button class="small primary" @click="push">Push</button>
+          <button ref="cancelPush" class="small" @click="askingPush = false">Cancel</button>
+        </div>
+      </div>
+      <p v-if="problem" class="problem" role="alert">{{ problem }}</p>
+      <p v-if="notice" class="notice">{{ notice }}</p>
+      <p v-if="!status && !problem" class="quiet">Reading git…</p>
+
+      <template v-if="status">
+        <div class="section-head">
+          <h4>Changes ({{ files.length }})</h4>
+          <button v-if="files.length" class="link" @click="toggleAll">{{ allTicked ? 'Untick all' : 'Tick all' }}</button>
+        </div>
+        <ul class="changes">
+          <li v-for="file in files" :key="file.path" :title="`${codeOf(file.code).word}${file.from ? ` from ${file.from}` : ''}`">
+            <input type="checkbox" :checked="ticked.has(file.path)" :aria-label="`Include ${file.path}`" @change="toggle(file.path)" />
+            <span class="code" :class="codeOf(file.code).tone">{{ codeOf(file.code).letter }}</span>
+            <span class="path">{{ file.path }}</span>
+            <button class="link" :aria-label="`Diff of ${file.path}`" @click="openDiff(file.path)">diff</button>
+          </li>
+        </ul>
+        <p v-if="!files.length" class="quiet">Nothing to commit. Every file is as it was last committed.</p>
+
+        <textarea
+          ref="box"
+          v-model="message"
+          class="message"
+          rows="3"
+          aria-label="Commit message"
+          :placeholder="`Message (Ctrl+Enter commits on ${status.branch || 'the branch'})`"
+          @keydown="onKey"
+          @input="grow"
+        ></textarea>
+        <div class="row">
+          <button class="small primary" :disabled="working || !message.trim() || !tickedCount" @click="commit">
+            Commit{{ tickedCount && tickedCount !== files.length ? ` ${tickedCount}` : '' }}
+          </button>
+          <button class="small" :disabled="!files.length" :title="`${companion} writes the message and commits in the session`" @click="askToCommit">Ask {{ companion }} to commit</button>
+        </div>
+
+        <div class="section-head">
+          <h4>Graph</h4>
+        </div>
+        <p v-if="!commits.length" class="quiet">No commits yet.</p>
+        <ul class="graph">
+          <li v-for="item in commits" :key="item.hash" :class="{ merge: item.parents.length > 1 }" :title="`${item.short} by ${item.author}, ${ago(item.date)}`">
+            <button class="commit" @click="openCard(item)">
+              <span class="lane" aria-hidden="true"></span>
+              <span class="subject">{{ item.subject }}</span>
+              <span v-for="badge in badges(item.refs)" :key="badge.text" class="badge" :class="badge.kind">{{ badge.text }}</span>
+            </button>
+          </li>
+        </ul>
+        <button v-if="more && commits.length" class="link more" @click="loadMore">Show older commits</button>
+      </template>
+    </div>
+
+    <DiffView v-if="diff" :title="diff.title" :text="diff.text" @close="diff = null" />
+    <!-- the card steps aside while one of its diffs is open, so Esc closes the diff first -->
+    <CommitCard v-if="card && !diff" :detail="card" :remote="remote" @diff="(path) => openDiff(path, card.commit.hash)" @close="card = null" />
+  </aside>
+</template>
+
+<style scoped>
+.source-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 14px 10px 14px 16px;
+  background: var(--panel-background);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  backdrop-filter: blur(var(--glass-blur));
+  box-sizing: border-box;
+  font-size: 13px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.tag {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+}
+
+.branch {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 6px 0 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+/* the column scrolls as a whole: nothing in it is ever squeezed */
+.scroll > * {
+  flex: none;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.quiet {
+  margin: 4px 0;
+  color: var(--text-dim);
+}
+
+.problem {
+  margin: 0;
+  color: var(--warn);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notice {
+  margin: 0;
+  font-size: 12px;
+  color: var(--good);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.confirm {
+  padding: 10px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--hover);
+}
+
+.confirm p {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.changes li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.changes input {
+  flex: none;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.code {
+  flex: none;
+  width: 20px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  text-align: center;
+}
+
+.code.new {
+  color: var(--good);
+}
+
+.code.gone,
+.code.conflict {
+  color: var(--warn);
+}
+
+.code.changed,
+.code.moved {
+  color: var(--accent);
+}
+
+/* a long path keeps its file name in sight and loses the start of the folder */
+.path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.message {
+  min-height: 72px;
+  max-height: 176px;
+  margin-top: 6px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.4;
+  resize: none;
+  box-sizing: border-box;
+}
+
+.message:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.graph li {
+  position: relative;
+}
+
+.commit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 4px 3px 20px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.commit:hover {
+  background: var(--hover);
+}
+
+.commit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.lane {
+  position: absolute;
+  left: 6px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.lane::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: calc(50% - 4px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.merge .lane::after {
+  background: var(--good);
+}
+
+.subject {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  flex: none;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.badge.branch {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.badge.tag {
+  border-color: var(--good);
+  color: var(--good);
+}
+
+.small {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.small.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #07142e;
+  font-weight: 600;
+}
+
+.small:hover:not(:disabled) {
+  filter: brightness(1.12);
+  background-color: var(--hover);
+}
+
+.small.primary:hover:not(:disabled) {
+  background-color: var(--accent);
+}
+
+.small:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.small:focus-visible,
+.link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.link {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.more {
+  align-self: flex-start;
+  margin: 4px 0 8px;
+}
+</style>

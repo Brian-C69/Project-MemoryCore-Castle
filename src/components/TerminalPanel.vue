@@ -50,8 +50,9 @@ const props = defineProps({
   showLog: { type: Boolean, default: false },
 })
 // (DEV) `view`: 'chat' | 'log' when the panel switched itself; `running`: the session started or
-// ended; `state`: a fresh dev state from Wake
-const emit = defineEmits(['settings', 'setup', 'view', 'running', 'state'])
+// ended; `state`: a fresh dev state from Wake; `busy`: the companion is working (Chat's typing
+// bubble); `context`: the session's context ({ percent, tokens }) when it changes, null once it ends
+const emit = defineEmits(['settings', 'setup', 'view', 'running', 'state', 'busy', 'context'])
 
 const isDev = props.devSlot !== null && props.devSlot !== undefined
 // the room Chat reads: a DEV tab's is routed to its own session (see castle.js)
@@ -398,7 +399,9 @@ function screenLines(count = 25) {
   return lines
 }
 
-defineExpose({ wake, screenLines, writeToSession })
+// a file put in the chat from outside (the DEV tab's FILES reader), as if dropped in the box
+const addPaths = (paths) => chat.value?.addPaths(paths)
+defineExpose({ wake, screenLines, writeToSession, addPaths })
 </script>
 
 <template>
@@ -439,6 +442,8 @@ defineExpose({ wake, screenLines, writeToSession })
         :room="chatRoom"
         :cli="activeProvider || cli"
         @show-log="setView('log')"
+        @busy="emit('busy', $event)"
+        @context="emit('context', $event)"
       />
     </div>
 

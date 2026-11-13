@@ -169,38 +169,123 @@ pub fn ensure_mcp_config(store: &SettingsStore) -> Option<PathBuf> {
 /// (main, STORY, a DEV tab): only the project's and the folder's own settings are read (so the
 /// personal settings, hooks, skills and `~/.claude/CLAUDE.md` are left out), and only Castle's own
 /// MCP list. Codex has no such options.
+#[cfg(test)]
 pub fn isolation_args(cli: Cli, mcp_config: &Path) -> Vec<String> {
+    isolation_args_with(cli, mcp_config, None)
+}
+
+/// The same, with Castle's own session settings (its status line) given by `--settings` when there
+/// is a file for it.
+pub fn isolation_args_with(cli: Cli, mcp_config: &Path, session_settings: Option<&Path>) -> Vec<String> {
     if cli != Cli::Claude {
         return Vec::new();
     }
+    let mut args = vec!["--setting-sources".to_string(), "project,local".to_string()];
+    if let Some(file) = session_settings {
+        args.push("--settings".to_string());
+        args.push(file.display().to_string());
+    }
     // `--mcp-config` takes several files, so it must never be last: a wake greeting after it would be
     // read as one more config file and the CLI would refuse to start. `--strict-mcp-config` closes it.
-    vec![
-        "--setting-sources".to_string(),
-        "project,local".to_string(),
-        "--mcp-config".to_string(),
-        mcp_config.display().to_string(),
-        "--strict-mcp-config".to_string(),
-    ]
+    args.push("--mcp-config".to_string());
+    args.push(mcp_config.display().to_string());
+    args.push("--strict-mcp-config".to_string());
+    args
 }
 
-/// The variables that go with it: the personal auto memory (notes Claude Code keeps per folder on
-/// this computer) is never read, whatever the room.
+/// Castle's status line script among its bundled tools.
+pub const STATUS_LINE_SCRIPT: &str = "castle-statusline.ps1";
+
+/// Castle's own settings for a session that is only this companion: kept in its settings folder,
+/// never the memory folder.
+pub fn session_settings_file(store: &SettingsStore) -> PathBuf {
+    store.folder().join("session-settings.json")
+}
+
+/// The command Claude Code runs for the status line: Castle's script, which prints
+/// `<model> | NN% | 123.4k tokens` so Chat can show how full the context is (the personal status
+/// line is left out with the rest of the personal setup).
+pub fn status_line_command(tools: &Path) -> String {
+    format!("powershell -NoProfile -ExecutionPolicy Bypass -File \"{}\"", tools.join(STATUS_LINE_SCRIPT).display())
+}
+
+/// The settings file's text: only the status line.
+pub fn session_settings_text(tools: &Path) -> String {
+    serde_json::json!({ "statusLine": { "type": "command", "command": status_line_command(tools) } }).to_string()
+}
+
+/// Writes Castle's session settings (again each wake, so a moved install points at its own tools).
+/// None when the script is not there or the file cannot be written: the session then simply has no
+/// status line, which never stops it from starting.
+pub fn ensure_session_settings(store: &SettingsStore, tools: &Path) -> Option<PathBuf> {
+    if !tools.join(STATUS_LINE_SCRIPT).is_file() {
+        return None;
+    }
+    let file = session_settings_file(store);
+    std::fs::create_dir_all(file.parent()?).ok()?;
+    std::fs::write(&file, session_settings_text(tools)).ok()?;
+    Some(file)
+}
+
+/// The variables that go with it, whatever the room: no CLAUDE.md file is read and no auto memory.
+/// Tested live (Nov 14 2026): `--setting-sources project,local` still lets the personal
+/// `~/.claude/CLAUDE.md` in, and that file can make the session someone else - so every CLAUDE.md
+/// is turned off, and the room's own instructions (Castle's block, the story rules, the project's
+/// CLAUDE.md) travel in the boot file instead (`folder_instructions`).
 pub fn isolation_vars(cli: Cli) -> Vec<(String, String)> {
     if cli != Cli::Claude {
         return Vec::new();
     }
-    vec![("CLAUDE_CODE_DISABLE_AUTO_MEMORY".to_string(), "1".to_string())]
+    vec![
+        ("CLAUDE_CODE_DISABLE_AUTO_MEMORY".to_string(), "1".to_string()),
+        ("CLAUDE_CODE_DISABLE_CLAUDE_MDS".to_string(), "1".to_string()),
+    ]
+}
+
+/// A folder's own instructions - its `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` - for a
+/// boot file, since an isolated session reads no CLAUDE.md by itself. Only the folder itself, never
+/// the folders above it (where someone's personal files may live). None when it has none.
+pub fn folder_instructions(folder: &Path) -> Option<String> {
+    let parts: Vec<String> = ["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md"]
+        .iter()
+        .filter_map(|name| std::fs::read_to_string(folder.join(name)).ok())
+        .map(|text| text.trim().to_string())
+        .filter(|text| !text.is_empty())
+        .collect();
+    (!parts.is_empty()).then(|| format!("# This folder's own instructions (its CLAUDE.md)\n\n{}", parts.join("\n\n")))
+}
+
+/// The boot file of a room that has no other boot: its folder's own instructions, so an isolated
+/// session still hears them (the main room without names, the STORY room's rules).
+fn room_instructions_boot(store: &SettingsStore, room: Room, folder: &Path) -> Option<Boot> {
+    let text = folder_instructions(folder)?;
+    let name = if room == Room::Story { "story.md" } else { "main.md" };
+    let file = store.folder().join("boot").join(name);
+    std::fs::create_dir_all(file.parent()?).ok()?;
+    std::fs::write(&file, text).ok()?;
+    Some(Boot { file, memory: false, only_this: true })
 }
 
 /// Both together for a session, or an error when the switch is on and the MCP list cannot be
 /// written: a session that should be only this companion is never started half-isolated.
+#[cfg(test)]
 pub fn isolation(store: &SettingsStore, cli: Cli, on: bool) -> Result<(Vec<String>, Vec<(String, String)>), String> {
+    isolation_inner(store, cli, on, None)
+}
+
+/// `isolation`, plus Castle's status line (from the script in `tools`), so the session's context
+/// shows in Chat.
+pub fn isolation_with_status(store: &SettingsStore, cli: Cli, on: bool, tools: &Path) -> Result<(Vec<String>, Vec<(String, String)>), String> {
+    isolation_inner(store, cli, on, Some(tools))
+}
+
+fn isolation_inner(store: &SettingsStore, cli: Cli, on: bool, tools: Option<&Path>) -> Result<(Vec<String>, Vec<(String, String)>), String> {
     if !on || cli != Cli::Claude {
         return Ok((Vec::new(), Vec::new()));
     }
     let mcp = ensure_mcp_config(store).ok_or("Castle could not write its settings folder, so the session was not started.")?;
-    Ok((isolation_args(cli, &mcp), isolation_vars(cli)))
+    let settings = tools.and_then(|tools| ensure_session_settings(store, tools));
+    Ok((isolation_args_with(cli, &mcp, settings.as_deref()), isolation_vars(cli)))
 }
 
 /// The variables a wake adds for the boot: a session that is only this companion reads no
@@ -266,11 +351,14 @@ pub(crate) fn wake_with_prompt(app: &AppHandle, store: &SettingsStore, host: &Pt
     // Castle's block in CLAUDE.md / AGENTS.md follows the Castle version (the Neural Link's lines
     // reach a member who set up before them); the member's own words outside it are untouched
     // the memory, read from the database now and handed to the CLI as it starts
-    let boot = prepare_boot(store, &settings, room, &folder);
+    let mut boot = prepare_boot(store, &settings, room, &folder);
+    if boot.is_none() && settings.only_this_companion && settings.cli == Cli::Claude {
+        boot = room_instructions_boot(store, room, &folder);
+    }
     vars.extend(wake_vars(boot.as_ref()));
     // the personal setup stays out whenever the switch is on - in the STORY room too, and even when
     // the names are missing and no boot file was written
-    let (isolation_args, isolation_vars) = isolation(store, settings.cli, settings.only_this_companion)?;
+    let (isolation_args, isolation_vars) = isolation_with_status(store, settings.cli, settings.only_this_companion, &tools_folder(app))?;
     vars.extend(isolation_vars);
     if room == Room::Main {
         if let (Some(companion), Some(member)) = (settings.companion_name.as_deref(), settings.member_name.as_deref()) {
@@ -489,6 +577,20 @@ mod tests {
     }
 
     #[test]
+    fn a_folders_own_instructions_travel_in_the_boot_file_and_never_the_folders_above() {
+        let root = folder("instructions");
+        let project = root.join("shop");
+        std::fs::create_dir_all(project.join(".claude")).unwrap();
+        std::fs::write(root.join("CLAUDE.md"), "someone above").unwrap();
+        assert_eq!(folder_instructions(&project), None);
+        std::fs::write(project.join("CLAUDE.md"), "Build with Vite.").unwrap();
+        std::fs::write(project.join(".claude").join("CLAUDE.md"), "Tests with vitest.").unwrap();
+        let text = folder_instructions(&project).unwrap();
+        assert!(text.contains("Build with Vite.") && text.contains("Tests with vitest."));
+        assert!(!text.contains("someone above"));
+    }
+
+    #[test]
     fn only_this_companion_keeps_the_personal_setup_out_with_or_without_a_boot_file() {
         let mcp = PathBuf::from("C:/castle/mcp.json");
         let args = isolation_args(Cli::Claude, &mcp);
@@ -498,7 +600,10 @@ mod tests {
         let at = args.iter().position(|a| a == "--mcp-config").unwrap();
         assert_eq!(args[at + 1], mcp.display().to_string());
         assert_eq!(args.last(), Some(&"--strict-mcp-config".to_string()));
-        assert_eq!(isolation_vars(Cli::Claude), vec![("CLAUDE_CODE_DISABLE_AUTO_MEMORY".to_string(), "1".to_string())]);
+        // every CLAUDE.md is off (the personal one gets past --setting-sources), and the auto memory
+        let vars = isolation_vars(Cli::Claude);
+        assert!(vars.contains(&("CLAUDE_CODE_DISABLE_AUTO_MEMORY".to_string(), "1".to_string())));
+        assert!(vars.contains(&("CLAUDE_CODE_DISABLE_CLAUDE_MDS".to_string(), "1".to_string())));
         assert!(isolation_args(Cli::Codex, &mcp).is_empty() && isolation_vars(Cli::Codex).is_empty());
 
         // the switch on, whatever the names: isolated, and Castle's empty MCP list is written outside the memory
@@ -509,6 +614,81 @@ mod tests {
         assert_eq!(std::fs::read_to_string(mcp_config_file(&store)).unwrap(), "{\"mcpServers\":{}}");
         let (off_args, off_vars) = isolation(&store, Cli::Claude, false).unwrap();
         assert!(off_args.is_empty() && off_vars.is_empty());
+    }
+
+    #[test]
+    fn castles_status_line_travels_in_its_own_settings_file_before_the_mcp_list() {
+        let tools = folder("status-tools");
+        let store = SettingsStore::open(&folder("status-config"));
+        // no script among the tools: no settings file and no --settings, the session still isolated
+        let (args, _) = isolation_with_status(&store, Cli::Claude, true, &tools).unwrap();
+        assert!(!args.contains(&"--settings".to_string()));
+        assert_eq!(args.last(), Some(&"--strict-mcp-config".to_string()));
+
+        std::fs::write(tools.join(STATUS_LINE_SCRIPT), "# script").unwrap();
+        let (args, vars) = isolation_with_status(&store, Cli::Claude, true, &tools).unwrap();
+        let file = session_settings_file(&store);
+        assert!(file.starts_with(store.folder()) && file.ends_with("session-settings.json"));
+        let at = args.iter().position(|a| a == "--settings").unwrap();
+        assert_eq!(args[at + 1], file.display().to_string());
+        // after the setting sources, before the MCP list, and a flag still comes last
+        assert!(at > args.iter().position(|a| a == "--setting-sources").unwrap());
+        assert!(at < args.iter().position(|a| a == "--mcp-config").unwrap());
+        assert_eq!(args.last(), Some(&"--strict-mcp-config".to_string()));
+        assert!(!vars.is_empty());
+
+        // the file holds only the status line, pointing at the script among the tools
+        let written: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        let script = tools.join(STATUS_LINE_SCRIPT).display().to_string();
+        assert_eq!(written["statusLine"]["type"], "command");
+        assert_eq!(written["statusLine"]["command"], format!("powershell -NoProfile -ExecutionPolicy Bypass -File \"{script}\""));
+        assert_eq!(written.as_object().unwrap().len(), 1);
+
+        // the plain isolation (and the switch off, or Codex) has no status line of Castle's
+        let (plain, _) = isolation(&store, Cli::Claude, true).unwrap();
+        assert!(!plain.contains(&"--settings".to_string()));
+        assert!(isolation_with_status(&store, Cli::Claude, false, &tools).unwrap().0.is_empty());
+        assert!(isolation_with_status(&store, Cli::Codex, true, &tools).unwrap().0.is_empty());
+    }
+
+    /// Runs the real script with a session's JSON on stdin (Windows PowerShell, as Claude Code does).
+    fn status_line(json: &serde_json::Value) -> Option<String> {
+        use std::io::Write;
+        let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources").join("tools").join(STATUS_LINE_SCRIPT);
+        let mut child = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
+            .arg(&script)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .ok()?;
+        child.stdin.take()?.write_all(json.to_string().as_bytes()).ok()?;
+        let output = child.wait_with_output().ok()?;
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
+    #[test]
+    fn the_status_line_says_the_model_the_percent_and_the_tokens() {
+        let place = folder("status-run");
+        let transcript = place.join("t.jsonl");
+        let lines = [
+            r#"{"type":"user","message":{"content":"hi"}}"#,
+            r#"{"type":"assistant","message":{"usage":{"input_tokens":10,"cache_creation_input_tokens":2000,"cache_read_input_tokens":40000,"output_tokens":50}}}"#,
+            r#"{"type":"assistant","isSidechain":true,"message":{"usage":{"input_tokens":999999}}}"#,
+            r#"{"type":"user","message":{"content":"next"}}"#,
+        ];
+        std::fs::write(&transcript, lines.join("\n")).unwrap();
+        let path = transcript.display().to_string();
+        // no PowerShell (not Windows): nothing to check
+        let Some(line) = status_line(&serde_json::json!({ "model": { "id": "claude-x", "display_name": "Opus" }, "transcript_path": path })) else { return };
+        // the newest main-thread answer: 42,010 of 200k (a side agent's answer is its own context)
+        assert_eq!(line, "Opus | 21% | 42k tokens");
+        let wide = status_line(&serde_json::json!({ "model": { "id": "claude-x[1m]", "display_name": "Opus" }, "transcript_path": path })).unwrap();
+        assert_eq!(wide, "Opus | 4% | 42k tokens");
+        // Claude Code's own numbers win when it sends them
+        let told = status_line(&serde_json::json!({ "model": { "display_name": "Sonnet" }, "context_window": { "used_percentage": 42.4, "context_window_size": 200000 } })).unwrap();
+        assert_eq!(told, "Sonnet | 42% | 84.8k tokens");
+        assert_eq!(status_line(&serde_json::json!({ "model": { "display_name": "Sonnet" } })).unwrap(), "Sonnet | 0% | 0 tokens");
     }
 
     #[test]

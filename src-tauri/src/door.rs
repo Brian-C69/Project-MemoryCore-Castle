@@ -35,7 +35,7 @@
 
 use crate::memdb;
 use crate::mirror;
-use crate::plans;
+use crate::door_plan::{next_line, plan_copy, plan_mark, plan_show, plan_status, project_folder};
 use mysql::prelude::Queryable;
 use mysql::{Conn, Row, Value};
 use std::collections::BTreeMap;
@@ -83,7 +83,7 @@ impl Ask {
     fn need(&self, name: &str) -> Result<&str, String> {
         self.flags.get(name).map(String::as_str).filter(|v| !v.trim().is_empty()).ok_or(format!("--{name} is needed."))
     }
-    fn get(&self, name: &str) -> Option<&str> {
+    pub(crate) fn get(&self, name: &str) -> Option<&str> {
         self.flags.get(name).map(String::as_str)
     }
     /// The long text of a verb: `--file <path>` (read as UTF-8) or `--body "..."`.
@@ -545,115 +545,6 @@ fn copy_folder(from: &Path, to: &Path) -> Result<(), String> {
     Ok(())
 }
 
-// ---------- plans for a project folder ----------
-
-/// The project folder: `--folder`, else the folder the door was started in; made whole.
-fn project_folder(ask: &Ask) -> Result<String, String> {
-    let folder = match ask.get("folder").map(str::trim).filter(|f| !f.is_empty()) {
-        Some(folder) => PathBuf::from(folder),
-        None => std::env::current_dir().map_err(|_| "This folder could not be read.".to_string())?,
-    };
-    let folder = std::path::absolute(&folder).unwrap_or(folder);
-    Ok(folder.display().to_string())
-}
-
-/// The newest `*.md` in a folder.
-pub fn newest_md(folder: &Path) -> Option<PathBuf> {
-    std::fs::read_dir(folder)
-        .ok()?
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.is_file() && p.extension().is_some_and(|x| x.eq_ignore_ascii_case("md")))
-        .max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok())
-}
-
-/// The plan the CLI approved last: the newest `*.md` in `%USERPROFILE%\.claude\plans`.
-fn newest_plan() -> Result<PathBuf, String> {
-    let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")).ok_or("Your home folder could not be found. Name the plan with --plan <file>.")?;
-    newest_md(&PathBuf::from(home).join(".claude").join("plans")).ok_or_else(|| "No plan was found in ~/.claude/plans. Name one with --plan <file>.".to_string())
-}
-
-/// The box in turn, and what is left.
-fn next_line(conn: &mut Conn, folder: &str) -> Result<String, String> {
-    let left = plans::left(conn, folder)?;
-    // carried and flagged boxes are the member's to decide: said, never walked
-    let waiting: Vec<String> = [(left.carried, "carried"), (left.flagged, "flagged")].iter().filter(|(n, _)| *n > 0).map(|(n, what)| format!("{n} {what}")).collect();
-    let waiting = if waiting.is_empty() { String::new() } else { format!(" ({} waiting for you)", waiting.join(", ")) };
-    Ok(match plans::next_item(conn, folder)? {
-        Some(next) => format!("NEXT #{} item {} [{}] {}\nLEFT {} open{waiting}", next.plan_id, next.item.ordinal, next.item.kind, next.item.text, left.open),
-        None => format!("NEXT nothing - every open box is walked{waiting}"),
-    })
-}
-
-fn plan_copy(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
-    let file = match ask.get("plan") {
-        Some(file) => PathBuf::from(file),
-        None => newest_plan()?,
-    };
-    let markdown = std::fs::read_to_string(&file).map_err(|_| format!("The plan {} could not be read.", file.display()))?;
-    let folder = project_folder(ask)?;
-    let (id, boxes, duplicate) = plans::copy_plan(conn, &folder, &markdown, Some(&file.display().to_string()))?;
-    if duplicate {
-        return Ok(format!("PLAN #{id} is already here ({boxes} items): the same plan was copied before"));
-    }
-    let parsed = plans::parse_plan(&markdown);
-    let phase = parsed.phase().map(|p| format!("{p} · ")).unwrap_or_default();
-    let title = if parsed.title.is_empty() { "untitled".to_string() } else { parsed.title };
-    Ok(format!("PLAN copied #{id} · {phase}{title} · {boxes} items\n{}", next_line(conn, &folder)?))
-}
-
-fn plan_status(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
-    let folder = project_folder(ask)?;
-    let open = plans::open_plans(conn, &folder)?;
-    if open.is_empty() {
-        return Ok("PLAN none open here - copy an approved plan with `castle-memory plan copy`".into());
-    }
-    // oldest first: the order they are walked in
-    let mut lines: Vec<String> = open
-        .iter()
-        .rev()
-        .map(|plan| {
-            let boxes: Vec<_> = plan.items.iter().filter(|i| i.kind != "phase").collect();
-            let done = boxes.iter().filter(|i| i.state == "done").count();
-            let phase = plan.phase.as_ref().map(|p| format!("{p} · ")).unwrap_or_default();
-            format!("PLAN #{} · {phase}{} · {done}/{} done", plan.id, plan.title, boxes.len())
-        })
-        .collect();
-    lines.push(next_line(conn, &folder)?);
-    Ok(lines.join("\n"))
-}
-
-/// A `--name 3` flag as a number (a leading # is fine).
-fn number<T: std::str::FromStr>(ask: &Ask, name: &str) -> Result<Option<T>, String> {
-    ask.get(name).map(|v| v.trim().trim_start_matches('#').parse().map_err(|_| format!("--{name} is a number, like 3."))).transpose()
-}
-
-fn plan_mark(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
-    let folder = project_folder(ask)?;
-    let which = match (number::<u32>(ask, "item")?, ask.get("next")) {
-        (Some(_), Some(_)) => return Err("Name one box: --next or --item N.".into()),
-        (Some(n), None) => plans::Which::Ordinal(n),
-        (None, _) => plans::Which::Next,
-    };
-    let state = ask.get("state").unwrap_or("done");
-    let marked = plans::mark(conn, &folder, number(ask, "id")?, which, state, ask.get("note"))?;
-    let mut out = format!("MARKED #{} item {} {}: {}", marked.plan_id, marked.ordinal, marked.state, plans::first_line(&marked.text));
-    if marked.plan_done {
-        out.push_str(&format!("\nPLAN #{} done - every box is ticked", marked.plan_id));
-    }
-    out.push('\n');
-    out.push_str(&next_line(conn, &folder)?);
-    Ok(out)
-}
-
-fn plan_show(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
-    let id = match number(ask, "id")? {
-        Some(id) => id,
-        None => plans::current_plan(conn, &project_folder(ask)?)?.ok_or("PLAN none open here - name one with --id N.")?,
-    };
-    Ok(plans::plan_body(conn, id)?.trim_end().to_string())
-}
-
 // ---------- export: the memory back out as markdown ----------
 
 fn write(path: &Path, text: &str) -> Result<(), String> {
@@ -826,6 +717,7 @@ pub fn main(args: &[String]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::door_plan::{newest_md, number};
 
     fn args(line: &[&str]) -> Vec<String> {
         line.iter().map(|s| s.to_string()).collect()

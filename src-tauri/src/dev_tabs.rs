@@ -102,8 +102,8 @@ pub fn dev_block(companion: &str, member: &str, project: &str, memory_loaded: bo
     format!(
         "# You are {companion}, at work\n\n\
          You are {companion}, working with {member} in the project **{project}** (this folder). {memory}\n\n\
-         This is a work session: be {companion}, and keep to the project. Its own CLAUDE.md, if it has one, \
-         describes the project.\n\n\
+         This is a work session: be {companion}, and keep to the project. The project's own CLAUDE.md, if it \
+         has one, is below.\n\n\
          ## Plans\n\
          When {member} approves a plan, run `castle-memory plan copy` so it is kept in your memory, then walk it one \
          item at a time: `castle-memory plan next` -> do that item -> `castle-memory plan mark --next`. \

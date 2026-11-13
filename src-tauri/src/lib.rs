@@ -10,10 +10,14 @@ mod clipboard;
 mod commands;
 mod db;
 mod dev;
+mod dev_files;
+mod dev_git;
 mod dev_tabs;
 mod door;
+mod door_plan;
 mod env;
 mod files;
+mod git;
 mod import;
 mod key;
 mod link;
@@ -40,6 +44,7 @@ mod studio;
 mod system;
 mod theme;
 mod themes;
+mod tree;
 mod transcript;
 mod tray;
 mod update;
@@ -232,6 +237,19 @@ pub fn run() {
             dev::dev_git_dirty,
             dev::dev_plan_items,
             dev::dev_plan_body,
+            chat::dev_chat_media,
+            chat::dev_media_open,
+            dev_git::dev_git_status,
+            dev_git::dev_git_diff,
+            dev_git::dev_git_log,
+            dev_git::dev_git_show,
+            dev_git::dev_git_commit,
+            dev_git::dev_git_push,
+            dev_git::dev_git_remote,
+            dev_git::dev_open_link,
+            dev_files::dev_tree,
+            dev_files::dev_file,
+            dev_files::dev_reveal,
             providers::provider_switch,
             providers::provider_switch_status,
             providers::provider_switch_cancel,

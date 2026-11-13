@@ -1,8 +1,12 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import TerminalPanel from '../../components/TerminalPanel.vue'
+import ContextMeter from '../../components/ContextMeter.vue'
+import { typeLine } from '../../components/typeline.js'
 import PlanPanel from './PlanPanel.vue'
-import { devCloseTab, devGitDirty } from '../../api/castle.js'
+import SourcePanel from './SourcePanel.vue'
+import { useSaveClose } from './useSaveClose.js'
+import { devCloseTab, memoryFeatures } from '../../api/castle.js'
 
 // One project's session in the DEV room: its chat in the middle, the Log behind a button, the
 // plan beside it on request. It stays mounted while other tabs show, so the session keeps going.
@@ -21,6 +25,19 @@ const emit = defineEmits(['state', 'running', 'settings', 'setup'])
 const panel = ref(null)
 const logOpen = ref(false)
 const planOpen = ref(false)
+const sourceOpen = ref(false)
+// what the chat reads off the session: working or not, and how full her context is
+const busy = ref(false)
+const context = ref(null)
+// the member's MemoryCore keeps projects, so `save project` means something to her
+const canSave = ref(false)
+onMounted(async () => {
+  try {
+    canSave.value = !!(await memoryFeatures())?.projects
+  } catch {
+    canSave.value = false
+  }
+})
 // what the session panel heard last (it hears before the room's next read of the tabs)
 const liveRunning = ref(null)
 const running = computed(() => liveRunning.value ?? !!props.tab.running)
@@ -35,7 +52,48 @@ const problem = ref('')
 function onRunning(on) {
   liveRunning.value = on
   emit('running', on)
+  if (!on) {
+    saveClose.sessionEnded()
+    context.value = null
+  }
 }
+
+// Types a line into her session (text, then Enter after a pause, as the quick actions do).
+function say(text) {
+  return typeLine((data) => panel.value?.writeToSession(data), text)
+}
+
+function saveProject() {
+  problem.value = ''
+  say('save project')
+}
+
+// Close session saves first when the project has uncommitted work (or asks, without projects)
+const saveClose = useSaveClose({
+  slot: () => props.tab.slot,
+  say,
+  busy,
+  running,
+  canSave: () => canSave.value,
+  close: () => closeNow(),
+})
+watch(
+  () => saveClose.saving.value?.ask,
+  async (ask) => {
+    askingClose.value = !!ask
+    if (ask) {
+      // the safe answer has the focus, so Enter keeps it open and Esc does too
+      await nextTick()
+      keepButton.value?.focus()
+    }
+  },
+)
+
+// a file from the FILES reader, put in her message box
+function putInChat(path) {
+  panel.value?.addPaths([path])
+}
+defineExpose({ putInChat })
 
 function wake() {
   problem.value = ''
@@ -44,22 +102,12 @@ function wake() {
 
 async function askClose() {
   problem.value = ''
-  let dirty = false
-  try {
-    dirty = await devGitDirty(props.tab.slot)
-  } catch {
-    // not a git folder, or git is missing: nothing to warn about
-  }
-  if (dirty) {
-    askingClose.value = true
-    // the safe answer has the focus, so Enter keeps it open and Esc does too
-    await nextTick()
-    keepButton.value?.focus()
-  } else closeNow()
+  await saveClose.requestClose()
 }
 
 async function closeNow() {
   askingClose.value = false
+  saveClose.dismiss()
   closing.value = true
   try {
     emit('state', await devCloseTab(props.tab.slot))
@@ -80,13 +128,21 @@ async function closeNow() {
         <span class="folder" :title="tab.folder">{{ tab.folder }}</span>
       </div>
       <div class="actions">
+        <ContextMeter :context="context" />
         <button v-if="!running" class="primary" :disabled="!tab.status?.ready" :title="tab.status?.ready ? '' : tab.status?.message" @click="wake">Wake</button>
+        <button v-if="running && canSave" :disabled="!!saveClose.saving.value" title="Ask her to save the project: its record in your memory, and a commit" @click="saveProject">Save project</button>
+        <button :class="{ on: sourceOpen }" :aria-pressed="sourceOpen" @click="sourceOpen = !sourceOpen">Source</button>
         <button :class="{ on: planOpen }" :aria-pressed="planOpen" @click="planOpen = !planOpen">Plan</button>
         <button :class="{ on: logOpen }" :aria-pressed="logOpen" @click="logOpen = !logOpen">Log</button>
         <button :disabled="closing" @click="askClose">{{ closing ? 'Closing…' : 'Close session' }}</button>
       </div>
     </header>
     <p v-if="problem" class="problem" role="alert">{{ problem }}</p>
+    <div v-if="saveClose.saving.value && !saveClose.saving.value.ask" class="saving" role="status">
+      <span>{{ saveClose.saving.value.note }}</span>
+      <button @click="saveClose.closeAnyway()">Close without saving</button>
+      <button class="primary" @click="saveClose.dismiss()">Keep it open</button>
+    </div>
 
     <div class="tab-body">
       <TerminalPanel
@@ -98,20 +154,23 @@ async function closeNow() {
         :cli="cli"
         :settings-stamp="settingsStamp"
         @view="logOpen = $event === 'log'"
+        @busy="busy = $event"
+        @context="context = $event"
         @running="onRunning"
         @state="emit('state', $event)"
         @settings="emit('settings', $event)"
         @setup="emit('setup')"
       />
+      <SourcePanel v-if="sourceOpen" class="plan-side" :slot="tab.slot" :companion="companion" :shown="shown && sourceOpen" @ask="say" />
       <PlanPanel v-if="planOpen" class="plan-side" :index="tab.slot" :shown="shown && planOpen" />
     </div>
 
-    <div v-if="askingClose" class="close-sheet" role="dialog" aria-modal="true" aria-labelledby="close-sheet-title" @click.self="askingClose = false" @keydown.esc.stop="askingClose = false">
+    <div v-if="askingClose" class="close-sheet" role="dialog" aria-modal="true" aria-labelledby="close-sheet-title" @click.self="askingClose = false; saveClose.dismiss()" @keydown.esc.stop="askingClose = false; saveClose.dismiss()">
       <div class="close-card">
         <h3 id="close-sheet-title">Close this session?</h3>
         <p>{{ tab.name }} has changes that are not committed yet. Closing the session keeps the files as they are, but {{ companion }} stops working here.</p>
         <div class="close-buttons">
-          <button ref="keepButton" class="primary" @click="askingClose = false">Keep it open</button>
+          <button ref="keepButton" class="primary" @click="askingClose = false; saveClose.dismiss()">Keep it open</button>
           <button @click="closeNow">Close anyway</button>
         </div>
       </div>
@@ -130,6 +189,20 @@ async function closeNow() {
   min-height: 0;
 }
 
+.saving {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  background: var(--panel-background);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.saving span {
+  flex: 1;
+}
 .tab-head {
   display: flex;
   flex-wrap: wrap;

@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import DevTab from './dev/DevTab.vue'
+import FileTree from './dev/FileTree.vue'
+import FileView from './dev/FileView.vue'
 import { chooseFolder, devForget, devOpen, devState } from '../api/castle.js'
 import { MAX_TABS, folderName, nextActive, orderTabs, recentProjects, tabForFolder } from './dev/devtabs.js'
 
@@ -22,6 +24,21 @@ const state = ref({ tabs: [], projects: [], memoryFolder: '' })
 const activeSlot = ref(null)
 const problem = ref('')
 const busy = ref(false)
+// the left column: the recent PROJECTS, or the open project's FILES
+const side = ref('projects')
+// the file open in the reader ({ name, rel }), for the active tab
+const reading = ref(null)
+const tabViews = {}
+const activeTab = computed(() => tabs.value.find((t) => t.slot === activeSlot.value) ?? null)
+watch(activeSlot, () => (reading.value = null))
+watch(activeTab, (tab) => {
+  if (!tab && side.value === 'files') side.value = 'projects'
+})
+// Put in chat: the file goes into the active tab's message box, as a dropped file does
+function putInChat(path) {
+  reading.value = null
+  tabViews[activeSlot.value]?.putInChat(path)
+}
 let timer
 
 const tabs = computed(() => orderTabs(state.value.tabs).map((t) => ({ ...t, name: t.name || folderName(t.folder) })))
@@ -104,8 +121,22 @@ onBeforeUnmount(() => clearInterval(timer))
 
 <template>
   <div class="dev-room">
-    <aside class="projects widget" aria-label="Projects">
-      <h2>PROJECTS</h2>
+    <aside class="projects widget" :aria-label="side === 'files' ? 'Files' : 'Projects'">
+      <div class="side-switch" role="tablist" aria-label="Left column">
+        <button role="tab" :aria-selected="side === 'projects'" :class="{ on: side === 'projects' }" @click="side = 'projects'">PROJECTS</button>
+        <button role="tab" :aria-selected="side === 'files'" :class="{ on: side === 'files' }" :disabled="!activeTab" :title="activeTab ? `The files of ${activeTab.name}` : 'Open a project to see its files'" @click="side = 'files'">FILES</button>
+      </div>
+      <FileTree
+        v-if="activeTab"
+        v-show="side === 'files'"
+        :key="`files:${activeTab.slot}:${activeTab.folder}`"
+        :slot="activeTab.slot"
+        :folder="activeTab.folder"
+        :shown="visible && side === 'files'"
+        :selected="reading?.rel"
+        @open="reading = $event"
+      />
+      <template v-if="side === 'projects'">
       <button class="open-folder" :disabled="busy" :title="full ? `All ${MAX_TABS} tabs are in use - close a session to open another project` : ''" @click="openFolder">
         {{ busy ? 'Opening…' : 'Open a folder…' }}
       </button>
@@ -123,6 +154,7 @@ onBeforeUnmount(() => clearInterval(timer))
           <button class="forget" title="Take off the list" :aria-label="`Take ${project.name} off the list`" @click="forget(project.folder)">&times;</button>
         </li>
       </ul>
+      </template>
     </aside>
 
     <div class="work">
@@ -147,6 +179,7 @@ onBeforeUnmount(() => clearInterval(timer))
         v-for="tab in tabs"
         v-show="tab.slot === activeSlot"
         :key="`${tab.slot}:${tab.folder}`"
+        :ref="(view) => (view ? (tabViews[tab.slot] = view) : delete tabViews[tab.slot])"
         :tab="tab"
         :shown="visible && tab.slot === activeSlot"
         :companion="companion"
@@ -157,6 +190,8 @@ onBeforeUnmount(() => clearInterval(timer))
         @settings="emit('settings', $event)"
         @setup="emit('setup')"
       />
+
+      <FileView v-if="reading && activeTab" :slot="activeTab.slot" :folder="activeTab.folder" :entry="reading" @put="putInChat" @close="reading = null" />
 
       <div v-if="!tabs.length" class="nothing widget">
         <p class="title">No project is open.</p>
@@ -183,6 +218,22 @@ onBeforeUnmount(() => clearInterval(timer))
   backdrop-filter: blur(var(--glass-blur));
 }
 
+.side-switch {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.side-switch button {
+  flex: 1;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  padding: 6px 8px;
+  opacity: 0.7;
+}
+.side-switch button.on {
+  opacity: 1;
+  border-color: var(--accent, currentColor);
+}
 .projects {
   display: flex;
   flex-direction: column;

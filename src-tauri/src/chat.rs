@@ -21,6 +21,12 @@ impl ChatState {
     pub fn clear(&self) {
         *self.0.lock().unwrap() = None;
     }
+
+    /// Whether this Chat's reader showed `path` (a picture or voice of its session, or a picture the
+    /// member shared in a message it read).
+    pub fn was_shown(&self, path: &str) -> bool {
+        self.0.lock().unwrap().as_ref().is_some_and(|(_, follower)| follower.was_shown(path))
+    }
 }
 #[derive(Default)]
 pub struct MainChat(pub ChatState);
@@ -167,7 +173,7 @@ pub fn chat_media(
     store: State<SettingsStore>,
 ) -> Result<String, String> {
     let chat = pick(Room::named(room.as_deref()), &main_chat, &story_chat);
-    let allowed = chat.0.lock().unwrap().as_ref().map(|(_, f)| f.was_shown(&path)).unwrap_or(false)
+    let allowed = chat.was_shown(&path)
         || member.0.lock().unwrap().contains(&path)
         || crate::providers::history(&store, Room::named(room.as_deref())).iter().any(|e| e.path.as_ref() == Some(&path) || e.pictures.contains(&path));
     if !allowed {
@@ -187,4 +193,80 @@ pub fn chat_attach(paths: Vec<String>, member: State<MemberPictures>) -> Vec<Str
         .collect();
     member.0.lock().unwrap().extend(pictures.iter().cloned());
     pictures
+}
+
+/// Whether a DEV tab's Chat may hand the screen `path`: that tab's reader showed it, or the member
+/// dropped or pasted it this run. A slot that does not exist is refused.
+pub(crate) fn dev_allows(chats: &[ChatState], slot: usize, path: &str, member: &HashSet<String>) -> Result<(), String> {
+    let chat = chats.get(slot).ok_or("That DEV tab does not exist.")?;
+    if chat.was_shown(path) || member.contains(path) {
+        Ok(())
+    } else {
+        Err("That file is not one this chat has shown.".into())
+    }
+}
+
+/// A picture or voice a DEV tab's Chat showed, as a data URL - never any other path.
+#[tauri::command]
+pub fn dev_chat_media(slot: usize, path: String, chats: State<crate::dev::DevChats>, member: State<MemberPictures>) -> Result<String, String> {
+    dev_allows(&chats.0, slot, &path, &member.0.lock().unwrap())?;
+    files::data_url(Path::new(&path))
+}
+
+/// Opens a file a DEV tab's Chat showed in its own app, or its folder with the file selected. A
+/// project's files are outside the memory folder, so the rule is the chat's own, not the fence.
+#[tauri::command]
+pub fn dev_media_open(slot: usize, path: String, folder: bool, chats: State<crate::dev::DevChats>, member: State<MemberPictures>) -> Result<(), String> {
+    dev_allows(&chats.0, slot, &path, &member.0.lock().unwrap())?;
+    let file = Path::new(&path);
+    if !file.is_file() {
+        return Err("The file is gone.".into());
+    }
+    let mut command = std::process::Command::new("explorer.exe");
+    if folder {
+        command.arg(format!("/select,{}", file.display()));
+    } else {
+        command.arg(file);
+    }
+    command.spawn().map(|_| ()).map_err(|_| "Windows could not open it.".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn a_dev_chat_hands_over_only_what_its_own_reader_showed_or_the_member_dropped() {
+        let folder = std::env::temp_dir().join(format!("castle-dev-media-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(&folder).unwrap();
+        let shot = folder.join("shot.png");
+        std::fs::write(&shot, b"png").unwrap();
+        let shot = shot.display().to_string();
+        // the member's message in slot 1's record names the picture, so slot 1's reader showed it
+        let record = folder.join("r.jsonl");
+        let line = format!(r#"{{"type":"user","uuid":"k","message":{{"content":{}}}}}"#, serde_json::to_string(&format!("look at {shot}")).unwrap());
+        std::fs::write(&record, format!("{line}\n")).unwrap();
+        let chats: [ChatState; 3] = Default::default();
+        let mut follower = claude::follower(record, SystemTime::now() + Duration::from_secs(3600));
+        follower.read_new().unwrap();
+        *chats[1].0.lock().unwrap() = Some((7, follower));
+        let none = HashSet::new();
+
+        assert!(chats[1].was_shown(&shot));
+        assert!(dev_allows(&chats, 1, &shot, &none).is_ok());
+        // another tab's chat never showed it, and no other path passes
+        assert!(dev_allows(&chats, 0, &shot, &none).is_err());
+        assert!(dev_allows(&chats, 1, r"C:\Windows\win.ini", &none).is_err());
+        // a picture the member dropped shows in any tab
+        let dropped = HashSet::from([shot.clone()]);
+        assert!(dev_allows(&chats, 2, &shot, &dropped).is_ok());
+        // a slot that does not exist is refused, whatever the path
+        assert_eq!(dev_allows(&chats, 3, &shot, &dropped), Err("That DEV tab does not exist.".to_string()));
+        // a closed tab forgets what it showed
+        chats[1].clear();
+        assert!(dev_allows(&chats, 1, &shot, &none).is_err());
+        let _ = std::fs::remove_dir_all(folder);
+    }
 }
