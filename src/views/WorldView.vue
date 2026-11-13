@@ -139,6 +139,16 @@ async function apply() {
     } while (again)
   } catch (reason) {
     problem.value = String(reason)
+    // A newer click can arrive while this attempt is failing (change() already wrote its row before
+    // calling apply(), so the screen shows it) - without this, "again" is simply abandoned: nothing
+    // rechecks it once the loop has exited through an exception, so that choice is never sent until
+    // something else happens to call apply(). Retried once, after this call has actually finished
+    // (sending must drop to false first, in the finally below, or the retry just coalesces into
+    // "again" again and does nothing).
+    if (again) {
+      again = false
+      queueMicrotask(apply)
+    }
   } finally {
     sending = false
   }
