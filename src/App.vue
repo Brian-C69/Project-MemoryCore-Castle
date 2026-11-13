@@ -90,6 +90,7 @@ const roomFile = ref('')
 const memoryStamp = ref(0)
 // rooms the member switched off in Settings are not available (never removed)
 const rooms = ref({})
+const barClock = ref({ enabled: false, format: '24h' })
 const tabs = computed(() =>
   allTabs.filter((tab) => (!tab.needs || home.value?.features?.[tab.needs]) && (tab.id === 'home' || rooms.value[tab.id] !== false)),
 )
@@ -154,6 +155,7 @@ async function loadSettingsAndTheme() {
     memoryFolder.value = view.settings.memoryFolder ?? ''
     memberName.value = view.settings.memberName ?? ''
     rooms.value = view.settings.rooms ?? {}
+    barClock.value = { enabled: !!view.settings.displayClock, format: view.settings.clockFormat ?? '24h' }
     if (!view.settings.setupDone) {
       setupOpen.value = true
       setupReopened.value = false
@@ -338,6 +340,8 @@ watch(settingsStamp, () => {
     <TopBar
       :tabs="tabs"
       :active="active"
+      :display-clock="barClock.enabled"
+      :clock-format="barClock.format"
       :marks="marks"
       :mark-titles="{ story: 'The story has new lines', chat: 'New in the room' }"
       @select="active = $event; marks = marks.filter((m) => m !== $event)"
