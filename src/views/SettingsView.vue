@@ -7,6 +7,7 @@ import BackupPanel from '../components/BackupPanel.vue'
 import DatabasePanel from '../components/DatabasePanel.vue'
 import { DIARY_LOOKS, lookOf } from '../components/diaryviews.js'
 import {
+  providerSwitch,
   roomsApply,
   roomCompanionRefresh,
   linkView,
@@ -158,7 +159,10 @@ async function tellRoom(message) {
 async function switchCli(cli) {
   if (settings.value.cli === cli) return
   cliCheck.value = await attempt('Checking…', () => setupCheckCli(cli))
-  await save({ cli }, `${cli === 'codex' ? 'Codex' : 'Claude Code'} is chosen. Wake your companion again to switch.`)
+  await attempt('Queuing switch…', async () => {
+    const state = await providerSwitch(cli)
+    done.value = state.message
+  })
 }
 
 async function changeAvatar() {

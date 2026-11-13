@@ -101,15 +101,18 @@ pub fn tools_folder(app: &AppHandle) -> PathBuf {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalView {
+    provider: Option<Cli>,
     running: bool,
     status: SessionStatus,
     snapshot: String,
 }
 
 fn view(store: &SettingsStore, host: &PtyHost, room: Room) -> TerminalView {
-    let settings = store.get();
+    let mut settings = store.get();
+    settings.cli = host.provider().unwrap_or(settings.cli);
     let program = env::find_on_path(settings.cli.command());
     TerminalView {
+        provider: host.provider(),
         running: host.is_running(),
         status: status(&settings, room, program.as_deref()),
         snapshot: host.snapshot(),
@@ -193,7 +196,11 @@ fn prepare_boot(store: &SettingsStore, settings: &Settings, room: Room, folder: 
 
 /// Starts the room's session unless it is already running. The screen hears it through that
 /// room's output and exit events.
-fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols: u16, rows: u16) -> Result<(), String> {
+pub(crate) fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols: u16, rows: u16) -> Result<(), String> {
+    wake_with_prompt(app, store, host, room, cols, rows, None)
+}
+
+pub(crate) fn wake_with_prompt(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols: u16, rows: u16, prompt: Option<&str>) -> Result<(), String> {
     let settings = store.get();
     let program = env::find_on_path(settings.cli.command());
     let ready = status(&settings, room, program.as_deref());
@@ -218,8 +225,10 @@ fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols
     let (output_event, exit_event) = room.events();
     let output = app.clone();
     let ending = app.clone();
-    host.start(
-        pty::launch_command(&program, &folder, &vars, &wake_args(settings.cli, boot.as_ref())),
+    let mut args = wake_args(settings.cli, boot.as_ref());
+    if let Some(prompt) = prompt { args.push(prompt.to_owned()); }
+    let started = host.start(
+        pty::launch_command(&program, &folder, &vars, &args),
         cols.max(20),
         rows.max(5),
         move |text| {
@@ -236,6 +245,9 @@ fn wake(app: &AppHandle, store: &SettingsStore, host: &PtyHost, room: Room, cols
             let _ = ending.emit(exit_event, code);
         },
     )?;
+    if started { host.bind_provider(settings.cli); }
+    // A handoff prompt is a turn the new CLI is now working on: a later switch waits for it.
+    if started && prompt.is_some() { host.mark_input(); }
     Ok(())
 }
 
@@ -254,12 +266,26 @@ pub fn terminal_state(room: Option<String>, store: State<SettingsStore>, main: S
     view(&store, host(room, &main, &story), room)
 }
 
+/// The opening line Castle gives a session when the member presses Wake: neither CLI does anything
+/// until its first message, so without it a fresh session sits blank instead of greeting. The
+/// companion's own instructions (CLAUDE.md / AGENTS.md) say what to do on a first turn; this only
+/// starts one. It lands in the conversation record like something the member said, so the provider
+/// handoff leaves it out.
+pub const WAKE_PROMPT: &str = "Hi, I just woke you. Please load your memory and greet me.";
+
+/// What to start the CLI with: only the Wake button asks for the greeting, and only for the main
+/// session - not a wake Castle does itself at launch, and not the STORY room.
+pub fn opening_prompt(room: Room, greet: Option<bool>) -> Option<&'static str> {
+    (room == Room::Main && greet == Some(true)).then_some(WAKE_PROMPT)
+}
+
 #[tauri::command]
 pub fn terminal_start(
     app: AppHandle,
     cols: u16,
     rows: u16,
     room: Option<String>,
+    greet: Option<bool>,
     store: State<SettingsStore>,
     main: State<MainHost>,
     story: State<StoryHost>,
@@ -269,12 +295,56 @@ pub fn terminal_start(
         crate::rooms::need(&store, "story")?;
     }
     let host = host(room, &main, &story);
-    wake(&app, &store, host, room, cols, rows)?;
+    wake_with_prompt(&app, &store, host, room, cols, rows, opening_prompt(room, greet))?;
     Ok(view(&store, host, room))
 }
 
+/// The terminal talking to the console on its own, not the member typing: answers to the
+/// console's questions and the focus reports the CLI asked for. Windows' console waits for the
+/// cursor answer before it starts the CLI, so these are never held back, and they never count as
+/// the member's last input - otherwise a fresh session would look typed into (Codex asks for the
+/// screen's colours the moment it starts) and a provider switch would wait for a turn that never
+/// began. What it knows, with the bytes Castle's screen really sends back:
+///   cursor position `ESC [ 1;1 R`, device attributes `ESC [ ? 1;2 c` and `ESC [ > 0;276;0 c`,
+///   status `ESC [ 0 n`, keyboard mode `ESC [ ? 0 u`, mode reports `ESC [ ? 2026;2 $ y`,
+///   colours `ESC ] 10;rgb:ee/f3/ff ESC \`, and focus `ESC [ I` / `ESC [ O`.
+/// A key press is never one of these (arrows end in A-D, F-keys in ~, a kitty key in u without `?`).
+pub fn is_terminal_reply(data: &str) -> bool {
+    if data.len() > 128 {
+        return false;
+    }
+    if data == "\x1b[I" || data == "\x1b[O" {
+        return true;
+    }
+    // OSC (colours) and DCS (version) replies: ESC ] or ESC P, then text, then ST (ESC \) or BEL
+    if let Some(rest) = data.strip_prefix("\x1b]").or_else(|| data.strip_prefix("\x1bP")) {
+        let text = rest.strip_suffix("\x1b\\").or_else(|| rest.strip_suffix('\x07'));
+        return text.is_some_and(|t| !t.contains('\x1b') && t.starts_with(|c: char| c.is_ascii_digit() || c == '>'));
+    }
+    let Some(body) = data.strip_prefix("\x1b[") else { return false };
+    let Some(last) = body.chars().last().filter(char::is_ascii) else { return false };
+    let params = &body[..body.len() - 1];
+    if !params.chars().all(|c| c.is_ascii_digit() || matches!(c, ';' | '?' | '>' | '$')) {
+        return false;
+    }
+    match last {
+        'R' | 'c' | 'n' => !params.contains('$'),
+        'u' => params.starts_with('?') && !params.contains('$'),
+        'y' => params.starts_with('?') && params.ends_with('$'),
+        _ => false,
+    }
+}
+
 #[tauri::command]
-pub fn terminal_write(data: String, room: Option<String>, main: State<MainHost>, story: State<StoryHost>) -> Result<(), String> {
+pub fn terminal_write(data: String, room: Option<String>, main: State<MainHost>, story: State<StoryHost>, images: State<crate::providers::Images>, control: State<crate::providers::Control>) -> Result<(), String> {
+    if is_terminal_reply(&data) {
+        return host(Room::named(room.as_deref()), &main, &story).reply(data.as_bytes());
+    }
+    let switching = control.0.try_lock().map_err(|_| "Provider is changing. Your message has not been sent.")?;
+    if Room::named(room.as_deref()) == Room::Main && switching.phase == "switching" { return Err("Provider is switching. Your message has not been sent.".into()); }
+    if Room::named(room.as_deref()) == Room::Main && images.0.lock().unwrap().iter().any(|j| j.phase == "working") {
+        return Err("An image job is using this memory. Your message has not been sent; retry when it finishes.".into());
+    }
     host(Room::named(room.as_deref()), &main, &story).write(data.as_bytes())
 }
 
@@ -401,5 +471,34 @@ MEMORY_DB_PASSWORD=x
         std::fs::write(&file, "old").unwrap();
         forget_boot_file(&store);
         assert!(!file.exists());
+    }
+
+    #[test]
+    fn only_the_wake_button_greets_and_only_in_the_main_session() {
+        assert_eq!(opening_prompt(Room::Main, Some(true)), Some(WAKE_PROMPT));
+        assert_eq!(opening_prompt(Room::Main, Some(false)), None, "a wake Castle does itself");
+        assert_eq!(opening_prompt(Room::Main, None), None, "no answer means no greeting");
+        assert_eq!(opening_prompt(Room::Story, Some(true)), None, "the STORY room has its own opening");
+    }
+
+    #[test]
+    fn the_terminal_answering_the_console_is_told_apart_from_typing() {
+        // the bytes Castle's screen (xterm.js) sent back to real Codex and Claude Code queries, plus the same
+        // shapes ending in BEL and as a DCS version reply (not captured, but the same kind of reply)
+        for reply in [
+            "\x1b[1;1R", "\x1b[24;80R", "\x1b[?1;2c", "\x1b[>0;276;0c", "\x1b[0n", "\x1b[I", "\x1b[O",
+            "\x1b[?0u", "\x1b[?2026;2$y", "\x1b[?1;2$y",
+            "\x1b]10;rgb:eeee/f3f3/ffff\x1b\\", "\x1b]11;rgb:0000/0000/0000\x1b\\", "\x1b]4;1;rgb:cccc/0000/0000\x1b\\",
+            "\x1b]11;rgb:0000/0000/0000\x07", "\x1bP>|xterm.js(5.5.0)\x1b\\",
+        ] {
+            assert!(is_terminal_reply(reply), "{reply:?}");
+        }
+        for typed in [
+            "hello", "\r", "\x7f", "\t", "\x1b", "\x1b[A", "\x1b[1;5C", "\x1b[3~", "\x1b[Z", "\x1bOP", "\x1b[200~paste\x1b[201~",
+            "\x1b[1;1Rmore", "\x1b[", "R", "\x1b[1;1H", "\x1b[97;5u", "\x1b[<0;10;5M", "\x1b]\x1b\\", "\x1b]11;rgb:0/0/0\x1b\\x",
+            "\x1b[?2026;2$u", "\x1bb", "\x1b]hello\x07",
+        ] {
+            assert!(!is_terminal_reply(typed), "{typed:?}");
+        }
     }
 }

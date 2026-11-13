@@ -134,6 +134,8 @@ impl Session {
 /// and the STORY room's.
 #[derive(Default)]
 pub struct PtyHost {
+    provider: Mutex<Option<crate::settings::Cli>>,
+    input_time: Mutex<Option<std::time::SystemTime>>,
     session: Mutex<Option<(u64, Session)>>,
     next_id: Mutex<u64>,
     scrollback: Arc<Mutex<Vec<u8>>>,
@@ -146,6 +148,14 @@ pub struct PtyHost {
 }
 
 impl PtyHost {
+    pub fn last_input_time(&self) -> Option<std::time::SystemTime> { *self.input_time.lock().unwrap() }
+    pub fn provider(&self) -> Option<crate::settings::Cli> {
+        if self.is_running() { *self.provider.lock().unwrap() } else { None }
+    }
+
+    pub fn bind_provider(&self, provider: crate::settings::Cli) {
+        *self.provider.lock().unwrap() = Some(provider);
+    }
     pub fn is_running(&self) -> bool {
         self.session.lock().unwrap().is_some()
     }
@@ -213,7 +223,19 @@ impl PtyHost {
     }
 
     pub fn write(&self, data: &[u8]) -> Result<(), String> {
+        *self.input_time.lock().unwrap() = Some(std::time::SystemTime::now());
         *self.last_input.lock().unwrap() = Some(std::time::Instant::now());
+        self.write_quietly(data)
+    }
+
+    /// Something was handed to the session as if typed (a provider handoff prompt).
+    pub fn mark_input(&self) {
+        *self.input_time.lock().unwrap() = Some(std::time::SystemTime::now());
+    }
+
+    /// The terminal's answer to the console's own question: not the member's input, so it does not
+    /// count as the last thing they typed.
+    pub fn reply(&self, data: &[u8]) -> Result<(), String> {
         self.write_quietly(data)
     }
 

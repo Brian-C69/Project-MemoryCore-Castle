@@ -6,6 +6,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import ChatView from './ChatView.vue'
+import { isTerminalReply } from './terminalreply.js'
 import QuickActions from './QuickActions.vue'
 import {
   clipboardCopy,
@@ -42,6 +43,8 @@ const MAX_WIDTH = 75
 const surface = ref(null)
 const panel = ref(null)
 const running = ref(false)
+let starting = false
+const activeProvider = ref(null)
 const ended = ref(false)
 const status = ref({ ready: false, message: '', fix: null })
 const problem = ref('')
@@ -111,6 +114,7 @@ function cssVar(name) {
 }
 
 function show(state) {
+  activeProvider.value = state.provider ?? null
   running.value = state.running
   status.value = state.status
 }
@@ -169,19 +173,26 @@ function onRightClick(event) {
   else pasteIntoSession()
 }
 
-async function wake() {
+// `greet`: true only when the member pressed Wake, so Castle opens the conversation. A wake Castle
+// does itself (at launch, or on a request from elsewhere) starts a blank session as before.
+async function wake({ greet = false } = {}) {
   if (running.value) {
     term.focus()
     return
   }
   problem.value = ''
   fitNow()
+  // The console asks this screen where its cursor is the moment it starts, before Castle has said
+  // the session is running; the answer must still reach it or the CLI never begins.
+  starting = true
   try {
-    show(await terminalStart(term.cols, term.rows, props.room))
+    show(await terminalStart(term.cols, term.rows, props.room, greet === true))
     ended.value = false
     term.focus()
   } catch (reason) {
     problem.value = String(reason)
+  } finally {
+    starting = false
   }
 }
 
@@ -229,7 +240,7 @@ onMounted(async () => {
   term.attachCustomKeyEventHandler(clipboardKeys)
   surface.value.addEventListener('contextmenu', onRightClick)
   term.onData((data) => {
-    if (running.value) terminalWrite(data, props.room).catch(() => {})
+    if (running.value || starting || isTerminalReply(data)) terminalWrite(data, props.room).catch(() => {})
   })
 
   // Listen before anything starts: the console asks this screen a question before it runs.
@@ -276,6 +287,8 @@ async function recheck() {
   }
 }
 watch(() => props.settingsStamp, recheck)
+window.addEventListener('castle-provider-changed', recheck)
+onBeforeUnmount(() => window.removeEventListener('castle-provider-changed', recheck))
 const whenShown = () => {
   if (document.visibilityState === 'visible' && !running.value) recheck()
 }
@@ -352,7 +365,7 @@ defineExpose({ wake, screenLines, writeToSession })
         :read-screen="screenLines"
         :companion="companion"
         :room="room"
-        :cli="cli"
+        :cli="activeProvider || cli"
         @show-log="setView('log')"
       />
     </div>
@@ -363,7 +376,7 @@ defineExpose({ wake, screenLines, writeToSession })
       <p class="title">{{ ended ? `${companion}'s session ended.` : `${companion} is resting.` }}</p>
       <p class="message">{{ problem || status.message }}</p>
       <div class="buttons">
-        <button class="primary" :disabled="!status.ready" @click="wake">Wake {{ companion === 'Your companion' ? 'your companion' : companion }}</button>
+        <button class="primary" :disabled="!status.ready" @click="wake({ greet: true })">Wake {{ companion === 'Your companion' ? 'your companion' : companion }}</button>
         <button v-if="status.fix === 'setup'" @click="emit('setup')">Open setup</button>
         <button v-if="status.fix === 'settings' || status.fix === 'install'" @click="emit('settings')">Settings</button>
       </div>

@@ -43,7 +43,7 @@ fn pick<'a>(room: Room, main: &'a MainChat, story: &'a StoryChat) -> &'a ChatSta
 }
 
 /// The newest record of `folder`'s session written since `started`, and how to follow it.
-fn newest_record(cli: Cli, folder: &Path, started: SystemTime) -> Option<(PathBuf, fn(PathBuf, SystemTime) -> Follower)> {
+pub(crate) fn newest_record(cli: Cli, folder: &Path, started: SystemTime) -> Option<(PathBuf, fn(PathBuf, SystemTime) -> Follower)> {
     match cli {
         Cli::Claude => {
             let records = claude::projects_root()?.join(claude::project_folder_name(&folder.display().to_string()));
@@ -74,7 +74,8 @@ pub fn chat_poll(
     let Some((session, started)) = host.started() else {
         return empty("asleep");
     };
-    let settings = store.get();
+    let mut settings = store.get();
+    settings.cli = host.provider().unwrap_or(settings.cli);
     let Some(folder) = room.folder(&settings) else {
         return empty("waiting");
     };
@@ -98,13 +99,22 @@ pub fn chat_poll(
     let (_, follower) = slot.as_mut().expect("set above");
     match follower.read_new() {
         Ok(mut entries) => {
+            if let Err(error) = crate::providers::remember(&store, room, settings.cli, session, &mut entries) {
+                eprintln!("MemoryCore Castle: {error}");
+            }
             if reset && entries.len() > transcript::FIRST_READ_LIMIT {
                 entries = entries.split_off(entries.len() - transcript::FIRST_READ_LIMIT);
             }
+            if reset { entries = crate::providers::history(&store, room); }
             ChatPoll { entries, reset, status: "ok" }
         }
         Err(_) => ChatPoll { entries: Vec::new(), reset, status: "unreadable" },
     }
+}
+
+#[tauri::command]
+pub fn chat_history(room: Option<String>, store: State<SettingsStore>) -> Vec<ChatEntry> {
+    crate::providers::history(&store, Room::named(room.as_deref()))
 }
 
 /// A picture or voice file Chat already showed (the companion's this session, or one the member
@@ -116,10 +126,12 @@ pub fn chat_media(
     main_chat: State<MainChat>,
     story_chat: State<StoryChat>,
     member: State<MemberPictures>,
+    store: State<SettingsStore>,
 ) -> Result<String, String> {
     let chat = pick(Room::named(room.as_deref()), &main_chat, &story_chat);
     let allowed = chat.0.lock().unwrap().as_ref().map(|(_, f)| f.was_shown(&path)).unwrap_or(false)
-        || member.0.lock().unwrap().contains(&path);
+        || member.0.lock().unwrap().contains(&path)
+        || crate::providers::history(&store, Room::named(room.as_deref())).iter().any(|e| e.path.as_ref() == Some(&path) || e.pictures.contains(&path));
     if !allowed {
         return Err("That file is not one Chat has shown this session.".into());
     }

@@ -9,6 +9,7 @@ import HomeCards from './components/widgets/HomeCards.vue'
 import DatabaseOffer from './components/DatabaseOffer.vue'
 import { shouldOffer } from './components/database.js'
 import CompanionHeader from './components/CompanionHeader.vue'
+import { onProviderChanged } from './api/castle.js'
 import ModalSheet from './components/ModalSheet.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import AppsView from './views/AppsView.vue'
@@ -293,7 +294,9 @@ async function onBackupCard(mode) {
 let refresh
 let stopBackupEvents
 let stopStoryEvents
+let stopProviderEvents
 onMounted(async () => {
+  stopProviderEvents = await onProviderChanged(async () => { await settingsSaved(); window.dispatchEvent(new Event('castle-provider-changed')) }).catch(() => null)
   await loadSettingsAndTheme()
   loadHome()
   loadBackup()
@@ -310,6 +313,7 @@ onMounted(async () => {
   }
 })
 onBeforeUnmount(() => {
+  stopProviderEvents?.()
   clearInterval(refresh)
   stopBackupEvents?.()
   stopStoryEvents?.()

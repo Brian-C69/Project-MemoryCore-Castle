@@ -1,7 +1,7 @@
 //! Chat's view of a session: the record the CLI writes for it, read only.
 //! Nothing here talks to the CLI; it reads the file the CLI already keeps.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
@@ -15,7 +15,7 @@ pub mod codex;
 pub const FIRST_READ_LIMIT: usize = 300;
 pub const WORK_DETAIL_LIMIT: usize = 70;
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatEntry {
     pub id: String,

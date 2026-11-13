@@ -1,6 +1,23 @@
 <script setup>
 // The top of the companion panel: the portrait (their picture, or the glowing crystal), the
 // name, and which app they think with - as in the Constellation design.
+import { onMounted, onBeforeUnmount, ref } from 'vue'
+import { providersList, providerSwitch, providerSwitchStatus, providerSwitchCancel } from '../api/castle.js'
+const providers = ref([])
+const switching = ref({})
+const problem = ref('')
+let timer
+async function discover() {
+  try { providers.value = await providersList() } catch (e) { problem.value = String(e) }
+}
+async function select(event) {
+  if (!event.target.value) return
+  try { switching.value = await providerSwitch(event.target.value); problem.value = '' } catch (e) { problem.value = String(e) }
+  event.target.value = ''
+}
+async function cancel() { await providerSwitchCancel(); switching.value = {} }
+onMounted(() => { discover(); timer = setInterval(async () => { try { switching.value = await providerSwitchStatus() } catch {} }, 1000) })
+onBeforeUnmount(() => clearInterval(timer))
 defineProps({
   name: { type: String, default: 'Your companion' },
   cliLabel: { type: String, default: 'Claude Code' },
@@ -16,7 +33,14 @@ defineProps({
     </div>
     <div class="who">
       <p class="name">{{ name }}</p>
-      <span class="chip">{{ cliLabel }}</span>
+      <select aria-label="Switch conversation provider" :disabled="!!switching.target" @change="select">
+        <option value="">{{ cliLabel }} — switch provider…</option>
+        <option v-for="p in providers" :key="p.cli" :value="p.cli" :disabled="!p.installed">{{ p.label }} — {{ !p.installed ? 'not installed' : p.signedIn ? 'signed in' : p.signedIn === false ? 'sign in needed' : 'status unknown' }}</option>
+      </select>
+      <button @click="discover">Refresh providers</button>
+      <p v-if="switching.message" role="status">{{ switching.message }}</p>
+      <button v-if="switching.target" @click="cancel">Cancel switch</button>
+      <p v-if="problem" role="alert">{{ problem }}</p>
     </div>
   </div>
 </template>
@@ -50,6 +74,9 @@ defineProps({
   color: #cfe0ff;
   text-shadow: 0 0 16px #7aa6ff, 0 0 4px #ffffff;
 }
+.who { min-width: 0; flex: 1; }
+select { display: block; max-width: 100%; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-background); color: var(--text); }
+button { margin-top: 6px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--hover); color: var(--text); cursor: pointer; }
 .name {
   margin: 0 0 8px;
   font-size: 22px;
