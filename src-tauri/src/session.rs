@@ -140,16 +140,65 @@ pub struct Boot {
     pub only_this: bool,
 }
 
-/// The CLI's own arguments at wake. Claude Code is given the boot file as a system prompt; a
-/// session that is only this companion also leaves out the personal settings (hooks, plugins).
-/// Codex has no such options, so it gets none and loads the memory itself.
+/// The CLI's own arguments at wake: Claude Code is given the boot file as a system prompt. Codex has
+/// no such option, so it gets none and loads the memory itself. Keeping the personal setup out is
+/// `isolation_args`, which does not depend on a boot file.
 pub fn wake_args(cli: Cli, boot: Option<&Boot>) -> Vec<String> {
     let (Cli::Claude, Some(boot)) = (cli, boot) else { return Vec::new() };
-    let mut args = vec!["--append-system-prompt-file".to_string(), boot.file.display().to_string()];
-    if boot.only_this {
-        args.extend(["--setting-sources".to_string(), "project,local".to_string()]);
+    vec!["--append-system-prompt-file".to_string(), boot.file.display().to_string()]
+}
+
+/// Castle's own list of MCP servers for a session that is only this companion: empty, so no server
+/// from the member's personal setup (`~/.claude.json`, read whatever the setting sources say) joins.
+pub fn mcp_config_file(store: &SettingsStore) -> PathBuf {
+    store.folder().join("mcp.json")
+}
+
+/// Writes the empty list once; None if it cannot be written (the session then is not started
+/// half-isolated - see `isolation`).
+pub fn ensure_mcp_config(store: &SettingsStore) -> Option<PathBuf> {
+    let file = mcp_config_file(store);
+    if !file.is_file() {
+        std::fs::create_dir_all(file.parent()?).ok()?;
+        std::fs::write(&file, "{\"mcpServers\":{}}").ok()?;
     }
-    args
+    Some(file)
+}
+
+/// What keeps the member's personal Claude Code setup out of a Castle session, in every room
+/// (main, STORY, a DEV tab): only the project's and the folder's own settings are read (so the
+/// personal settings, hooks, skills and `~/.claude/CLAUDE.md` are left out), and only Castle's own
+/// MCP list. Codex has no such options.
+pub fn isolation_args(cli: Cli, mcp_config: &Path) -> Vec<String> {
+    if cli != Cli::Claude {
+        return Vec::new();
+    }
+    vec![
+        "--setting-sources".to_string(),
+        "project,local".to_string(),
+        "--strict-mcp-config".to_string(),
+        "--mcp-config".to_string(),
+        mcp_config.display().to_string(),
+    ]
+}
+
+/// The variables that go with it: the personal auto memory (notes Claude Code keeps per folder on
+/// this computer) is never read, whatever the room.
+pub fn isolation_vars(cli: Cli) -> Vec<(String, String)> {
+    if cli != Cli::Claude {
+        return Vec::new();
+    }
+    vec![("CLAUDE_CODE_DISABLE_AUTO_MEMORY".to_string(), "1".to_string())]
+}
+
+/// Both together for a session, or an error when the switch is on and the MCP list cannot be
+/// written: a session that should be only this companion is never started half-isolated.
+pub fn isolation(store: &SettingsStore, cli: Cli, on: bool) -> Result<(Vec<String>, Vec<(String, String)>), String> {
+    if !on || cli != Cli::Claude {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let mcp = ensure_mcp_config(store).ok_or("Castle could not write its settings folder, so the session was not started.")?;
+    Ok((isolation_args(cli, &mcp), isolation_vars(cli)))
 }
 
 /// The variables a wake adds for the boot: a session that is only this companion reads no
@@ -217,6 +266,10 @@ pub(crate) fn wake_with_prompt(app: &AppHandle, store: &SettingsStore, host: &Pt
     // the memory, read from the database now and handed to the CLI as it starts
     let boot = prepare_boot(store, &settings, room, &folder);
     vars.extend(wake_vars(boot.as_ref()));
+    // the personal setup stays out whenever the switch is on - in the STORY room too, and even when
+    // the names are missing and no boot file was written
+    let (isolation_args, isolation_vars) = isolation(store, settings.cli, settings.only_this_companion)?;
+    vars.extend(isolation_vars);
     if room == Room::Main {
         if let (Some(companion), Some(member)) = (settings.companion_name.as_deref(), settings.member_name.as_deref()) {
             let _ = crate::setup::write_blocks_for(&folder, companion, member, boot.as_ref().is_some_and(|b| b.memory));
@@ -226,6 +279,7 @@ pub(crate) fn wake_with_prompt(app: &AppHandle, store: &SettingsStore, host: &Pt
     let output = app.clone();
     let ending = app.clone();
     let mut args = wake_args(settings.cli, boot.as_ref());
+    args.extend(isolation_args);
     if let Some(prompt) = prompt { args.push(prompt.to_owned()); }
     let started = host.start(
         pty::launch_command(&program, &folder, &vars, &args),
@@ -425,11 +479,31 @@ mod tests {
         assert!(wake_args(Cli::Codex, Some(&boot)).is_empty());
         assert!(wake_args(Cli::Claude, None).is_empty());
         assert!(wake_vars(Some(&boot)).is_empty() && wake_vars(None).is_empty());
-        // only this companion: the personal settings are left out and no CLAUDE.md is read
+        // Castle's block in the boot file: no CLAUDE.md is read (the block travels in the boot file)
         let only = Boot { only_this: true, ..boot.clone() };
-        assert_eq!(wake_args(Cli::Claude, Some(&only))[2..], ["--setting-sources".to_string(), "project,local".to_string()]);
+        assert_eq!(wake_args(Cli::Claude, Some(&only)).len(), 2);
         assert_eq!(wake_vars(Some(&only)), vec![("CLAUDE_CODE_DISABLE_CLAUDE_MDS".to_string(), "1".to_string())]);
         assert!(wake_args(Cli::Codex, Some(&only)).is_empty());
+    }
+
+    #[test]
+    fn only_this_companion_keeps_the_personal_setup_out_with_or_without_a_boot_file() {
+        let mcp = PathBuf::from("C:/castle/mcp.json");
+        let args = isolation_args(Cli::Claude, &mcp);
+        assert_eq!(args[..2], ["--setting-sources".to_string(), "project,local".to_string()]);
+        assert!(args.contains(&"--strict-mcp-config".to_string()));
+        assert_eq!(args.last(), Some(&mcp.display().to_string()));
+        assert_eq!(isolation_vars(Cli::Claude), vec![("CLAUDE_CODE_DISABLE_AUTO_MEMORY".to_string(), "1".to_string())]);
+        assert!(isolation_args(Cli::Codex, &mcp).is_empty() && isolation_vars(Cli::Codex).is_empty());
+
+        // the switch on, whatever the names: isolated, and Castle's empty MCP list is written outside the memory
+        let settings_folder = folder("isolation");
+        let store = SettingsStore::open(&settings_folder);
+        let (on_args, on_vars) = isolation(&store, Cli::Claude, true).unwrap();
+        assert!(on_args.contains(&"--strict-mcp-config".to_string()) && !on_vars.is_empty());
+        assert_eq!(std::fs::read_to_string(mcp_config_file(&store)).unwrap(), "{\"mcpServers\":{}}");
+        let (off_args, off_vars) = isolation(&store, Cli::Claude, false).unwrap();
+        assert!(off_args.is_empty() && off_vars.is_empty());
     }
 
     #[test]
