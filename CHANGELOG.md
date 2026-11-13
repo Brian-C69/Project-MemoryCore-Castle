@@ -4,6 +4,9 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **The WORLD room's screens fit their monitors.** The world window and the Identify number were a little bigger than the screen and sat off its edges; they now line up exactly.
+- **Only one world card is highlighted.** The card you picked has the outline; the world a screen is showing keeps a small "on screen" tag instead of a second outline.
+- **Fast clicks on the world cards keep up.** The screen no longer reloads every world in between: it goes straight to the one you stopped on.
 - **The music switch moved to the top bar**, next to Settings, with its volume slider: the music plays on every tab, so its controls are on every tab. The volume follows your hand as you drag.
 - **Castle's music and a world screen's music never overlap.** When a world is showing on another screen it plays its own music and Castle's steps aside, and Castle's music comes back when the last world closes.
 - **Choose the screen Castle lives on.** In the WORLD room, each screen has a "Castle" radio under its name: pick one and Castle moves there, and opens there next time. A world on that screen gives way, and the screen Castle left can now show one.
