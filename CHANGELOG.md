@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.3 - 2026-11-14
+
 - **New project** in the DEV tab: clone a repository from its link, or create a new one on GitHub (private by default), into the projects folder you choose once; it opens as a tab by itself. In **Source**, a folder without git gets **Start git here**, and a project not on GitHub yet gets **Connect to GitHub** (create the repository and push). Signing in to GitHub opens GitHub's own window.
 - **The DEV tab grew up**: pictures you drop show as thumbnails; **Source** shows your changes with diffs, commits the files you tick, pushes after one question and draws the history; **FILES** opens the project's folders and files (secret files like `.env` stay closed); **Save project** asks your companion to save, and Close session saves first when there are changes; the mode pills (Manual, Accept edits, Plan, Auto) sit under the message box, and a small meter shows how full her context is.
 - **A DEV tab.** Open your project folders (up to eight at once) and your companion works in each one in its own tab, shown as a chat with the Log beside it. She wakes there as herself, with her memory, and your personal Claude Code setup always stays out. When you approve a plan she keeps it in your memory database (`castle-memory plan copy`), walks it item by item, and the **Plan** panel shows where she is. Close session asks first if the project has changes not yet committed.
