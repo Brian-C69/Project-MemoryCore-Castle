@@ -107,7 +107,7 @@ watch(() => props.mine, check, { deep: true })
     />
     <Slideshow v-else :pictures="pictures" :interval="config.seconds || 15" :shuffled="config.shuffle !== false" />
     <p v-if="waiting" class="waiting">{{ waiting }}</p>
-    <MusicPlayer v-if="lead" v-show="false" :tracks="tracks" :enabled="music.enabled && active" :volume="music.volume" />
+    <MusicPlayer v-if="lead" v-show="false" :tracks="tracks" :enabled="music.enabled" :volume="music.volume" />
   </div>
 </template>
 
