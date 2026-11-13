@@ -163,6 +163,26 @@ pub async fn world_apply(app: AppHandle, screens: Vec<WorldScreen>, store: State
     Ok(saved)
 }
 
+/// The WORLD music: on / off and how loud. Saves only these two, so it can never write an older
+/// copy of the screens back; the open world windows hear it at once.
+#[tauri::command]
+pub async fn world_music(app: AppHandle, music: Option<bool>, volume: Option<f32>, store: State<'_, SettingsStore>) -> Result<(), String> {
+    let mut next = store.get();
+    if let Some(music) = music {
+        next.world.music = music;
+    }
+    if let Some(volume) = volume {
+        next.world.volume = volume.clamp(0.0, 1.0);
+    }
+    settings::save(&store.path, &next).map_err(|_| "The music setting could not be saved.".to_string())?;
+    let entries = next.world.screens.clone();
+    *store.current.lock().unwrap() = next;
+    if entries.iter().any(|e| e.on) {
+        apply(&app, &entries).await?;
+    }
+    Ok(())
+}
+
 /// Shows a big number on one screen for a moment, so the member knows which is which.
 #[tauri::command]
 pub async fn world_identify(app: AppHandle, index: usize) -> Result<(), String> {

@@ -162,23 +162,6 @@ function pickCard(world) {
   if (row && !row.screen.isMain && ready(world)) setWorld(row, world.id)
 }
 
-// The music follows the controls at once (the player listens for this); saving happens after.
-function liveMusic(patch) {
-  if (settings.value) settings.value = { ...settings.value, world: { ...settings.value.world, ...patch } }
-  window.dispatchEvent(new CustomEvent('castle-music', { detail: patch }))
-}
-
-async function saveMusic(patch) {
-  liveMusic(patch)
-  const next = { ...settings.value, world: { ...settings.value.world, ...patch } }
-  try {
-    settings.value = (await saveSettings(next)).settings
-    if (rows.value.some((r) => r.entry.on)) await apply() // the open screens hear it at once
-  } catch (reason) {
-    problem.value = String(reason)
-  }
-}
-
 // ---------- the member's own worlds ----------
 
 const pictureName = computed(() => form.value.picture.split(/[\\/]/).pop())
@@ -304,12 +287,6 @@ watch(
           <h2>YOUR SCREENS</h2>
           <span class="spacer"></span>
           <span v-if="saved" class="good">{{ saved }}</span>
-          <!-- the world's music: on / off and how loud, beside the screens it plays on -->
-          <span v-if="settings" class="music" title="Plays on any Castle tab, even minimised: Castle's own music, then the songs your companion makes. Steps aside the moment a world window opens on another screen.">
-            <span class="music-label">MUSIC</span>
-            <button :class="{ primary: settings.world.music }" @click="saveMusic({ music: !settings.world.music })">{{ settings.world.music ? 'on' : 'off' }}</button>
-            <input type="range" min="0" max="1" step="0.05" :value="settings.world.volume" aria-label="Music volume" @input="liveMusic({ volume: +$event.target.value })" @change="saveMusic({ volume: +$event.target.value })" />
-          </span>
           <button @click="refresh({ fresh: true })">Look for screens</button>
         </div>
 
@@ -380,7 +357,7 @@ watch(
         <p v-if="!others.length && rows.length" class="hint">Only one screen is connected. Plug in another screen to give it a world, or preview a world here.</p>
         <p v-else-if="others.length" class="hint">Click a screen, then a world on the right to show it there.</p>
         <p v-if="problem" class="problem">{{ problem }}</p>
-        <p v-if="settings" class="hint">Music plays on the first screen showing a world: Castle's own music, then the songs your companion makes.</p>
+        <p v-if="settings" class="hint">The music switch is at the top right, next to Settings. A screen showing a world plays that world's own music; Castle's music steps aside while one is open.</p>
         <p v-if="quotaLine" class="hint">{{ quotaLine }}</p>
       </section>
 
@@ -674,19 +651,6 @@ button:disabled {
 button.danger {
   border-color: var(--warn);
   color: var(--warn);
-}
-.music {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-}
-.music-label {
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  color: var(--text-dim);
-}
-.music input[type='range'] {
-  width: 110px;
 }
 .preview-panel {
   position: relative;
