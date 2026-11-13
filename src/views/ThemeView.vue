@@ -18,6 +18,7 @@ import {
 } from '../api/castle.js'
 import DiaryPage from '../components/DiaryPage.vue'
 import { lookOf } from '../components/diaryviews.js'
+import { typeLine } from '../components/typeline.js'
 import { DIARY_THEMES, indexOf, SAMPLE_PAGE, SAMPLE_PAGES, SAMPLE_TEXT, step, STORY_THEMES, wearingLine } from '../components/themeroom.js'
 import { builtInThemes, fromUserFolders, problemWith } from '../themes/loader.js'
 
@@ -168,8 +169,7 @@ async function askCompanion(theme, paint) {
         'Keep text easy to read on the background. Tell me when you are done.',
       ]
   const text = lines.join('\n')
-  await terminalWrite(`\u001b[200~${text}\u001b[201~`)
-  await terminalWrite('\r')
+  await typeLine(terminalWrite, `\u001b[200~${text}\u001b[201~`)
   done.value = `Asked ${props.companion}. When it is done, press Reload themes.`
   emit('show-chat')
 }

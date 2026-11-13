@@ -7,6 +7,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { diaryStamp, terminalState, terminalWrite, updateCheck, updateInstall } from '../api/castle.js'
 import MarkdownText from './MarkdownText.vue'
+import { typeLine } from './typeline.js'
 
 const emit = defineEmits(['status', 'about'])
 const status = ref(null)
@@ -31,8 +32,7 @@ async function saveDiaryFirst() {
   if (!state?.running) return
   const before = await diaryStamp()
   step.value = 'Saving the diary first…'
-  await terminalWrite('save diary')
-  await terminalWrite('\r')
+  await typeLine(terminalWrite, 'save diary')
   for (let waited = 0; waited < 180 && !skip; waited += 3) {
     await sleep(3000)
     if ((await diaryStamp()) > before) {

@@ -11,6 +11,7 @@ import ModalSheet from '../components/ModalSheet.vue'
 import MarkdownText from '../components/MarkdownText.vue'
 import ImageViewer from '../components/ImageViewer.vue'
 import StageView from '../components/stage/StageView.vue'
+import { typeLine } from '../components/typeline.js'
 import { getSettings, memoryRead, saveSettings, storyClose, storyPrepare, storyWorlds, terminalState, terminalWrite } from '../api/castle.js'
 
 const props = defineProps({
@@ -82,8 +83,7 @@ async function say(text) {
     return false
   }
   problem.value = ''
-  await terminalWrite(text, 'story')
-  await terminalWrite('\r', 'story')
+  await typeLine((data) => terminalWrite(data, 'story'), text)
   return true
 }
 

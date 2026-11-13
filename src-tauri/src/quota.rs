@@ -1,9 +1,11 @@
 //! How much of the member's weekly CLI limit is left - the great crystal shines with it.
 //!
 //! Claude Code: the endpoint behind Claude Code's `/usage`, asked with the login Claude Code
-//! keeps in `~/.claude/.credentials.json`. It is not a documented API and may change: when it
-//! fails the crystal simply keeps its normal glow. The token is read for each call, goes out only
-//! in the Authorization header, and never reaches a page or a log.
+//! keeps in `~/.claude/.credentials.json`. It is not a documented API and may change. The USAGE
+//! card and the crystal share one answer, asked at most every five minutes; when an ask fails the
+//! last good numbers stay (dated, so the card can say how old they are), and with none the crystal
+//! simply keeps its normal glow. The token is read for each ask, goes out only in the
+//! Authorization header, and is never kept, logged or sent to a page.
 //!
 //! Codex: its session files carry the limits it was last told (`token_count` lines with
 //! `rate_limits`); the newest one is read.
@@ -140,8 +142,79 @@ fn claude_answer() -> Result<Value, &'static str> {
     answer.json().map_err(|_| "unknown")
 }
 
+/// What Castle last heard from Claude Code's usage endpoint. The USAGE card and the crystal both
+/// read this one answer, so Anthropic is asked at most once every five minutes for the two.
+/// It holds the usage numbers only - never the login.
+#[derive(Debug, Clone)]
+struct ClaudeCache {
+    /// When the endpoint was last asked, answered or not.
+    asked: Instant,
+    /// Why that ask gave nothing ("signed_out" or "unknown"); None when it answered.
+    failed: Option<&'static str>,
+    /// The last good answer and when it came, in milliseconds since 1970.
+    good: Option<(i64, Value)>,
+}
+
+/// An answer younger than five minutes is used again instead of asking.
+fn still_fresh(cache: &ClaudeCache, now: Instant) -> bool {
+    now.saturating_duration_since(cache.asked) < EVERY
+}
+
+/// The cache after one more ask. A network failure or a refused ask keeps the last good numbers
+/// (the card shows how old they are); signing out drops them, since they belong to a login that
+/// is gone.
+fn remember(previous: Option<ClaudeCache>, outcome: Result<Value, &'static str>, asked: Instant, now: i64) -> ClaudeCache {
+    match outcome {
+        Ok(answer) => ClaudeCache { asked, failed: None, good: Some((now, answer)) },
+        Err("signed_out") => ClaudeCache { asked, failed: Some("signed_out"), good: None },
+        Err(why) => ClaudeCache { asked, failed: Some(why), good: previous.and_then(|p| p.good) },
+    }
+}
+
+/// The USAGE card's Claude Code line from the cache: the last good numbers, dated when they
+/// came, or why there are none.
+fn claude_card(cache: &ClaudeCache) -> CliUsage {
+    match &cache.good {
+        Some((at, answer)) => parse_claude_usage(answer, *at),
+        None => usage(Cli::Claude, cache.failed.unwrap_or("unknown")),
+    }
+}
+
+/// The crystal's weekly limit from the cache; None = unknown.
+fn claude_glow(cache: &ClaudeCache) -> Option<Quota> {
+    cache.good.as_ref().and_then(|(_, answer)| parse_claude(answer))
+}
+
+static CLAUDE: Mutex<Option<ClaudeCache>> = Mutex::new(None);
+
+/// The shared Claude Code answer, asked again only when it is over five minutes old. The lock is
+/// held while asking, so the card and the crystal starting together still make one ask.
+fn claude_cached() -> ClaudeCache {
+    let mut slot = CLAUDE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let now = Instant::now();
+    if let Some(cache) = slot.as_ref().filter(|c| still_fresh(c, now)) {
+        return cache.clone();
+    }
+    let fresh = remember(slot.take(), claude_answer(), now, now_ms());
+    *slot = Some(fresh.clone());
+    fresh
+}
+
 fn claude_quota() -> Option<Quota> {
-    parse_claude(&claude_answer().ok()?)
+    claude_glow(&claude_cached())
+}
+
+/// A Codex reading kept for five minutes, so its session files are not read again on every call.
+fn cached<T: Clone>(slot: &Mutex<Option<(Instant, T)>>, read: impl FnOnce() -> T) -> T {
+    let mut slot = slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((when, value)) = slot.as_ref() {
+        if when.elapsed() < EVERY {
+            return value.clone();
+        }
+    }
+    let value = read();
+    *slot = Some((Instant::now(), value.clone()));
+    value
 }
 
 // ---- HOME's USAGE card: both CLIs, the five-hour window and the week ----------------------------
@@ -241,10 +314,7 @@ fn claude_usage() -> CliUsage {
     if crate::env::find_on_path(Cli::Claude.command()).is_none() {
         return usage(Cli::Claude, "not_installed");
     }
-    match claude_answer() {
-        Ok(answer) => parse_claude_usage(&answer, now_ms()),
-        Err(status) => usage(Cli::Claude, status),
-    }
+    claude_card(&claude_cached())
 }
 
 fn codex_usage() -> CliUsage {
@@ -266,49 +336,35 @@ pub fn shown_clis(claude: bool, codex: bool) -> Vec<Cli> {
     [(Cli::Claude, claude), (Cli::Codex, codex)].into_iter().filter(|(_, on)| *on).map(|(cli, _)| cli).collect()
 }
 
-/// The last answer, with which CLIs it covers, so a changed toggle never reuses a stale answer.
-type UsageCache = Option<(Instant, Vec<Cli>, Vec<CliUsage>)>;
-static LAST_USAGE: Mutex<UsageCache> = Mutex::new(None);
+/// Codex's line on the USAGE card and Codex's weekly limit for the crystal, each kept five minutes.
+/// Claude Code's two share one cached answer instead (see `claude_cached`).
+static CODEX_CARD: Mutex<Option<(Instant, CliUsage)>> = Mutex::new(None);
+static CODEX_GLOW: Mutex<Option<(Instant, Option<Quota>)>> = Mutex::new(None);
 
 /// The five-hour and weekly limits of the CLIs switched on in Settings > Companion, asked at most
-/// every five minutes. None switched on gives an empty list.
+/// every five minutes. None switched on gives an empty list. Each CLI is looked up on its own, so
+/// a changed toggle never shows a CLI that was just switched off.
 #[tauri::command]
 pub async fn cli_usage(store: State<'_, SettingsStore>) -> Result<Vec<CliUsage>, String> {
     let settings = store.get();
     let wanted = shown_clis(settings.show_claude_usage, settings.show_codex_usage);
-    if let Some((when, covered, answer)) = LAST_USAGE.lock().unwrap().clone() {
-        if covered == wanted && when.elapsed() < EVERY {
-            return Ok(answer);
-        }
-    }
-    let asked = wanted.clone();
-    let answer = tauri::async_runtime::spawn_blocking(move || {
-        asked.into_iter().map(|cli| if cli == Cli::Claude { claude_usage() } else { codex_usage() }).collect::<Vec<_>>()
+    tauri::async_runtime::spawn_blocking(move || {
+        wanted.into_iter().map(|cli| if cli == Cli::Claude { claude_usage() } else { cached(&CODEX_CARD, codex_usage) }).collect::<Vec<_>>()
     })
     .await
-    .map_err(|_| "Usage check stopped.".to_string())?;
-    *LAST_USAGE.lock().unwrap() = Some((Instant::now(), wanted, answer.clone()));
-    Ok(answer)
+    .map_err(|_| "Usage check stopped.".to_string())
 }
-
-static LAST: Mutex<Option<(Instant, Cli, Option<Quota>)>> = Mutex::new(None);
 
 /// The weekly limit left for the member's CLI, asked at most every five minutes; None = unknown.
 #[tauri::command]
 pub async fn cli_quota(store: State<'_, SettingsStore>) -> Result<Option<Quota>, String> {
     let cli = store.get().cli;
-    if let Some((when, was, answer)) = LAST.lock().unwrap().clone() {
-        if was == cli && when.elapsed() < EVERY {
-            return Ok(answer);
-        }
-    }
     let answer = tauri::async_runtime::spawn_blocking(move || match cli {
         Cli::Claude => claude_quota(),
-        Cli::Codex => codex_quota(),
+        Cli::Codex => cached(&CODEX_GLOW, codex_quota),
     })
     .await
     .unwrap_or(None);
-    *LAST.lock().unwrap() = Some((Instant::now(), cli, answer.clone()));
     Ok(answer)
 }
 
@@ -401,6 +457,83 @@ mod tests {
         let u = parse_codex_usage(no_week, 1000).unwrap();
         assert_eq!((u.five_hour.unwrap().resets_at, u.weekly, u.observed_at), (Some(61_000), None, Some(1000)));
         assert!(parse_codex_usage(r#"{"type":"event_msg","payload":{"type":"token_count","rate_limits":{}}}"#, 0).is_none());
+    }
+
+    fn claude_answer_with(five_hour: f64, weekly: f64) -> Value {
+        serde_json::json!({ "limits": [
+            { "group": "session", "kind": "five_hour", "percent": five_hour },
+            { "group": "weekly", "kind": "weekly_all", "percent": weekly },
+        ]})
+    }
+
+    #[test]
+    fn the_card_and_the_crystal_read_one_claude_answer() {
+        let asked = Instant::now();
+        let cache = remember(None, Ok(claude_answer_with(20.0, 30.0)), asked, 1_000);
+        let card = claude_card(&cache);
+        assert_eq!(card.status, "ok");
+        assert_eq!(card.five_hour.unwrap().used_percent, 20.0);
+        assert_eq!(card.weekly.unwrap().used_percent, 30.0);
+        assert_eq!(card.observed_at, Some(1_000));
+        assert_eq!(claude_glow(&cache).unwrap().left_percent, 70.0);
+    }
+
+    #[test]
+    fn a_claude_answer_is_used_again_for_five_minutes() {
+        let asked = Instant::now();
+        let cache = remember(None, Ok(claude_answer_with(1.0, 2.0)), asked, 0);
+        assert!(still_fresh(&cache, asked));
+        assert!(still_fresh(&cache, asked + Duration::from_secs(4 * 60 + 59)));
+        assert!(!still_fresh(&cache, asked + EVERY));
+        // a failed ask also waits five minutes before asking again
+        let failed = remember(None, Err("unknown"), asked, 0);
+        assert!(still_fresh(&failed, asked + Duration::from_secs(60)));
+    }
+
+    #[test]
+    fn a_failed_claude_ask_keeps_the_last_good_numbers_with_their_old_time() {
+        let first = Instant::now();
+        let good = remember(None, Ok(claude_answer_with(40.0, 50.0)), first, 1_000);
+        let later = remember(Some(good), Err("unknown"), first + EVERY, 999_000);
+        assert_eq!(later.failed, Some("unknown"));
+        let card = claude_card(&later);
+        assert_eq!(card.status, "ok");
+        assert_eq!(card.weekly.unwrap().used_percent, 50.0);
+        // dated when they came, so the card says how old they are
+        assert_eq!(card.observed_at, Some(1_000));
+        assert_eq!(claude_glow(&later).unwrap().left_percent, 50.0);
+        // the next good answer replaces them
+        let again = remember(Some(later), Ok(claude_answer_with(5.0, 6.0)), first + EVERY * 2, 2_000_000);
+        assert_eq!((claude_card(&again).observed_at, again.failed), (Some(2_000_000), None));
+    }
+
+    #[test]
+    fn signing_out_drops_the_old_claude_numbers() {
+        let first = Instant::now();
+        let good = remember(None, Ok(claude_answer_with(40.0, 50.0)), first, 1_000);
+        let out = remember(Some(good), Err("signed_out"), first + EVERY, 2_000);
+        assert_eq!(claude_card(&out).status, "signed_out");
+        assert!(claude_glow(&out).is_none());
+    }
+
+    #[test]
+    fn with_no_good_claude_answer_yet_the_card_says_why() {
+        let cache = remember(None, Err("unknown"), Instant::now(), 0);
+        let card = claude_card(&cache);
+        assert_eq!((card.status.as_str(), card.five_hour, card.weekly), ("unknown", None, None));
+        assert!(claude_glow(&cache).is_none());
+    }
+
+    #[test]
+    fn a_codex_reading_is_kept_for_five_minutes() {
+        let slot: Mutex<Option<(Instant, u32)>> = Mutex::new(None);
+        assert_eq!(cached(&slot, || 1), 1);
+        assert_eq!(cached(&slot, || 2), 1);
+        // (an Instant cannot go back past the moment the computer started)
+        if let Some(old) = Instant::now().checked_sub(EVERY + Duration::from_secs(1)) {
+            *slot.lock().unwrap() = Some((old, 1));
+            assert_eq!(cached(&slot, || 3), 3);
+        }
     }
 
     /// Live, on demand only: `cargo test live_claude_quota -- --ignored --nocapture`. Prints the

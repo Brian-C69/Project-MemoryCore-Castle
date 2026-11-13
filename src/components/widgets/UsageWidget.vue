@@ -1,6 +1,6 @@
 <script setup>
-// HOME's USAGE card: Claude Code's and Codex's five-hour and weekly limits, side by side, whichever
-// one the companion is using. Castle asks the CLIs at most every five minutes.
+// HOME's USAGE card: the five-hour and weekly limits of Claude Code, Codex or both, side by side -
+// the ones switched on in Settings > Companion. Castle asks the CLIs at most every five minutes.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { cliUsage } from '../../api/castle.js'
 import { rows } from './usage.js'
@@ -12,12 +12,17 @@ watch(() => props.stamp, () => read())
 const usage = ref(null)
 const now = ref(Date.now())
 let timer
+// Counts the reads. Only the newest one may fill the card, so a slow older answer that still
+// carries a CLI just switched off never puts it back.
+let latest = 0
 
 async function read() {
   now.value = Date.now()
   if (document.visibilityState !== 'visible') return
+  const mine = ++latest
   try {
-    usage.value = await cliUsage()
+    const answer = await cliUsage()
+    if (mine === latest) usage.value = answer
   } catch {
     // The last reading stays.
   }

@@ -183,6 +183,8 @@ At the top: your companion's picture (or the glowing crystal), their name, and t
 
 A card with nothing to show yet says so in a friendly line - for example, a new memory's DIARY card reminds you to press **Save diary** after a talk.
 
+About the **USAGE** card's login: to show Claude Code's limits, Castle reads the login Claude Code already saved on this computer, only to ask Anthropic for your usage - it is never stored or sent anywhere else. Codex's usage is read from Codex's own files on your computer. You can turn off either one in **Settings › Companion**.
+
 ### Turning a room off
 
 In **Settings › Rooms** you can switch off any room you don't use (HOME always stays). Its tab disappears and nothing runs for it - STORY's session ends, WORLD's screens close, CHAT stops reading the room - but **nothing is removed**: turn it back on and everything is there as it was.
