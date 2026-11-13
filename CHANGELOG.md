@@ -4,6 +4,10 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **The music switch moved to the top bar**, next to Settings, with its volume slider: the music plays on every tab, so its controls are on every tab. The volume follows your hand as you drag.
+- **Castle's music and a world screen's music never overlap.** When a world is showing on another screen it plays its own music and Castle's steps aside, and Castle's music comes back when the last world closes.
+- **Choose the screen Castle lives on.** In the WORLD room, each screen has a "Castle" radio under its name: pick one and Castle moves there, and opens there next time. A world on that screen gives way, and the screen Castle left can now show one.
+- A screen's on/off in the WORLD room is a **flip switch** now, at the right end of its row.
 - **The music plays on every tab.** With MUSIC on in the WORLD room, Castle's music now starts as soon as Castle opens and keeps playing on any tab, even when Castle is minimised or in the tray. It stays quiet only if a world on another screen is already playing it. The volume slider also follows your hand at once instead of a few seconds later.
 
 ## 0.2.2 - 2026-11-10
