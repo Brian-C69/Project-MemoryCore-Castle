@@ -276,6 +276,10 @@ onMounted(async () => {
           <button @click="changeAvatar">Choose a picture</button>
           <button @click="clearAvatar">Use the drawn look / crystal</button>
         </div>
+        <h3>Usage card</h3>
+        <label class="toggle"><input type="checkbox" :checked="settings.showClaudeUsage !== false" @change="save({ showClaudeUsage: $event.target.checked })" /> Show Claude Code usage on HOME</label>
+        <label class="toggle"><input type="checkbox" :checked="settings.showCodexUsage !== false" @change="save({ showCodexUsage: $event.target.checked })" /> Show Codex usage on HOME</label>
+        <p class="hint">The USAGE card on HOME shows how much of the five-hour and weekly limits is used. One you switch off is not asked at all. Switch both off and the card says so.</p>
         <button @click="emit('setup')">Run the first-run setup again</button>
       </section>
 

@@ -170,6 +170,10 @@ pub struct Settings {
     /// The top bar's minus button minimises Castle to the taskbar. Off (the default), it hides
     /// Castle to the tray icon, as before.
     pub minimize_to_taskbar: bool,
+    /// Whether HOME's USAGE card shows Claude Code's limits, and Codex's. On by default; a CLI that
+    /// is off is not asked at all.
+    pub show_claude_usage: bool,
+    pub show_codex_usage: bool,
     /// The id of the companion's room key Castle made on the Portfolio (so it can be removed again).
     pub room_companion_key_id: Option<String>,
     /// The name that key carries in the room (a rename in Settings remakes the key).
@@ -234,6 +238,8 @@ impl Default for Settings {
             start_with_windows: false,
             start_session_on_launch: true,
             minimize_to_taskbar: false,
+            show_claude_usage: true,
+            show_codex_usage: true,
             room_companion_key_id: None,
             room_companion_name: None,
             world: WorldSettings::default(),
@@ -413,6 +419,8 @@ mod tests {
             start_with_windows: true,
             start_session_on_launch: false,
             minimize_to_taskbar: true,
+            show_claude_usage: false,
+            show_codex_usage: true,
             room_companion_key_id: Some("17".into()),
             room_companion_name: Some("Lyra".into()),
             world: WorldSettings {
@@ -470,6 +478,7 @@ mod tests {
         assert_eq!(settings.memory_folder.as_deref(), Some("D:\\MemoryCore"));
         assert!(settings.start_session_on_launch);
         assert!(!settings.minimize_to_taskbar, "a settings file from before this option keeps the tray behaviour");
+        assert!(settings.show_claude_usage && settings.show_codex_usage, "a settings file from before the toggles shows both");
         assert_eq!(settings.world, WorldSettings::default());
     }
 

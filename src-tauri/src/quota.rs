@@ -261,18 +261,33 @@ fn codex_usage() -> CliUsage {
         .unwrap_or_else(|| usage(Cli::Codex, "unknown"))
 }
 
-static LAST_USAGE: Mutex<Option<(Instant, Vec<CliUsage>)>> = Mutex::new(None);
+/// The CLIs the member wants on the USAGE card, in the card's order. One that is off is not asked.
+pub fn shown_clis(claude: bool, codex: bool) -> Vec<Cli> {
+    [(Cli::Claude, claude), (Cli::Codex, codex)].into_iter().filter(|(_, on)| *on).map(|(cli, _)| cli).collect()
+}
 
-/// Both CLIs' five-hour and weekly limits, asked at most every five minutes.
+/// The last answer, with which CLIs it covers, so a changed toggle never reuses a stale answer.
+type UsageCache = Option<(Instant, Vec<Cli>, Vec<CliUsage>)>;
+static LAST_USAGE: Mutex<UsageCache> = Mutex::new(None);
+
+/// The five-hour and weekly limits of the CLIs switched on in Settings > Companion, asked at most
+/// every five minutes. None switched on gives an empty list.
 #[tauri::command]
-pub async fn cli_usage() -> Result<Vec<CliUsage>, String> {
-    if let Some((when, answer)) = LAST_USAGE.lock().unwrap().clone() {
-        if when.elapsed() < EVERY {
+pub async fn cli_usage(store: State<'_, SettingsStore>) -> Result<Vec<CliUsage>, String> {
+    let settings = store.get();
+    let wanted = shown_clis(settings.show_claude_usage, settings.show_codex_usage);
+    if let Some((when, covered, answer)) = LAST_USAGE.lock().unwrap().clone() {
+        if covered == wanted && when.elapsed() < EVERY {
             return Ok(answer);
         }
     }
-    let answer = tauri::async_runtime::spawn_blocking(|| vec![claude_usage(), codex_usage()]).await.map_err(|_| "Usage check stopped.".to_string())?;
-    *LAST_USAGE.lock().unwrap() = Some((Instant::now(), answer.clone()));
+    let asked = wanted.clone();
+    let answer = tauri::async_runtime::spawn_blocking(move || {
+        asked.into_iter().map(|cli| if cli == Cli::Claude { claude_usage() } else { codex_usage() }).collect::<Vec<_>>()
+    })
+    .await
+    .map_err(|_| "Usage check stopped.".to_string())?;
+    *LAST_USAGE.lock().unwrap() = Some((Instant::now(), wanted, answer.clone()));
     Ok(answer)
 }
 
@@ -334,6 +349,14 @@ mod tests {
     fn used_over_a_hundred_never_goes_below_nothing_left() {
         assert_eq!(quota("claude", 130.0, None).left_percent, 0.0);
         assert_eq!(quota("claude", -5.0, None).left_percent, 100.0);
+    }
+
+    #[test]
+    fn only_the_clis_switched_on_are_asked() {
+        assert_eq!(shown_clis(true, true), vec![Cli::Claude, Cli::Codex]);
+        assert_eq!(shown_clis(false, true), vec![Cli::Codex]);
+        assert_eq!(shown_clis(true, false), vec![Cli::Claude]);
+        assert!(shown_clis(false, false).is_empty());
     }
 
     #[test]
