@@ -80,7 +80,7 @@ pub fn hide_castle(app: AppHandle, store: State<SettingsStore>) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = if store.get().minimize_to_taskbar { window.minimize() } else { window.hide() };
     }
-    crate::world::set_visible(&app, false);
+    crate::tray::went_hidden(&app);
 }
 
 /// Opens a file from the memory folder in its own app, or its folder with the file selected.

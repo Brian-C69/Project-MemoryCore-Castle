@@ -10,6 +10,17 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 const MAIN_WINDOW: &str = "main";
 /// Tells the page to start the companion's session; the page does it, because it must be listening first.
 pub const WAKE_EVENT: &str = "castle-wake";
+/// Tells the page Castle just went out of sight (the minus button, the tray, the hotkey, the close
+/// button): a personal room blurs again so a shared screen never shows it on the way back.
+pub const HIDDEN_EVENT: &str = "castle-hidden";
+
+/// Castle went out of sight: the page hears it, and the WORLD on the other screens goes too.
+pub fn went_hidden(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+        let _ = window.emit(HIDDEN_EVENT, ());
+    }
+    crate::world::set_visible(app, false);
+}
 
 /// Brings Castle to the front, whatever state it was in.
 pub fn show_main(app: &AppHandle) {
@@ -31,7 +42,7 @@ pub fn toggle_main(app: &AppHandle) {
             && window.is_focused().unwrap_or(false);
         if in_front {
             let _ = window.hide();
-            crate::world::set_visible(app, false);
+            went_hidden(app);
         } else {
             show_main(app);
         }

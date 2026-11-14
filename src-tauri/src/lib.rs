@@ -462,7 +462,7 @@ pub fn run() {
                 if window.label() == "main" {
                     api.prevent_close();
                     let _ = window.hide();
-                    world::set_visible(window.app_handle(), false);
+                    tray::went_hidden(window.app_handle());
                 }
             }
             // Castle minimised to the taskbar comes back with a click there: the WORLD on the other
