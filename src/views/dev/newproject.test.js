@@ -50,6 +50,9 @@ describe('the New project helpers', () => {
     expect(landingFolder('D:\\Projects', '', 'app')).toBe('D:\\Projects\\app')
     expect(landingFolder('D:\\Projects', 'Web', ' ')).toBe('D:\\Projects\\Web\\<name>')
     expect(landingFolder(null, 'Web', 'app')).toBe('')
+    // the suggested folder before any choice: the sheet lands and submits there straight away
+    expect(landingFolder('C:\\Users\\Lyra\\Projects', '', 'order-tracker')).toBe('C:\\Users\\Lyra\\Projects\\order-tracker')
+    expect(canSubmit({ mode: 'link', root: 'C:\\Users\\Lyra\\Projects', link: 'https://github.com/o/order-tracker.git', name: 'order-tracker', working: false })).toBe(true)
   })
 
   it('lets the sheet make the project only when it can', () => {

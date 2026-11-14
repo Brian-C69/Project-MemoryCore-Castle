@@ -11,6 +11,8 @@ import { canSubmit, githubLine, landingFolder, nameFromLink, validRepoName } fro
 const emit = defineEmits(['made', 'close'])
 
 const root = ref(null)
+// true while the folder is only Castle's suggestion (<user folder>\Projects), made on the first project
+const suggested = ref(false)
 const rootRead = ref(false)
 const kinds = ref([])
 const kind = ref('')
@@ -67,6 +69,7 @@ async function changeRoot() {
     if (!folder) return
     await devSetRoot(folder)
     root.value = folder
+    suggested.value = false
     await readKinds()
   } catch (reason) {
     problem.value = String(reason)
@@ -91,6 +94,7 @@ async function make() {
       mode.value === 'link'
         ? await devClone(link.value.trim(), kind.value, name.value.trim())
         : await devCreate(owner.value, name.value.trim(), isPrivate.value, kind.value)
+    suggested.value = false
     emit('made', folder)
   } catch (reason) {
     problem.value = String(reason)
@@ -101,7 +105,9 @@ async function make() {
 
 onMounted(async () => {
   try {
-    root.value = (await devRoot()) || null
+    const place = (await devRoot()) ?? {}
+    root.value = place.folder || null
+    suggested.value = Boolean(place.suggested)
   } catch (reason) {
     problem.value = String(reason)
   }
@@ -120,11 +126,12 @@ onMounted(async () => {
         <template v-else-if="root">
           <div class="row">
             <code class="path" :title="root">{{ root }}</code>
+            <span v-if="suggested" class="tag" title="Castle makes this folder with your first project. Change it any time.">suggested</span>
             <button class="small" :disabled="working" @click="changeRoot">Change…</button>
           </div>
         </template>
         <template v-else>
-          <p class="quiet">Choose the folder your projects live in first. New projects are made inside it.</p>
+          <p class="quiet">Choose the folder your projects live in. New projects are made inside it.</p>
           <div class="row">
             <button class="small primary" @click="changeRoot">Choose a folder…</button>
           </div>
@@ -239,6 +246,14 @@ code {
   font-family: 'Cascadia Mono', Consolas, monospace;
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.tag {
+  padding: 1px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 11px;
 }
 
 .quiet {

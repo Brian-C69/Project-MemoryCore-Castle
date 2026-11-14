@@ -5,7 +5,8 @@
 //!
 //! Git and gh are always run as programs with their own arguments, never through a shell, never
 //! with a prompt or a window, and never over a folder that already exists. The projects folder is
-//! the member's own choice (`settings.dev_root`); there is no default.
+//! the member's own choice (`settings.dev_root`); until they choose, Castle suggests
+//! `<user folder>\Projects`, made and kept as their choice the first time a project goes in it.
 
 use crate::env;
 use crate::settings::{self, Settings, SettingsStore};
@@ -133,6 +134,32 @@ pub fn new_folder(root: &Path, kind: &str, name: &str) -> Result<PathBuf, String
     Ok(folder)
 }
 
+/// Where projects go before the member chooses: `<user folder>\Projects`.
+pub fn suggested_root(user_folder: Option<&Path>) -> Option<PathBuf> {
+    user_folder.map(|home| home.join("Projects"))
+}
+
+/// The projects folder in use: the member's choice, else the suggestion (and whether it is one).
+pub fn effective_root(settings: &Settings, user_folder: Option<&Path>) -> Option<(PathBuf, bool)> {
+    match root_of(settings) {
+        Ok(root) => Some((root, false)),
+        Err(_) => suggested_root(user_folder).map(|root| (root, true)),
+    }
+}
+
+fn user_folder() -> Option<PathBuf> {
+    std::env::var_os("USERPROFILE").map(PathBuf::from).filter(|p| p.is_dir())
+}
+
+/// The projects folder as the New project sheet shows it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectsFolder {
+    pub folder: Option<String>,
+    /// true while it is only Castle's suggestion (made and kept on the first new project)
+    pub suggested: bool,
+}
+
 /// The projects folder from the settings, or the plain line asking the member to choose one.
 pub fn root_of(settings: &Settings) -> Result<PathBuf, String> {
     settings
@@ -152,7 +179,7 @@ fn git_program() -> Result<PathBuf, String> {
 
 /// GitHub's tool: on PATH, else its install folder (a Castle started before the GitHub CLI was
 /// installed still carries the old PATH).
-fn gh_program() -> Option<PathBuf> {
+pub fn gh_program() -> Option<PathBuf> {
     env::find_on_path("gh").or_else(|| {
         let mut places = vec![PathBuf::from(r"C:\Program Files\GitHub CLI\gh.exe")];
         if let Some(local) = std::env::var_os("LOCALAPPDATA") {
@@ -435,10 +462,21 @@ pub async fn dev_github() -> Result<GitHub, String> {
     blocking(|| Ok(github()), "GitHub could not be asked.").await
 }
 
-/// The projects folder new projects go in, when the member has chosen one.
+/// The projects folder new projects go in: the member's choice, or Castle's suggestion.
 #[tauri::command]
-pub fn dev_root(store: State<SettingsStore>) -> Option<String> {
-    store.get().dev_root
+pub fn dev_root(store: State<SettingsStore>) -> ProjectsFolder {
+    match effective_root(&store.get(), user_folder().as_deref()) {
+        Some((root, suggested)) => ProjectsFolder { folder: Some(root.display().to_string()), suggested },
+        None => ProjectsFolder { folder: None, suggested: false },
+    }
+}
+
+fn save_root(store: &SettingsStore, folder: String) -> Result<(), String> {
+    let mut next = store.get();
+    next.dev_root = Some(folder);
+    settings::save(&store.path, &next).map_err(|_| "The projects folder could not be saved.".to_string())?;
+    *store.current.lock().unwrap() = next;
+    Ok(())
 }
 
 /// Chooses the projects folder (it must be an existing folder).
@@ -448,17 +486,27 @@ pub fn dev_set_root(folder: String, store: State<SettingsStore>) -> Result<(), S
     if folder.is_empty() || !Path::new(&folder).is_dir() {
         return Err("That folder is not there.".to_string());
     }
-    let mut next = store.get();
-    next.dev_root = Some(folder);
-    settings::save(&store.path, &next).map_err(|_| "The projects folder could not be saved.".to_string())?;
-    *store.current.lock().unwrap() = next;
-    Ok(())
+    save_root(&store, folder)
 }
 
-/// The kinds of project in the projects folder (the folders inside it).
+/// The folder a new project goes in: the member's choice, or the suggestion, made on disk and kept
+/// as their choice now that a project is going in it.
+fn root_for_new(store: &SettingsStore) -> Result<PathBuf, String> {
+    match effective_root(&store.get(), user_folder().as_deref()) {
+        Some((root, false)) => Ok(root),
+        Some((root, true)) => {
+            fs::create_dir_all(&root).map_err(|_| format!("The projects folder could not be made: {}", root.display()))?;
+            save_root(store, root.display().to_string())?;
+            Ok(root)
+        }
+        None => Err(NO_ROOT.to_string()),
+    }
+}
+
+/// The kinds of project in the projects folder (the folders inside it; none in a suggestion not made yet).
 #[tauri::command]
 pub async fn dev_kinds(store: State<'_, SettingsStore>) -> Result<Vec<String>, String> {
-    let root = root_of(&store.get())?;
+    let (root, _) = effective_root(&store.get(), user_folder().as_deref()).ok_or_else(|| NO_ROOT.to_string())?;
     blocking(move || Ok(kinds(&root)), "The projects folder could not be read.").await
 }
 
@@ -466,7 +514,7 @@ pub async fn dev_kinds(store: State<'_, SettingsStore>) -> Result<Vec<String>, S
 #[tauri::command]
 pub async fn dev_clone(link: String, kind: String, name: String, store: State<'_, SettingsStore>) -> Result<String, String> {
     crate::rooms::need(&store, "dev")?;
-    let root = root_of(&store.get())?;
+    let root = root_for_new(&store)?;
     blocking(move || clone(&link, &root, kind.trim(), name.trim()).map(|f| f.display().to_string()), "The clone could not run.").await
 }
 
@@ -474,7 +522,7 @@ pub async fn dev_clone(link: String, kind: String, name: String, store: State<'_
 #[tauri::command]
 pub async fn dev_create(owner: String, name: String, private: bool, kind: String, store: State<'_, SettingsStore>) -> Result<String, String> {
     crate::rooms::need(&store, "dev")?;
-    let root = root_of(&store.get())?;
+    let root = root_for_new(&store)?;
     blocking(
         move || create(owner.trim(), name.trim(), private, &root, kind.trim()).map(|f| f.display().to_string()),
         "The repo could not be created.",
@@ -525,6 +573,15 @@ mod tests {
         assert_eq!(root_of(&blank).unwrap_err(), NO_ROOT);
         let set = Settings { dev_root: Some(r"E:\Work".into()), ..Settings::default() };
         assert_eq!(root_of(&set), Ok(PathBuf::from(r"E:\Work")));
+    }
+
+    #[test]
+    fn before_a_choice_the_user_folder_suggests_projects() {
+        let home = PathBuf::from(r"C:\Users\Lyra");
+        assert_eq!(effective_root(&Settings::default(), Some(&home)), Some((PathBuf::from(r"C:\Users\Lyra\Projects"), true)));
+        let set = Settings { dev_root: Some(r"E:\Work".into()), ..Settings::default() };
+        assert_eq!(effective_root(&set, Some(&home)), Some((PathBuf::from(r"E:\Work"), false)), "the member's choice always wins");
+        assert_eq!(effective_root(&Settings::default(), None), None, "no user folder, no suggestion: the sheet asks for a folder");
     }
 
     #[test]
