@@ -74,20 +74,39 @@ export function useStage({ world, companion, portrait, active, say }) {
   const initial = initialOf
 
   // ---------- music ----------
+  // Only an adventure with its own music plays any here. A new adventure has none, and Castle's own
+  // player (the top bar) already plays on every tab, so a second copy would overlap it.
   function musicSource() {
     const w = world()
-    return w?.music?.length ? url(w.music[0]) : '/ambience/castle-theme.mp3'
+    return w?.music?.length ? url(w.music[0]) : null
+  }
+  let holding = false
+  // While the stage plays its own tune, Castle's top-bar player steps aside (never two tunes at once).
+  function hold(on) {
+    if (holding === on) return
+    holding = on
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('castle-music', { detail: { stage: on } }))
   }
   function syncMusic() {
     if (!bgm) return
     const want = musicSource()
+    if (!want) {
+      bgm.pause()
+      hold(false)
+      return
+    }
     if (bgm.dataset?.src !== want) {
       bgm.src = want
       if (bgm.dataset) bgm.dataset.src = want
     }
     bgm.volume = s.volume * (voice && !voice.paused ? MUSIC_UNDER_VOICE : MUSIC_LEVEL) * 2
-    if (s.music && active()) bgm.play().catch(() => {})
-    else bgm.pause()
+    if (s.music && active()) {
+      hold(true)
+      bgm.play().catch(() => {})
+    } else {
+      bgm.pause()
+      hold(false)
+    }
   }
 
   // ---------- pages ----------
@@ -217,6 +236,7 @@ export function useStage({ world, companion, portrait, active, say }) {
     window.removeEventListener('castle-story-reply', onReply)
     bgm?.pause()
     voice?.pause()
+    hold(false)
   })
   watch(() => world()?.id, () => {
     reset()
