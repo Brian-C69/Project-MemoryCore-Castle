@@ -30,6 +30,7 @@ import UsageReveal from './components/UsageReveal.vue'
 import WhatsNew from './components/WhatsNew.vue'
 import { sectionFor, unseenSections } from './components/changelog.js'
 import { moveTab, orderTabs } from './components/taborder.js'
+import { SIZES, WIDGETS, dropPlace, isOn, memberPlace, placeFor, placePatch, resetPatch, sizeOf } from './components/widgets/widgetplaces.js'
 import changelog from '../CHANGELOG.md?raw'
 import { version as appVersion } from '../package.json'
 import NoticeToasts from './components/NoticeToasts.vue'
@@ -85,6 +86,7 @@ const chatOpened = ref(active.value === 'chat')
 // DEV stays mounted once opened, so its project sessions keep going behind the other rooms
 const devOpened = ref(active.value === 'dev')
 watch(active, (room) => {
+  if (room !== 'home') arranging.value = false
   if (room === 'story') storyOpened.value = true
   if (room === 'chat') chatOpened.value = true
   if (room === 'dev') devOpened.value = true
@@ -96,6 +98,11 @@ const memoryStamp = ref(0)
 const rooms = ref({})
 const barClock = ref({ enabled: false, format: '24h' })
 const usageCard = ref(true)
+// HOME's widgets as the member arranged them (WIDGETS): on or off, size, and places per theme
+const widgetPrefs = ref({})
+const arranging = ref(false)
+const drag = ref(null) // { id, x, y, dx, dy, box }
+const homeEl = ref(null)
 // the member's own tab order (dragged in the top bar); empty = Castle's order
 const tabOrder = ref([])
 const tabs = computed(() =>
@@ -120,6 +127,59 @@ const theme = ref(null)
 const themeNotice = ref('')
 const activeLabel = computed(() => allTabs.find((t) => t.id === active.value)?.label ?? '')
 const widgets = computed(() => theme.value?.widgets ?? {})
+// The widgets HOME draws: switched on, and (for the cards and USAGE) placed by the theme.
+const shownWidgets = computed(() =>
+  WIDGETS.map((w) => w.id).filter((id) => isOn(id, { ...widgetPrefs.value, showUsageCard: usageCard.value }) && (['clock', 'gauges'].includes(id) || widgets.value[id])),
+)
+
+function slotStyle(id) {
+  const style = placeStyle(placeFor(widgets.value[id], memberPlace(widgetPrefs.value, theme.value?.id, id)))
+  const scale = SIZES[sizeOf(id, widgetPrefs.value)]
+  const moving = drag.value?.id === id ? `translate(${drag.value.dx}px, ${drag.value.dy}px) ` : ''
+  if (moving || scale !== 1) style.transform = `${moving}scale(${scale})`
+  return style
+}
+
+async function saveWidgets(patch) {
+  widgetPrefs.value = { ...widgetPrefs.value, ...patch }
+  try {
+    const { settings } = await getSettings()
+    await saveSettings({ ...settings, ...patch })
+  } catch {
+    // outside Castle's window: the arrangement holds until the page reloads
+  }
+}
+
+// Arrange mode: a widget follows the pointer and is put down where it is dropped, kept on HOME.
+function startDrag(event, id) {
+  if (!arranging.value || event.button !== 0) return
+  const home = homeEl.value.getBoundingClientRect()
+  const rect = event.currentTarget.getBoundingClientRect()
+  event.currentTarget.setPointerCapture(event.pointerId)
+  drag.value = { id, x: event.clientX, y: event.clientY, dx: 0, dy: 0, box: { left: rect.left - home.left, top: rect.top - home.top, width: rect.width, height: rect.height } }
+}
+
+function moveDrag(event) {
+  if (!drag.value) return
+  drag.value = { ...drag.value, dx: event.clientX - drag.value.x, dy: event.clientY - drag.value.y }
+}
+
+async function endDrag() {
+  const d = drag.value
+  if (!d) return
+  drag.value = null
+  if (!d.dx && !d.dy) return
+  const home = homeEl.value.getBoundingClientRect()
+  const place = dropPlace({ ...d.box, left: d.box.left + d.dx, top: d.box.top + d.dy }, { width: home.width, height: home.height })
+  await saveWidgets(placePatch(widgetPrefs.value, theme.value?.id, d.id, place))
+}
+
+function arrange() {
+  active.value = 'home'
+  arranging.value = true
+}
+
+const onArrangeKey = (event) => event.key === 'Escape' && arranging.value && (arranging.value = false)
 
 // "What's new" after an update: the sections since the version last seen, once. The very first
 // launch only records the version. dev only: ?whatsnew=<version> shows that version's notes.
@@ -164,6 +224,7 @@ async function loadSettingsAndTheme() {
     rooms.value = view.settings.rooms ?? {}
     barClock.value = { enabled: !!view.settings.displayClock, format: view.settings.clockFormat ?? '24h' }
     usageCard.value = view.settings.showUsageCard !== false
+    widgetPrefs.value = { widgetsOff: view.settings.widgetsOff ?? [], widgetSizes: view.settings.widgetSizes ?? {}, widgetPlaces: view.settings.widgetPlaces ?? {} }
     tabOrder.value = view.settings.tabOrder ?? []
     if (!view.settings.setupDone) {
       setupOpen.value = true
@@ -330,6 +391,7 @@ let stopBackupEvents
 let stopStoryEvents
 let stopProviderEvents
 onMounted(async () => {
+  window.addEventListener('keydown', onArrangeKey)
   stopProviderEvents = await onProviderChanged(async () => { await settingsSaved(); window.dispatchEvent(new Event('castle-provider-changed')) }).catch(() => null)
   await loadSettingsAndTheme()
   loadHome()
@@ -347,6 +409,7 @@ onMounted(async () => {
   }
 })
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onArrangeKey)
   stopProviderEvents?.()
   clearInterval(refresh)
   stopBackupEvents?.()
@@ -375,7 +438,7 @@ watch(settingsStamp, () => {
       @hide="hideCastle().catch(() => {})"
     />
     <main class="screen">
-      <div v-show="active === 'home'" class="home" :class="theme?.widgetStyle ?? 'glass'">
+      <div v-show="active === 'home'" ref="homeEl" class="home" :class="[theme?.widgetStyle ?? 'glass', { arranging }]">
         <UsageReveal v-if="theme?.usageReveal" :theme="theme" :visible="active === 'home'" />
         <QuotaGlow v-if="theme?.quotaGlow" :theme="theme" :visible="active === 'home'" />
         <TerminalPanel
@@ -387,11 +450,26 @@ watch(settingsStamp, () => {
         >
           <template #header="{ write, running }"><CompanionHeader :name="companion" :cli-label="cliLabel" :avatar="avatar" :write="write" :running="running" /></template>
         </TerminalPanel>
-        <div class="widget-slot" :style="placeStyle(widgets.clock)"><ClockWidget :size="widgets.clock?.size ?? 'm'" /></div>
-        <div class="widget-slot" :style="placeStyle(widgets.gauges)"><GaugeWidget /></div>
-        <div v-if="widgets.usage && usageCard" class="widget-slot" :style="placeStyle(widgets.usage)"><UsageWidget :stamp="settingsStamp" /></div>
-        <div v-for="kind in ['today', 'projects', 'diary', 'growth', 'backup', 'database']" :key="kind" class="widget-slot" :style="placeStyle(widgets[kind])">
-          <HomeCards v-if="widgets[kind]" :kind="kind" :data="home" :backup="backup" :database="database" @open="openMemoryFile" @backup="onBackupCard" @database="onDatabaseCard" />
+        <div
+          v-for="id in shownWidgets"
+          :key="id"
+          class="widget-slot"
+          :class="{ movable: arranging, moving: drag?.id === id }"
+          :style="slotStyle(id)"
+          @pointerdown="startDrag($event, id)"
+          @pointermove="moveDrag"
+          @pointerup="endDrag"
+          @pointercancel="endDrag"
+        >
+          <ClockWidget v-if="id === 'clock'" :size="widgets.clock?.size ?? 'm'" />
+          <GaugeWidget v-else-if="id === 'gauges'" />
+          <UsageWidget v-else-if="id === 'usage'" :stamp="settingsStamp" />
+          <HomeCards v-else :kind="id" :data="home" :backup="backup" :database="database" @open="openMemoryFile" @backup="onBackupCard" @database="onDatabaseCard" />
+        </div>
+        <div v-if="arranging" class="arrange-bar" role="toolbar" aria-label="Arrange HOME">
+          <span>Drag a widget to move it. Each theme keeps its own places.</span>
+          <button @click="saveWidgets(resetPatch(widgetPrefs, theme?.id))">Back to the theme's places</button>
+          <button class="primary" @click="arranging = false">Done</button>
         </div>
       </div>
       <AppsView v-if="active === 'apps'" class="room" />
@@ -489,6 +567,60 @@ body {
 
 .widget-slot {
   position: absolute;
+  transform-origin: top left;
+}
+
+/* Arrange mode: every widget shows its edge and follows the pointer; nothing inside is pressed. */
+.widget-slot.movable {
+  cursor: grab;
+  outline: 2px dashed color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 4px;
+  border-radius: 14px;
+  touch-action: none;
+}
+
+.widget-slot.movable > * {
+  pointer-events: none;
+}
+
+.widget-slot.moving {
+  cursor: grabbing;
+  z-index: 5;
+  opacity: 0.9;
+}
+
+.arrange-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--panel-background);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  backdrop-filter: blur(var(--glass-blur));
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.arrange-bar button {
+  font: inherit;
+  color: var(--text);
+  background: var(--hover);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.arrange-bar button.primary {
+  background: var(--accent);
+  color: #07142e;
+  border-color: transparent;
 }
 
 /* Widget frames: glass themes give them a pane, bare themes let the wallpaper show through. */
