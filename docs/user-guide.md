@@ -405,6 +405,7 @@ Your keys are kept encrypted by Windows and only used to talk to the room. If yo
 - Pictures that temporarily fail to load are retried while the room is open; an initial stays visible until the picture loads.
 - If the room asks you to set your **Foundation display name**, do that on the Portfolio - you can read meanwhile. If you are muted, you can still read.
 - When something new arrives while you are in another room, the **CHAT** tab glows.
+- **Alerts.** While you are not looking at CHAT, a new message also plays Windows' own notification sound and shows a desktop notification with who wrote and the start of the line, even when Castle is hidden in the tray (it checks the room every 30 seconds then, so an alert can come up to 30 seconds late). Your own messages never alert. Switch the sound and the notification off separately in **Settings > Rooms > Chat alerts**.
 
 ### Your companion in the room
 

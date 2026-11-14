@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Chat alerts.** A new message in the chat room now shows a desktop notification (who wrote, and the start of the line) while you are not looking at CHAT, also when Castle is hidden in the tray, as well as the glow on the tab. You can also switch on Windows' notification sound. Your own messages never alert. The notification is on and the sound is off by default; each has its own switch in **Settings > Rooms > Chat alerts**.
+
 ## 0.2.4 - 2026-11-14
 
 - **Pictures and voice lines now show in CHAT.** The room names each one by a number, and Castle only took text, so they were refused before they were fetched and the chat showed nothing.

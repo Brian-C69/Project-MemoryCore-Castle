@@ -30,6 +30,7 @@ mod pty;
 mod providers;
 mod messages;
 mod quota;
+mod roomalert;
 mod roomread;
 mod rooms;
 mod roomturn;
@@ -204,6 +205,7 @@ pub fn run() {
             tray::show_main(app);
         }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![startup::SIGN_IN_ARG]),
