@@ -5,6 +5,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
+import ThemedAudio from '../components/ThemedAudio.vue'
 import { imageRequest } from '../api/castle.js'
 const imageBrief = ref('')
 const imageProblem = ref('')
@@ -102,7 +103,7 @@ watch(() => props.stamp, load)
         <template v-else-if="p.id === 'voice' && voiceUp">
           <textarea v-model="voiceText" rows="2" placeholder="Type what VoiceStudio should say…" @keydown.ctrl.enter="speak"></textarea>
           <button :disabled="voiceBusy || !voiceText.trim()" @click="speak">{{ voiceBusy ? 'Speaking…' : 'Speak with VoiceStudio' }}</button>
-          <audio v-if="voiceClip" :src="voiceClip" controls></audio>
+          <ThemedAudio v-if="voiceClip" :src="voiceClip" />
           <p v-if="voiceProblem" role="alert" class="problem">{{ voiceProblem }}</p>
         </template>
         <button v-else-if="powers[p.id] === 'prompt'" @click="emit('keys')">Add the {{ p.key }} key</button>
@@ -180,9 +181,6 @@ watch(() => props.stamp, load)
   margin: 0;
   font-size: 13px;
   color: var(--warn);
-}
-.power audio {
-  width: 100%;
 }
 .powers {
   display: grid;
