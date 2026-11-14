@@ -259,6 +259,32 @@ pub struct Settings {
     /// The top bar's tabs in the member's own order (tab ids, dragged into place). Empty means
     /// Castle's own order; a tab not listed (a room added in a later release) follows the listed ones.
     pub tab_order: Vec<String>,
+    /// HOME's widgets the member switched off in WIDGETS. USAGE is not listed here: its switch is
+    /// `show_usage_card`, which also stops Castle asking the CLIs.
+    pub widgets_off: Vec<String>,
+    /// Each widget's size on HOME: one of WIDGET_SIZES (a widget not listed is "m").
+    pub widget_sizes: std::collections::BTreeMap<String, String>,
+    /// Where the member put HOME's widgets, per theme id: the widget's top-left corner as
+    /// percentages of HOME. A widget not listed keeps the theme's own place.
+    pub widget_places: std::collections::BTreeMap<String, std::collections::BTreeMap<String, WidgetPlace>>,
+}
+
+/// HOME's widgets, by id (the theme's `widgets` keys).
+pub const WIDGETS: [&str; 9] = ["clock", "gauges", "usage", "today", "projects", "diary", "growth", "backup", "database"];
+pub const WIDGET_SIZES: [&str; 3] = ["s", "m", "l"];
+/// The most themes whose widget places are kept.
+const WIDGET_THEMES_MAX: usize = 64;
+
+/// A widget's top-left corner on HOME, in percent of HOME's width and height.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WidgetPlace {
+    pub left: f64,
+    pub top: f64,
+}
+
+fn plain_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= TAB_ID_MAX && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 /// The longest tab order kept, and the longest tab id in it.
@@ -323,6 +349,9 @@ impl Default for Settings {
             profile_look: "cards".into(),
             dev_root: None,
             tab_order: Vec::new(),
+            widgets_off: Vec::new(),
+            widget_sizes: std::collections::BTreeMap::new(),
+            widget_places: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -375,6 +404,26 @@ impl Settings {
         if !PROFILE_LOOKS.contains(&self.profile_look.as_str()) {
             self.profile_look = "cards".into();
         }
+        // HOME's widgets: known ids only, USAGE's switch is show_usage_card; places kept on HOME
+        let mut off: Vec<String> = std::mem::take(&mut self.widgets_off).into_iter().filter(|w| WIDGETS.contains(&w.as_str()) && w != "usage").collect();
+        off.sort();
+        off.dedup();
+        self.widgets_off = off;
+        self.widget_sizes.retain(|w, size| WIDGETS.contains(&w.as_str()) && WIDGET_SIZES.contains(&size.as_str()) && size != "m");
+        self.widget_places = std::mem::take(&mut self.widget_places)
+            .into_iter()
+            .filter(|(theme, _)| plain_id(theme))
+            .take(WIDGET_THEMES_MAX)
+            .map(|(theme, places)| {
+                let kept = places
+                    .into_iter()
+                    .filter(|(w, p)| WIDGETS.contains(&w.as_str()) && p.left.is_finite() && p.top.is_finite())
+                    .map(|(w, p)| (w, WidgetPlace { left: p.left.clamp(0.0, 100.0), top: p.top.clamp(0.0, 100.0) }))
+                    .collect::<std::collections::BTreeMap<_, _>>();
+                (theme, kept)
+            })
+            .filter(|(_, places)| !places.is_empty())
+            .collect();
         // every known room is listed (a missing one is on); unknown names go
         self.rooms = ROOMS.iter().map(|r| (r.to_string(), self.rooms.get(*r).copied().unwrap_or(true))).collect();
         self
@@ -476,6 +525,24 @@ mod tests {
         assert_eq!(old.profile_look, "cards");
         let odd: Settings = serde_json::from_str(r#"{"profileLook":"spiral"}"#).unwrap();
         assert_eq!(odd.normalized().profile_look, "cards");
+    }
+
+    #[test]
+    fn the_widgets_keep_known_ids_sizes_and_places_on_home() {
+        let old: Settings = serde_json::from_str(r#"{"cli":"claude"}"#).unwrap();
+        assert!(old.widgets_off.is_empty() && old.widget_sizes.is_empty() && old.widget_places.is_empty(), "a settings file from before WIDGETS shows every widget where its theme puts it");
+        let odd: Settings = serde_json::from_str(
+            r#"{"widgetsOff":["diary","usage","nonsense","diary"],
+                "widgetSizes":{"clock":"l","gauges":"m","today":"xl","ghost":"s"},
+                "widgetPlaces":{"constellation":{"clock":{"left":140,"top":-5},"ghost":{"left":1,"top":1}},"bad id!":{"clock":{"left":1,"top":1}},"seed":{"ghost":{"left":1,"top":1}}}}"#,
+        )
+        .unwrap();
+        let s = odd.normalized();
+        assert_eq!(s.widgets_off, ["diary"], "USAGE's switch is show_usage_card; unknown ids go");
+        assert_eq!(s.widget_sizes.into_iter().collect::<Vec<_>>(), [("clock".to_string(), "l".to_string())]);
+        assert_eq!(s.widget_places.keys().collect::<Vec<_>>(), ["constellation"]);
+        assert_eq!(s.widget_places["constellation"]["clock"], WidgetPlace { left: 100.0, top: 0.0 });
+        assert!(!s.widget_places["constellation"].contains_key("ghost"));
     }
 
     #[test]
@@ -608,6 +675,9 @@ mod tests {
             profile_look: "constellation".into(),
             dev_root: Some("D:/Projects".into()),
             tab_order: vec!["dev".into(), "home".into(), "chat".into()],
+            widgets_off: vec!["growth".into()],
+            widget_sizes: [("clock".to_string(), "l".to_string())].into_iter().collect(),
+            widget_places: [("seed".to_string(), [("today".to_string(), WidgetPlace { left: 12.5, top: 40.0 })].into_iter().collect())].into_iter().collect(),
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));
