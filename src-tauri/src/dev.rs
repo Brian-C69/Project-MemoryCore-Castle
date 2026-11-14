@@ -223,6 +223,20 @@ pub fn dev_open(folder: String, store: State<SettingsStore>, hosts: State<DevHos
     Ok(state(&store, &hosts))
 }
 
+/// The live servers: every listening developer port, and which DEV tab owns it. Read only:
+/// nothing here ever ends a process.
+#[tauri::command]
+pub async fn dev_servers(store: State<'_, SettingsStore>, hosts: State<'_, DevHosts>) -> Result<Vec<crate::servers::Server>, String> {
+    let settings = store.get();
+    let sessions: Vec<(u8, u32)> = hosts.0.iter().enumerate().filter_map(|(slot, host)| host.pid().map(|pid| (slot as u8, pid))).collect();
+    let projects: Vec<(u8, PathBuf)> =
+        settings.dev_tabs.iter().enumerate().filter_map(|(slot, folder)| folder.as_ref().map(|f| (slot as u8, PathBuf::from(f)))).collect();
+    let companion = settings.companion_label();
+    tauri::async_runtime::spawn_blocking(move || crate::servers::servers(&sessions, &projects, &companion))
+        .await
+        .map_err(|_| "The servers could not be read.".to_string())
+}
+
 #[tauri::command]
 pub fn dev_close_tab(slot: usize, store: State<SettingsStore>, hosts: State<DevHosts>, chats: State<DevChats>) -> Result<DevState, String> {
     host(&hosts, slot)?.kill();

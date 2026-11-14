@@ -55,6 +55,8 @@ pub struct Session {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     killer: Box<dyn ChildKiller + Send + Sync>,
+    /// The program's process id (DEV's live servers are traced back to it).
+    pid: Option<u32>,
 }
 
 impl Session {
@@ -85,6 +87,7 @@ impl Session {
             .take_writer()
             .map_err(|_| "The console could not be written to.".to_string())?;
         let killer = child.clone_killer();
+        let pid = child.process_id();
 
         std::thread::spawn(move || {
             let mut pending = Vec::new();
@@ -109,7 +112,7 @@ impl Session {
             on_exit(code);
         });
 
-        Ok(Session { master: pair.master, writer, killer })
+        Ok(Session { master: pair.master, writer, killer, pid })
     }
 
     pub fn write(&mut self, data: &[u8]) -> Result<(), String> {
@@ -158,6 +161,11 @@ impl PtyHost {
     }
     pub fn is_running(&self) -> bool {
         self.session.lock().unwrap().is_some()
+    }
+
+    /// The running session's process id (DEV's live servers are traced back to it).
+    pub fn pid(&self) -> Option<u32> {
+        self.session.lock().unwrap().as_ref().and_then(|(_, session)| session.pid)
     }
 
     /// The running session's id and start time.

@@ -41,6 +41,7 @@ mod rooms;
 mod roomturn;
 mod signin;
 mod screen;
+mod servers;
 mod session;
 mod settings;
 mod setup;
@@ -242,6 +243,7 @@ pub fn run() {
             providers::image_cancel,
             dev::dev_state,
             dev::dev_open,
+            dev::dev_servers,
             dev::dev_close_tab,
             dev::dev_forget,
             dev::dev_wake,
