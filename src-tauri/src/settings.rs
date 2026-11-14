@@ -171,6 +171,10 @@ pub struct Settings {
     /// The top bar's minus button minimises Castle to the taskbar. Off (the default), it hides
     /// Castle to the tray icon, as before.
     pub minimize_to_taskbar: bool,
+    /// Optional local-time clock immediately before the top bar's music controls.
+    pub display_clock: bool,
+    /// "12h" or "24h".
+    pub clock_format: String,
     /// Whether HOME's USAGE card shows Claude Code's limits, and Codex's. On by default; a CLI that
     /// is off is not asked at all.
     pub show_claude_usage: bool,
@@ -248,6 +252,8 @@ impl Default for Settings {
             start_with_windows: false,
             start_session_on_launch: true,
             minimize_to_taskbar: false,
+            display_clock: false,
+            clock_format: "24h".into(),
             show_claude_usage: true,
             show_codex_usage: true,
             room_companion_key_id: None,
@@ -280,6 +286,7 @@ impl Default for Settings {
 impl Settings {
     /// Trims every text field; an empty one means unset. The room address loses its trailing slash.
     pub fn normalized(mut self) -> Self {
+        if !["12h", "24h"].contains(&self.clock_format.as_str()) { self.clock_format = "24h".into(); }
         fn clean(value: Option<String>) -> Option<String> {
             value.map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
         }
@@ -401,6 +408,17 @@ impl SettingsStore {
 mod tests {
     use super::*;
 
+    #[test]
+    fn clock_defaults_and_invalid_formats_are_safe() {
+        let old: Settings = serde_json::from_str(r#"{"setupDone":true}"#).unwrap();
+        assert!(!old.display_clock);
+        assert_eq!(old.clock_format, "24h");
+        let invalid: Settings = serde_json::from_str(r#"{"displayClock":true,"clockFormat":"23h"}"#).unwrap();
+        let fixed = invalid.normalized();
+        assert!(fixed.display_clock);
+        assert_eq!(fixed.clock_format, "24h");
+    }
+
     fn temp_folder(name: &str) -> PathBuf {
         let folder = std::env::temp_dir().join(format!("castle-test-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&folder);
@@ -434,6 +452,8 @@ mod tests {
             start_with_windows: true,
             start_session_on_launch: false,
             minimize_to_taskbar: true,
+            display_clock: true,
+            clock_format: "12h".into(),
             show_claude_usage: false,
             show_codex_usage: true,
             room_companion_key_id: Some("17".into()),

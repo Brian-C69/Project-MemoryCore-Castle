@@ -1,9 +1,12 @@
 <script setup>
 import TopMusic from './TopMusic.vue'
+import TopClock from './TopClock.vue'
 
 defineProps({
   tabs: { type: Array, required: true },
   active: { type: String, required: true },
+  displayClock: { type: Boolean, default: false },
+  clockFormat: { type: String, default: '24h' },
   // Tabs with something new waiting (the story room speaking, a new chat line): their button changes colour.
   marks: { type: Array, default: () => [] },
   // what is new, per tab, for its tooltip ("2 new · Rin online")
@@ -28,6 +31,7 @@ defineEmits(['select', 'settings', 'hide'])
       </button>
     </nav>
     <div class="actions">
+      <TopClock v-if="displayClock" :format="clockFormat" />
       <TopMusic />
       <button class="action" title="Settings" aria-label="Settings" @click="$emit('settings')">&#9881;</button>
       <button class="action" title="Hide to tray" aria-label="Hide to tray" @click="$emit('hide')">&#8211;</button>
@@ -82,6 +86,9 @@ defineEmits(['select', 'settings', 'hide'])
 .tabs {
   display: flex;
   flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
   gap: 8px;
 }
 
@@ -112,6 +119,8 @@ button {
 
 .actions {
   display: flex;
+  align-items: center;
+  flex-shrink: 0;
   gap: 4px;
 }
 
