@@ -67,6 +67,8 @@ pub struct Bundle {
     pub skipped: Vec<String>,
     /// the emotion engine's file (emotion/traits.md), by path
     pub traits: Option<String>,
+    /// MY PROFILE's readings (profile/readings.json), by path
+    pub profile: Option<String>,
 }
 
 /// What the member is shown before and after moving in.
@@ -339,6 +341,10 @@ pub fn collect(folder: &Path) -> Bundle {
     if traits.is_file() && bundle.take(folder, &traits) {
         bundle.traits = Some(crate::traits::MARKDOWN_FILE.to_string());
     }
+    let profile = folder.join(crate::profile::EXPORT_FILE);
+    if profile.is_file() && bundle.take(folder, &profile) {
+        bundle.profile = Some(crate::profile::EXPORT_FILE.to_string());
+    }
     bundle
 }
 
@@ -422,6 +428,11 @@ pub fn load(conn: &mut Conn, bundle: &Bundle) -> Result<(), String> {
     if let Some(path) = &bundle.traits {
         let traits = crate::traits::from_markdown(bundle.body_of(path).unwrap_or_default());
         crate::traits::load_all(&mut tx, &traits).map_err(|_| "The traits could not be kept, so nothing was changed.".to_string())?;
+    }
+    if let Some(path) = &bundle.profile {
+        for reading in crate::profile::from_json(bundle.body_of(path).unwrap_or_default()) {
+            crate::profile::save_in(&mut tx, &reading).map_err(|_| "Your profile readings could not be kept, so nothing was changed.".to_string())?;
+        }
     }
     let diary_there: Option<u64> = tx.query_first("SELECT COUNT(*) FROM diary_entries WHERE source_file IS NOT NULL").map_err(sql("Counting the diary"))?;
     if (diary_there.unwrap_or(0) as usize) < bundle.diary.len() {

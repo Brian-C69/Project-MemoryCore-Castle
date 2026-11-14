@@ -271,15 +271,24 @@ pub fn months_read(conn: &mut impl Queryable) -> Result<Vec<String>, String> {
 /// A month's reading, kept whole in one transaction (any older reading of that month is replaced).
 pub fn save(conn: &mut Conn, r: &Reading) -> Result<(), String> {
     let mut tx = conn.start_transaction(TxOpts::default()).map_err(sql("Opening the database"))?;
+    save_in(&mut tx, r)?;
+    tx.commit().map_err(sql("Keeping the reading"))
+}
+
+/// The rows of one reading, inside a transaction the caller holds (moving in keeps every reading
+/// in its own transaction with the rest of the memory).
+pub fn save_in(tx: &mut impl Queryable, r: &Reading) -> Result<(), String> {
+    if !is_month(&r.month) {
+        return Err("That is not a month.".into());
+    }
     let first = format!("{}-01", r.month);
     tx.exec_drop("DELETE FROM profile_readings WHERE month = ?", (&first,)).map_err(sql("Replacing the month"))?;
     tx.exec_drop(
-        "INSERT INTO profile_readings (month, mbti, enneagram, tritype, headline, entries_read, from_date, to_date, scanned_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW()))",
+        "INSERT INTO profile_readings (month, mbti, enneagram, tritype, headline, entries_read, from_date, to_date, scanned_at)          VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW()))",
         (&first, &r.mbti, &r.enneagram, &r.tritype, &r.headline, r.entries_read, &r.from_date, &r.to_date, &r.scanned_at),
     )
     .map_err(sql("Keeping the reading"))?;
-    let id = tx.last_insert_id().ok_or("Keeping the reading did not work.")?;
+    let id: u64 = tx.query_first("SELECT LAST_INSERT_ID()").map_err(sql("Keeping the reading"))?.ok_or("Keeping the reading did not work.")?;
     for grp in SCORE_GROUPS {
         for (sort, s) in r.scores.iter().filter(|s| s.grp == grp).enumerate() {
             tx.exec_drop("INSERT INTO profile_scores (reading_id, grp, label, score, sort) VALUES (?, ?, ?, ?, ?)", (id, &s.grp, &s.label, s.score.min(100), sort as u32))
@@ -292,7 +301,17 @@ pub fn save(conn: &mut Conn, r: &Reading) -> Result<(), String> {
             tx.exec_drop("INSERT INTO profile_notes (reading_id, grp, line, sort) VALUES (?, ?, ?, ?)", (id, &n.grp, &line, sort as u32)).map_err(sql("Keeping the notes"))?;
         }
     }
-    tx.commit().map_err(sql("Keeping the reading"))
+    Ok(())
+}
+
+/// `profile/readings.json`: every reading, oldest first.
+pub fn to_json(readings: &[Reading]) -> String {
+    serde_json::to_string_pretty(readings).unwrap_or_else(|_| "[]".into())
+}
+
+/// The readings in an exported file; a file that is not readings is no readings.
+pub fn from_json(text: &str) -> Vec<Reading> {
+    serde_json::from_str::<Vec<Reading>>(text).unwrap_or_default().into_iter().filter(|r| is_month(&r.month)).collect()
 }
 
 type ReadingRow = (u64, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<u32>, Option<String>, Option<String>, Option<String>);
@@ -516,6 +535,15 @@ mod tests {
         assert!(w.contains("shadow (up to five): Overthinking"));
         assert!(w.contains("<page title=\"2026-03-02 - Tea\">\nWe had tea  <page>\n</page>"));
         assert!(w.ends_with("Answer only with <reading>{...}</reading>."));
+    }
+
+    #[test]
+    fn the_readings_travel_as_json_and_back() {
+        let r = check_reading("2026-03", &good(), 12, "2026-03-01", "2026-03-30").unwrap();
+        let back = from_json(&to_json(std::slice::from_ref(&r)));
+        assert_eq!(back, vec![r]);
+        assert!(from_json("not json").is_empty());
+        assert!(from_json(r#"[{"month":"2026-13"}]"#).is_empty());
     }
 
     #[test]

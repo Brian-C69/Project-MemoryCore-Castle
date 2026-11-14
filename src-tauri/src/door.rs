@@ -597,6 +597,11 @@ fn export(conn: &mut Conn, to: &Path) -> Result<String, String> {
     if !traits.is_empty() {
         write(&to.join(crate::traits::MARKDOWN_FILE), &crate::traits::to_markdown(&traits))?;
     }
+    // the member's MY PROFILE readings, every month
+    let readings = crate::profile::all(conn).unwrap_or_default();
+    if !readings.is_empty() {
+        write(&to.join(crate::profile::EXPORT_FILE), &crate::profile::to_json(&readings))?;
+    }
 
     // 2. diary entries written since then: appended to their day's file, MemoryCore's own shape
     let rows: Vec<(Option<String>, u32, String, String)> = conn
@@ -909,13 +914,13 @@ mod tests {
         assert!(go(&["trait", "show", "--number", "9"]).is_err());
 
         let file = folder.join("backup").join("memory.sql");
-        assert!(go(&["dump", "--to", file.to_str().unwrap()]).unwrap().starts_with("DUMP 19 table(s), "));
+        assert!(go(&["dump", "--to", file.to_str().unwrap()]).unwrap().starts_with("DUMP 22 table(s), "));
         let before = go(&["diary", "show", "--date", "2026-11-10"]).unwrap();
         drop(go);
         // the record of the note: sent once, read once
         let recorded: Option<(u64, u64)> = conn.query_first("SELECT COUNT(*), COUNT(read_at) FROM link_notes").unwrap();
         assert_eq!(recorded, Some((1, 1)));
-        conn.query_drop("DROP TABLE diary_entries, reminders, projects, link_notes, link_terminals, imported_files, memory_files, memory_file_history, session_sections, session_section_history, skills, skill_files, skill_file_history, diary_entry_history, project_plan_items, project_plans, companion_trait_history, companion_traits, schema_migrations").unwrap();
+        conn.query_drop("DROP TABLE diary_entries, reminders, projects, link_notes, link_terminals, imported_files, memory_files, memory_file_history, session_sections, session_section_history, skills, skill_files, skill_file_history, diary_entry_history, project_plan_items, project_plans, companion_trait_history, companion_traits, profile_notes, profile_scores, profile_readings, schema_migrations").unwrap();
         let mut go =|line: &[&str]| run(&mut conn, &parse(&args(line)).unwrap(), &folder);
         assert!(go(&["diary", "list"]).is_err());
         assert!(go(&["restore", "--from", file.to_str().unwrap()]).unwrap().starts_with("RESTORE "));
