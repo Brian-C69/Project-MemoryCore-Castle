@@ -9,7 +9,9 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../components/roomsteps.js'
 import { listen } from '@tauri-apps/api/event'
 import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCard, roomCardSave, roomCompanionIn, roomFaceSet, roomFile, roomLog, roomMe, roomMine, roomPost, roomPresence, roomReset, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
-import { initial, isMine, ticks } from '../components/roomchat.js'
+import { avatarLoader, currentAvatar, datedLines, initial, isMine, roomMembers, speakerPresentation, ticks } from '../components/roomchat.js'
+import { roomNameSet } from '../api/castle.js'
+import { avatarGet } from '../api/castle.js'
 
 const props = defineProps({
   visible: { type: Boolean, default: true },
@@ -20,6 +22,8 @@ const emit = defineEmits(['fresh'])
 const settings = ref(null)
 const keys = ref([])
 const me = ref(null)
+const companionProfile = ref(null)
+const companionPortrait = ref(null)
 const lines = ref([])
 const seen = ref([]) // who has read how far (the ticks)
 const myIds = ref([]) // the lines Castle posted for the member
@@ -27,6 +31,10 @@ const faces = ref({}) // avatar token -> picture
 const tab = ref('chat') // CHAT | LOG
 const readProblem = ref('')
 const faceLine = ref('')
+const displayName = ref('')
+const nameEditing = ref(false)
+const nameSaving = ref(false)
+const nameLine = ref('')
 const turnLog = ref('') // the companion's room turns, raw
 const card = ref({ open: false, text: '', saved: '' })
 const presence = ref([])
@@ -37,6 +45,7 @@ const scroller = ref(null)
 // the member's door, step by step (member_status): signedIn, card, foundation, name, roomOpen, expired
 const member = ref(null)
 const signing = ref(false)
+const roomSaving = ref(false)
 const doorProblem = ref('')
 const PORTFOLIO = 'https://www.afifmaahi-portfolio.com'
 let alive = true
@@ -45,7 +54,18 @@ const haveCompanionKey = computed(() => keys.value.some((k) => k.name === 'room-
 const ready = computed(() => !!member.value?.roomOpen)
 const locked = computed(() => !ready.value || refused.value?.kind === 'locked' || refused.value?.kind === 'notSetUp')
 const mode = computed(() => settings.value?.roomCompanionMode ?? 'off')
-const shown = computed(() => lines.value)
+const today = ref(new Date())
+const shown = computed(() => datedLines(lines.value, today.value))
+const avatarToken = (author) => currentAvatar(author, presence.value)
+const myPicture = computed(() => faces.value[avatarToken(me.value)] || null)
+const companionPicture = computed(() => faces.value[avatarToken(companionProfile.value)] || companionPortrait.value)
+const hostName = computed(() => {
+  const present = [...new Set(presence.value.filter((p) => p.kind === 'host').map((p) => p.name))]
+  const recorded = [...new Set(lines.value.filter((l) => l.author?.kind === 'host').map((l) => l.author.name))]
+  const names = present.length ? present : recorded
+  return names.length === 1 ? names[0] : ''
+})
+const speaker = (author) => speakerPresentation(author, hostName.value)
 
 const isAi = (l) => ['assistant', 'member_assistant'].includes(l.author?.kind)
 const mine = (l) => isMine(l, myIds.value, me.value)
@@ -65,25 +85,21 @@ async function loadFile(id) {
   }
 }
 
-async function loadFace(token) {
-  if (!token || faces.value[token] !== undefined) return
-  faces.value = { ...faces.value, [token]: null }
-  try {
-    faces.value = { ...faces.value, [token]: await roomAvatar(token) }
-  } catch {
-    // the letter stays
-  }
-}
+const loadFace = avatarLoader(roomAvatar, (token, face) => {
+  faces.value = { ...faces.value, [token]: face }
+})
 
 // Lines from the room reader (or a line just sent): kept once each, in order; cleared ones go.
 function take(fresh, cleared = [], quiet = false) {
   const gone = new Set(cleared)
   const added = (fresh ?? []).filter((l) => !lines.value.some((x) => x.id === l.id))
-  lines.value = [...lines.value.filter((l) => !gone.has(l.id)), ...added].sort((x, y) => x.id - y.id).slice(-500)
-  added.forEach((l) => {
+  const merged = new Map(lines.value.map((l) => [l.id, l]))
+  for (const l of fresh ?? []) merged.set(l.id, l)
+  lines.value = [...merged.values()].filter((l) => !gone.has(l.id)).sort((x, y) => x.id - y.id).slice(-500)
+  lines.value.forEach((l) => {
     loadFile(l.voice?.fileId)
     loadFile(l.picture?.fileId)
-    loadFace(l.author?.avatar)
+    loadFace(avatarToken(l.author))
   })
   if (added.length && !quiet) {
     readProblem.value = ''
@@ -93,12 +109,21 @@ function take(fresh, cleared = [], quiet = false) {
 }
 
 async function refreshPresence() {
+  today.value = new Date()
   if (!ready.value || !props.visible) return
   try {
-    presence.value = await roomPresence()
-    me.value = await roomMe()
-    seen.value = await roomSeen()
+    presence.value = roomMembers(await roomPresence())
     presence.value.forEach((x) => loadFace(x.avatar))
+    lines.value.forEach((l) => loadFace(avatarToken(l.author)))
+    me.value = await roomMe()
+    loadFace(avatarToken(me.value))
+    if (haveCompanionKey.value) {
+      try {
+        companionProfile.value = await roomMe('companion')
+        loadFace(avatarToken(companionProfile.value))
+      } catch { /* Retain the last picture while the room is temporarily unavailable. */ }
+    } else companionProfile.value = null
+    seen.value = await roomSeen()
   } catch {
     // the read loop reports refusals
   }
@@ -206,17 +231,50 @@ async function signOut() {
 }
 
 async function setCompanionIn(on) {
+  if (roomSaving.value) return
+  roomSaving.value = true
   doorProblem.value = ''
   try {
     await roomCompanionIn(on)
     keys.value = await keyStatus()
+    await refreshPresence()
     if (!on && mode.value !== 'off') await setMode('off')
   } catch (reason) {
     doorProblem.value = String(reason?.message ?? reason)
-  }
+  } finally { roomSaving.value = false }
+}
+
+async function changeParticipation(next) {
+  if (roomSaving.value || !haveCompanionKey.value) return
+  roomSaving.value = true
+  try { await setMode(next) } finally { roomSaving.value = false }
 }
 
 const openLibrary = () => openUrl(`${PORTFOLIO}/alice/library`).catch(() => {})
+
+async function saveDisplayName() {
+  if (nameSaving.value) return
+  nameSaving.value = true
+  nameLine.value = ''
+  const ownIds = lines.value.filter(mine).map((l) => l.id)
+  let saved = false
+  try {
+    await roomNameSet(displayName.value.trim())
+    saved = true
+    // Retain ownership of existing lines even after the server's display name changes.
+    myIds.value = [...new Set([...myIds.value, ...ownIds])]
+    nameLine.value = 'Display name saved. Refreshing the room…'
+    const updated = await roomMe()
+    me.value = updated
+    lines.value = lines.value.map((l) => ownIds.includes(l.id) ? { ...l, author: { ...l.author, name: updated.name } } : l)
+    nameEditing.value = false
+    nameLine.value = 'Your public display name is saved.'
+    await checkDoor()
+    await refreshPresence()
+  } catch (reason) {
+    nameLine.value = `${saved ? 'Name saved, but the room could not refresh: ' : ''}${String(reason?.message ?? reason)}`
+  } finally { nameSaving.value = false }
+}
 // Sign in happens on the Library page; Castle then connects to that sign-in (the desktop page shows
 // "Continue as <name>", one click).
 function signInOnLibrary() {
@@ -258,6 +316,7 @@ onMounted(async () => {
   try {
     settings.value = (await getSettings()).settings
     keys.value = await keyStatus()
+    companionPortrait.value = await avatarGet().catch(() => null)
   } catch {
     // outside Castle's window
   }
@@ -352,22 +411,25 @@ watch(() => props.visible, (on) => {
         <p v-if="readProblem" class="problem">{{ readProblem }}</p>
         <div v-show="tab === 'chat'" ref="scroller" class="lines">
           <p v-if="!shown.length" class="hint">The room is quiet. Say hello.</p>
-          <template v-for="l in shown" :key="l.id">
+          <template v-for="item in shown" :key="item.key">
+            <div v-if="item.kind === 'day'" class="day-divider"><time :datetime="item.key" :title="item.date">{{ item.label }}</time></div>
+            <template v-else v-for="l in [item.line]" :key="l.id">
             <p v-if="l.author?.kind === 'system'" class="system"><em>{{ l.text }}</em></p>
             <div v-else-if="mine(l)" class="bubble mine">
               <span class="text">{{ l.text }}</span>
               <span class="meta">{{ clock(l.at) }} <span class="tick" :class="{ read: ticks(l, seen, me).read }" :title="ticks(l, seen, me).title">{{ ticks(l, seen, me).mark }}</span></span>
             </div>
             <div v-else class="bubble theirs" :class="[l.author?.kind, { ai: isAi(l) }]">
-              <span class="face"><img v-if="faces[l.author?.avatar]" :src="faces[l.author.avatar]" alt="" /><template v-else>{{ initial(l.author) }}</template></span>
+              <span class="face"><img v-if="faces[avatarToken(l.author)]" :src="faces[avatarToken(l.author)]" alt="" /><template v-else>{{ initial(l.author) }}</template></span>
               <div class="body">
-                <span class="who">{{ l.author?.name }}<span v-if="isAi(l)" class="spark"> ✦</span></span>
+                <span class="who" :title="speaker(l.author).title" :tabindex="isAi(l) ? 0 : undefined" :aria-label="speaker(l.author).title ? `${speaker(l.author).name}, ${speaker(l.author).title}` : undefined">{{ speaker(l.author).name }}<span v-if="isAi(l)" class="spark"> ✦</span></span>
                 <span class="text">{{ l.text }}</span>
                 <audio v-if="l.voice && files[l.voice.fileId]" :src="files[l.voice.fileId]" controls preload="none"></audio>
                 <img v-if="l.picture && files[l.picture.fileId]" :src="files[l.picture.fileId]" alt="" class="picture" />
               </div>
               <span class="meta">{{ clock(l.at) }}</span>
             </div>
+            </template>
           </template>
         </div>
         <div v-show="tab === 'log'" class="lines log">
@@ -384,19 +446,25 @@ watch(() => props.visible, (on) => {
       <aside class="side widget">
         <h3>IN THE ROOM</h3>
         <ul>
-          <li v-for="p in presence" :key="p.name + p.kind" :class="p.status">
+          <li v-for="(p, index) in presence" :key="`${p.kind}:${p.name}:${index}`" :class="p.status">
             <span class="face small"><img v-if="faces[p.avatar]" :src="faces[p.avatar]" alt="" /><template v-else>{{ initial(p) }}</template></span>
-            <span class="dot">●</span> {{ p.name }}<span v-if="['assistant', 'member_assistant'].includes(p.kind)"> ✦</span>
+            <span class="dot">●</span> <span :title="speaker(p).title" :tabindex="speaker(p).title ? 0 : undefined" :aria-label="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : undefined">{{ speaker(p).name }}<span v-if="['assistant', 'member_assistant'].includes(p.kind)"> ✦</span></span>
             <span v-if="p.kind === 'host'" class="tag">host</span>
             <span v-else-if="p.foundation" class="tag">Foundation</span>
           </li>
         </ul>
         <h3>{{ companion.toUpperCase() }} IN THE ROOM</h3>
-        <label v-for="m in [{ id: 'off', text: 'Listening only' }, { id: 'named', text: 'When named' }, { id: 'joins', text: 'Joins in' }]" :key="m.id" class="mode">
-          <input type="radio" :checked="mode === m.id" :disabled="!haveCompanionKey && m.id !== 'off'" @change="setMode(m.id)" /> {{ m.text }}
-        </label>
-        <label class="mode"><input type="checkbox" :checked="haveCompanionKey" @change="setCompanionIn($event.target.checked)" /> Let {{ companion }} in</label>
-        <p class="hint">{{ haveCompanionKey ? `${companion} speaks on your own usage, kindly and without anything private.` : `${companion} is not in the room. Let it in and Castle makes its room key for it - nothing to paste.` }}</p>
+        <button type="button" role="switch" :aria-checked="haveCompanionKey" :aria-label="`Let ${companion} in`" :disabled="roomSaving" class="room-toggle" @click="setCompanionIn(!haveCompanionKey)">
+          <span>{{ roomSaving ? 'Updating…' : `Let ${companion} in` }}</span>
+          <span class="toggle-track" :class="{ enabled: haveCompanionKey }" aria-hidden="true"><span class="toggle-thumb"></span></span>
+        </button>
+        <label for="room-participation" class="hint participation-label">Participation rule</label>
+        <select id="room-participation" class="participation-select" :value="mode" :disabled="!haveCompanionKey || roomSaving" @change="changeParticipation($event.target.value)">
+          <option value="off">Listening only</option>
+          <option value="named">When named</option>
+          <option value="joins">Joins in</option>
+        </select>
+        <p class="hint">{{ !haveCompanionKey ? `Switch on to let ${companion} enter, then choose a rule.` : mode === 'off' ? `${companion} listens without posting replies.` : mode === 'named' ? `${companion} replies when someone mentions its name.` : `${companion} may join the conversation on your usage, without sharing anything private.` }}</p>
         <p v-if="doorProblem" class="problem">{{ doorProblem }}</p>
         <button v-if="haveCompanionKey" @click="card.open ? (card.open = false) : openCard()">{{ card.open ? 'Close the public card' : `${companion}'s public card` }}</button>
         <div v-if="card.open" class="card-edit">
@@ -405,20 +473,68 @@ watch(() => props.visible, (on) => {
           <button class="primary" @click="saveCard">Save the card</button>
           <p v-if="card.saved" class="hint">{{ card.saved }}</p>
         </div>
-        <h3>YOUR FACE</h3>
-        <div class="row wrap">
-          <button @click="setFace(false)">Change my picture</button>
-          <button @click="setFace(false, true)">Use my Google picture</button>
-          <button v-if="haveCompanionKey" @click="setFace(true)">{{ companion }}'s picture</button>
+        <h3>YOUR PROFILE</h3>
+        <div class="profile-pair">
+          <section class="profile-person" aria-label="Your room picture">
+            <span class="profile-picture"><img v-if="myPicture" :src="myPicture" :alt="`${me?.name || member?.name || 'Your'} profile picture`" /><span v-else>{{ initial(me) }}</span></span>
+            <strong :title="me?.name || member?.name">{{ me?.name || member?.name || 'You' }}</strong>
+            <span class="hint">You</span>
+            <button @click="setFace(false)">Change my picture</button>
+            <button class="subtle" @click="setFace(false, true)">Use Google picture</button>
+          </section>
+          <section class="profile-person" :aria-label="`${companion}'s room picture`">
+            <span class="profile-picture"><img v-if="companionPicture" :src="companionPicture" :alt="`${companion}'s profile picture`" /><span v-else>✦</span></span>
+            <strong :title="companion">{{ companion }}</strong>
+            <span class="hint">Companion</span>
+            <button :disabled="!haveCompanionKey" :title="haveCompanionKey ? `Change ${companion}'s room picture` : `Let ${companion} in to change the room picture`" @click="setFace(true)">Change {{ companion }}'s picture</button>
+          </section>
         </div>
-        <p v-if="faceLine" class="hint">{{ faceLine }}</p>
-        <button @click="signOut">Sign out</button>
+        <p v-if="faceLine" role="status" class="hint">{{ faceLine }}</p>
+        <button v-if="!nameEditing" @click="displayName = me?.name || member?.name || ''; nameEditing = true; nameLine = ''">Change display name</button>
+        <form v-else class="name-edit" @submit.prevent="saveDisplayName">
+          <label for="room-display-name">Public display name</label>
+          <input id="room-display-name" v-model="displayName" maxlength="80" :disabled="nameSaving" />
+          <p class="hint">Shown to everyone in the Foundation room. Leave empty to use your Library card name.</p>
+          <div class="row wrap"><button class="primary" :disabled="nameSaving">{{ nameSaving ? 'Saving…' : 'Save name' }}</button><button type="button" :disabled="nameSaving" @click="nameEditing = false">Cancel</button></div>
+        </form>
+        <p v-if="nameLine" role="status" class="hint">{{ nameLine }}</p>
+        <div class="profile-footer"><button @click="signOut">Sign out</button></div>
       </aside>
     </template>
   </div>
 </template>
 
 <style scoped>
+.lines, .side {
+  color-scheme: dark;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-dim) 45%, transparent) transparent;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+.room-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; text-align: left; min-height: 44px; }
+.toggle-track { display: inline-flex; align-items: center; width: 38px; height: 22px; flex-shrink: 0; padding: 3px; box-sizing: border-box; border-radius: 20px; background: var(--line); }
+.toggle-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--text); transition: transform .15s ease; }
+.toggle-track.enabled { background: var(--accent); }
+.toggle-track.enabled .toggle-thumb { transform: translateX(16px); background: #07142e; }
+.participation-label { margin-top: 4px; }
+.participation-select { width: 100%; min-height: 40px; padding: 8px 10px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel-background); font: inherit; font-size: 13px; }
+.participation-select:disabled { opacity: .45; cursor: not-allowed; }
+.room-toggle:focus-visible, .participation-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.profile-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.profile-person { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; padding: 12px 8px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.025); }
+.profile-picture { display: grid; place-items: center; width: 64px; height: 64px; flex-shrink: 0; border-radius: 16px; overflow: hidden; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); font-size: 24px; }
+.profile-picture img { width: 100%; height: 100%; object-fit: cover; }
+.profile-person strong { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: 13px; }
+.profile-person button { width: 100%; min-height: 38px; padding: 7px 5px; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.profile-person button.subtle { border-color: transparent; color: var(--text-dim); }
+.profile-footer { padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--line); }
+.profile-footer button { width: 100%; }
+.name-edit { display: flex; flex-direction: column; gap: 8px; }
+.name-edit input { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: transparent; }
+.day-divider { display: flex; align-items: center; gap: 12px; width: 100%; margin: 14px 0; color: var(--text-dim); font-size: 12px; }
+.day-divider::before, .day-divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.day-divider time { padding: 4px 10px; border-radius: 12px; background: var(--surface, rgba(255,255,255,.05)); }
 .turns {
   margin: 0;
   font: 12px/1.5 ui-monospace, Consolas, monospace;
@@ -683,6 +799,8 @@ input:not([type='radio']) {
   gap: 8px;
   width: 280px;
   padding: 16px;
+  min-height: 0;
+  overflow-y: auto;
 }
 ul {
   display: grid;

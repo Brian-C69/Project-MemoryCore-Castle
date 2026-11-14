@@ -436,8 +436,10 @@ async fn blocking<T: Send + 'static>(work: impl FnOnce() -> Result<T, RoomRefusa
 }
 
 #[tauri::command]
-pub async fn room_me(store: State<'_, SettingsStore>) -> Result<Value, RoomRefusal> {
-    let room = room_for(&store, "me")?;
+pub async fn room_me(who: Option<String>, store: State<'_, SettingsStore>) -> Result<Value, RoomRefusal> {
+    let who = who.as_deref().unwrap_or("me");
+    if !["me", "companion"].contains(&who) { return Err(refusal("other", "That room profile is not available.")); }
+    let room = room_for(&store, who)?;
     blocking(move || room.me()).await
 }
 
@@ -480,6 +482,41 @@ pub async fn room_seen(store: State<'_, SettingsStore>) -> Result<Value, RoomRef
 }
 
 static FACES: std::sync::Mutex<Option<std::collections::HashMap<String, String>>> = std::sync::Mutex::new(None);
+
+/// The Portfolio's Foundation profile contract: preserve the other editable fields on PUT.
+pub fn display_name_payload(profile: &Value, name: &str) -> Result<Value, RoomRefusal> {
+    let name = name.trim();
+    if name.chars().count() > 80 { return Err(refusal("other", "Use at most 80 characters for your display name.")); }
+    let mut body = serde_json::Map::new();
+    for field in ["partnerName", "portfolioUrl", "built", "listed"] {
+        let value = profile.get(field).ok_or_else(|| refusal("other", "Your Foundation profile could not be read. Nothing was changed."))?;
+        if (field == "listed" && !value.is_boolean()) || (field != "listed" && !value.is_string() && !value.is_null()) {
+            return Err(refusal("other", "Your Foundation profile could not be read. Nothing was changed."));
+        }
+        body.insert(field.into(), value.clone());
+    }
+    body.insert("displayName".into(), Value::String(name.into()));
+    Ok(Value::Object(body))
+}
+
+pub fn change_display_name(base: &str, token: &str, name: &str) -> Result<(), RoomRefusal> {
+    if name.trim().chars().count() > 80 { return Err(refusal("other", "Use at most 80 characters for your display name.")); }
+    let room = Room::new(base, token);
+    let client = room.client(Duration::from_secs(20))?;
+    let url = format!("{}/api/member/foundation", base.trim_end_matches('/'));
+    let profile: Value = Room::answer(client.get(&url).bearer_auth(token).send())?.json().map_err(|_| refusal("other", "Your Foundation profile could not be read."))?;
+    let payload = display_name_payload(&profile, name)?;
+    Room::answer(client.put(&url).bearer_auth(token).json(&payload).send())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn room_name_set(name: String, store: State<'_, SettingsStore>) -> Result<(), RoomRefusal> {
+    crate::rooms::need(&store, "chat").map_err(|e| refusal("other", e))?;
+    let token = key::load("member").ok_or_else(|| refusal("locked", "Sign in to the room first."))?;
+    let base = crate::signin::portfolio();
+    blocking(move || change_display_name(&base, &token, &name)).await
+}
 
 /// A face by its avatar token, cached for good (a new picture comes with a new token).
 #[tauri::command]
@@ -528,6 +565,50 @@ mod tests {
     use super::*;
     use std::io::{Read, Write};
     use std::net::TcpListener;
+
+    #[test]
+    fn display_name_preserves_the_other_foundation_fields_and_validates_input() {
+        let profile = serde_json::json!({"displayName":"Before","partnerName":"Mira","portfolioUrl":"https://example.test","built":"A castle","listed":true,"privateServerField":"do not send"});
+        let p = display_name_payload(&profile, "  Bernard  ").unwrap();
+        assert_eq!(p["displayName"], "Bernard");
+        for field in ["partnerName", "portfolioUrl", "built", "listed"] { assert_eq!(p[field], profile[field]); }
+        assert!(p.get("privateServerField").is_none());
+        assert_eq!(display_name_payload(&profile, "").unwrap()["displayName"], "");
+        assert!(display_name_payload(&profile, &"a".repeat(81)).is_err());
+        assert!(display_name_payload(&serde_json::json!({}), "Bernard").is_err());
+    }
+
+    #[test]
+    fn display_name_uses_the_authenticated_profile_contract_without_overwriting_other_fields() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            let mut requests = Vec::new();
+            for body in [r#"{"displayName":"Old","partnerName":"Mira","portfolioUrl":"","built":"kept","listed":false}"#, r#"{"displayName":"Bernard"}"#] {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+                let mut bytes = Vec::new();
+                loop {
+                    let mut buf = [0; 4096]; let n = stream.read(&mut buf).unwrap(); if n == 0 { break; } bytes.extend_from_slice(&buf[..n]);
+                    let text = String::from_utf8_lossy(&bytes);
+                    if let Some(end) = text.find("\r\n\r\n") {
+                        let length = text[..end].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").and_then(|s| s.trim().parse::<usize>().ok())).unwrap_or(0);
+                        if bytes.len() >= end + 4 + length { break; }
+                    }
+                }
+                requests.push(String::from_utf8(bytes).unwrap());
+                write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
+            }
+            requests
+        });
+        change_display_name(&base, "test-token", " Bernard ").unwrap();
+        let requests = handle.join().unwrap();
+        assert!(requests[0].starts_with("GET /api/member/foundation "));
+        assert!(requests[1].starts_with("PUT /api/member/foundation "));
+        assert!(requests.iter().all(|r| r.to_lowercase().contains("authorization: bearer test-token")));
+        let payload: Value = serde_json::from_str(requests[1].split("\r\n\r\n").nth(1).unwrap()).unwrap();
+        assert_eq!(payload["displayName"], "Bernard"); assert_eq!(payload["partnerName"], "Mira"); assert_eq!(payload["built"], "kept"); assert_eq!(payload["listed"], false);
+    }
 
     /// A one-request mock room: answers `status` with `body`, and returns the request it saw.
     fn mock(status: u16, body: &'static str, kind: &'static str) -> (String, std::thread::JoinHandle<String>) {
