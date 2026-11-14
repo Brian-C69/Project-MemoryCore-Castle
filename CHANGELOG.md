@@ -8,6 +8,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **Pictures and voice lines now show in CHAT.** The room names each one by a number, and Castle only took text, so they were refused before they were fetched and the chat showed nothing.
 - **Arrange the tabs your way.** Drag a tab in the top bar onto another to move it, or press Alt+Left / Alt+Right on a tab. Castle remembers the order, a room you switch back on returns to its place, and Settings > Rooms puts them back in their first order.
+- **Optional local voice.** For people who run [VoiceStudio](https://github.com/debpalash/voicestudio) on their own PC: Settings > Companion has a new **Local voice** switch (off by default). Turned on, and with VoiceStudio running, STUDIO's Voice card can speak a line with it and saves the clip with your other voice lines. Everything stays on your computer; with the switch off Castle never contacts it.
+
 - **CHAT feels like a chat app.** Companions go by their own names (hover to see whose they are), the conversation is divided by day (Today, Yesterday, the weekday, then the date), pictures that fail to load try again, and **YOUR PROFILE** shows you and your companion side by side, with **Change display name** for your public Foundation name. Letting your companion in is a switch, and how it joins in is a list.
 - **Honest presence dots.** A dot is green only for someone really here; your own companion shows as off while it is not let in, and grey when the room cannot confirm it.
 - **A clock in the top bar**, if you like one: Settings > Start-up > **Display clock**, in 12-hour or 24-hour time.
