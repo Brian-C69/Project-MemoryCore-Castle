@@ -560,6 +560,71 @@ mod tests {
         assert!(from_json(r#"[{"month":"2026-13"}]"#).is_empty());
     }
 
+    /// Against a real MySQL (`CASTLE_TEST_DB=<port>:<admin>:<password>`): the finished months, a
+    /// month read and replaced, the timeline, and the readings out as JSON and back in. Uses and
+    /// drops its own database.
+    #[test]
+    #[ignore]
+    fn live_a_month_read_kept_and_carried() {
+        let spec = std::env::var("CASTLE_TEST_DB").expect("set CASTLE_TEST_DB");
+        let mut parts = spec.splitn(3, ':');
+        let port: u16 = parts.next().unwrap().parse().unwrap();
+        let (admin, admin_pw) = (parts.next().unwrap().to_string(), parts.next().unwrap_or("").to_string());
+        let access = crate::memdb::provision(port, &admin, &admin_pw, &format!("Profile Test {}", std::process::id())).unwrap();
+        let mut conn = crate::memdb::open(&access).unwrap();
+
+        // six pages in a finished month, three in an older thin one, one in the month in progress
+        for day in 1..=6 {
+            conn.exec_drop("INSERT INTO diary_entries (entry_date, session_no, title, body) VALUES (?, 1, ?, ?)", (format!("2025-01-0{day}"), format!("Day {day}"), format!("Page {day}"))).unwrap();
+        }
+        for day in 1..=3 {
+            conn.exec_drop("INSERT INTO diary_entries (entry_date, session_no, title, body) VALUES (?, 1, 'Thin', 'thin')", (format!("2024-12-0{day}"),)).unwrap();
+        }
+        conn.query_drop("INSERT INTO diary_entries (entry_date, session_no, title, body) VALUES (CURDATE(), 1, 'Today', 'now')").unwrap();
+        assert_eq!(crate::memory::diary_months(&mut conn, MIN_ENTRIES).unwrap(), vec![("2025-01".to_string(), 6)]);
+        let pages = crate::memory::diary_for_month(&mut conn, "2025-01", ENTRY_EACH, MONTH_TOTAL).unwrap();
+        assert_eq!(pages.len(), 6);
+        assert_eq!(pages[0].0, "2025-01-01 - Day 1");
+
+        let empty = profile(&mut conn).unwrap();
+        assert!(!empty.ready && empty.current.is_none());
+        assert_eq!(empty.waiting, ["2025-01"]);
+
+        let r = check_reading("2025-01", &good(), 6, "2025-01-01", "2025-01-06").unwrap();
+        save(&mut conn, &r).unwrap();
+        save(&mut conn, &r).unwrap();
+        let count: Option<u64> = conn.query_first("SELECT COUNT(*) FROM profile_readings").unwrap();
+        assert_eq!(count, Some(1), "a month read again replaces its reading");
+        let p = profile(&mut conn).unwrap();
+        assert!(p.ready && p.waiting.is_empty());
+        assert_eq!(p.timeline[0].headline.iter().map(|s| s.label.as_str()).collect::<Vec<_>>(), HEADLINE);
+        let current = p.current.unwrap();
+        assert_eq!((current.scores.clone(), current.notes.clone()), (r.scores.clone(), r.notes.clone()));
+        assert!(month(&mut conn, "2025-02").unwrap().is_none());
+
+        // out as profile/readings.json and back in
+        let json = to_json(&all(&mut conn).unwrap());
+        conn.query_drop("DELETE FROM profile_readings").unwrap();
+        let notes: Option<u64> = conn.query_first("SELECT COUNT(*) FROM profile_notes").unwrap();
+        assert_eq!(notes, Some(0), "the notes go with their reading");
+        let mut tx = conn.start_transaction(TxOpts::default()).unwrap();
+        for reading in from_json(&json) {
+            save_in(&mut tx, &reading).unwrap();
+        }
+        tx.commit().unwrap();
+        let again = month(&mut conn, "2025-01").unwrap().unwrap();
+        assert_eq!((again.mbti, again.scores, again.notes), (r.mbti, r.scores, r.notes));
+
+        let mut root = mysql::Conn::new(mysql::Opts::from(
+            mysql::OptsBuilder::new().ip_or_hostname(Some("127.0.0.1")).tcp_port(port).user(Some(admin)).pass(Some(admin_pw)).prefer_socket(false),
+        ))
+        .unwrap();
+        root.query_drop(format!("DROP DATABASE `{}`", access.name)).unwrap();
+        for host in ["localhost", "127.0.0.1"] {
+            root.query_drop(format!("DROP USER '{}'@'{host}'", access.user)).unwrap();
+        }
+    }
+
     #[test]
     fn the_timeline_is_in_month_order_with_its_tiles_in_order() {
         let rows = vec![(2, "2026-03".to_string(), Some("INTJ-A".to_string())), (1, "2026-01".to_string(), None)];
