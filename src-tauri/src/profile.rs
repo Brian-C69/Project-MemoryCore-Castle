@@ -538,6 +538,20 @@ mod tests {
     }
 
     #[test]
+    fn the_chat_room_never_reads_the_profile() {
+        // the room's turn, its rules, the wake and the picture turn: none of them names a reading
+        for (name, text) in [
+            ("roomturn.rs", include_str!("roomturn.rs")),
+            ("roomdraw.rs", include_str!("roomdraw.rs")),
+            ("chatroom.rs", include_str!("chatroom.rs")),
+            ("mirror.rs", include_str!("mirror.rs")),
+            ("room-rules.md", include_str!("../resources/room-rules.md")),
+        ] {
+            assert!(!text.contains("profile::") && !text.contains("profile_readings") && !text.contains("profile_scores") && !text.contains("profile_notes"), "{name} reads MY PROFILE");
+        }
+    }
+
+    #[test]
     fn the_readings_travel_as_json_and_back() {
         let r = check_reading("2026-03", &good(), 12, "2026-03-01", "2026-03-30").unwrap();
         let back = from_json(&to_json(std::slice::from_ref(&r)));
