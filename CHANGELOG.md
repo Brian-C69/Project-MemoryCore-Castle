@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Arrange the tabs your way.** Drag a tab in the top bar onto another to move it, or press Alt+Left / Alt+Right on a tab. Castle remembers the order, a room you switch back on returns to its place, and Settings > Rooms puts them back in their first order.
+
 ## 0.2.3 - 2026-11-14
 
 - **New project** in the DEV tab: clone a repository from its link, or create a new one on GitHub (private by default), into the projects folder you choose once; it opens as a tab by itself. In **Source**, a folder without git gets **Start git here**, and a project not on GitHub yet gets **Connect to GitHub** (create the repository and push). Signing in to GitHub opens GitHub's own window.

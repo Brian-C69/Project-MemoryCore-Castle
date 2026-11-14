@@ -1,8 +1,10 @@
 <script setup>
+import { onBeforeUnmount, ref } from 'vue'
 import TopMusic from './TopMusic.vue'
 import TopClock from './TopClock.vue'
+import { neighbourOf } from './taborder.js'
 
-defineProps({
+const props = defineProps({
   tabs: { type: Array, required: true },
   active: { type: String, required: true },
   displayClock: { type: Boolean, default: false },
@@ -12,20 +14,81 @@ defineProps({
   // what is new, per tab, for its tooltip ("2 new · Rin online")
   markTitles: { type: Object, default: () => ({}) },
 })
-defineEmits(['select', 'settings', 'hide'])
+const emit = defineEmits(['select', 'settings', 'hide', 'reorder'])
+
+// The member arranges the tabs: press a tab and drag it onto another (pointer events, so it works
+// whatever the window does with dropped files), or Alt+Left / Alt+Right on the focused tab.
+// `reorder` carries { from, to }: the moved tab and the tab it lands beside.
+const DRAG_START = 6 // pixels the pointer moves before a press becomes a drag
+const dragging = ref(null)
+const over = ref(null)
+let press = null
+let justDragged = false
+
+function stopListening() {
+  window.removeEventListener('pointermove', onMove)
+  window.removeEventListener('pointerup', onUp)
+  window.removeEventListener('pointercancel', onCancel)
+}
+function onDown(event, id) {
+  if (event.button !== 0) return
+  press = { id, x: event.clientX }
+  justDragged = false
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointercancel', onCancel)
+}
+function onMove(event) {
+  if (!press) return
+  if (!dragging.value) {
+    if (Math.abs(event.clientX - press.x) < DRAG_START) return
+    dragging.value = press.id
+  }
+  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-tab]')
+  over.value = target?.dataset.tab ?? null
+}
+function onUp() {
+  if (dragging.value && over.value && over.value !== dragging.value) emit('reorder', { from: dragging.value, to: over.value })
+  justDragged = !!dragging.value
+  onCancel()
+}
+function onCancel() {
+  press = null
+  dragging.value = null
+  over.value = null
+  stopListening()
+}
+function onClick(id) {
+  // a drag that ends on the tab it started from still clicks it: that is not a choice
+  if (justDragged) {
+    justDragged = false
+    return
+  }
+  emit('select', id)
+}
+function onKey(event, id) {
+  if (!event.altKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return
+  event.preventDefault()
+  const to = neighbourOf(props.tabs.map((t) => t.id), id, event.key === 'ArrowLeft' ? -1 : 1)
+  if (to) emit('reorder', { from: id, to })
+}
+onBeforeUnmount(stopListening)
 </script>
 
 <template>
   <header class="top-bar">
     <span class="title"><span class="gem">◆</span> MEMORYCORE</span>
-    <nav class="tabs">
+    <nav class="tabs" :class="{ sorting: dragging }">
       <button
         v-for="tab in tabs"
         :key="tab.id"
         class="tab"
-        :class="{ active: tab.id === active, fresh: marks.includes(tab.id) }"
+        :data-tab="tab.id"
+        :class="{ active: tab.id === active, fresh: marks.includes(tab.id), dragging: tab.id === dragging, 'drop-target': dragging && tab.id === over && tab.id !== dragging }"
         :title="marks.includes(tab.id) ? markTitles[tab.id] || 'Something new is waiting' : undefined"
-        @click="$emit('select', tab.id)"
+        @pointerdown="onDown($event, tab.id)"
+        @click="onClick(tab.id)"
+        @keydown="onKey($event, tab.id)"
       >
         {{ tab.label }}
       </button>
@@ -115,6 +178,24 @@ button {
 .tab.active {
   color: var(--text);
   border-bottom-color: var(--accent);
+}
+
+/* Arranging the tabs: the one being moved fades, the one it will land beside lights up. */
+.tabs.sorting,
+.tabs.sorting .tab {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.tab.dragging {
+  opacity: 0.45;
+}
+
+.tab.drop-target {
+  color: var(--text);
+  background: var(--hover);
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--accent) inset;
 }
 
 .actions {

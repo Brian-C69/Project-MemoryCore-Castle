@@ -27,6 +27,7 @@ import UpdateChip from './components/UpdateChip.vue'
 import QuotaGlow from './components/QuotaGlow.vue'
 import WhatsNew from './components/WhatsNew.vue'
 import { sectionFor, unseenSections } from './components/changelog.js'
+import { moveTab, orderTabs } from './components/taborder.js'
 import changelog from '../CHANGELOG.md?raw'
 import { version as appVersion } from '../package.json'
 import NoticeToasts from './components/NoticeToasts.vue'
@@ -91,8 +92,10 @@ const memoryStamp = ref(0)
 // rooms the member switched off in Settings are not available (never removed)
 const rooms = ref({})
 const barClock = ref({ enabled: false, format: '24h' })
+// the member's own tab order (dragged in the top bar); empty = Castle's order
+const tabOrder = ref([])
 const tabs = computed(() =>
-  allTabs.filter((tab) => (!tab.needs || home.value?.features?.[tab.needs]) && (tab.id === 'home' || rooms.value[tab.id] !== false)),
+  orderTabs(allTabs, tabOrder.value).filter((tab) => (!tab.needs || home.value?.features?.[tab.needs]) && (tab.id === 'home' || rooms.value[tab.id] !== false)),
 )
 // a room switched off closes: its tab goes, its mark clears, a kept-alive room unmounts
 watch(tabs, (list) => {
@@ -156,6 +159,7 @@ async function loadSettingsAndTheme() {
     memberName.value = view.settings.memberName ?? ''
     rooms.value = view.settings.rooms ?? {}
     barClock.value = { enabled: !!view.settings.displayClock, format: view.settings.clockFormat ?? '24h' }
+    tabOrder.value = view.settings.tabOrder ?? []
     if (!view.settings.setupDone) {
       setupOpen.value = true
       setupReopened.value = false
@@ -184,6 +188,21 @@ async function loadSettingsAndTheme() {
 function openSettings(section = 'companion') {
   settingsSection.value = typeof section === 'string' ? section : 'companion'
   settingsOpen.value = true
+}
+
+// A tab dragged into a new place (or moved with Alt+arrow): the order covers every tab, the hidden
+// rooms too, so a room switched back on returns to where the member left it.
+async function reorderTabs({ from, to }) {
+  const ids = orderTabs(allTabs, tabOrder.value).map((t) => t.id)
+  const next = moveTab(ids, from, to)
+  if (next === ids) return
+  tabOrder.value = next
+  try {
+    const { settings } = await getSettings()
+    await saveSettings({ ...settings, tabOrder: next })
+  } catch {
+    // outside Castle's window: the order holds until the page reloads
+  }
 }
 
 function openKeys() {
@@ -345,6 +364,7 @@ watch(settingsStamp, () => {
       :marks="marks"
       :mark-titles="{ story: 'The story has new lines', chat: 'New in the room' }"
       @select="active = $event; marks = marks.filter((m) => m !== $event)"
+      @reorder="reorderTabs"
       @settings="openSettings"
       @hide="hideCastle().catch(() => {})"
     />

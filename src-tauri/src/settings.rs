@@ -231,7 +231,14 @@ pub struct Settings {
     /// The DEV tab's projects folder: new projects are cloned or made in it (or in one of its
     /// folders). None until the member chooses one; there is no default.
     pub dev_root: Option<String>,
+    /// The top bar's tabs in the member's own order (tab ids, dragged into place). Empty means
+    /// Castle's own order; a tab not listed (a room added in a later release) follows the listed ones.
+    pub tab_order: Vec<String>,
 }
+
+/// The longest tab order kept, and the longest tab id in it.
+const TAB_ORDER_MAX: usize = 32;
+const TAB_ID_MAX: usize = 32;
 
 pub const DIARY_LOOKS: [&str; 3] = ["list", "calendar", "book"];
 pub const STORY_LOOKS: [&str; 5] = ["classic", "cinema", "book", "messenger", "jrpg"];
@@ -279,6 +286,7 @@ impl Default for Settings {
             only_this_companion: false,
             diary_look: "list".into(),
             dev_root: None,
+            tab_order: Vec::new(),
         }
     }
 }
@@ -299,6 +307,15 @@ impl Settings {
         self.room_companion_name = clean(self.room_companion_name);
         self.last_seen_version = clean(self.last_seen_version);
         self.dev_root = clean(self.dev_root);
+        // the tab order: plain ids only, each once
+        let mut seen = std::collections::BTreeSet::new();
+        self.tab_order = std::mem::take(&mut self.tab_order)
+            .into_iter()
+            .map(|id| id.trim().to_string())
+            .filter(|id| !id.is_empty() && id.len() <= TAB_ID_MAX && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+            .filter(|id| seen.insert(id.clone()))
+            .take(TAB_ORDER_MAX)
+            .collect();
         self.world.volume = self.world.volume.clamp(0.0, 1.0);
         self.quick_actions.retain(|a| !a.label.trim().is_empty() && !a.command.trim().is_empty());
         for action in &mut self.quick_actions {
@@ -409,6 +426,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_tab_order_keeps_plain_ids_once_each() {
+        let old: Settings = serde_json::from_str(r#"{"setupDone":true}"#).unwrap();
+        assert!(old.tab_order.is_empty());
+        let messy: Settings = serde_json::from_str(r#"{"tabOrder":[" dev ","home","dev","","../x","chat"]}"#).unwrap();
+        assert_eq!(messy.normalized().tab_order, vec!["dev", "home", "chat"]);
+        let long: Settings = serde_json::from_str(&format!(r#"{{"tabOrder":{}}}"#, serde_json::to_string(&(0..40).map(|i| format!("t{i}")).collect::<Vec<_>>()).unwrap())).unwrap();
+        assert_eq!(long.normalized().tab_order.len(), TAB_ORDER_MAX);
+    }
+
+    #[test]
     fn clock_defaults_and_invalid_formats_are_safe() {
         let old: Settings = serde_json::from_str(r#"{"setupDone":true}"#).unwrap();
         assert!(!old.display_clock);
@@ -484,6 +511,7 @@ mod tests {
             only_this_companion: true,
             diary_look: "book".into(),
             dev_root: Some("D:/Projects".into()),
+            tab_order: vec!["dev".into(), "home".into(), "chat".into()],
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));
