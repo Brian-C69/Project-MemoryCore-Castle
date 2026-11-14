@@ -568,9 +568,54 @@ pub fn recent_diary(folder: &Path, n: usize, each: usize, total: usize) -> Vec<(
     cap_entries(entries, each, total)
 }
 
+// ---------- one month of the diary (MY PROFILE's reading) ----------
+
+/// The finished months with at least `min` diary entries, oldest first, as (`YYYY-MM`, entries).
+/// The month in progress is never one; the database's own clock names it. MY PROFILE lives in the
+/// database, so this reads only there.
+pub fn diary_months(conn: &mut impl mysql::prelude::Queryable, min: u32) -> Result<Vec<(String, u32)>, String> {
+    conn.exec(
+        "SELECT DATE_FORMAT(entry_date, '%Y-%m') AS m, COUNT(*) FROM diary_entries \
+         WHERE entry_date IS NOT NULL AND entry_date < DATE_FORMAT(CURDATE(), '%Y-%m-01') \
+         GROUP BY m HAVING COUNT(*) >= ? ORDER BY m",
+        (min,),
+    )
+    .map_err(|_| "The diary could not be read.".to_string())
+}
+
+/// Each entry's share of a month's room (its title's room kept aside): every entry is read, the
+/// long ones cut to fit. Pure, tested.
+pub fn fair_share(entries: usize, each: usize, total: usize) -> usize {
+    if entries == 0 { each } else { each.min((total / entries).saturating_sub(TITLE_ROOM)) }
+}
+
+const TITLE_ROOM: usize = 120;
+
+/// One month's diary (`YYYY-MM`), oldest first, as ("date - title", body), cut so every entry fits.
+pub fn diary_for_month(conn: &mut impl mysql::prelude::Queryable, month: &str, each: usize, total: usize) -> Result<Vec<(String, String)>, String> {
+    let first = format!("{month}-01");
+    let rows: Vec<(String, String, String)> = conn
+        .exec(
+            "SELECT DATE_FORMAT(entry_date, '%Y-%m-%d'), title, body FROM diary_entries \
+             WHERE entry_date >= ? AND entry_date < DATE_ADD(?, INTERVAL 1 MONTH) ORDER BY entry_date, session_no, id",
+            (&first, &first),
+        )
+        .map_err(|_| "The diary could not be read.".to_string())?;
+    let share = fair_share(rows.len(), each, total);
+    let entries = rows.into_iter().map(|(date, title, body)| (format!("{date} - {title}"), body)).collect();
+    Ok(cap_entries(entries, share, total))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_entry_of_a_month_gets_its_share() {
+        assert_eq!(fair_share(0, 3000, 60000), 3000);
+        assert_eq!(fair_share(10, 3000, 60000), 3000);
+        assert_eq!(fair_share(40, 3000, 60000), 1380);
+    }
 
     #[test]
     fn the_recent_diary_is_cut_to_size() {
