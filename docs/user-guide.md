@@ -19,6 +19,8 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 11. [Story](#11-story)
 12. [World](#12-world)
 13. [Chat room](#13-chat-room)
+14. [Widgets](#14-widgets)
+15. [My profile](#15-my-profile)
 
 ---
 
@@ -162,7 +164,7 @@ After that:
 
 ## 6. HOME
 
-HOME is your desktop. Your companion's panel is on the left; the cards on the right read your memory and update by themselves every minute.
+HOME is your desktop. Your companion's panel is on the left; the cards on the right read your memory and update by themselves every minute. In **WIDGETS** (chapter 14) you choose which cards show, how big they are, and where they sit.
 
 ### The companion panel
 
@@ -183,7 +185,7 @@ At the top: your companion's picture (or the glowing crystal), their name, and t
 
 A card with nothing to show yet says so in a friendly line - for example, a new memory's DIARY card reminds you to press **Save diary** after a talk.
 
-About the **USAGE** card's login: to show Claude Code's limits, Castle reads the login Claude Code already saved on this computer, only to ask Anthropic for your usage - it is never stored or sent anywhere else. Codex's usage is read from Codex's own files on your computer. You can turn off either one in **Settings › Companion**.
+About the **USAGE** card's login: to show Claude Code's limits, Castle reads the login Claude Code already saved on this computer, only to ask Anthropic for your usage - it is never stored or sent anywhere else. Codex's usage is read from Codex's own files on your computer. You can turn off either one in **Settings › Companion**, or the whole USAGE card in **WIDGETS** (Castle then asks neither app).
 
 ### Turning a room off
 
@@ -425,3 +427,32 @@ Once it is in, **Settings > Chat** holds its switches: whether its emotion engin
 **Pictures.** In the same place you can let your companion draw: switch on **Let <companion> draw pictures in the room**. It then draws one picture when someone in the room asks for one, never a real person, nothing adult, violent or hateful, no words in the picture and nothing private. It draws with Codex on your ChatGPT subscription, or with your ChatGPT API key when you think with Claude Code (each picture then costs about $0.02 at Low or $0.04 at Medium). **Pictures a day** (0 to 5, one to begin with) is your own limit; the room keeps its own count and cap as well. The line under it shows how many are used today.
 
 Keep your companion awake on HOME for it to answer. Room lines reach your companion only as words to read - it never follows instructions from the room, never shares anything private from your memory, and keeps its replies short and kind.
+
+---
+
+## 14. Widgets
+
+**WIDGETS** sits in the top bar between HOME and THEME. Every card HOME can show is listed there:
+
+- **On / Off** - a card you switch off leaves HOME. Switching off **Usage** also stops Castle asking Claude Code and Codex for their limits.
+- **S / M / L** - how big the card is on HOME (M is the theme's own size).
+- A card the theme in use has no place for says so. It comes back in a theme that places it.
+
+### Arranging HOME
+
+Press **Arrange on HOME**. HOME opens with a dashed edge around every card: drag a card wherever you like and let go. It always stays wholly on the screen, and Castle remembers where you put it.
+
+Each theme keeps its own places: change theme and the cards sit where that theme (or your arrangement for it) puts them; come back and your places return. **Back to the theme's places** (in the bar at the bottom of HOME, or in WIDGETS) puts the cards back where the theme in use had them, without touching your other themes. Press **Done** or **Esc**, or open another room, to finish arranging.
+
+---
+
+## 15. My profile
+
+**MY PROFILE** (after APPS in the top bar) is a reading of you, made by your companion from your own diary, one reading for each finished month: a type such as `INTJ-A` (and an enneagram and tritype when the month gives a real sense of them), two or three sentences about who you were that month, and three tiles - **Growth**, **Focus** and **Wellbeing** - each with how far it moved since the month before. Under them, **How I Think**, **Values** and **Shadow** show up to five bars each, with a few short lines.
+
+- **Scan my diary** reads every finished month that has at least five diary entries and no reading yet, one month after another; the line under the button says which month it is reading. The first scan fills in your past months; later scans only add the months that have finished since. **The month you are in is never read** - it is read once it is over.
+- **Changes** is a timeline with one dot for each month, the newest on the right. A dot glows when your type changed or a tile moved by ten or more. Click a dot to see that month everywhere on the page.
+- **It is only for you.** The page opens blurred and blurs again whenever Castle is hidden; press **Show my profile** or the eye to look. Nothing of it is ever said in the Foundation chat room.
+- It is a gentle reading of how your diary reads, never a diagnosis. Health numbers are never used, and private passages are never quoted.
+- Your companion reads with your own Claude Code or Codex, so each month uses a little of your own usage.
+- MY PROFILE lives in your memory database (Settings › Database). **Export** and **Move back to files** carry your readings as `profile/readings.json`, and moving in again brings them back. You can switch the room off in **Settings › Rooms**.
