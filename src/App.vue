@@ -14,6 +14,7 @@ import { onProviderChanged } from './api/castle.js'
 import ModalSheet from './components/ModalSheet.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import AppsView from './views/AppsView.vue'
+import WidgetsView from './views/WidgetsView.vue'
 import MyProfileView from './views/myprofile/MyProfileView.vue'
 import MemoryRoom from './views/MemoryRoom.vue'
 import ThemeView from './views/ThemeView.vue'
@@ -42,6 +43,7 @@ import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolde
 // (`needs`); the rest always show.
 const allTabs = [
   { id: 'home', label: 'HOME' },
+  { id: 'widgets', label: 'WIDGETS' },
   { id: 'theme', label: 'THEME' },
   { id: 'apps', label: 'APPS' },
   { id: 'myprofile', label: 'MY PROFILE' },
@@ -77,7 +79,7 @@ const settingsSection = ref('companion')
 // the update line for Settings > About
 const updateInfo = ref(null)
 // Rooms that are built; any other room shows its name until its phase lands.
-const BUILT = new Set(['home', 'theme', 'apps', 'myprofile', 'diary', 'projects', 'library', 'studio', 'appearance', 'story', 'world', 'chat', 'dev'])
+const BUILT = new Set(['home', 'widgets', 'theme', 'apps', 'myprofile', 'diary', 'projects', 'library', 'studio', 'appearance', 'story', 'world', 'chat', 'dev'])
 // Tabs with something new waiting (the story speaking while the member is elsewhere).
 const marks = ref([])
 const memberName = ref('')
@@ -473,6 +475,7 @@ watch(settingsStamp, () => {
         </div>
       </div>
       <AppsView v-if="active === 'apps'" class="room" />
+      <WidgetsView v-if="active === 'widgets'" :theme-id="theme?.id ?? ''" :theme-name="theme?.name ?? ''" :theme-widgets="widgets" @arrange="arrange" @changed="loadSettingsAndTheme" />
       <MyProfileView v-if="active === 'myprofile'" :companion="companion" @settings="openSettings('database')" />
       <ChatRoomView v-show="active === 'chat'" v-if="chatOpened" :visible="active === 'chat'" :companion="companion" :settings-stamp="settingsStamp" @settings="openSettings" @fresh="!marks.includes('chat') && (marks = [...marks, 'chat'])" />
       <DevView v-show="active === 'dev'" v-if="devOpened" :visible="active === 'dev'" :companion="companion" :cli="cli" :settings-stamp="settingsStamp" @settings="openSettings" @setup="openSetup" />

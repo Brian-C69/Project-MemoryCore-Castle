@@ -1,11 +1,17 @@
 // The top bar's tabs in the member's own order (Settings `tabOrder`, a list of tab ids).
 
 // The tabs in the saved order. A tab the order does not name (a room added in a later release)
-// keeps Castle's own order after the named ones; an id that is no tab any more is passed over.
+// arrives right after the tab before it in Castle's own order, so a new room lands where Castle
+// puts it even in a member's own order; an id that is no tab any more is passed over.
 export function orderTabs(tabs, order = []) {
   const rank = new Map((order ?? []).map((id, i) => [id, i]))
-  const named = tabs.filter((t) => rank.has(t.id)).sort((a, b) => rank.get(a.id) - rank.get(b.id))
-  return [...named, ...tabs.filter((t) => !rank.has(t.id))]
+  const out = tabs.filter((t) => rank.has(t.id)).sort((a, b) => rank.get(a.id) - rank.get(b.id))
+  tabs.forEach((tab, i) => {
+    if (rank.has(tab.id)) return
+    const before = i > 0 ? out.findIndex((t) => t.id === tabs[i - 1].id) : -1
+    out.splice(before + 1, 0, tab)
+  })
+  return out
 }
 
 // The ids with `from` moved onto `to`: before it when moving left, after it when moving right -

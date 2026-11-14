@@ -1,0 +1,222 @@
+<script setup>
+import { onMounted, ref } from 'vue'
+import { getSettings, saveSettings } from '../api/castle.js'
+import { isOn, resetPatch, sizeOf, sizePatch, switchPatch, WIDGETS } from '../components/widgets/widgetplaces.js'
+
+// WIDGETS: HOME's widgets, each switched on or off and given a size; Arrange takes the member to
+// HOME to drag them into place (each theme keeps its own places).
+const props = defineProps({
+  themeId: { type: String, default: '' },
+  themeName: { type: String, default: '' },
+  // the theme's own widget places: a card or USAGE the theme has no place for is not drawn
+  themeWidgets: { type: Object, default: () => ({}) },
+})
+const emit = defineEmits(['arrange', 'changed'])
+
+const settings = ref({})
+const problem = ref('')
+const notice = ref('')
+
+const placed = (id) => ['clock', 'gauges'].includes(id) || Boolean(props.themeWidgets[id])
+const hasPlaces = () => Object.keys(settings.value.widgetPlaces?.[props.themeId] ?? {}).length > 0
+
+async function load() {
+  try {
+    settings.value = (await getSettings()).settings
+  } catch {
+    // outside Castle's window: every widget on, medium
+  }
+}
+
+async function save(patch, said = '') {
+  problem.value = ''
+  try {
+    const { settings: now } = await getSettings()
+    settings.value = (await saveSettings({ ...now, ...patch })).settings
+    notice.value = said
+    emit('changed')
+  } catch (reason) {
+    problem.value = String(reason?.message ?? reason)
+  }
+}
+
+onMounted(load)
+</script>
+
+<template>
+  <section class="widgets-room" aria-label="Widgets">
+    <header class="top">
+      <div>
+        <h2>WIDGETS</h2>
+        <p class="dim">Choose what HOME shows and how big. Arrange moves them on HOME{{ themeName ? ` - ${themeName} keeps its own places` : '' }}.</p>
+      </div>
+      <div class="actions">
+        <button :disabled="!hasPlaces()" @click="save(resetPatch(settings, themeId), 'Back in the theme\'s places.')">Back to the theme's places</button>
+        <button class="primary" @click="emit('arrange')">Arrange on HOME</button>
+      </div>
+    </header>
+    <p v-if="notice" class="notice">{{ notice }}</p>
+    <p v-if="problem" class="problem" role="alert">{{ problem }}</p>
+
+    <div class="grid">
+      <article v-for="w in WIDGETS" :key="w.id" class="card" :class="{ off: !isOn(w.id, settings) }">
+        <div class="head">
+          <h3>{{ w.name }}</h3>
+          <label class="switch">
+            <input type="checkbox" :checked="isOn(w.id, settings)" :aria-label="`Show ${w.name} on HOME`" @change="save(switchPatch(w.id, $event.target.checked, settings))" />
+            <span>{{ isOn(w.id, settings) ? 'On' : 'Off' }}</span>
+          </label>
+        </div>
+        <p class="dim">{{ w.about }}</p>
+        <p v-if="w.id === 'usage'" class="dim small">Off also stops Castle asking Claude Code and Codex for their limits.</p>
+        <p v-if="!placed(w.id)" class="dim small">This theme has no place for it.</p>
+        <div class="sizes" role="group" :aria-label="`${w.name} size`">
+          <button
+            v-for="size in ['s', 'm', 'l']"
+            :key="size"
+            :class="{ on: sizeOf(w.id, settings) === size }"
+            :aria-pressed="sizeOf(w.id, settings) === size"
+            :disabled="!isOn(w.id, settings)"
+            @click="save(sizePatch(w.id, size, settings))"
+          >
+            {{ size.toUpperCase() }}
+          </button>
+        </div>
+      </article>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.widgets-room {
+  position: absolute;
+  inset: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 24px;
+  background: var(--panel-background);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  backdrop-filter: blur(var(--glass-blur));
+  color: var(--text);
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+h2 {
+  margin: 0;
+  letter-spacing: 0.25em;
+  font-weight: 500;
+}
+
+h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.dim {
+  color: var(--text-dim);
+  margin: 4px 0;
+  line-height: 1.4;
+}
+
+.small {
+  font-size: 0.8rem;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card.off {
+  opacity: 0.6;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.sizes {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.sizes button {
+  min-width: 36px;
+  padding: 4px 8px;
+}
+
+.sizes button.on {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  border-color: var(--accent);
+}
+
+.notice {
+  color: var(--good, #9fe0b0);
+  margin: 0;
+}
+
+.problem {
+  color: var(--warn);
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--hover);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  color: #07142e;
+  border-color: transparent;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+</style>

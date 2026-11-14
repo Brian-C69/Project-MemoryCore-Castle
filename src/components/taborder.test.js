@@ -9,8 +9,13 @@ describe('the top bar in the member order', () => {
     expect(ids(orderTabs(TABS, []))).toEqual(['home', 'theme', 'apps', 'chat', 'dev'])
     expect(ids(orderTabs(TABS, undefined))).toEqual(['home', 'theme', 'apps', 'chat', 'dev'])
   })
-  it('follows the saved order, puts tabs it does not name after, and passes over old ids', () => {
+  it('follows the saved order, puts tabs it does not name after their Castle neighbour, and passes over old ids', () => {
     expect(ids(orderTabs(TABS, ['dev', 'gone', 'home']))).toEqual(['dev', 'home', 'theme', 'apps', 'chat'])
+  })
+  it('lands a room from a later release beside the tab Castle puts it after', () => {
+    const later = ['home', 'widgets', 'theme', 'apps', 'myprofile', 'chat', 'dev'].map((id) => ({ id, label: id.toUpperCase() }))
+    expect(ids(orderTabs(later, ['dev', 'home', 'apps', 'theme', 'chat']))).toEqual(['dev', 'home', 'widgets', 'apps', 'myprofile', 'theme', 'chat'])
+    expect(ids(orderTabs([{ id: 'first' }, ...TABS], ['dev', 'home']))).toEqual(['first', 'dev', 'home', 'theme', 'apps', 'chat'])
   })
 })
 
