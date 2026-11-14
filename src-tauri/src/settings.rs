@@ -46,7 +46,7 @@ pub struct QuickAction {
 
 /// The rooms the member may switch off in Settings (HOME is always on). Off = not available:
 /// the tab is gone and nothing runs for it, but nothing is removed.
-pub const ROOMS: [&str; 11] = ["theme", "apps", "diary", "projects", "library", "appearance", "studio", "story", "world", "chat", "dev"];
+pub const ROOMS: [&str; 12] = ["theme", "apps", "myprofile", "diary", "projects", "library", "appearance", "studio", "story", "world", "chat", "dev"];
 
 pub const DEFAULT_WORLD: &str = "3d/floating-isles";
 pub const CAMERAS: [&str; 4] = ["director", "follow", "wide", "orbit"];

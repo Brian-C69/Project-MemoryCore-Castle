@@ -137,6 +137,7 @@ async function switchLink(patch) {
 const ROOM_SWITCHES = [
   { id: 'theme', label: 'THEME' },
   { id: 'apps', label: 'APPS' },
+  { id: 'myprofile', label: 'MY PROFILE' },
   { id: 'diary', label: 'DIARY' },
   { id: 'projects', label: 'PROJECTS' },
   { id: 'library', label: 'LIBRARY' },
