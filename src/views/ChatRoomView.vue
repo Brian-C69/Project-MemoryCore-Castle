@@ -9,7 +9,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../components/roomsteps.js'
 import { listen } from '@tauri-apps/api/event'
 import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCard, roomCardSave, roomCompanionIn, roomFaceSet, roomFile, roomLog, roomMe, roomMine, roomPost, roomPresence, roomReset, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
-import { avatarLoader, currentAvatar, datedLines, initial, isMine, roomMembers, speakerPresentation, ticks } from '../components/roomchat.js'
+import { avatarLoader, currentAvatar, datedLines, initial, isMine, roomMembers, roomPresenceState, speakerPresentation, ticks } from '../components/roomchat.js'
 import { roomNameSet } from '../api/castle.js'
 import { avatarGet } from '../api/castle.js'
 
@@ -46,6 +46,9 @@ const scroller = ref(null)
 const member = ref(null)
 const signing = ref(false)
 const roomSaving = ref(false)
+const presenceFresh = ref(false) // the last presence read worked
+const companionVerified = ref(false) // the room confirmed this Castle's companion identity
+let presenceRead = 0 // an older presence read must not overwrite a newer one
 const doorProblem = ref('')
 const PORTFOLIO = 'https://www.afifmaahi-portfolio.com'
 let alive = true
@@ -111,23 +114,40 @@ function take(fresh, cleared = [], quiet = false) {
 async function refreshPresence() {
   today.value = new Date()
   if (!ready.value || !props.visible) return
+  const read = ++presenceRead
   try {
-    presence.value = roomMembers(await roomPresence())
+    const rows = roomMembers(await roomPresence())
+    if (!alive || read !== presenceRead) return
+    presence.value = rows
+    presenceFresh.value = true
     presence.value.forEach((x) => loadFace(x.avatar))
     lines.value.forEach((l) => loadFace(avatarToken(l.author)))
     me.value = await roomMe()
     loadFace(avatarToken(me.value))
     if (haveCompanionKey.value) {
       try {
-        companionProfile.value = await roomMe('companion')
+        const profile = await roomMe('companion')
+        if (!alive || read !== presenceRead) return
+        companionProfile.value = profile
+        // keep the last answer while this one is on its way: the dot only goes grey when the check fails
+        companionVerified.value = !!profile?.name
         loadFace(avatarToken(companionProfile.value))
-      } catch { /* Retain the last picture while the room is temporarily unavailable. */ }
-    } else companionProfile.value = null
+      } catch {
+        // Retain the last picture while the room is temporarily unavailable, but do not claim it is online.
+        if (read === presenceRead) companionVerified.value = false
+      }
+    } else {
+      companionProfile.value = null
+      companionVerified.value = false
+    }
     seen.value = await roomSeen()
   } catch {
     // the read loop reports refusals
+    if (read === presenceRead) presenceFresh.value = false
   }
 }
+
+const presenceState = (row) => roomPresenceState(row, { me: me.value, companion: companionProfile.value, enabled: haveCompanionKey.value, verified: companionVerified.value, fresh: presenceFresh.value })
 
 function scrollDown() {
   requestAnimationFrame(() => scroller.value && (scroller.value.scrollTop = scroller.value.scrollHeight))
@@ -233,6 +253,7 @@ async function signOut() {
 async function setCompanionIn(on) {
   if (roomSaving.value) return
   roomSaving.value = true
+  ++presenceRead // a presence read that started before this change must not undo it
   doorProblem.value = ''
   try {
     await roomCompanionIn(on)
@@ -446,9 +467,9 @@ watch(() => props.visible, (on) => {
       <aside class="side widget">
         <h3>IN THE ROOM</h3>
         <ul>
-          <li v-for="(p, index) in presence" :key="`${p.kind}:${p.name}:${index}`" :class="p.status">
+          <li v-for="(p, index) in presence" :key="`${p.kind}:${p.name}:${index}`" :class="presenceState(p)">
             <span class="face small"><img v-if="faces[p.avatar]" :src="faces[p.avatar]" alt="" /><template v-else>{{ initial(p) }}</template></span>
-            <span class="dot">●</span> <span :title="speaker(p).title" :tabindex="speaker(p).title ? 0 : undefined" :aria-label="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : undefined">{{ speaker(p).name }}<span v-if="['assistant', 'member_assistant'].includes(p.kind)"> ✦</span></span>
+            <span class="dot" role="img" :aria-label="presenceState(p)" :title="presenceState(p)">●</span> <span :title="speaker(p).title" :tabindex="speaker(p).title ? 0 : undefined" :aria-label="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : undefined">{{ speaker(p).name }}<span v-if="['assistant', 'member_assistant'].includes(p.kind)"> ✦</span></span>
             <span v-if="p.kind === 'host'" class="tag">host</span>
             <span v-else-if="p.foundation" class="tag">Foundation</span>
           </li>
@@ -811,10 +832,10 @@ ul {
   font-size: 14px;
 }
 .dot {
-  color: var(--good);
-}
-li.away .dot {
   color: var(--text-dim);
+}
+li.online .dot, li.here .dot, li.active .dot {
+  color: var(--good);
 }
 .tag {
   margin-left: 6px;
