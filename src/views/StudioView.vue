@@ -65,16 +65,18 @@ watch(() => props.stamp, load)
 
 <template>
   <div class="studio">
-    <label>Picture request <textarea v-model="imageBrief" placeholder="Describe the picture for Codex…"></textarea></label>
-    <button :disabled="!imageBrief.trim()" @click="drawImage">Create picture with Codex</button>
-    <p v-if="imageProblem" role="alert">{{ imageProblem }}</p>
     <ImageJobs />
     <section class="powers">
       <article v-for="p in POWERS" :key="p.id" class="power widget">
         <h3>{{ p.label }}</h3>
         <span class="state" :class="STATE[powers[p.id]]?.cls">{{ p.id === 'image' && powers.image === 'prompt' ? 'Prompt only — install/sign in to Codex' : STATE[powers[p.id]]?.text ?? '…' }}</span>
         <p class="hint">Ask {{ companion }}: <em>"{{ p.ask }} …"</em></p>
-        <button v-if="p.id !== 'image' && powers[p.id] === 'prompt'" @click="emit('keys')">Add the {{ p.key }} key</button>
+        <template v-if="p.id === 'image'">
+          <textarea v-model="imageBrief" rows="2" placeholder="Describe the picture for Codex…" aria-label="Picture request" @keydown.ctrl.enter="drawImage"></textarea>
+          <button :disabled="!imageBrief.trim()" @click="drawImage">Create picture with Codex</button>
+          <p v-if="imageProblem" role="alert" class="problem">{{ imageProblem }}</p>
+        </template>
+        <button v-else-if="powers[p.id] === 'prompt'" @click="emit('keys')">Add the {{ p.key }} key</button>
       </article>
     </section>
 
@@ -131,6 +133,24 @@ watch(() => props.stamp, load)
   border: 1px solid var(--line);
   border-radius: 14px;
   backdrop-filter: blur(var(--glass-blur));
+}
+.power textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.problem {
+  margin: 0;
+  font-size: 13px;
+  color: var(--warn);
 }
 .powers {
   display: grid;
