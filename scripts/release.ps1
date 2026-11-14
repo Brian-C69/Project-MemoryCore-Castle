@@ -8,7 +8,7 @@
   Only official builds update themselves. This script:
     -Setup     once: makes the updater signing key pair. The PRIVATE key stays on this computer in
                %APPDATA%\MemoryCore Castle Release\ (never in the repository; its text also goes
-               into the GitHub secret TAURI_SIGNING_PRIVATE_KEY). The PUBLIC key is written into
+               into the secret TAURI_SIGNING_PRIVATE_KEY of the GitHub environment `release`). The PUBLIC key is written into
                src-tauri\tauri.official.conf.json, which every official build uses.
     (default)  builds the NSIS installer with CASTLE_OFFICIAL=1 and the "official" feature, signs
                the updater artifact, and writes the release files (installer, signature,
@@ -53,7 +53,7 @@ if ($Setup) {
     Write-OfficialConf (Get-Content $pubFile -Raw).Trim()
     Write-Host "Private key: $keyFile (back it up somewhere safe; never commit it)"
     Write-Host "Public key written into src-tauri\tauri.official.conf.json (commit that file)."
-    Write-Host "GitHub secret TAURI_SIGNING_PRIVATE_KEY = the private key file's text."
+    Write-Host "GitHub: environment release > secret TAURI_SIGNING_PRIVATE_KEY = the private key file's text."
     exit 0
 }
 

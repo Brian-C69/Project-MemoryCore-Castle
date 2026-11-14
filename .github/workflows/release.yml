@@ -2,7 +2,11 @@
 # official, signed Windows installer, publishes the GitHub release every installed Castle reads,
 # and tells the MemoryCore Foundation's site about it.
 #
-# Secrets (repository settings > Secrets and variables > Actions):
+# The job runs in the `release` environment (repository settings > Environments): only a v*.*.*
+# tag may use it, and the repository owner approves each run before the signing key is handed over,
+# so anyone with write access can start a release but nothing is signed without that approval.
+#
+# Secrets (in the `release` environment, never at repository level):
 #   TAURI_SIGNING_PRIVATE_KEY  the text of the private key made by `scripts/release.ps1 -Setup`
 #   PORTFOLIO_RELEASE_TOKEN    optional - the site's release token; without it that step is skipped
 # Variable (optional): PORTFOLIO_RELEASE_URL - where the release is sent (has a default)
@@ -22,6 +26,7 @@ concurrency:
 jobs:
   release:
     runs-on: windows-latest
+    environment: release
     env:
       PORTFOLIO_RELEASE_TOKEN: ${{ secrets.PORTFOLIO_RELEASE_TOKEN }}
     steps:
