@@ -7,6 +7,8 @@ import PlanPanel from './PlanPanel.vue'
 import SourcePanel from './SourcePanel.vue'
 import { useSaveClose } from './useSaveClose.js'
 import { devCloseTab, memoryFeatures } from '../../api/castle.js'
+import { devOpenLink } from '../../api/devgit.js'
+import { linkOf, programOf } from './devprojects.js'
 
 // One project's session in the DEV room: its chat in the middle, the Log behind a button, the
 // plan beside it on request. It stays mounted while other tabs show, so the session keeps going.
@@ -18,6 +20,8 @@ const props = defineProps({
   companion: { type: String, default: 'Your companion' },
   cli: { type: String, default: 'claude' },
   settingsStamp: { type: Number, default: 0 },
+  // this tab's live servers (started in its session, or running in its folder)
+  servers: { type: Array, default: () => [] },
 })
 // `state`: a fresh dev state (after Wake or Close session); `running`: the session started or ended
 const emit = defineEmits(['state', 'running', 'settings', 'setup'])
@@ -137,6 +141,12 @@ async function closeNow() {
         <button :disabled="closing" @click="askClose">{{ closing ? 'Closing…' : 'Close session' }}</button>
       </div>
     </header>
+    <p v-if="servers.length" class="live">
+      <span class="label">LIVE</span>
+      <button v-for="s in servers" :key="s.port" class="server" :title="`${programOf(s)} - pid ${s.pid}`" @click="devOpenLink(linkOf(s)).catch(() => {})">
+        :{{ s.port }} {{ programOf(s) }} <span class="go">open &#8599;</span>
+      </button>
+    </p>
     <p v-if="problem" class="problem" role="alert">{{ problem }}</p>
     <div v-if="saveClose.saving.value && !saveClose.saving.value.ask" class="saving" role="status">
       <span>{{ saveClose.saving.value.note }}</span>
@@ -295,6 +305,35 @@ button:hover:not(:disabled) {
 button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.live .label {
+  letter-spacing: 0.14em;
+  color: var(--good, #8fe3b0);
+}
+
+.server {
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--good, #8fe3b0) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--good, #8fe3b0) 8%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.server .go {
+  color: var(--good, #8fe3b0);
 }
 
 .problem {

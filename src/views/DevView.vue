@@ -4,7 +4,9 @@ import DevTab from './dev/DevTab.vue'
 import FileTree from './dev/FileTree.vue'
 import FileView from './dev/FileView.vue'
 import NewProject from './dev/NewProject.vue'
-import { chooseFolder, devForget, devOpen, devState } from '../api/castle.js'
+import LiveServers from './dev/LiveServers.vue'
+import { serversOf } from './dev/devprojects.js'
+import { chooseFolder, devForget, devOpen, devServers, devState } from '../api/castle.js'
 import { MAX_TABS, folderName, nextActive, orderTabs, recentProjects, tabForFolder } from './dev/devtabs.js'
 
 // The DEV room: a session per project folder, up to eight tabs. The projects opened before are
@@ -112,20 +114,43 @@ function markRunning(slot, on) {
   state.value = { ...state.value, tabs: state.value.tabs.map((t) => (t.slot === slot ? { ...t, running: on } : t)) }
 }
 
+// The live servers on this computer: read every few seconds while DEV is in sight. View only.
+const servers = ref([])
+const serversOpen = ref(false)
+const SERVERS_EVERY_MS = 5000
+let serverTimer
+async function readServers() {
+  try {
+    servers.value = await devServers()
+  } catch {
+    // the next look tries again
+  }
+}
+
 watch(
   () => props.visible,
   (on) => {
     clearInterval(timer)
+    clearInterval(serverTimer)
     if (!on) return
     refresh()
+    readServers()
     timer = setInterval(refresh, READ_EVERY_MS)
+    serverTimer = setInterval(readServers, SERVERS_EVERY_MS)
   },
 )
 onMounted(() => {
   refresh()
-  if (props.visible) timer = setInterval(refresh, READ_EVERY_MS)
+  if (props.visible) {
+    readServers()
+    timer = setInterval(refresh, READ_EVERY_MS)
+    serverTimer = setInterval(readServers, SERVERS_EVERY_MS)
+  }
 })
-onBeforeUnmount(() => clearInterval(timer))
+onBeforeUnmount(() => {
+  clearInterval(timer)
+  clearInterval(serverTimer)
+})
 </script>
 
 <template>
@@ -168,7 +193,7 @@ onBeforeUnmount(() => clearInterval(timer))
     </aside>
 
     <div class="work">
-      <nav v-if="tabs.length" class="tab-strip" role="tablist" aria-label="Open projects">
+      <nav class="tab-strip" role="tablist" aria-label="Open projects">
         <button
           v-for="tab in tabs"
           :key="tab.slot"
@@ -182,7 +207,10 @@ onBeforeUnmount(() => clearInterval(timer))
           <span class="dot" :class="{ on: tab.running }"></span>
           <span class="label">{{ tab.name }}</span>
         </button>
-        <span class="count">{{ tabs.length }} / {{ MAX_TABS }}</span>
+        <span v-if="tabs.length" class="count">{{ tabs.length }} / {{ MAX_TABS }}</span>
+        <button class="servers-btn" :class="{ alone: !tabs.length }" :aria-expanded="serversOpen" title="The developer servers listening on this computer, and which project owns each" @click="serversOpen = !serversOpen">
+          SERVERS: {{ servers.length }} live {{ serversOpen ? '▴' : '▾' }}
+        </button>
       </nav>
 
       <DevTab
@@ -191,6 +219,7 @@ onBeforeUnmount(() => clearInterval(timer))
         :key="`${tab.slot}:${tab.folder}`"
         :ref="(view) => (view ? (tabViews[tab.slot] = view) : delete tabViews[tab.slot])"
         :tab="tab"
+        :servers="serversOf(servers, tab.slot)"
         :shown="visible && tab.slot === activeSlot"
         :companion="companion"
         :cli="cli"
@@ -209,6 +238,7 @@ onBeforeUnmount(() => clearInterval(timer))
       </div>
     </div>
 
+    <LiveServers v-if="serversOpen" :servers="servers" :tabs="tabs" @close="serversOpen = false" />
     <NewProject v-if="making" @made="made" @close="making = false" />
   </div>
 </template>
@@ -444,6 +474,24 @@ button:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.servers-btn {
+  flex: none;
+  margin: 0 0 4px 8px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--good, #8fe3b0) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--good, #8fe3b0) 8%, transparent);
+  color: var(--good, #8fe3b0);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.servers-btn.alone {
+  margin-left: auto;
 }
 
 .count {
