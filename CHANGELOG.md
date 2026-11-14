@@ -6,6 +6,9 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **MY PROFILE: you, read from your own diary.** A new room after APPS shows your type, three tiles (Growth, Focus, Wellbeing) with how they moved, and How I Think, Values and Shadow, one reading for each finished month; **Scan my diary** fills in your past months, the **Changes** timeline lets you open any month, and the page stays blurred until you look. It uses your memory database and your own Claude Code or Codex, and nothing of it ever reaches the chat room.
 - **WIDGETS: HOME the way you want it.** A new room between HOME and THEME switches each card on or off and sets its size; **Arrange on HOME** lets you drag the cards anywhere, each theme keeps its own places, and **Back to the theme's places** resets the theme in use. The USAGE card's own switch moved here from Settings.
+- **New project opens straight away.** No more choosing a projects folder first: Castle suggests `Projects` in your user folder and makes it with your first project (**Change…** picks another).
+- **Sign in to GitHub finds the GitHub CLI** even when it was installed after Castle started.
+- **Live servers in DEV.** **SERVERS: N live** lists every developer server on your computer with the project it belongs to, and each tab shows its own on a **LIVE** line, one press to open. Castle only shows them and never stops one.
 - **New rooms arrive in their place.** If you ever dragged your tabs, a room added in an update now appears beside its neighbour instead of at the end of the bar.
 
 ## 0.2.8 - 2026-11-14

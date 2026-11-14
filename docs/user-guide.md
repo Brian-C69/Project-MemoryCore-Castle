@@ -21,6 +21,7 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 13. [Chat room](#13-chat-room)
 14. [Widgets](#14-widgets)
 15. [My profile](#15-my-profile)
+16. [Dev](#16-dev)
 
 ---
 
@@ -456,3 +457,17 @@ Each theme keeps its own places: change theme and the cards sit where that theme
 - It is a gentle reading of how your diary reads, never a diagnosis. Health numbers are never used, and private passages are never quoted.
 - Your companion reads with your own Claude Code or Codex, so each month uses a little of your own usage.
 - MY PROFILE lives in your memory database (Settings › Database). **Export** and **Move back to files** carry your readings as `profile/readings.json`, and moving in again brings them back. You can switch the room off in **Settings › Rooms**.
+
+---
+
+## 16. Dev
+
+**DEV** opens your projects as tabs, each with its own session of your companion working in that project's folder.
+
+### New project
+
+**+ New project** clones a repo from a link, or creates a new one on GitHub. The whole form is there at once. If you haven't chosen a projects folder yet, Castle suggests one in your user folder (`Projects`, marked *suggested*). It is made the first time a project goes in, and **Change…** picks another folder any time. To create on GitHub, install the GitHub CLI and press **Sign in to GitHub**; Castle finds it even when it was installed after Castle started.
+
+### Live servers
+
+**SERVERS: N live** in the tab strip lists every developer server listening on this computer: its port, the program, the project it belongs to, and whether your companion started it in a tab or it runs in a project's folder. **open ↗** opens it in your browser. Each tab also shows a **LIVE** line with its own servers. Castle only shows them: it never stops a server, so a port another project uses is always left alone.
