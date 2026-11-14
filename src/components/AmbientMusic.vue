@@ -18,12 +18,13 @@ const music = ref(false)
 const volume = ref(0.5)
 const screensOn = ref(false)
 const roomOn = ref(true)
+const stageOwns = ref(false) // the story stage is playing its own adventure's music
 const songs = ref([])
 let timer = 0
 let liveUntil = 0 // the World tab's controls just changed things: the saved copy may still be old
 
 const tracks = computed(() => tracksFor('2d', songs.value, convertFileSrc))
-const enabled = computed(() => music.value && roomOn.value && !screensOn.value)
+const enabled = computed(() => music.value && roomOn.value && !screensOn.value && !stageOwns.value)
 
 async function read() {
   try {
@@ -53,6 +54,7 @@ async function readSongs() {
 // The WORLD room's MUSIC controls: follow them at once, without waiting for the saved copy.
 function live(event) {
   const patch = event.detail ?? {}
+  if (typeof patch.stage === 'boolean') stageOwns.value = patch.stage
   if (patch.screens) read() // the screens just changed: hand over at once, not at the next check
   if (typeof patch.music !== 'boolean' && typeof patch.volume !== 'number') return
   liveUntil = Date.now() + 5000

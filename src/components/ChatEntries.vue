@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import MarkdownText from './MarkdownText.vue'
 
 // Chat's conversation: the member's bubbles right, the companion's left, plan cards, pictures side
@@ -51,6 +51,42 @@ const nearBottom = () => {
 const toBottom = () => {
   if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
 }
+
+// The chat starts at its newest message and stays there until the member scrolls up. It sits in a
+// tab that is hidden (display: none) while it loads, where scrolling does nothing, so the newest
+// message is also found again when the tab is shown, when a picture finishes loading, or when
+// lines are added - as long as the member has not scrolled away from the bottom.
+let stick = true
+let watching = null
+let following = null
+const onScroll = () => {
+  const el = scroller.value
+  if (el && el.clientHeight > 0) stick = nearBottom()
+}
+const follow = () => {
+  if (stick) toBottom()
+}
+onMounted(() => {
+  const el = scroller.value
+  if (!el) return
+  el.addEventListener('scroll', onScroll, { passive: true })
+  el.addEventListener('load', follow, true) // pictures, which grow the page after the lines
+  if (typeof ResizeObserver !== 'undefined') {
+    watching = new ResizeObserver(follow) // hidden -> shown, or the window resized
+    watching.observe(el)
+  }
+  if (typeof MutationObserver !== 'undefined') {
+    following = new MutationObserver(follow)
+    following.observe(el, { childList: true, subtree: true })
+  }
+  toBottom()
+})
+onBeforeUnmount(() => {
+  scroller.value?.removeEventListener('scroll', onScroll)
+  scroller.value?.removeEventListener('load', follow, true)
+  watching?.disconnect()
+  following?.disconnect()
+})
 
 defineExpose({ nearBottom, toBottom })
 </script>
