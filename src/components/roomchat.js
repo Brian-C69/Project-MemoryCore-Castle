@@ -4,6 +4,17 @@
 const AI_KINDS = ['assistant', 'member_assistant']
 export const isAi = (author) => AI_KINDS.includes(author?.kind)
 
+// Presence is not proof that this Castle still admits its companion: revoked keys can
+// leave rows behind. Never interpret an unknown/stale status as online.
+export function roomPresenceState(row, { me = null, companion = null, enabled = false, verified = false, fresh = false } = {}) {
+  const owner = String(row.ownerName || String(row.name ?? '').match(/^(.+)['\u2019]s\s+(.+)$/)?.[1] || '').trim()
+  const own = isAi(row) && ((companion?.name && row.name === companion.name && row.kind === companion.kind) || (me?.name && owner === me.name))
+  if (own && !enabled) return 'disabled'
+  if (own && !verified) return 'unknown'
+  if (!fresh) return 'unknown'
+  return ['online', 'here', 'active', 'idle', 'away', 'offline'].includes(row.status) ? row.status : 'unknown'
+}
+
 // The service can retain several presence rows for revoked/recreated companion keys.
 // Merge only the same raw companion identity, never the shortened display name.
 export function roomMembers(rows = []) {
