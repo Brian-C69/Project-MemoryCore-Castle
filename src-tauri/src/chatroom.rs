@@ -554,8 +554,21 @@ pub async fn room_face_set(path: Option<String>, companion: bool, store: State<'
     .map_err(|_| "The picture could not be sent.".to_string())?
 }
 
+/// A room file's id as the page hands it over: the room sends `fileId` as a number
+/// (`"picture": {"fileId": 42}`), and text is taken too. Anything else is no file. Pure, tested.
+fn file_id(id: &Value) -> Option<String> {
+    match id {
+        Value::Number(n) => n.as_u64().map(|n| n.to_string()),
+        Value::String(s) if !s.trim().is_empty() => Some(s.trim().to_string()),
+        _ => None,
+    }
+}
+
+/// A picture or voice line from the room, as a data URL. The id arrives as the room wrote it (a
+/// number): a `String` parameter refused it before any request, so pictures and voices never showed.
 #[tauri::command]
-pub async fn room_file(id: String, store: State<'_, SettingsStore>) -> Result<String, RoomRefusal> {
+pub async fn room_file(id: Value, store: State<'_, SettingsStore>) -> Result<String, RoomRefusal> {
+    let id = file_id(&id).ok_or_else(|| refusal("other", "That is not a room file."))?;
     let room = room_for(&store, "me")?;
     blocking(move || room.file(&id)).await
 }
@@ -565,6 +578,17 @@ mod tests {
     use super::*;
     use std::io::{Read, Write};
     use std::net::TcpListener;
+
+    #[test]
+    fn a_room_file_id_is_taken_as_the_room_sends_it() {
+        // the line shape the room sends: "picture": {"fileId": 42}
+        let line = serde_json::json!({"picture": {"fileId": 42}, "voice": {"fileId": "7", "seconds": 3}});
+        assert_eq!(file_id(&line["picture"]["fileId"]), Some("42".to_string()));
+        assert_eq!(file_id(&line["voice"]["fileId"]), Some("7".to_string()));
+        for junk in [serde_json::json!(null), serde_json::json!(-1), serde_json::json!(1.5), serde_json::json!(" "), serde_json::json!({})] {
+            assert_eq!(file_id(&junk), None, "{junk}");
+        }
+    }
 
     #[test]
     fn display_name_preserves_the_other_foundation_fields_and_validates_input() {
