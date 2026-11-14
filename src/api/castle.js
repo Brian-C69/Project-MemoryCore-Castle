@@ -232,6 +232,17 @@ export const dbTraitActivate = (number) => invoke('db_trait_activate', { number 
 export const dbTraitRetire = (number) => invoke('db_trait_retire', { number })
 // kind 'diary' (her recent diary) or 'idea' (the member's words) -> [{ name, line, body, audience, why }]; nothing is kept
 export const emotionPropose = (kind, idea = null) => invoke('emotion_propose', { kind, idea })
+// MY PROFILE, the member's own readings. -> { ready, timeline: [{ month, mbti, headline: [{ grp, label, score }] }],
+// current: { month, mbti, enneagram, tritype, headline, entriesRead, fromDate, toDate, scannedAt, scores, notes }, waiting: ['YYYY-MM'] }
+export const profileRead = () => invoke('profile_read')
+// one month in full (same shape as current), or null
+export const profileMonth = (month) => invoke('profile_month', { month })
+// reads every finished month not read yet -> { read, skipped: ['YYYY-MM'] }
+export const profileScan = () => invoke('profile_scan')
+// while it reads: { month, done, total, state: reading | read | skipped, problem }
+export const onProfileProgress = on('profile-progress')
+// Castle just went out of sight (minus button, tray, hotkey, close button)
+export const onCastleHidden = on('castle-hidden')
 // "Set it up for me": install, start, create, check - then it stops and gives the move's counts
 export const dbSetupAll = () => invoke('db_setup_all')
 // while it runs: { step: install | start | create | check, state: running | done }
