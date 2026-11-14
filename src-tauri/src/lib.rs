@@ -28,6 +28,7 @@ mod memdb;
 mod memory;
 mod mirror;
 mod plans;
+mod profile;
 mod pty;
 mod providers;
 mod messages;
@@ -392,6 +393,9 @@ pub fn run() {
             emotion::db_trait_activate,
             emotion::db_trait_retire,
             emotion::emotion_propose,
+            profile::profile_read,
+            profile::profile_month,
+            profile::profile_scan,
             db::db_setup_all,
             db::db_move_out
         ])
