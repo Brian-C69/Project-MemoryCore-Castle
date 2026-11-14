@@ -65,7 +65,7 @@ fn git(folder: &Path, args: &[&str]) -> Ran {
 }
 
 fn gh(folder: &Path, args: &[&str]) -> Ran {
-    match env::find_on_path("gh") {
+    match crate::dev_new::gh_program() {
         Some(program) => run(&program, args, folder, Duration::from_secs(120)),
         None => Ran { ok: false, out: String::new(), err: "the GitHub CLI is not installed".into() },
     }
@@ -118,7 +118,7 @@ pub struct BackupStatus {
 pub fn status(folder: &Path) -> BackupStatus {
     let mut s = BackupStatus {
         git_installed: env::find_on_path("git").is_some(),
-        gh_installed: env::find_on_path("gh").is_some(),
+        gh_installed: crate::dev_new::gh_program().is_some(),
         ..BackupStatus::default()
     };
     if s.gh_installed {
@@ -335,7 +335,8 @@ pub async fn backup_now(store: State<'_, SettingsStore>) -> Result<BackupStatus,
 /// member finishes it there, then presses Check again.
 #[tauri::command]
 pub fn backup_sign_in() -> Result<(), String> {
-    let gh = env::find_on_path("gh").ok_or("Install the GitHub CLI first (cli.github.com).")?;
+    // on PATH or in its install folder: a Castle started before gh was installed still finds it
+    let gh = crate::dev_new::gh_program().ok_or("Install the GitHub CLI first (cli.github.com).")?;
     Command::new("cmd.exe")
         .args(["/c", "start", "GitHub sign-in", "cmd", "/k"])
         .arg(gh)
