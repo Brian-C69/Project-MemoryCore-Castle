@@ -19,7 +19,7 @@ pub const HOST: &str = "127.0.0.1";
 pub const ENV_KEYS: [&str; 5] = ["MEMORY_DB_HOST", "MEMORY_DB_PORT", "MEMORY_DB_NAME", "MEMORY_DB_USER", "MEMORY_DB_PASSWORD"];
 
 /// The migrations, in order. A released file is never edited; a change is a new entry.
-pub const MIGRATIONS: [(&str, &str); 8] = [
+pub const MIGRATIONS: [(&str, &str); 9] = [
     ("001_core", include_str!("../resources/schema/001_core.sql")),
     ("002_imported_files", include_str!("../resources/schema/002_imported_files.sql")),
     ("003_memory_skills", include_str!("../resources/schema/003_memory_skills.sql")),
@@ -28,6 +28,7 @@ pub const MIGRATIONS: [(&str, &str); 8] = [
     ("006_diary_history", include_str!("../resources/schema/006_diary_history.sql")),
     ("007_project_plans", include_str!("../resources/schema/007_project_plans.sql")),
     ("008_companion_traits", include_str!("../resources/schema/008_companion_traits.sql")),
+    ("009_profile_readings", include_str!("../resources/schema/009_profile_readings.sql")),
 ];
 
 /// How to reach one database.
