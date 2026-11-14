@@ -1,5 +1,6 @@
 //! A new line in the Foundation room: a sound and a desktop notification when the member is not
-//! looking at the CHAT tab. Both are on by default and each has its own switch in Settings > Rooms.
+//! looking at the CHAT tab. The notification is on by default and the sound off (the sound ignores
+//! Windows quiet hours); each has its own switch in Settings > Rooms.
 //! The room reader (roomread.rs) runs from the moment Castle starts, also while Castle is hidden in
 //! the tray, so this reaches the member then too. An alert is best effort: it never stops a read.
 
@@ -65,6 +66,9 @@ pub fn new_lines(app: &AppHandle, fresh: &[Value], chat_shown: bool) {
         beep();
     }
     if settings.alert_notify {
+        // No `.sound(..)`: with tauri-plugin-notification 2.8 / notify-rust 4.19 a Windows toast built
+        // without one is `<audio silent="true"/>`, so the Sound switch is the only sound (checked in
+        // the dependency source, not by ear).
         let _ = app.notification().builder().title(title).body(body).show();
     }
 }

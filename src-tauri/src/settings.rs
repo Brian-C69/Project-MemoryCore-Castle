@@ -172,7 +172,8 @@ pub struct Settings {
     /// Castle to the tray icon, as before.
     pub minimize_to_taskbar: bool,
     /// A sound, and a desktop notification, when a new line arrives in the chat room while the
-    /// member is not looking at CHAT. On by default; each has its own switch in Settings > Rooms.
+    /// member is not looking at CHAT. The notification is on by default; the sound is off by default
+    /// (it plays through Windows' quiet hours); each has its own switch in Settings > Rooms.
     pub alert_sound: bool,
     pub alert_notify: bool,
     /// Optional local-time clock immediately before the top bar's music controls.
@@ -263,7 +264,7 @@ impl Default for Settings {
             start_with_windows: false,
             start_session_on_launch: true,
             minimize_to_taskbar: false,
-            alert_sound: true,
+            alert_sound: false,
             alert_notify: true,
             display_clock: false,
             clock_format: "24h".into(),
@@ -460,12 +461,13 @@ mod tests {
     }
 
     #[test]
-    fn chat_alerts_are_on_for_new_and_older_settings_files() {
-        assert!(Settings::default().alert_sound && Settings::default().alert_notify);
+    fn the_chat_notification_is_on_and_the_sound_off_for_new_and_older_settings_files() {
+        assert!(Settings::default().alert_notify);
+        assert!(!Settings::default().alert_sound, "the sound ignores quiet hours, so it starts off");
         let old: Settings = serde_json::from_str(r#"{"setupDone":true}"#).unwrap();
-        assert!(old.alert_sound && old.alert_notify);
-        let off: Settings = serde_json::from_str(r#"{"alertSound":false,"alertNotify":false}"#).unwrap();
-        assert!(!off.alert_sound && !off.alert_notify);
+        assert!(old.alert_notify && !old.alert_sound);
+        let chosen: Settings = serde_json::from_str(r#"{"alertSound":true,"alertNotify":false}"#).unwrap();
+        assert!(chosen.alert_sound && !chosen.alert_notify);
     }
 
     #[test]
@@ -494,7 +496,7 @@ mod tests {
             start_with_windows: true,
             start_session_on_launch: false,
             minimize_to_taskbar: true,
-            alert_sound: false,
+            alert_sound: true,
             alert_notify: false,
             display_clock: true,
             clock_format: "12h".into(),
