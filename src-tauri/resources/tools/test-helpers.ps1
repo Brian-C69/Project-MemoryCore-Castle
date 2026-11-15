@@ -238,6 +238,11 @@ Report ($leak -notmatch 'sk-proj-AbCd' -and $leak -notmatch 'abc\.def\.ghi' -and
 $long = Protect-Secret ('token ' + ('a1B2' * 12))
 Report ($long -notmatch 'a1B2a1B2') 'common: Protect-Secret strips long tokens' $long
 
+$body = ConvertTo-CastleJsonBytes @{ prompt = "Mira's ""look"" - violet"; n = 1 }
+$back = $null
+try { $back = [System.Text.Encoding]::UTF8.GetString($body) | ConvertFrom-Json } catch {}
+Report ($body -is [byte[]] -and $back.prompt -eq "Mira's ""look"" - violet" -and $back.n -eq 1) 'common: ConvertTo-CastleJsonBytes gives real bytes of valid JSON (not an unrolled Object[])' "type $($body.GetType().FullName)"
+
 $saved = [Environment]::GetEnvironmentVariable('CASTLE_TEST_KEY', 'Process')
 $okKey = $true
 foreach ($v in @('', '   ', 'your-key-here', '<paste key>', 'sk-...', 'changeme', 'xxxxxxxxxxxx', 'PLACEHOLDER')) {

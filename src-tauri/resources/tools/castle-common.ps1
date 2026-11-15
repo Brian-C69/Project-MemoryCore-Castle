@@ -243,5 +243,7 @@ function ConvertTo-CastleJsonBytes {
     # PS 5.1 sends string bodies as Latin-1; send UTF-8 bytes so any language survives.
     param([Parameter(Mandatory = $true)]$Object)
     $json = $Object | ConvertTo-Json -Depth 10 -Compress
-    return [System.Text.Encoding]::UTF8.GetBytes($json)
+    # The comma keeps the byte[] whole: PowerShell unrolls an array a function returns, and an
+    # Object[] body goes out as numbers joined by spaces, which every provider refuses as JSON.
+    return , ([System.Text.Encoding]::UTF8.GetBytes($json))
 }
