@@ -29,6 +29,26 @@ pub struct Book {
     pub excerpt: String,
     pub words: usize,
     pub updated_at: u64,
+    /// the Spiral Library ref this book was kept from (None for the member's own)
+    pub origin: Option<String>,
+}
+
+/// The first line Export writes on a book kept from the Spiral Library, read back by the take-in.
+const ORIGIN_MARK: &str = "<!-- from the Spiral Library: ";
+
+/// The origin line for Export. Pure.
+pub fn origin_line(reference: &str) -> String {
+    format!("{ORIGIN_MARK}{} -->", reference.replace("-->", ""))
+}
+
+/// A book file's origin (when its first line is the origin line) and its words without that line. Pure.
+pub fn split_origin(body: &str) -> (Option<String>, String) {
+    let mut lines = body.splitn(2, '\n');
+    let first = lines.next().unwrap_or("").trim_end_matches('\r');
+    match first.strip_prefix(ORIGIN_MARK).and_then(|r| r.strip_suffix(" -->")) {
+        Some(reference) if !reference.trim().is_empty() => (Some(reference.trim().to_string()), lines.next().unwrap_or("").to_string()),
+        _ => (None, body.to_string()),
+    }
 }
 
 fn sql(what: &'static str) -> impl Fn(mysql::Error) -> String {
@@ -64,23 +84,26 @@ pub fn excerpt_of(body: &str) -> String {
     one_line(&text, 160)
 }
 
-fn book_of(row: (u64, String, String, String, String, Option<u64>)) -> Book {
-    let (id, shelf, slug, title, body, at) = row;
-    Book { id, shelf, slug, title, excerpt: excerpt_of(&body), words: body.split_whitespace().count(), updated_at: at.unwrap_or(0) }
+type BookRow = (u64, String, String, String, String, Option<u64>, Option<String>);
+const BOOK_COLUMNS: &str = "id, shelf, slug, title, body, CAST(UNIX_TIMESTAMP(updated_at) AS UNSIGNED), origin_ref";
+
+fn book_of(row: BookRow) -> Book {
+    let (id, shelf, slug, title, body, at, origin) = row;
+    Book { id, shelf, slug, title, excerpt: excerpt_of(&body), words: body.split_whitespace().count(), updated_at: at.unwrap_or(0), origin }
 }
 
 /// Every book, by shelf then title.
 pub fn books(conn: &mut impl Queryable) -> Result<Vec<Book>, String> {
-    let rows: Vec<(u64, String, String, String, String, Option<u64>)> = conn
-        .query("SELECT id, shelf, slug, title, body, CAST(UNIX_TIMESTAMP(updated_at) AS UNSIGNED) FROM library_books ORDER BY shelf, title")
+    let rows: Vec<BookRow> = conn
+        .query(format!("SELECT {BOOK_COLUMNS} FROM library_books ORDER BY shelf, title"))
         .map_err(sql("Reading the library"))?;
     Ok(rows.into_iter().map(book_of).collect())
 }
 
 /// One book's whole text.
 pub fn read(conn: &mut impl Queryable, id: u64) -> Result<Option<(Book, String)>, String> {
-    let row: Option<(u64, String, String, String, String, Option<u64>)> = conn
-        .exec_first("SELECT id, shelf, slug, title, body, CAST(UNIX_TIMESTAMP(updated_at) AS UNSIGNED) FROM library_books WHERE id = ?", (id,))
+    let row: Option<BookRow> = conn
+        .exec_first(format!("SELECT {BOOK_COLUMNS} FROM library_books WHERE id = ?"), (id,))
         .map_err(sql("Reading a book"))?;
     Ok(row.map(|r| {
         let body = r.4.clone();
@@ -114,6 +137,29 @@ pub fn add(conn: &mut impl Queryable, shelf: &str, title: &str, body: &str) -> R
     id.ok_or_else(|| "The book could not be read back.".to_string())
 }
 
+/// A book kept from the Spiral Library: its words and edition replaced when that ref is already
+/// kept (never a second copy), else a new book on `shelf`. Returns the book's id.
+pub fn keep_from(conn: &mut impl Queryable, shelf: &str, title: &str, body: &str, origin_ref: &str, edition: &str) -> Result<u64, String> {
+    let have: Option<u64> = conn.exec_first("SELECT id FROM library_books WHERE origin_ref = ? LIMIT 1", (origin_ref,)).map_err(sql("Reading the library"))?;
+    let body: String = body.chars().take(BODY_MAX).collect();
+    let id = match have {
+        Some(id) => {
+            let title = one_line(title, TITLE_MAX);
+            conn.exec_drop("UPDATE library_books SET title = ?, body = ? WHERE id = ?", (&title, &body, id)).map_err(sql("Updating the book"))?;
+            id
+        }
+        None => add(conn, shelf, title, &body)?,
+    };
+    conn.exec_drop("UPDATE library_books SET origin_ref = ?, origin_edition = ? WHERE id = ?", (origin_ref, edition, id)).map_err(sql("Marking where the book came from"))?;
+    Ok(id)
+}
+
+/// Every Spiral book kept, as (ref, edition kept).
+pub fn kept_origins(conn: &mut impl Queryable) -> Result<Vec<(String, String)>, String> {
+    let rows: Vec<(String, Option<String>)> = conn.query("SELECT origin_ref, origin_edition FROM library_books WHERE origin_ref IS NOT NULL").map_err(sql("Reading the library"))?;
+    Ok(rows.into_iter().map(|(r, e)| (r, e.unwrap_or_default())).collect())
+}
+
 /// New words (and title) for a book.
 pub fn set(conn: &mut impl Queryable, id: u64, title: Option<&str>, body: &str) -> Result<(), String> {
     let (book, _) = read(conn, id)?.ok_or("No such book.")?;
@@ -128,8 +174,17 @@ pub fn delete(conn: &mut impl Queryable, id: u64) -> Result<(), String> {
 
 /// The files Export writes: `library/<shelf>/<slug>.md`, as a memory kept them.
 pub fn to_files(conn: &mut impl Queryable) -> Result<Vec<(String, String)>, String> {
-    let rows: Vec<(String, String, String)> = conn.query("SELECT shelf, slug, body FROM library_books ORDER BY shelf, slug").map_err(sql("Reading the library"))?;
-    Ok(rows.into_iter().map(|(shelf, slug, body)| (format!("library/{shelf}/{slug}.md"), body)).collect())
+    let rows: Vec<(String, String, String, Option<String>)> = conn.query("SELECT shelf, slug, body, origin_ref FROM library_books ORDER BY shelf, slug").map_err(sql("Reading the library"))?;
+    Ok(rows
+        .into_iter()
+        .map(|(shelf, slug, body, origin)| {
+            let body = match origin {
+                Some(r) => format!("{}\n{body}", origin_line(&r)),
+                None => body,
+            };
+            (format!("library/{shelf}/{slug}.md"), body)
+        })
+        .collect())
 }
 
 // ---------- taking the old files in, once ----------
@@ -186,9 +241,11 @@ pub fn take_in(conn: &mut mysql::Conn, memory: &Path) -> Result<usize, String> {
         )
         .map_err(sql("Keeping a file"))?;
         let slug = if slug.is_empty() { "book".to_string() } else { slug.clone() };
+        // a book Export wrote from the Spiral Library comes back knowing where it came from
+        let (origin, words) = split_origin(body);
         tx.exec_drop(
-            "INSERT INTO library_books (shelf, slug, title, body, source_file) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE title = VALUES(title), body = VALUES(body)",
-            (shelf, &slug, one_line(title, TITLE_MAX), body, rel),
+            "INSERT INTO library_books (shelf, slug, title, body, source_file, origin_ref) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE title = VALUES(title), body = VALUES(body)",
+            (shelf, &slug, one_line(title, TITLE_MAX), &words, rel, &origin),
         )
         .map_err(sql("Taking in a book"))?;
     }
@@ -258,6 +315,15 @@ mod tests {
     }
 
     #[test]
+    fn a_kept_spiral_book_carries_its_origin_through_the_export_file() {
+        let file = format!("{}\n# Keys\nwords", origin_line("architecture/books/keys"));
+        assert_eq!(split_origin(&file), (Some("architecture/books/keys".to_string()), "# Keys\nwords".to_string()));
+        assert_eq!(split_origin("# Own book\nwords"), (None, "# Own book\nwords".to_string()));
+        assert_eq!(split_origin("<!-- from the Spiral Library:  -->\nx").0, None, "an empty ref is no origin");
+        assert!(!origin_line("a-->b").contains("a-->"));
+    }
+
+    #[test]
     fn the_old_library_is_read_shelf_by_shelf_without_changing_anything() {
         let root = std::env::temp_dir().join(format!("castle-library-db-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
@@ -298,6 +364,10 @@ mod tests {
         assert_eq!(books(&mut conn).unwrap().len(), 2);
         delete(&mut conn, id).unwrap();
         assert_eq!(to_files(&mut conn).unwrap()[0].0, "library/pattern/keys.md");
+        let kept = keep_from(&mut conn, "architecture", "Static demo", "# Static demo\nv1", "architecture/books/static", "2026-11-01").unwrap();
+        let again = keep_from(&mut conn, "architecture", "Static demo", "# Static demo\nv2", "architecture/books/static", "2026-11-15").unwrap();
+        assert_eq!(kept, again, "one copy per Spiral book");
+        assert_eq!(kept_origins(&mut conn).unwrap(), vec![("architecture/books/static".to_string(), "2026-11-15".to_string())]);
         let _ = std::fs::remove_dir_all(root);
         conn.query_drop(format!("DROP DATABASE `{}`", access.name)).unwrap();
     }
