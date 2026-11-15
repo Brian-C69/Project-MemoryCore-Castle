@@ -284,7 +284,9 @@ Everything lives in your MemoryCore folder (`media-generation/`, `music/`, and t
 
 ### How drawing works here
 
-Castle writes every Appearance drawing's prompt itself, straight from your notes: the look in `appearance/companion.md`, and the outfit's or hairstyle's own words. No AI has to read them, so drawing spends no conversation tokens. A line such as `Art style: soft watercolor illustration` in `companion.md` sets the art style. While `companion.md` still has Castle's starting words, **Redraw** follows your portrait instead (the room says so under the buttons); with no portrait yet it is refused, because it would draw a stranger - describe the look first, or upload a picture.
+**Where the look is written.** Under STANDARD LOOK, **The look in words** holds how your companion looks (face, eyes, hair colour, build, anything that always stays the same) and **Art style** the style you like (anime, soft watercolor illustration...). Press **Save the look**. Each outfit and hairstyle has **Edit words** for its name and description. All of it is kept in your memory database, not in files; your companion can read and change it too when you ask (`castle-memory look show`). APPEARANCE needs the memory database: if your memory is still kept in files, move it in first (Settings > Database). The first time APPEARANCE opens there, the old notes (`appearance/companion.md`, each `outfit.md` and `hair.md`, `current.json`) are taken in and removed; the pictures stay where they are. **Export to markdown** writes those notes back out.
+
+Castle writes every drawing's prompt itself from those words, so no AI has to read them and drawing spends no conversation tokens. While the look has no words yet, **Redraw** follows your portrait instead (the room says so under the buttons); with no portrait yet it is refused, because it would draw a stranger - write the look first, or upload a picture.
 
 Then the app your companion thinks with decides how the picture is drawn:
 
@@ -307,7 +309,7 @@ A Codex job waits until the main conversation reaches a confirmed turn boundary,
 
 ### The standard look
 
-Press **Upload image** to use artwork you already have, or **Draw the standard look** to start from `appearance/companion.md`. Uploads accept PNG, JPEG and WebP up to 25 MB and are copied into your MemoryCore as PNG. Replacing an imported image preserves the previous file. Uploading does not generate an image or call a paid API.
+Press **Upload image** to use artwork you already have, or **Draw the standard look** to start from the look in words. Uploads accept PNG, JPEG and WebP up to 25 MB and are copied into your MemoryCore as PNG. Replacing an imported image preserves the previous file. Uploading does not generate an image or call a paid API.
 
 Write what you want changed in **Changes for the next drawing**, then press **Improve from image**. Castle passes the existing image as the reference (to Codex, or with your key) and asks for the face and body proportions to stay the same. Your companion's conversation is not touched. Press **Refresh** after the result is saved.
 

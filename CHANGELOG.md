@@ -4,6 +4,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Write the look right in APPEARANCE.** **The look in words**, its **Art style** and each outfit's and hairstyle's words are edited in the room and kept in your memory database instead of markdown files (the old notes are taken in the first time). Your companion can read and change its look too, and Export gives the files back.
 - **Delete in STUDIO, and a Backups shelf.** Every picture, video, song, voice line and saved prompt can be deleted (it goes to the Recycle Bin). The pictures Castle keeps before replacing one now sit under **Backups** instead of crowding **Pictures**.
 - **Pictures open whole, and no requests box.** A tall picture fits the viewer instead of being cropped, and a drawing's progress is one line in the room's top bar.
 - **Pictures, songs, videos and voice lines with your keys work again.** A new picture without a reference, a Suno song, a Seedance video and an ElevenLabs voice line could all fail with "Invalid body": Castle now sends their requests correctly.
