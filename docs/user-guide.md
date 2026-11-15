@@ -254,10 +254,6 @@ Write what you want and press the main button (or **Ctrl + Enter**):
 - **Create picture** draws it straight away; its progress shows beside **Refresh**, and the picture appears in the gallery.
 - For a **video**, a **song** or a **voice line**, the button is **Ask <your companion>**: the request goes to your companion in Chat, and it tells you the cost and asks before it makes it.
 
-### The gallery
-
-Below the Make bar, everything your companion made fills the room: **Pictures** and **Backups** as large tiles at their own shape, **Videos**, **Songs**, **Voice** and **Saved prompts** as rows you can play.
-
 ### Your own voice (optional, for self-hosters)
 
 If you run [VoiceStudio](https://github.com/debpalash/voicestudio) on this PC, you can use it for Voice instead of a key. It is off by default: turn it on in **Settings > Companion > Local voice**. With it on and VoiceStudio running, Voice shows **VoiceStudio**: type a line in the Make bar, press **Speak with VoiceStudio**, and the clip plays and is saved with your other voice lines. Castle uses your first saved VoiceStudio voice (a saved voice also keeps one-word lines from coming out as noise) and checks each clip with VoiceStudio's own transcriber, making it again if it came out as noise. Everything stays on your computer, Castle never installs or starts VoiceStudio, and while the switch is off Castle never contacts it. VoiceStudio's models have their own licences; some are non-commercial.
@@ -272,7 +268,9 @@ The idea is saved next to where the file would have gone (a `.prompt.md`, `.lyri
 
 ### The gallery
 
-- **Pictures** - click one to see it large; use the arrow keys to move between them.
+Below the Make bar, everything your companion made fills the room.
+
+- **Pictures** - large tiles at their own shape; click one to see it large and use the arrow keys to move between them.
 - **Videos**, **Songs** and **Voice** - play them right in Castle. Songs are grouped by album.
 - **Saved prompts** - the ideas saved while a key was missing, with **Show file**.
 - **Backups** - the pictures Castle kept before replacing one (when it draws a new standard look or turnaround, or you upload a new picture).
