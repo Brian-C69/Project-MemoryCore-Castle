@@ -277,16 +277,18 @@ Everything lives in your MemoryCore folder (`media-generation/`, `music/`, and t
 
 ### How drawing works here
 
-Castle draws an Appearance or Studio picture the first way that is open to you:
+Castle writes every Appearance drawing's prompt itself, straight from your notes: the look in `appearance/companion.md`, and the outfit's or hairstyle's own words. No AI has to read them, so drawing spends no conversation tokens. A line such as `Art style: soft watercolor illustration` in `companion.md` sets the art style. While `companion.md` still has Castle's starting words, **Redraw** is refused (it would draw a stranger); describe the look first, or use **Improve from image**, which follows your portrait.
 
-1. **Codex on your ChatGPT plan.** When Codex is installed and signed in with ChatGPT, the picture is a separate Codex job, even when the main conversation uses Claude Code. It costs nothing beyond your plan.
-2. **Your companion, with your OpenAI key.** When your companion thinks with Claude Code and you added a ChatGPT (OpenAI) key in **Settings > Keys**, the request goes to your companion as if you typed it in Chat. It reads the drawing style and your companion's look, tells you the cost, and draws only after you say yes. Castle opens Chat so you can answer.
+Then Castle draws the picture the first way that is open to you:
+
+1. **Codex on your ChatGPT plan.** When Codex is installed and signed in with ChatGPT, Codex draws the finished prompt as a separate job, even when the main conversation uses Claude Code. It costs nothing beyond your plan.
+2. **Your OpenAI key.** When you added a ChatGPT (OpenAI) key in **Settings > Keys**, Castle draws the picture itself with gpt-image-2, whichever CLI your companion thinks with. Your companion does not need to be awake, and nothing is typed into your conversation. The price is on the button before you press it.
 3. **Neither.** The prompt is saved under **Image requests**, with what to add.
 
 The badge at the top of the room says which way the next picture goes:
 
 - **Codex on your ChatGPT plan** - Codex is signed in with ChatGPT (Castle asks Codex itself; an installed Codex alone is not enough).
-- **Ready - drawn with your OpenAI key** - your companion draws with your key.
+- **Ready - drawn with your OpenAI key** - Castle draws with your key.
 - **Prompt only - add an OpenAI key or sign in to Codex** - nothing can draw yet; requests are saved.
 
 **Quality** beside the badge sets how carefully every drawing in this room is made, and so what it costs with your key: **As the style says** (high for the standard look and turnarounds, medium for a try-on), **Low** (about $0.03 a picture), **Medium** (about $0.06) or **High** (about $0.25). The prices show only when your key pays; on your ChatGPT plan they do not apply. Each picture's size stays with its shape (the standard look and a try-on are tall, a turnaround is wide). Castle remembers your choice on this computer.

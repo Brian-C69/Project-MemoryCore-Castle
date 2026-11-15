@@ -4,7 +4,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
-- **Pictures with your OpenAI key.** APPEARANCE and STUDIO no longer refuse when Codex is not signed in with ChatGPT: if your companion thinks with Claude Code and you added an OpenAI key, it draws the picture with your key after telling you the cost. The badge now says which way the next picture goes.
+- **Pictures with your OpenAI key, without spending tokens.** APPEARANCE and STUDIO no longer refuse when Codex is not signed in with ChatGPT: with an OpenAI key Castle draws the picture itself, writing the prompt straight from your notes, so no AI tokens are spent and your companion need not be awake. On Codex the finished prompt is handed over too. The badge says which way the next picture goes.
 - **Choose what a picture costs.** APPEARANCE has a **Quality** choice (Low, Medium, High, or as the style says) with the price of each when your key pays, so a standard look can cost about $0.03 instead of $0.25.
 
 ## 0.2.9 - 2026-11-15
