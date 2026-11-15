@@ -8,8 +8,11 @@ export const POWERS = [
   { id: 'voice', label: 'Voice', key: 'ElevenLabs', ask: 'Say this out loud:' },
 ]
 
-/** The small status pill of a power: { text, tone } (tone: 'ready' or 'missing'). */
-export function powerPill(id, powers = {}, voiceUp = false) {
+/** The small status pill of a power: { text, tone } (tone: 'ready', 'missing' or 'checking').
+ * `loaded` is false only while the Picture power's real state (it asks Codex itself) is still
+ * being read, so it reads "Checking..." instead of defaulting to "Add a key". */
+export function powerPill(id, powers = {}, voiceUp = false, loaded = true) {
+  if (id === 'image' && !loaded) return { text: 'Checking…', tone: 'checking' }
   if (id === 'voice' && voiceUp) return { text: 'VoiceStudio', tone: 'ready' }
   const state = powers[id]
   if (state === 'builtin') return { text: 'Codex', tone: 'ready' }
@@ -25,7 +28,8 @@ export function powerPill(id, powers = {}, voiceUp = false) {
  *  - kind 'key'       -> open Settings > Keys
  * with the button's label and, for the companion, the line to type.
  */
-export function makeAction(id, powers = {}, voiceUp = false, companion = 'your companion') {
+export function makeAction(id, powers = {}, voiceUp = false, companion = 'your companion', loaded = true) {
+  if (id === 'image' && !loaded) return { kind: 'checking', label: 'Checking…' }
   const power = POWERS.find((p) => p.id === id) ?? POWERS[0]
   const state = powers[power.id]
   if (power.id === 'image') {

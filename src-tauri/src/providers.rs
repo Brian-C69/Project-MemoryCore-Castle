@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
     sync::Mutex,
+    time::{Duration, Instant},
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -566,7 +567,7 @@ pub fn start_images(app: &AppHandle) {
             }
         }
         // asked now, not when it was queued: a sign-in or a key may have changed since
-        let way = crate::env::picture_way(store.get().cli, codex_signed_in, crate::key::load("openai").is_some());
+        let way = crate::env::picture_way(store.get().cli, codex_chatgpt_cached, crate::key::load("openai").is_some());
         // Only a Codex job waits for a safe pause in the conversation; a drawing with the key is a
         // helper script beside it. Reading the record can take a moment; no lock is held meanwhile.
         if way != "key" && !safe_boundary(&store, &app.state::<MainHost>().0) {
@@ -671,6 +672,26 @@ pub(crate) fn draw_once(brief: &str, folder: &Path, output: &Path, limit: std::t
 /// What to do when no way to draw is open, in the member's words.
 const NO_WAY: &str = "Not drawn: sign in to Codex with ChatGPT, or add an OpenAI key in Settings > Keys. Prompt saved.";
 
+/// How long a ChatGPT sign-in check is trusted before it is asked again: STUDIO and APPEARANCE ask
+/// on every visit, and the image queue asks once a second while a job waits for a safe moment, so
+/// without this a `codex login status` process would be spawned that often.
+const CODEX_CHATGPT_EVERY: Duration = Duration::from_secs(60);
+static CODEX_CHATGPT: Mutex<Option<(Instant, bool)>> = Mutex::new(None);
+
+/// `read`, kept for `every`: a fresh read only once that long has passed since the last one. Pure
+/// given `read`, tested with a fake clock via the slot's own stored instant.
+fn cached_bool(slot: &Mutex<Option<(Instant, bool)>>, every: Duration, read: impl FnOnce() -> bool) -> bool {
+    let mut slot = slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((when, value)) = slot.as_ref() {
+        if when.elapsed() < every {
+            return *value;
+        }
+    }
+    let value = read();
+    *slot = Some((Instant::now(), value));
+    value
+}
+
 /// Codex is installed and signed in with ChatGPT (the plan, never an API key). Asks Codex itself.
 pub(crate) fn codex_signed_in() -> bool {
     auth_output(Cli::Codex).is_some_and(|auth| {
@@ -684,9 +705,14 @@ pub(crate) fn codex_signed_in() -> bool {
     })
 }
 
+/// `codex_signed_in`, but kept for a minute instead of a process every time (see `CODEX_CHATGPT_EVERY`).
+pub(crate) fn codex_chatgpt_cached() -> bool {
+    cached_bool(&CODEX_CHATGPT, CODEX_CHATGPT_EVERY, codex_signed_in)
+}
+
 /// Codex signed in with ChatGPT, and where it is; the reason in words otherwise.
 fn codex_ready() -> Result<PathBuf, String> {
-    if !codex_signed_in() {
+    if !codex_chatgpt_cached() {
         return Err(NO_WAY.into());
     }
     crate::env::find_on_path("codex")
@@ -1393,5 +1419,18 @@ mod tests {
     fn handoff_is_bounded_and_identifies_history_as_data() {
         let text = handoff(&[], Path::new("memory"));
         assert!(text.contains("master-memory.md") && text.contains("not new authorization"));
+    }
+
+    #[test]
+    fn a_chatgpt_sign_in_check_is_kept_for_a_minute() {
+        let slot: Mutex<Option<(Instant, bool)>> = Mutex::new(None);
+        let every = Duration::from_secs(60);
+        assert!(cached_bool(&slot, every, || true));
+        assert!(cached_bool(&slot, every, || false), "still within the minute: the first answer stands");
+        // (an Instant cannot go back past the moment the computer started)
+        if let Some(old) = Instant::now().checked_sub(every + Duration::from_secs(1)) {
+            *slot.lock().unwrap() = Some((old, true));
+            assert!(!cached_bool(&slot, every, || false), "a minute has passed: asked again");
+        }
     }
 }

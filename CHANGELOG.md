@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **STUDIO's Picture power stopped flashing "Add the OpenAI key".** Whether the next picture can be drawn with Codex was checked fresh every single visit to STUDIO (and once a second while a picture waited in the queue), spawning a `codex login status` process each time; the button showed its "missing key" fallback for however long that took. The check is now kept for a minute, warmed once when Castle starts, and shows **Checking...** instead of a false "missing key" while it is still being read.
+
 - **A real LIBRARY.** Turn it on in Settings > Rooms: **My books** keeps the knowledge your companion saves in your memory database (an old `library/` folder is taken in), and the **Spiral Library** brings Kiyo's published books, whole for members who may read them.
 - **New project can choose its stack.** Frontend, backend, database, hosting and mobile (or your own with Other...), and your companion is told what to set up when the project opens.
 - **A new STUDIO.** One Make bar for pictures, videos, songs and voice lines, with each one's state at a glance, and a gallery that fills the room with your creations at their own shape.
