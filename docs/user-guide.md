@@ -268,6 +268,11 @@ The idea is saved next to where the file would have gone (a `.prompt.md`, `.lyri
 - **Pictures** - click one to see it large; use the arrow keys to move between them.
 - **Videos**, **Songs** and **Voice** - play them right in Castle. Songs are grouped by album.
 - **Saved prompts** - the ideas saved while a key was missing, with **Show file**.
+- **Backups** - the pictures Castle kept before replacing one (when it draws a new standard look or turnaround, or you upload a new picture).
+
+Every item has a **Delete** (on a picture, the small ✕ in its corner). Castle asks **Delete? Yes / No** right there, and a deleted file goes to the Windows Recycle Bin, so you can restore it. The standard look itself cannot be deleted here; replace it in APPEARANCE.
+
+While a picture is being drawn, the line beside **Refresh** says so (**Stop** ends it). If it could not be drawn, the line says why, with **Retry** and **Dismiss**. A finished picture simply appears.
 
 Everything lives in your MemoryCore folder (`media-generation/`, `music/`, and the story's own folders), so it is part of your memory and your backup.
 
@@ -296,9 +301,9 @@ The badge at the top of the room says which way the next picture goes:
 
 **Quality** beside the badge sets how carefully every drawing in this room is made, and so what it costs with your key: **As the style says** (high for the standard look and turnarounds, medium for a try-on), **Low** (about $0.03 a picture), **Medium** (about $0.06) or **High** (about $0.25). The prices show only when your key pays; on your ChatGPT plan they do not apply. Each picture's size stays with its shape (the standard look and a try-on are tall, a turnaround is wide). Castle remembers your choice on this computer.
 
-Your OpenAI key is never given to Codex, because Codex would then bill your API account instead of your plan. Image jobs show queued, working, completed, or prompt-saved status. Video, music and voice keep their separate key requirements.
+Your OpenAI key is never given to Codex, because Codex would then bill your API account instead of your plan. While a picture is drawn, the line in the room's top bar says so, with **Stop**; if it could not be drawn, the line gives the reason with **Retry** and **Dismiss**, and a finished picture simply appears. Video, music and voice keep their separate key requirements.
 
-A Codex job waits until the main conversation reaches a confirmed turn boundary, and holds new messages while it draws. Normal Codex permissions remain in effect; if the noninteractive job cannot proceed, Castle saves the prompt. Press **Refresh** after completion. Saved prompts can be retried from the room. Interrupted jobs are not automatically rerun after Castle restarts.
+A Codex job waits until the main conversation reaches a confirmed turn boundary, and holds new messages while it draws. Normal Codex permissions remain in effect; if the noninteractive job cannot proceed, Castle saves the prompt. Saved prompts can be retried from the room. Interrupted jobs are not automatically rerun after Castle restarts.
 
 ### The standard look
 

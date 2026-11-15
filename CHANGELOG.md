@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Delete in STUDIO, and a Backups shelf.** Every picture, video, song, voice line and saved prompt can be deleted (it goes to the Recycle Bin). The pictures Castle keeps before replacing one now sit under **Backups** instead of crowding **Pictures**.
+- **Pictures open whole, and no requests box.** A tall picture fits the viewer instead of being cropped, and a drawing's progress is one line in the room's top bar.
 - **Pictures, songs, videos and voice lines with your keys work again.** A new picture without a reference, a Suno song, a Seedance video and an ElevenLabs voice line could all fail with "Invalid body": Castle now sends their requests correctly.
 - **Pictures with your OpenAI key, without spending tokens.** APPEARANCE and STUDIO no longer refuse when Codex is not signed in with ChatGPT. With Claude Code, Castle draws with your OpenAI key and never uses Codex; with Codex, it draws on your ChatGPT plan, or with your key when Codex is not signed in. The prompt is written straight from your notes, so no AI tokens are spent; a key drawing starts at once, your companion need not be awake, and you can keep chatting while it draws. The badge says which way the next picture goes.
 - **A green dot, like the Keep.** The companion panel's provider picker and Refresh providers are gone: a green dot on the picture shows your companion is here, and pulses while they work. Switch between Claude Code and Codex in **Settings > Companion > Thinks with**.
