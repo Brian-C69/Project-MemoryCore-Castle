@@ -558,7 +558,8 @@ input {
   border-radius: 10px;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 34%),
-    color-mix(in srgb, var(--panel-background) 82%, transparent);
+    linear-gradient(var(--panel-background), var(--panel-background)),
+    #04081c;
   box-shadow:
     inset 0 0 0 5px color-mix(in srgb, var(--accent) 7%, transparent),
     inset 0 -30px 40px -26px color-mix(in srgb, var(--accent) 30%, transparent),
@@ -652,7 +653,8 @@ input {
 .pick,
 .dots,
 .line {
-  background: color-mix(in srgb, var(--panel-background) 88%, #04081c);
+  /* Theme panel colours can contain alpha: back them with a solid surface. */
+  background: linear-gradient(var(--panel-background), var(--panel-background)), #04081c;
   backdrop-filter: blur(var(--glass-blur));
 }
 .pick {
@@ -748,7 +750,7 @@ input {
   padding: 6px 22px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel-background) 88%, #04081c);
+  background: linear-gradient(var(--panel-background), var(--panel-background)), #04081c;
   backdrop-filter: blur(var(--glass-blur));
   font-family: 'Palatino Linotype', Palatino, Georgia, serif;
   font-style: italic;
