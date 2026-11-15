@@ -9,8 +9,8 @@ import GlassSelect from '../components/GlassSelect.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../components/roomsteps.js'
 import { listen } from '@tauri-apps/api/event'
-import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCompanionIn, roomFaceSet, roomFile, roomLog, roomMe, roomMine, roomPost, roomPresence, roomReset, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
-import { avatarLoader, currentAvatar, datedLines, initial, isMine, roomMembers, roomPresenceState, speakerPresentation, ticks } from '../components/roomchat.js'
+import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCompanionIn, roomFaceSet, roomFile, roomLog, roomMe, roomMine, roomPost, roomPresence, roomReact, roomReset, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
+import { avatarLoader, currentAvatar, datedLines, initial, isMine, REACTIONS, reactionChips, replySnippet, replyingLine, roomFeatures, roomMembers, roomPresenceState, speakerPresentation, ticks, toggleReaction } from '../components/roomchat.js'
 import { roomCompanionRefresh, roomNameSet, setupApply } from '../api/castle.js'
 import { avatarGet } from '../api/castle.js'
 
@@ -159,12 +159,31 @@ function scrollDown() {
   requestAnimationFrame(() => scroller.value && (scroller.value.scrollTop = scroller.value.scrollHeight))
 }
 
+// Reactions and replies: shown only when the room lists them in /me's features (issue #29).
+const can = computed(() => roomFeatures(me.value))
+const replying = ref(null) // the line being answered
+function reply(line) {
+  replying.value = line
+}
+async function react(line, emoji) {
+  try {
+    const answer = await roomReact(line.id, emoji, toggleReaction(line, emoji))
+    if (answer?.reactions) take([{ ...line, reactions: answer.reactions }], [], true)
+  } catch (reason) {
+    refused.value = reason
+  }
+}
+function jumpTo(id) {
+  document.getElementById('room-line-' + id)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+
 async function send() {
   const text = draft.value.trim()
   if (!text) return
   try {
-    const line = await roomPost(text)
+    const line = await roomPost(text, null, replying.value?.id ?? null)
     draft.value = ''
+    replying.value = null
     if (line?.id) myIds.value = [...myIds.value, line.id]
     take([line], [], true)
     scrollDown()
@@ -378,7 +397,10 @@ onMounted(async () => {
     // outside Castle's window
   }
   try {
-    stops.push(await listen('room-lines', (e) => take(e.payload.lines, e.payload.cleared)))
+    stops.push(await listen('room-lines', (e) => {
+      take(e.payload.lines, e.payload.cleared)
+      if (e.payload.updated?.length) take(e.payload.updated, [], true)
+    }))
     stops.push(await listen('room-turn', () => loadLog()))
     stops.push(
       await listen('room-read-failed', (e) => {
@@ -472,19 +494,35 @@ watch(() => props.visible, (on) => {
             <div v-if="item.kind === 'day'" class="day-divider"><time :datetime="item.key" :title="item.date">{{ item.label }}</time></div>
             <template v-else v-for="l in [item.line]" :key="l.id">
             <p v-if="l.author?.kind === 'system'" class="system"><em>{{ l.text }}</em></p>
-            <div v-else-if="mine(l)" class="bubble mine">
+            <div v-else-if="mine(l)" :id="'room-line-' + l.id" class="bubble mine" tabindex="-1">
+              <button v-if="replySnippet(l, lines)" class="quote" :disabled="!replySnippet(l, lines).loaded" @click="jumpTo(l.replyTo.id)"><strong>{{ replySnippet(l, lines).name }}</strong> {{ replySnippet(l, lines).text }}</button>
               <span class="text">{{ l.text }}</span>
               <span class="meta">{{ clock(l.at) }} <span class="tick" :class="{ read: ticks(l, seen, me).read }" :title="ticks(l, seen, me).title">{{ ticks(l, seen, me).mark }}</span></span>
+              <span v-if="reactionChips(l).length" class="chips">
+                <button v-for="r in reactionChips(l)" :key="r.emoji" class="chip" :class="{ mine: r.mine }" :disabled="!can.reactions" @click="react(l, r.emoji)">{{ r.emoji }} {{ r.count }}</button>
+              </span>
+              <span v-if="can.reactions || can.replies" class="tools" role="toolbar" aria-label="React or reply">
+                <template v-if="can.reactions"><button v-for="e in REACTIONS" :key="e" :aria-label="'React ' + e" @click="react(l, e)">{{ e }}</button></template>
+                <button v-if="can.replies" @click="reply(l)">Reply</button>
+              </span>
             </div>
-            <div v-else class="bubble theirs" :class="[l.author?.kind, { ai: isAi(l) }]">
+            <div v-else :id="'room-line-' + l.id" class="bubble theirs" :class="[l.author?.kind, { ai: isAi(l) }]" tabindex="-1">
               <span class="face"><img v-if="faces[avatarToken(l.author)]" :src="faces[avatarToken(l.author)]" alt="" /><template v-else>{{ initial(l.author) }}</template></span>
               <div class="body">
                 <span class="who" :title="speaker(l.author).title" :tabindex="isAi(l) ? 0 : undefined" :aria-label="speaker(l.author).title ? `${speaker(l.author).name}, ${speaker(l.author).title}` : undefined">{{ speaker(l.author).name }}<span v-if="isAi(l)" class="spark"> ✦</span></span>
+                <button v-if="replySnippet(l, lines)" class="quote" :disabled="!replySnippet(l, lines).loaded" @click="jumpTo(l.replyTo.id)"><strong>{{ replySnippet(l, lines).name }}</strong> {{ replySnippet(l, lines).text }}</button>
                 <span class="text">{{ l.text }}</span>
                 <audio v-if="l.voice && files[l.voice.fileId]" :src="files[l.voice.fileId]" controls preload="none"></audio>
                 <img v-if="l.picture && files[l.picture.fileId]" :src="files[l.picture.fileId]" alt="" class="picture" />
               </div>
               <span class="meta">{{ clock(l.at) }}</span>
+              <span v-if="reactionChips(l).length" class="chips">
+                <button v-for="r in reactionChips(l)" :key="r.emoji" class="chip" :class="{ mine: r.mine }" :disabled="!can.reactions" @click="react(l, r.emoji)">{{ r.emoji }} {{ r.count }}</button>
+              </span>
+              <span v-if="can.reactions || can.replies" class="tools" role="toolbar" aria-label="React or reply">
+                <template v-if="can.reactions"><button v-for="e in REACTIONS" :key="e" :aria-label="'React ' + e" @click="react(l, e)">{{ e }}</button></template>
+                <button v-if="can.replies" @click="reply(l)">Reply</button>
+              </span>
             </div>
             </template>
           </template>
@@ -494,6 +532,10 @@ watch(() => props.visible, (on) => {
           <pre v-if="turnLog" class="turns">{{ turnLog }}</pre>
           <p v-else class="hint">No turns yet.</p>
         </div>
+        <p v-if="replying" class="replying">
+          <span>Replying to {{ replyingLine(replying, mine(replying) ? 'yourself' : speaker(replying.author).name) }}</span>
+          <button aria-label="Stop replying" @click="replying = null">&#x2715;</button>
+        </p>
         <form class="say" @submit.prevent="send">
           <input v-model="draft" maxlength="1000" placeholder="Write to the room..." :disabled="me?.needsName || me?.muted" />
           <button class="primary" :disabled="!draft.trim()">Send</button>
@@ -843,6 +885,108 @@ input:not([type='radio']) {
 .at {
   font-size: 12px;
   color: var(--text-dim);
+}
+.bubble {
+  position: relative;
+}
+.quote {
+  display: block;
+  max-width: 100%;
+  margin-bottom: 4px;
+  padding: 4px 8px;
+  overflow: hidden;
+  border: 0;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.quote:disabled {
+  cursor: default;
+}
+.quote strong {
+  margin-right: 4px;
+  color: var(--text);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.chip {
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chip.mine {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.tools {
+  position: absolute;
+  top: -14px;
+  right: 8px;
+  display: none;
+  gap: 2px;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-background) 92%, #050b1f);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.bubble:hover .tools,
+.bubble:focus-within .tools {
+  display: flex;
+}
+.tools button {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tools button:hover,
+.tools button:focus-visible {
+  background: var(--hover);
+}
+.replying {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-size: 13px;
+}
+.replying span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.replying button {
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
 }
 .say {
   display: flex;

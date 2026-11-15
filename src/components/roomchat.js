@@ -120,3 +120,39 @@ export function currentAvatar(author, presence = []) {
   const matches = presence.filter((p) => author?.name && p.name === author.name && p.kind === author.kind)
   return matches.length === 1 ? matches[0].avatar : null
 }
+
+// ---------- reactions and replies (shown only when the room lists them in /me's features) ----------
+export const REACTIONS = ['👍', '❤️', '👏', '😂', '😮', '😢']
+
+/** What the room can do, from /me: { replies, reactions }. */
+export function roomFeatures(me) {
+  const f = Array.isArray(me?.features) ? me.features : []
+  return { replies: f.includes('replies'), reactions: f.includes('reactions') }
+}
+
+/** A line's chips: the reactions with a count, in the room's order. */
+export function reactionChips(line) {
+  const list = Array.isArray(line?.reactions) ? line.reactions : []
+  return REACTIONS.map((e) => list.find((r) => r.emoji === e)).filter((r) => r && r.count > 0)
+}
+
+/** Whether pressing `emoji` on `line` adds it (true) or takes the member's own back (false). */
+export function toggleReaction(line, emoji) {
+  return !(line?.reactions ?? []).some((r) => r.emoji === emoji && r.mine)
+}
+
+/** The quote a reply shows: the original's name and its first words, and whether it is loaded. */
+export function replySnippet(line, lines = []) {
+  const reply = line?.replyTo
+  if (!reply || typeof reply !== 'object') return null
+  const original = lines.find((l) => l.id === reply.id)
+  const text = String(reply.text ?? '').replace(/\s+/g, ' ').trim()
+  return { id: reply.id, name: reply.name || 'someone', text: text || 'a removed message', loaded: Boolean(original), gone: !text }
+}
+
+/** The strip above the composer while replying: "Name: the start of the line". */
+export function replyingLine(line, name) {
+  const text = String(line?.text ?? '').replace(/\s+/g, ' ').trim()
+  const short = text.length > 80 ? `${text.slice(0, 80)}…` : text || 'a picture or a voice line'
+  return `${name}: ${short}`
+}
