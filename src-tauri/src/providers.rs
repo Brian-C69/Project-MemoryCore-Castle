@@ -228,6 +228,10 @@ pub struct ImageJob {
     /// member's notes, so no AI has to. None for a free picture (STUDIO) and in older queues.
     #[serde(default)]
     look: Option<LookSpec>,
+    /// Drawn by Castle with the OpenAI key: a helper script that never touches the conversation,
+    /// so it neither waits for a safe pause nor holds the chat or a provider switch.
+    #[serde(default)]
+    pub(crate) by_key: bool,
     /// The member pressed Stop while it was drawing: the worker ends Codex at its next look.
     #[serde(skip)]
     stop_asked: bool,
@@ -247,6 +251,13 @@ pub struct LookSpec {
     pub changes: Option<String>,
     #[serde(default)]
     pub quality: Option<String>,
+}
+
+impl ImageJob {
+    /// A drawing that keeps the companion's conversation still: a Codex job while it works.
+    pub(crate) fn holds_session(&self) -> bool {
+        self.phase == "working" && !self.by_key
+    }
 }
 
 impl LookSpec {
@@ -482,13 +493,14 @@ pub fn image_request(
         id,
         label: label.unwrap_or_default().chars().take(120).collect(),
         phase: "queued".into(),
-        message: "Waiting for the main conversation to finish its turn.".into(),
+        message: "Waiting to start.".into(),
         output: target.display().to_string(),
         brief,
         references,
         memory,
         prompt,
         look,
+        by_key: false,
         stop_asked: false,
     };
     let mut jobs = images.0.lock().unwrap();
@@ -547,12 +559,13 @@ pub fn start_images(app: &AppHandle) {
                 continue;
             }
         }
-        // Reading the record can take a moment; no lock is held meanwhile, so typing is never refused for it.
-        if !safe_boundary(&store, &app.state::<MainHost>().0) {
-            continue;
-        }
         // asked now, not when it was queued: a sign-in or a key may have changed since
         let way = crate::env::picture_way(codex_signed_in(), crate::key::load("openai").is_some());
+        // Only a Codex job waits for a safe pause in the conversation; a drawing with the key is a
+        // helper script beside it. Reading the record can take a moment; no lock is held meanwhile.
+        if way != "key" && !safe_boundary(&store, &app.state::<MainHost>().0) {
+            continue;
+        }
         let job = {
             // held only while the job is marked, so a switch cannot start in between
             let switch = control.0.lock().unwrap();
@@ -563,8 +576,9 @@ pub fn start_images(app: &AppHandle) {
             let Some(job) = jobs.iter_mut().find(|j| j.id == id && j.phase == "queued") else { continue };
             job.phase = "working".into();
             job.stop_asked = false;
+            job.by_key = way == "key";
             job.message = if way == "key" {
-                "Drawing with your OpenAI key. Messages to your companion wait until it finishes; Stop ends it."
+                "Drawing with your OpenAI key. Stop ends it."
             } else {
                 "Drawing with Codex. Messages to your companion wait until it finishes; Stop ends it."
             }
@@ -642,6 +656,7 @@ pub(crate) fn draw_once(brief: &str, folder: &Path, output: &Path, limit: std::t
         memory: folder.to_path_buf(),
         prompt: folder.join("last-picture.prompt.md"),
         look: None,
+        by_key: false,
         stop_asked: false,
     };
     run_image_with_program(&job, &program, None, &|| false, limit)
@@ -1046,7 +1061,7 @@ pub fn start(app: &AppHandle) {
             .lock()
             .unwrap()
             .iter()
-            .any(|j| j.phase == "working")
+            .any(|j| j.holds_session())
         {
             continue;
         }
@@ -1065,7 +1080,7 @@ pub fn start(app: &AppHandle) {
                 .lock()
                 .unwrap()
                 .iter()
-                .any(|j| j.phase == "working")
+                .any(|j| j.holds_session())
         {
             continue;
         }
@@ -1184,6 +1199,14 @@ mod tests {
         assert!(LookSpec { kind: "outfit".into(), outfit: Some("..\\secret".into()), ..Default::default() }.check().is_err());
         assert!(LookSpec { kind: "hair".into(), hair: Some("a/b".into()), ..Default::default() }.check().is_err());
         assert!(LookSpec { kind: "standard".into(), quality: Some("ultra".into()), ..Default::default() }.check().is_err());
+    }
+
+    #[test]
+    fn only_a_codex_drawing_keeps_the_conversation_still() {
+        let job = |phase: &str, by_key: bool| ImageJob { id: "1".into(), label: String::new(), phase: phase.into(), message: String::new(), output: String::new(), brief: String::new(), references: vec![], memory: PathBuf::new(), prompt: PathBuf::new(), look: None, by_key, stop_asked: false };
+        assert!(job("working", false).holds_session());
+        assert!(!job("working", true).holds_session(), "a drawing with the key never holds the chat");
+        assert!(!job("queued", false).holds_session());
     }
 
     #[test]
@@ -1313,6 +1336,7 @@ mod tests {
             memory: root.clone(),
             prompt: root.join("saved.prompt.md"),
             look: None,
+            by_key: false,
             stop_asked: false,
         };
         let never = || false;

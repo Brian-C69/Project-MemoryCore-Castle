@@ -110,7 +110,7 @@ pub fn send_message(text: String, room: Option<String>, app: AppHandle) -> Resul
             .lock()
             .unwrap()
             .iter()
-            .any(|j| j.phase == "working");
+            .any(|j| j.holds_session());
     let pending = app.state::<Pending>();
     let mut messages = pending.0.lock().unwrap();
     let selected = memory(&store)?;
@@ -202,7 +202,7 @@ pub fn start(app: &AppHandle) {
                 .lock()
                 .unwrap()
                 .iter()
-                .any(|j| j.phase == "working")
+                .any(|j| j.holds_session())
         {
             continue;
         }

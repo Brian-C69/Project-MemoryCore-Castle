@@ -492,7 +492,7 @@ pub fn terminal_write(data: String, room: Option<String>, main: State<MainHost>,
             return Err("Provider is switching. Your message has not been sent.".into());
         }
         drop(switching);
-        let drawing = images.0.lock().unwrap().iter().any(|j| j.phase == "working");
+        let drawing = images.0.lock().unwrap().iter().any(|j| j.holds_session());
         if drawing && holds_back_while_drawing(&data) {
             return Err("A picture is being drawn in this memory. Your message has not been sent; send it when the drawing finishes, or press Stop on the drawing.".into());
         }
