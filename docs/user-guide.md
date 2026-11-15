@@ -58,6 +58,8 @@ If Castle cannot start the session, the panel says why in one sentence and offer
 
 The companion panel has two views. Switch between them with **CHAT** and **LOG** at the top of the panel; the session keeps running either way.
 
+At the top sit your companion's picture and name. A **green dot** on the picture's lower right shows they are here (the session is running); it **pulses** while they work on a reply, and there is no dot while they rest. Which app they think with is chosen in **Settings > Companion > Thinks with**; while a switch is under way its progress shows under the name, with **Cancel switch**.
+
 ### Chat
 
 Chat shows your conversation as message bubbles, like a messaging app.
@@ -301,7 +303,7 @@ A Codex job starts once the main conversation reaches a confirmed turn boundary.
 
 Press **Upload image** to use artwork you already have, or **Draw the standard look** to start from `appearance/companion.md`. Uploads accept PNG, JPEG and WebP up to 25 MB and are copied into your MemoryCore as PNG. Replacing an imported image preserves the previous file. Uploading does not generate an image or call a paid API.
 
-Write what you want changed in **Changes for the next drawing**, then press **Improve from image**. Castle sends the existing image as a reference to the separate Codex job and asks it to preserve the face and body proportions. The selected conversation provider stays unchanged. Press **Refresh** after the result is saved.
+Write what you want changed in **Changes for the next drawing**, then press **Improve from image**. Castle passes the existing image as the reference (to Codex, or with your key) and asks for the face and body proportions to stay the same. Your companion's conversation is not touched. Press **Refresh** after the result is saved.
 
 The standard look also becomes your companion's picture in the panel, unless you chose your own picture in setup.
 
