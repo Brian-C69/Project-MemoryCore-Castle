@@ -10,7 +10,7 @@ import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../co
 import { listen } from '@tauri-apps/api/event'
 import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCompanionIn, roomFaceSet, roomFile, roomLog, roomMe, roomMine, roomPost, roomPresence, roomReset, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
 import { avatarLoader, currentAvatar, datedLines, initial, isMine, roomMembers, roomPresenceState, speakerPresentation, ticks } from '../components/roomchat.js'
-import { roomNameSet } from '../api/castle.js'
+import { roomCompanionRefresh, roomNameSet, setupApply } from '../api/castle.js'
 import { avatarGet } from '../api/castle.js'
 
 const props = defineProps({
@@ -19,7 +19,8 @@ const props = defineProps({
   // goes up each time Settings saves: the page reads the settings again
   settingsStamp: { type: Number, default: 0 },
 })
-const emit = defineEmits(['fresh', 'settings'])
+// 'renamed': the companion's name changed here, so the app reads the settings again and every page follows
+const emit = defineEmits(['fresh', 'settings', 'renamed'])
 
 const settings = ref(null)
 const keys = ref([])
@@ -300,6 +301,43 @@ function signInOnLibrary() {
 }
 
 // The member's face in the room (their Google picture by default), and their companion's.
+// the small menu behind a picture's pencil ('me' or 'companion'); it closes when focus leaves the card
+const menu = ref('')
+function menuOut(event) {
+  if (!event.currentTarget.contains(event.relatedTarget)) menu.value = ''
+}
+
+// the companion's name is the one in Settings, so changing it here saves it there and then tells the
+// app to read the settings again (every page follows), the memory files and the room, as Settings does
+const companionEditing = ref(false)
+const companionName = ref('')
+const companionSaving = ref(false)
+const companionLine = ref('')
+async function saveCompanionName() {
+  const name = companionName.value.trim()
+  if (!name || companionSaving.value) return
+  companionSaving.value = true
+  companionLine.value = ''
+  try {
+    const { settings: current } = await getSettings()
+    await saveSettings({ ...current, companionName: name })
+    emit('renamed')
+    companionEditing.value = false
+    companionLine.value = `Saved. ${name} is the name everywhere now.`
+    try {
+      if (current.memoryFolder && current.memberName?.trim()) await setupApply(current.memoryFolder, name, current.memberName, current.relationshipStyle ?? '')
+      const told = await roomCompanionRefresh()
+      if (told?.inRoom) companionLine.value = `Saved. ${name} is the name everywhere now, and in the room.`
+    } catch (reason) {
+      companionLine.value = `Saved, but a follow-up step failed: ${String(reason?.message ?? reason)}`
+    }
+  } catch (reason) {
+    companionLine.value = String(reason?.message ?? reason)
+  } finally {
+    companionSaving.value = false
+  }
+}
+
 async function setFace(companion, reset = false) {
   faceLine.value = ''
   try {
@@ -485,29 +523,47 @@ watch(() => props.visible, (on) => {
         <p class="hint">The alerts, and {{ companion }}'s voice here and public card once it is in.</p>
         <h3>YOUR PROFILE</h3>
         <div class="profile-pair">
-          <section class="profile-person" aria-label="Your room picture">
-            <span class="profile-picture"><img v-if="myPicture" :src="myPicture" :alt="`${me?.name || member?.name || 'Your'} profile picture`" /><span v-else>{{ initial(me) }}</span></span>
+          <section class="profile-person" aria-label="Your room picture" @focusout="menuOut">
+            <span class="pic-wrap">
+              <span class="profile-picture"><img v-if="myPicture" :src="myPicture" :alt="`${me?.name || member?.name || 'Your'} profile picture`" /><span v-else>{{ initial(me) }}</span></span>
+              <button class="pic-edit" aria-label="Edit my picture" title="Edit my picture" :aria-expanded="menu === 'me'" @click="menu = menu === 'me' ? '' : 'me'" @keydown.esc="menu = ''"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" /><path d="M13.5 6.5l4 4" /></svg></button>
+            </span>
             <strong :title="me?.name || member?.name">{{ me?.name || member?.name || 'You' }}</strong>
             <span class="hint">You</span>
-            <button @click="setFace(false)">Change my picture</button>
-            <button class="subtle" @click="setFace(false, true)">Use Google picture</button>
+            <div v-if="menu === 'me'" class="pic-menu" role="menu">
+              <button role="menuitem" @click="menu = ''; setFace(false)">Change picture</button>
+              <button role="menuitem" @click="menu = ''; displayName = me?.name || member?.name || ''; nameEditing = true; companionEditing = false; nameLine = ''">Change name</button>
+              <button role="menuitem" @click="menu = ''; setFace(false, true)">Use Google picture</button>
+            </div>
           </section>
-          <section class="profile-person" :aria-label="`${companion}'s room picture`">
-            <span class="profile-picture"><img v-if="companionPicture" :src="companionPicture" :alt="`${companion}'s profile picture`" /><span v-else>✦</span></span>
+          <section class="profile-person" :aria-label="`${companion}'s room picture`" @focusout="menuOut">
+            <span class="pic-wrap">
+              <span class="profile-picture"><img v-if="companionPicture" :src="companionPicture" :alt="`${companion}'s profile picture`" /><span v-else>✦</span></span>
+              <button class="pic-edit" :aria-label="`Edit ${companion}`" :title="`Edit ${companion}`" :aria-expanded="menu === 'companion'" @click="menu = menu === 'companion' ? '' : 'companion'" @keydown.esc="menu = ''"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" /><path d="M13.5 6.5l4 4" /></svg></button>
+            </span>
             <strong :title="companion">{{ companion }}</strong>
             <span class="hint">Companion</span>
-            <button :disabled="!haveCompanionKey" :title="haveCompanionKey ? `Change ${companion}'s room picture` : `Let ${companion} in to change the room picture`" @click="setFace(true)">Change {{ companion }}'s picture</button>
+            <div v-if="menu === 'companion'" class="pic-menu" role="menu">
+              <button role="menuitem" :disabled="!haveCompanionKey" :title="haveCompanionKey ? `Change ${companion}'s room picture` : `Let ${companion} in to change the room picture`" @click="menu = ''; setFace(true)">Change picture</button>
+              <button role="menuitem" @click="menu = ''; companionName = companion; companionEditing = true; nameEditing = false; companionLine = ''">Change name</button>
+            </div>
           </section>
         </div>
         <p v-if="faceLine" role="status" class="hint">{{ faceLine }}</p>
-        <button v-if="!nameEditing" @click="displayName = me?.name || member?.name || ''; nameEditing = true; nameLine = ''">Change display name</button>
-        <form v-else class="name-edit" @submit.prevent="saveDisplayName">
+        <form v-if="nameEditing" class="name-edit" @submit.prevent="saveDisplayName">
           <label for="room-display-name">Public display name</label>
           <input id="room-display-name" v-model="displayName" maxlength="80" :disabled="nameSaving" />
           <p class="hint">Shown to everyone in the Foundation room. Leave empty to use your Library card name.</p>
           <div class="row wrap"><button class="primary" :disabled="nameSaving">{{ nameSaving ? 'Saving…' : 'Save name' }}</button><button type="button" :disabled="nameSaving" @click="nameEditing = false">Cancel</button></div>
         </form>
+        <form v-if="companionEditing" class="name-edit" @submit.prevent="saveCompanionName">
+          <label for="companion-name">{{ companion }}'s name</label>
+          <input id="companion-name" v-model="companionName" maxlength="40" :disabled="companionSaving" />
+          <p class="hint">The new name shows everywhere in Castle at once, and in the chat room if {{ companion }} is in it. Names already written in your memory files stay as they are: ask {{ companion }} to update the memory.</p>
+          <div class="row wrap"><button class="primary" :disabled="companionSaving || !companionName.trim()">{{ companionSaving ? 'Saving…' : 'Save name' }}</button><button type="button" :disabled="companionSaving" @click="companionEditing = false">Cancel</button></div>
+        </form>
         <p v-if="nameLine" role="status" class="hint">{{ nameLine }}</p>
+        <p v-if="companionLine" role="status" class="hint">{{ companionLine }}</p>
         <div class="profile-footer"><button @click="signOut">Sign out</button></div>
       </aside>
     </template>
@@ -532,11 +588,18 @@ watch(() => props.visible, (on) => {
 .participation-select:disabled { opacity: .45; cursor: not-allowed; }
 .room-toggle:focus-visible, .participation-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .profile-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
-.profile-person { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; padding: 12px 8px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.025); }
+.profile-person { position: relative; display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; padding: 12px 8px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.025); }
 .profile-picture { display: grid; place-items: center; width: 64px; height: 64px; flex-shrink: 0; border-radius: 16px; overflow: hidden; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); font-size: 24px; }
 .profile-picture img { width: 100%; height: 100%; object-fit: cover; }
 .profile-person strong { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: 13px; }
 .profile-person button { width: 100%; min-height: 38px; padding: 7px 5px; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+/* the pencil sits on the picture's top right corner; the member's own opens a small menu */
+.pic-wrap { position: relative; display: inline-flex; }
+.profile-person button.pic-edit { position: absolute; top: -6px; right: -8px; display: grid; place-items: center; width: 24px; min-height: 24px; height: 24px; padding: 0; border-radius: 50%; background: var(--panel-background); }
+.pic-edit svg { display: block; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.profile-person button.pic-edit:disabled { opacity: .45; }
+.pic-menu { position: absolute; z-index: 3; top: 62px; left: 6px; right: 6px; display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-background); backdrop-filter: blur(var(--glass-blur)); box-shadow: 0 10px 24px -10px rgba(0, 0, 0, .7); }
+.profile-person .pic-menu button { min-height: 32px; }
 .profile-person button.subtle { border-color: transparent; color: var(--text-dim); }
 .profile-footer { padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--line); }
 .profile-footer button { width: 100%; }

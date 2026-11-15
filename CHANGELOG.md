@@ -16,6 +16,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 - **MY PROFILE sits straight on your theme.** The big card around the whole page is gone, so its own cards stand on the theme like the other pages, and hide / show works as before. The page uses Castle's thin themed scrollbar, and the eye button's icon is centred in its box.
 - **Click a chat notification to open CHAT.** Clicking the desktop notification for a new chat message now brings Castle forward, out of the tray or minimised, and opens the CHAT tab. It was doing nothing before.
 - **CHAT keeps its history after a restart.** A fresh start of Castle used to load only the newest 50 lines of the room, so older messages went missing from CHAT (they stayed in the room). Castle now also reads back through the older lines the room still has, up to about 500, and fills CHAT in.
+- **Edit your picture and names from a pencil.** In the chat room's YOUR PROFILE, each picture has a small pencil at its top right. Yours opens Change picture, Change name and Use Google picture; your companion's opens Change picture and Change name. Changing your companion's name there is the same as in Settings: it shows everywhere in Castle at once, in your memory files and in the room.
 
 ## 0.2.9 - 2026-11-15
 
