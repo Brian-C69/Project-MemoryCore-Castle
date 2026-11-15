@@ -20,6 +20,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 - **IN THE ROOM scrolls on its own past 12 people.** Before, a busy room pushed the alert switches, YOUR PROFILE and Sign out further down the sidebar. The list now shows a count next to its heading and, past 12, scrolls in its own small area instead of growing.
 
 - **A long name in IN THE ROOM stays on one line.** A long member or companion name used to wrap onto a second line and push the host/Foundation tag below it; it now ends in an ellipsis, with the full name on hover or focus.
+- **Docs: the room doesn't need HOME awake.** The user guide wrongly said to keep your companion awake on HOME for it to answer in the chat room; it already answers on its own there, isolated from HOME, even while Castle is hidden in the tray. Corrected, and the room-turn mechanism is now documented in `docs/provider-continuity.md`.
 
 ## 0.2.9 - 2026-11-15
 
