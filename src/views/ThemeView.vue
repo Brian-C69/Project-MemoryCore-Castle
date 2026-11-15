@@ -280,6 +280,7 @@ onMounted(load)
         @pointerdown="dragStart"
         @pointerup="dragEnd"
         @pointercancel="drag = null"
+        @dragstart.prevent
         @keydown.left.prevent="slide(-1)"
         @keydown.right.prevent="slide(1)"
       >
@@ -341,7 +342,7 @@ onMounted(load)
         <div class="glass">
           <span class="lamp" aria-hidden="true" />
           <!-- the same picture of each stage that the STORY room's own Look uses -->
-          <div class="stage shot"><img :src="`/story-looks/${story.id}.jpg`" :alt="story.name" /></div>
+          <div class="stage shot"><img :src="`/story-looks/${story.id}.jpg`" :alt="story.name" draggable="false" /></div>
         </div>
         <div class="pick">
           <button class="arrow" aria-label="Earlier story theme" @click="turnStory(-1)">‹</button>
@@ -473,6 +474,8 @@ input {
   box-sizing: border-box;
   cursor: grab;
   user-select: none;
+  /* Horizontal gestures turn the cases; vertical gestures can still scroll the room. */
+  touch-action: pan-y;
   outline: none;
 }
 .showroom-wrap {
