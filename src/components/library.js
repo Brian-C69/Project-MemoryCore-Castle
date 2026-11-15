@@ -31,3 +31,16 @@ export function priceOf(card) {
   const amount = (card.priceCents / 100).toFixed(2)
   return (card.currency || 'usd').toLowerCase() === 'usd' ? `$${amount}` : `${amount} ${String(card.currency).toUpperCase()}`
 }
+
+/**
+ * What the reader offers for a Spiral book, given `kept` (ref -> the edition in My books):
+ *  'none'   - nothing to keep (no book, a preview, or an empty one)
+ *  'keep'   - Add to My books
+ *  'kept'   - In My books, the same edition
+ *  'update' - In My books, but the Spiral Library has a newer edition
+ */
+export function keepState(book, kept = {}) {
+  if (!book || book.preview || !String(book.body ?? '').trim()) return 'none'
+  if (!Object.prototype.hasOwnProperty.call(kept ?? {}, book.ref)) return 'keep'
+  return book.updatedAt && kept[book.ref] !== book.updatedAt ? 'update' : 'kept'
+}

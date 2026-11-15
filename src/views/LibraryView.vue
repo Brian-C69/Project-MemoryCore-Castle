@@ -1,11 +1,12 @@
 <script setup>
 // LIBRARY: the member's own books (rows in their memory database; the companion's "save library"
 // keeps them) and the Spiral Library (Kiyo's published books, pulled from the Portfolio by Castle
-// alone, read-only). Shelves on the left, book cards in the middle, the reader on the right.
+// alone, read-only; a book read whole can be kept in My books). Shelves on the left, book cards in
+// the middle, the reader on the right.
 import { computed, onMounted, ref, watch } from 'vue'
 import MarkdownText from '../components/MarkdownText.vue'
-import { libraryBooks, libraryDelete, libraryRead, memberSignIn, spiralRead, spiralRoom } from '../api/castle.js'
-import { filterBooks, previewLine, priceOf, shelvesOf } from '../components/library.js'
+import { libraryBooks, libraryDelete, libraryRead, memberSignIn, spiralKeep, spiralKept, spiralRead, spiralRoom } from '../api/castle.js'
+import { filterBooks, keepState, previewLine, priceOf, shelvesOf } from '../components/library.js'
 
 const props = defineProps({
   companion: { type: String, default: 'Your companion' },
@@ -40,19 +41,51 @@ const query = ref('')
 const open = ref(null) // { title, body, preview, book }
 const reading = ref(false)
 const asking = ref(null)
+const kept = ref({}) // Spiral ref -> the edition in My books
+const keeping = ref(false)
+const KEEP_WORDS = { keep: 'Add to My books', kept: 'In My books', update: 'Update in My books' }
 
 const books = computed(() => (side.value === 'mine' ? mine.value : spiral.value.books))
 const shelfLabels = computed(() => Object.fromEntries(spiral.value.shelves.map((s) => [s.key, s.label])))
 const shelves = computed(() => shelvesOf(books.value, side.value === 'spiral' ? shelfLabels.value : {}))
 const shown = computed(() => filterBooks(books.value, shelf.value, query.value))
 const preview = computed(() => (open.value?.spiral ? previewLine(open.value.spiral, spiral.value.signedIn) : ''))
+const keep = computed(() => (open.value?.spiral ? keepState(open.value.spiral, kept.value) : 'none'))
+
+// which Spiral books are already in My books; without the memory database nothing is, and the
+// keep itself says why
+async function loadKept() {
+  try {
+    kept.value = await spiralKept()
+  } catch {
+    kept.value = {}
+  }
+}
+
+async function keepBook() {
+  const book = open.value?.spiral
+  if (!book) return
+  problem.value = ''
+  keeping.value = true
+  try {
+    mine.value = await spiralKeep(book.ref)
+    await loadKept()
+  } catch (e) {
+    problem.value = String(e?.message ?? e)
+  } finally {
+    keeping.value = false
+  }
+}
 
 async function load() {
   problem.value = ''
   loading.value = true
   try {
     if (side.value === 'mine') mine.value = await libraryBooks()
-    else spiral.value = await spiralRoom()
+    else {
+      spiral.value = await spiralRoom()
+      loadKept()
+    }
   } catch (e) {
     problem.value = String(e?.message ?? e)
   } finally {
@@ -133,6 +166,7 @@ onMounted(load)
           <article v-for="b in shown" :key="b.id ?? b.ref" class="card" :class="{ active: open && (open.id === b.id && b.id !== undefined || open.spiral?.ref === b.ref) }">
             <button class="open" @click="readBook(b)">
               <img v-if="b.coverUrl" class="cover" :src="b.coverUrl" :alt="b.title" loading="lazy" />
+              <span v-if="b.origin" class="badge" :title="`Kept from the Spiral Library (${b.origin})`">Spiral</span>
               <strong>{{ b.title }}</strong>
               <span v-if="b.subtitle" class="sub">{{ b.subtitle }}</span>
               <span class="line">{{ b.excerpt ?? b.summary }}</span>
@@ -155,6 +189,12 @@ onMounted(load)
           <h3>{{ open.title }}</h3>
           <p v-if="open.subtitle" class="sub">{{ open.subtitle }}</p>
           <p v-if="preview" class="preview">{{ preview }}</p>
+          <p v-if="keep !== 'none'" class="keep">
+            <button :class="{ primary: keep !== 'kept' }" :disabled="keep === 'kept' || keeping" @click="keepBook">
+              {{ keeping ? 'Keeping…' : KEEP_WORDS[keep] }}
+            </button>
+            <span v-if="keep === 'update'" class="dim">The Spiral Library has a newer edition.</span>
+          </p>
           <div class="text"><MarkdownText :text="open.body" size="reader" /></div>
         </template>
         <p v-else class="empty">Choose a book to read it here.</p>
@@ -328,6 +368,35 @@ h2 {
   margin: 0 0 4px;
   font-size: 18px;
   font-weight: 500;
+}
+.keep {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+.keep .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #07142e;
+  font-weight: 600;
+}
+.keep button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+.dim {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.badge {
+  align-self: flex-start;
+  padding: 1px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, var(--line));
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 11px;
+  letter-spacing: 0.06em;
 }
 .preview {
   padding: 8px 12px;

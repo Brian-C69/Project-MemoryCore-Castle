@@ -111,6 +111,9 @@ export const libraryRead = (id) => invoke('library_read', { id })
 export const libraryDelete = (id) => invoke('library_delete', { id })
 export const spiralRoom = () => invoke('spiral_room')
 export const spiralRead = (reference) => invoke('spiral_read', { reference })
+// Keep a Spiral book read whole in My books (again = update) -> My books; and ref -> edition kept
+export const spiralKeep = (reference) => invoke('spiral_keep', { reference })
+export const spiralKept = () => invoke('spiral_kept')
 // One memory page's markdown (only .md inside the memory folder).
 export const memoryRead = (file) => invoke('memory_read', { file })
 

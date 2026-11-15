@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterBooks, previewLine, priceOf, shelvesOf } from './library.js'
+import { filterBooks, keepState, previewLine, priceOf, shelvesOf } from './library.js'
 
 const books = [
   { shelf: 'pattern', title: 'Keys cannot destroy', excerpt: 'an agent key' },
@@ -31,5 +31,14 @@ describe('the library', () => {
     expect(priceOf({ free: true })).toBe('Free')
     expect(priceOf({ priceCents: 300, currency: 'usd' })).toBe('$3.00')
     expect(priceOf({ priceCents: 1000, currency: 'myr' })).toBe('10.00 MYR')
+  })
+  it('offers to keep a whole Spiral book, says when it is kept, and when a newer edition came', () => {
+    const book = { ref: 'architecture/books/keys', body: '# Keys', preview: false, updatedAt: '2026-11-15' }
+    expect(keepState(book, {})).toBe('keep')
+    expect(keepState(book, { 'architecture/books/keys': '2026-11-15' })).toBe('kept')
+    expect(keepState(book, { 'architecture/books/keys': '2026-11-01' })).toBe('update')
+    expect(keepState({ ...book, preview: true }, {})).toBe('none')
+    expect(keepState({ ...book, body: ' ' }, {})).toBe('none')
+    expect(keepState(null, {})).toBe('none')
   })
 })
