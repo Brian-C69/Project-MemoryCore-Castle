@@ -279,7 +279,7 @@ Everything lives in your MemoryCore folder (`media-generation/`, `music/`, and t
 
 ### How drawing works here
 
-Castle writes every Appearance drawing's prompt itself, straight from your notes: the look in `appearance/companion.md`, and the outfit's or hairstyle's own words. No AI has to read them, so drawing spends no conversation tokens. A line such as `Art style: soft watercolor illustration` in `companion.md` sets the art style. While `companion.md` still has Castle's starting words, **Redraw** is refused (it would draw a stranger); describe the look first, or use **Improve from image**, which follows your portrait.
+Castle writes every Appearance drawing's prompt itself, straight from your notes: the look in `appearance/companion.md`, and the outfit's or hairstyle's own words. No AI has to read them, so drawing spends no conversation tokens. A line such as `Art style: soft watercolor illustration` in `companion.md` sets the art style. While `companion.md` still has Castle's starting words, **Redraw** follows your portrait instead (the room says so under the buttons); with no portrait yet it is refused, because it would draw a stranger - describe the look first, or upload a picture.
 
 Then the app your companion thinks with decides how the picture is drawn:
 
