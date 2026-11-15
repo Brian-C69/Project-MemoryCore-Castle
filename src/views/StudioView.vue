@@ -216,8 +216,18 @@ h3 {
   align-items: stretch;
   gap: 14px;
 }
+.make-row .create {
+  /* the label changes with the power and what it can do (Create picture, Ask <companion>, Add the
+     ElevenLabs key, Working...): a fixed floor keeps the button, and the box beside it, from
+     shifting width as you switch powers or it starts working */
+  flex: 0 0 auto;
+  min-width: 190px;
+  white-space: nowrap;
+}
 .make-row textarea {
-  flex: 1;
+  /* fills what the fixed-width switch and create button leave behind, so it keeps one width as
+     you move between Picture, Video, Song and Voice instead of resizing with them */
+  flex: 1 1 320px;
   min-width: 260px;
   min-height: 56px;
   resize: vertical;
@@ -241,8 +251,12 @@ h3 {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-width: 96px;
-  padding: 8px 12px;
+  /* a fixed width, not a minimum: the pill below (Ready, Codex, VoiceStudio, Add a key) is a
+     different length for each power, and a minimum let the button - and everything to its right -
+     change width as you switched between them */
+  width: 112px;
+  flex-shrink: 0;
+  padding: 8px 6px;
   border: 0;
   border-right: 1px solid var(--line);
   border-radius: 0;
@@ -257,11 +271,13 @@ h3 {
 .power-name {
   font-size: 14px;
   letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 .pill {
   padding: 1px 8px;
   border-radius: 999px;
   font-size: 10px;
+  white-space: nowrap;
 }
 .pill.ready {
   background: color-mix(in srgb, var(--good) 30%, transparent);
