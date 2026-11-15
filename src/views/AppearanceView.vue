@@ -9,13 +9,18 @@ import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
 import { appearanceImport, appearanceLook, appearanceNew, appearanceWear, choosePicture, studioPowers } from '../api/castle.js'
 import { referenceLine, improvementLine, itemReferenceLine } from '../components/appearance.js'
-import { askImage as askCompanion } from '../api/ask.js'
+import { askImage } from '../api/ask.js'
 
 const props = defineProps({
   companion: { type: String, default: 'Your companion' },
   stamp: { type: Number, default: 0 },
 })
 const emit = defineEmits(['keys', 'show-chat'])
+// The way the last picture went ("codex", "companion" or "none"), for the line after asking.
+let lastWay = 'codex'
+const askCompanion = async (lines, label) => {
+  lastWay = await askImage(lines, label, props.companion)
+}
 
 const look = ref(null)
 const image = ref('')
@@ -66,7 +71,7 @@ watch(
   },
 )
 
-const STATE = { ready: 'Ready to draw', builtin: 'Codex available — checked when drawing', prompt: 'Codex unavailable — prompts are saved' }
+const STATE = { ready: 'Ready - drawn with your OpenAI key', builtin: 'Codex on your ChatGPT plan', prompt: 'Prompt only - add an OpenAI key or sign in to Codex' }
 const sep = computed(() => (look.value?.folder?.includes('/') ? '/' : '\\'))
 const path = (...parts) => [look.value.folder, ...parts].join(sep.value)
 
@@ -186,7 +191,14 @@ async function tryOn(again = false) {
 }
 
 function after(label) {
-  done.value = `Queued for Codex: ${label}. Watch it under Image requests; the picture appears here when it is done.`
+  if (lastWay === 'companion') {
+    done.value = `Asked ${props.companion}: ${label}. It tells you the cost and asks before it draws - answer in Chat; the picture appears here once it is saved.`
+    emit('show-chat')
+  } else if (lastWay === 'none') {
+    done.value = `Not drawn: ${label}. Sign in to Codex with ChatGPT, or think with Claude Code and add an OpenAI key in Settings > Keys. The prompt is saved under Image requests.`
+  } else {
+    done.value = `Queued for Codex: ${label}. Watch it under Image requests; the picture appears here when it is done.`
+  }
 }
 
 // Adds the outfit or hairstyle folder with its words and, when one was chosen, its reference image.
@@ -291,7 +303,7 @@ watch(() => props.stamp, load)
         <p v-if="tryOnLine" class="hint">{{ tryOnLine }}</p>
         <button :disabled="!!busy" @click="tryOn()">{{ !look.tryOn?.exists || look.tryOn.stale ? "Try on today's look" : "Show today's look" }}</button>
         <button v-if="look.tryOn?.exists && !look.tryOn.stale" :disabled="!!busy" @click="tryOn(true)">Draw again</button>
-        <p class="hint">Upload PNG, JPEG or WebP (up to 25 MB). Drawing uses Codex separately from your conversation. If unavailable, the prompt is saved; there is no automatic API fallback.</p>
+        <p class="hint">Upload PNG, JPEG or WebP (up to 25 MB). Pictures are drawn by Codex on your ChatGPT plan when it is signed in; otherwise {{ companion }} draws them with your OpenAI key (it tells you the cost and asks first). With neither, the prompt is saved.</p>
         <p class="hint">The look in words lives in <code>appearance/companion.md</code> - ask {{ companion }} to change it, or edit it yourself.</p>
       </section>
 
