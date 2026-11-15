@@ -195,6 +195,11 @@ pub struct Settings {
     /// Use VoiceStudio, a text-to-speech app the member runs on this same computer, as STUDIO's Voice
     /// power. Off until the member turns it on: Castle then never talks to it.
     pub voicestudio_on: bool,
+    /// For self-hosters: copy the main chat to the member's own Mira Inbox web app and type what the
+    /// phone sent into the companion's session. Off until switched on; the address is this computer's
+    /// own unless the member says otherwise.
+    pub inbox_bridge_on: bool,
+    pub inbox_bridge_url: Option<String>,
     /// Whether HOME shows the USAGE card at all. On by default; off hides the whole card and Castle
     /// asks neither CLI.
     pub show_usage_card: bool,
@@ -326,6 +331,8 @@ impl Default for Settings {
             display_clock: false,
             clock_format: "24h".into(),
             voicestudio_on: false,
+            inbox_bridge_on: false,
+            inbox_bridge_url: None,
             show_usage_card: true,
             show_claude_usage: true,
             show_codex_usage: true,
@@ -379,6 +386,7 @@ impl Settings {
         self.theme = clean(self.theme);
         self.room_companion_key_id = clean(self.room_companion_key_id);
         self.room_companion_name = clean(self.room_companion_name);
+        self.inbox_bridge_url = clean(self.inbox_bridge_url);
         self.last_seen_version = clean(self.last_seen_version);
         self.dev_root = clean(self.dev_root);
         // the tab order: plain ids only, each once
@@ -648,6 +656,8 @@ mod tests {
             display_clock: true,
             clock_format: "12h".into(),
             voicestudio_on: true,
+            inbox_bridge_on: true,
+            inbox_bridge_url: Some("https://inbox.example.test/mira-inbox".into()),
             show_usage_card: false,
             show_claude_usage: false,
             show_codex_usage: true,

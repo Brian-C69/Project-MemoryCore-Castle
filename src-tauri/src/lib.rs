@@ -39,6 +39,7 @@ mod providers;
 mod messages;
 mod oneshot;
 mod quota;
+mod inboxbridge;
 mod roomalert;
 mod roomdraw;
 mod roomread;
@@ -227,6 +228,7 @@ pub fn run() {
         .manage(providers::Control::default())
         .manage(providers::Images::default())
         .manage(messages::Pending::default())
+        .manage(inboxbridge::BridgeState::default())
         .manage(session::StoryHost::default())
         .manage(dev::DevHosts::default())
         .manage(dev::DevChats::default())
@@ -317,6 +319,7 @@ pub fn run() {
             studio::picture_way,
             studio::studio_delete,
             voicestudio::voicestudio_status,
+            inboxbridge::inbox_bridge_status,
             voicestudio::voicestudio_speak,
             appearance::appearance_look,
             appearance::appearance_new,
@@ -477,6 +480,7 @@ pub fn run() {
             world::restore(app.handle());
             world::watch_covered(app.handle());
             roomread::start(app.handle());
+            inboxbridge::start(app.handle());
             link::start(app.handle());
             db::start_with_castle(app.handle());
             Ok(())
