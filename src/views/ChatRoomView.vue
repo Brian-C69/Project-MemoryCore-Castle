@@ -39,6 +39,9 @@ const nameSaving = ref(false)
 const nameLine = ref('')
 const turnLog = ref('') // the companion's room turns, raw
 const presence = ref([])
+// IN THE ROOM shows this many rows before it scrolls on its own, so a busy room never pushes
+// the switches and YOUR PROFILE below it out of sight.
+const ROSTER_ROWS = 12
 const refused = ref(null)
 const draft = ref('')
 const files = ref({})
@@ -459,8 +462,8 @@ watch(() => props.visible, (on) => {
       </section>
 
       <aside class="side widget">
-        <h3>IN THE ROOM</h3>
-        <ul>
+        <h3>IN THE ROOM<span v-if="presence.length" class="count"> ({{ presence.length }})</span></h3>
+        <ul class="roster" :class="{ scrolls: presence.length > ROSTER_ROWS }">
           <li v-for="(p, index) in presence" :key="`${p.kind}:${p.name}:${index}`" :class="presenceState(p)">
             <span class="face small"><img v-if="faces[p.avatar]" :src="faces[p.avatar]" alt="" /><template v-else>{{ initial(p) }}</template></span>
             <span class="dot" role="img" :aria-label="presenceState(p)" :title="presenceState(p)">●</span>
@@ -831,6 +834,20 @@ li.online .dot, li.here .dot, li.active .dot {
   margin-left: 6px;
   font-size: 11px;
   color: var(--text-dim);
+}
+.count {
+  font-weight: 400;
+  color: var(--text-dim);
+}
+/* 12 rows (22px face + 6px row gap each) before the room's own scrollbar takes over, so a busy
+   room scrolls in place instead of pushing the switches and YOUR PROFILE further down the sidebar */
+.roster.scrolls {
+  max-height: calc(12 * 28px - 6px);
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-right: -4px;
+  scrollbar-color: var(--line) transparent;
+  scrollbar-width: thin;
 }
 .hint {
   margin: 0;

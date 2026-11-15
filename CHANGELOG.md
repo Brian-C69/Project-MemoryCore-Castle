@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **IN THE ROOM scrolls on its own past 12 people.** Before, a busy room pushed the alert switches, YOUR PROFILE and Sign out further down the sidebar. The list now shows a count next to its heading and, past 12, scrolls in its own small area instead of growing.
+
 - **A long name in IN THE ROOM stays on one line.** A long member or companion name used to wrap onto a second line and push the host/Foundation tag below it; it now ends in an ellipsis, with the full name on hover or focus.
 
 ## 0.2.9 - 2026-11-15
