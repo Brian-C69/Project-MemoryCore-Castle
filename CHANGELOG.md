@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **HOME's PROFILE tab now hears a theme change right away.** Changing the profile look in THEME and coming back to HOME while PROFILE was already the tab open there used to still show the old look, unlike the diary and story looks. THEME's saves now tell every tab the same way Settings' own saves do.
+
 ## 0.2.10 - 2026-11-15
 
 - **Keep a Spiral book in My books.** A book you read whole in the Spiral Library can be added to My books with one button (a Foundation member can keep every book), marked with a Spiral badge, and updated when a newer edition comes out. A preview is never kept.
