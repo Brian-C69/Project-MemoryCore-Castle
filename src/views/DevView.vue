@@ -95,10 +95,25 @@ async function openFolder() {
 
 // New project: the sheet clones or creates the repo, then the new folder opens as a tab
 const making = ref(false)
-async function made(folder) {
+// The setup sentence a new project's companion hears once, by folder, until its tab says it.
+const firstWords = ref({})
+async function made(folder, sentence = '') {
   making.value = false
-  if (folder) await openProject(folder)
+  if (!folder) return
+  if (sentence) firstWords.value = { ...firstWords.value, [folder]: sentence }
+  await openProject(folder)
 }
+function firstSaid(folder) {
+  const { [folder]: _, ...rest } = firstWords.value
+  firstWords.value = rest
+}
+// a tab closed before its companion heard its setup: the sentence goes with it
+watch(
+  () => state.value.tabs.map((t) => t.folder),
+  (open) => {
+    for (const folder of Object.keys(firstWords.value)) if (!open.includes(folder)) firstSaid(folder)
+  },
+)
 
 async function forget(folder) {
   problem.value = ''
@@ -224,6 +239,8 @@ onBeforeUnmount(() => {
         :companion="companion"
         :cli="cli"
         :settings-stamp="settingsStamp"
+        :first-words="firstWords[tab.folder] ?? ''"
+        @first-said="firstSaid(tab.folder)"
         @state="apply($event)"
         @running="markRunning(tab.slot, $event)"
         @settings="emit('settings', $event)"
@@ -239,7 +256,7 @@ onBeforeUnmount(() => {
     </div>
 
     <LiveServers v-if="serversOpen" :servers="servers" :tabs="tabs" @close="serversOpen = false" />
-    <NewProject v-if="making" @made="made" @close="making = false" />
+    <NewProject v-if="making" :companion="companion" @made="made" @close="making = false" />
   </div>
 </template>
 

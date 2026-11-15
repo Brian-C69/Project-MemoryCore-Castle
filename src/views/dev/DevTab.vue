@@ -22,9 +22,11 @@ const props = defineProps({
   settingsStamp: { type: Number, default: 0 },
   // this tab's live servers (started in its session, or running in its folder)
   servers: { type: Array, default: () => [] },
+  // a new project's setup sentence, typed once after the companion's first reply ends ('' = none)
+  firstWords: { type: String, default: '' },
 })
 // `state`: a fresh dev state (after Wake or Close session); `running`: the session started or ended
-const emit = defineEmits(['state', 'running', 'settings', 'setup'])
+const emit = defineEmits(['state', 'running', 'settings', 'setup', 'first-said'])
 
 const panel = ref(null)
 const logOpen = ref(false)
@@ -66,6 +68,17 @@ function onRunning(on) {
 function say(text) {
   return typeLine((data) => panel.value?.writeToSession(data), text)
 }
+
+// A new project's companion hears its setup once: after it has woken and its first reply ended.
+let sawWork = false
+watch(busy, (now, before) => {
+  if (now) sawWork = true
+  if (props.firstWords && running.value && sawWork && before && !now) {
+    const words = props.firstWords
+    emit('first-said')
+    say(words)
+  }
+})
 
 function saveProject() {
   problem.value = ''

@@ -4,11 +4,12 @@ import { computed, onMounted, ref, watch } from 'vue'
 import ModalSheet from '../../components/ModalSheet.vue'
 import { backupSignIn, chooseFolder, openUrl } from '../../api/castle.js'
 import { devClone, devCreate, devGithub, devKinds, devRoot, devSetRoot } from '../../api/devnew.js'
-import { canSubmit, githubLine, landingFolder, nameFromLink, validRepoName } from './newproject.js'
+import { canSubmit, githubLine, landingFolder, nameFromLink, OTHER, setupSentence, STACK, stackPreview, validRepoName } from './newproject.js'
 
 // New project, from the DEV room's left column: a repo cloned from a link, or a new repo made on
 // GitHub, either way into the projects folder (<root>\<kind>\<name>). The name and the owner are
 // the member's, never guessed beyond the link's own name. `made` gives back the new folder.
+defineProps({ companion: { type: String, default: 'Your companion' } })
 const emit = defineEmits(['made', 'close'])
 
 const root = ref(null)
@@ -17,6 +18,11 @@ const suggested = ref(false)
 const rootRead = ref(false)
 const kinds = ref([])
 const kind = ref('')
+// the stack the member's companion is asked to set up (optional: none by default)
+const picks = ref(Object.fromEntries(STACK.map((s) => [s.id, ''])))
+const others = ref(Object.fromEntries(STACK.map((s) => [s.id, ''])))
+const stackOptions = (s) => [{ value: '', label: 'none' }, ...s.options, { value: OTHER, label: 'Other...' }]
+const preview = computed(() => stackPreview(picks.value, others.value))
 const mode = ref('link')
 const link = ref('')
 const name = ref('')
@@ -96,7 +102,7 @@ async function make() {
         ? await devClone(link.value.trim(), kind.value, name.value.trim())
         : await devCreate(owner.value, name.value.trim(), isPrivate.value, kind.value)
     suggested.value = false
-    emit('made', folder)
+    emit('made', folder, setupSentence(picks.value, others.value))
   } catch (reason) {
     problem.value = String(reason)
   } finally {
@@ -189,6 +195,18 @@ onMounted(async () => {
           </label>
 
           <p class="landing"><span>Folder</span><code>{{ landing }}</code></p>
+
+          <fieldset class="stack">
+            <legend>Stack (optional)</legend>
+            <div class="stack-grid">
+              <label v-for="s in STACK" :key="s.id" class="field">
+                <span>{{ s.label }}</span>
+                <GlassSelect v-model="picks[s.id]" :options="stackOptions(s)" :disabled="working" :aria-label="s.label" />
+                <input v-if="picks[s.id] === OTHER" v-model="others[s.id]" maxlength="60" :placeholder="`Your ${s.label.toLowerCase()}`" :disabled="working" :aria-label="`Other ${s.label.toLowerCase()}`" />
+              </label>
+            </div>
+            <p class="hint">{{ preview ? `${companion} will set up: ${preview}` : 'Leave it all on none to start with an empty project.' }}</p>
+          </fieldset>
         </div>
 
         <p v-if="problem" class="problem" role="alert">{{ problem }}</p>
@@ -325,6 +343,24 @@ code {
   accent-color: var(--accent);
 }
 
+.stack {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.stack legend {
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.stack-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
 .hint {
   margin: -4px 0 0 70px;
   font-size: 12px;
