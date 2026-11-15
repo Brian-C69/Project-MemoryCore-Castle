@@ -150,7 +150,7 @@ onMounted(load)
     </header>
     <p v-if="problem" class="problem" role="alert">{{ problem }}</p>
 
-    <div class="room">
+    <div class="library-room">
       <nav class="shelves widget" aria-label="Shelves">
         <button v-for="s in shelves" :key="s.key" :class="{ on: shelf === s.key }" @click="shelf = s.key">
           <span>{{ s.label }}</span><span class="count">{{ s.count }}</span>
@@ -259,7 +259,7 @@ h2 {
 .spacer {
   flex: 1;
 }
-.room {
+.library-room {
   display: grid;
   grid-template-columns: 200px minmax(0, 1.2fr) minmax(0, 1fr);
   gap: 14px;
@@ -430,7 +430,7 @@ button {
   cursor: pointer;
 }
 @media (max-width: 1000px) {
-  .room { grid-template-columns: 160px minmax(0, 1fr); }
+  .library-room { grid-template-columns: 160px minmax(0, 1fr); }
   .reader { grid-column: 1 / -1; min-height: 300px; }
 }
 </style>
