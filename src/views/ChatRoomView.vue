@@ -501,7 +501,8 @@ watch(() => props.visible, (on) => {
         <ul>
           <li v-for="(p, index) in presence" :key="`${p.kind}:${p.name}:${index}`" :class="presenceState(p)">
             <span class="face small"><img v-if="faces[p.avatar]" :src="faces[p.avatar]" alt="" /><template v-else>{{ initial(p) }}</template></span>
-            <span class="dot" role="img" :aria-label="presenceState(p)" :title="presenceState(p)">●</span> <span :title="speaker(p).title" :tabindex="speaker(p).title ? 0 : undefined" :aria-label="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : undefined">{{ speaker(p).name }}<span v-if="['assistant', 'member_assistant'].includes(p.kind)"> ✦</span></span>
+            <span class="dot" role="img" :aria-label="presenceState(p)" :title="presenceState(p)">●</span>
+            <span class="name" :title="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : speaker(p).name" :tabindex="speaker(p).title ? 0 : undefined" :aria-label="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : undefined">{{ speaker(p).name }}<span v-if="['assistant', 'member_assistant'].includes(p.kind)"> ✦</span></span>
             <span v-if="p.kind === 'host'" class="tag">host</span>
             <span v-else-if="p.foundation" class="tag">Foundation</span>
           </li>
@@ -868,6 +869,20 @@ ul {
   list-style: none;
   font-size: 14px;
 }
+ul li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* a long room name is cut with an ellipsis rather than wrapping onto a second line and pushing
+   the Foundation/host tag below it; the full name is still in the title on hover or focus */
+ul li .name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
 .dot {
   color: var(--text-dim);
 }
@@ -875,6 +890,7 @@ li.online .dot, li.here .dot, li.active .dot {
   color: var(--good);
 }
 .tag {
+  flex-shrink: 0;
   margin-left: 6px;
   font-size: 11px;
   color: var(--text-dim);
