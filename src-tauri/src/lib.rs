@@ -363,6 +363,7 @@ pub fn run() {
             roomdraw::room_pictures_status,
             roomturn::room_card,
             roomturn::room_card_save,
+            roomturn::ollama_models,
             worlds::worlds_mine,
             worlds::world_new,
             worlds::world_delete,

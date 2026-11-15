@@ -208,6 +208,8 @@ export const roomLog = () => invoke('room_log')
 export const roomPicturesStatus = () => invoke('room_pictures_status')
 export const roomCard = () => invoke('room_card')
 export const roomCardSave = (text) => invoke('room_card_save', { text })
+// the member's own pulled Ollama models, for the room chat's local-model switch (private)
+export const ollamaModels = (url) => invoke('ollama_models', { url })
 
 // Updates (official builds only). -> { official, version, available, notes, message }
 export const updateCheck = () => invoke('update_check')

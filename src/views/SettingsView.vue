@@ -25,6 +25,7 @@ import {
   keySave,
   keyStatus,
   keyTest,
+  ollamaModels,
   openUrl,
   releasesPage,
   roomCard,
@@ -99,8 +100,40 @@ const drawsWith = computed(() => {
   return ''
 })
 watch(tab, (now) => {
-  if (now === 'chat') loadPictures()
+  if (now === 'chat') {
+    loadPictures()
+    if (settings.value?.roomChatLocalModel) refreshOllamaModels()
+  }
 })
+
+// The room chat's local model (private): the names Ollama already has pulled, instead of a blind
+// text box. Refreshed on entering the tab, on toggling the switch on, and on demand.
+const ollamaModelNames = ref([])
+const ollamaModelsBusy = ref(false)
+const ollamaModelsProblem = ref('')
+// keeps the saved model selectable even if the fetch failed or it isn't (yet) in the pulled list
+const ollamaModelOptions = computed(() => {
+  const chosen = settings.value?.roomChatOllamaModel
+  const names = chosen && !ollamaModelNames.value.includes(chosen) ? [chosen, ...ollamaModelNames.value] : ollamaModelNames.value
+  return names.map((name) => ({ value: name, label: name }))
+})
+async function refreshOllamaModels(afterUrlChange = false) {
+  if (afterUrlChange) await save({ roomChatOllamaUrl: settings.value.roomChatOllamaUrl })
+  ollamaModelsBusy.value = true
+  ollamaModelsProblem.value = ''
+  try {
+    ollamaModelNames.value = await ollamaModels(settings.value?.roomChatOllamaUrl ?? '')
+  } catch (reason) {
+    ollamaModelNames.value = []
+    ollamaModelsProblem.value = String(reason?.message ?? reason)
+  } finally {
+    ollamaModelsBusy.value = false
+  }
+}
+async function toggleRoomChatLocalModel(on) {
+  await save({ roomChatLocalModel: on })
+  if (on) refreshOllamaModels()
+}
 
 async function openCard() {
   try {
@@ -470,13 +503,17 @@ onMounted(async () => {
 
           <h3 class="with-tip">Local model for replies <HelpTip :text="`For self-hosters who run their own Ollama. Only the words ${companionLabel} speaks in the room move to it; drawing a picture there still goes through Codex or your OpenAI key either way, since a local chat model cannot draw.`" /></h3>
           <div class="setting-row">
-            <label class="toggle"><input type="checkbox" :checked="!!settings.roomChatLocalModel" :disabled="!!busy" @change="save({ roomChatLocalModel: $event.target.checked })" /> Reply in the room with a local model instead of {{ settings.cli === 'claude' ? 'Claude Code' : 'Codex' }}</label>
+            <label class="toggle"><input type="checkbox" :checked="!!settings.roomChatLocalModel" :disabled="!!busy" @change="toggleRoomChatLocalModel($event.target.checked)" /> Reply in the room with a local model instead of {{ settings.cli === 'claude' ? 'Claude Code' : 'Codex' }}</label>
           </div>
           <template v-if="settings.roomChatLocalModel">
             <div class="row">
-              <label class="wide">Ollama address <input v-model="settings.roomChatOllamaUrl" maxlength="200" placeholder="http://127.0.0.1:11434" @change="save({ roomChatOllamaUrl: settings.roomChatOllamaUrl })" /></label>
-              <label class="wide">Model <input v-model="settings.roomChatOllamaModel" maxlength="80" placeholder="llama3" @change="save({ roomChatOllamaModel: settings.roomChatOllamaModel })" /></label>
+              <label class="wide">Ollama address <input v-model="settings.roomChatOllamaUrl" maxlength="200" placeholder="http://127.0.0.1:11434" @change="refreshOllamaModels(true)" /></label>
+              <label class="wide">Model
+                <GlassSelect :model-value="settings.roomChatOllamaModel ?? ''" :options="ollamaModelOptions" :disabled="!!busy" placeholder="Choose a model" aria-label="Local model" @update:model-value="(m) => save({ roomChatOllamaModel: m })" />
+              </label>
+              <button type="button" :disabled="ollamaModelsBusy" @click="refreshOllamaModels(true)">{{ ollamaModelsBusy ? 'Checking…' : 'Refresh' }}</button>
             </div>
+            <p v-if="ollamaModelsProblem" class="problem">{{ ollamaModelsProblem }}</p>
             <p class="hint">Your Claude Code or Codex usage is never spent on room replies while this is on. {{ companionLabel }} still only answers under the rule above, and nothing from your memory reaches this model - the same room rules and public card any CLI would get.</p>
           </template>
 
