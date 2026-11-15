@@ -26,6 +26,9 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'castle-common.ps1')
 
+# the prompt itself, or a UTF-8 file holding it (Castle passes a file, so no quote is ever lost)
+$Prompt = Resolve-CastleText $Prompt
+
 $Model = 'gpt-image-2'
 
 # Rough USD per image by size and quality. These are ESTIMATES taken from

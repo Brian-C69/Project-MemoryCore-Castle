@@ -44,14 +44,14 @@ pub fn image_mode(cli: Cli, has_openai_key: bool) -> &'static str {
 }
 
 /// How an APPEARANCE or STUDIO picture is drawn: "codex" (a separate Codex job on the member's
-/// ChatGPT plan), "companion" (the request goes to a Claude Code companion, which fills the style
-/// from the memory and draws with castle-image.ps1 and the OpenAI key) or "none" (the prompt is
-/// saved). The plan comes first: it costs the member nothing more.
-pub fn picture_way(codex_chatgpt: bool, cli: Cli, has_openai_key: bool) -> &'static str {
+/// ChatGPT plan), "key" (Castle runs castle-look.ps1 / castle-image.ps1 itself with the OpenAI key:
+/// no AI writes the prompt, whichever CLI the companion thinks with; the key still never reaches
+/// Codex) or "none" (the prompt is saved). The plan comes first: it costs the member nothing more.
+pub fn picture_way(codex_chatgpt: bool, has_openai_key: bool) -> &'static str {
     if codex_chatgpt {
         "codex"
-    } else if cli == Cli::Claude && has_openai_key {
-        "companion"
+    } else if has_openai_key {
+        "key"
     } else {
         "none"
     }
@@ -112,13 +112,11 @@ mod tests {
     }
 
     #[test]
-    fn a_picture_goes_to_the_plan_first_then_the_key_through_the_companion() {
-        assert_eq!(picture_way(true, Cli::Claude, true), "codex");
-        assert_eq!(picture_way(true, Cli::Codex, false), "codex");
-        assert_eq!(picture_way(false, Cli::Claude, true), "companion");
-        // the key never reaches Codex (it would switch Codex to paid API billing)
-        assert_eq!(picture_way(false, Cli::Codex, true), "none");
-        assert_eq!(picture_way(false, Cli::Claude, false), "none");
+    fn a_picture_goes_to_the_plan_first_then_to_the_key() {
+        assert_eq!(picture_way(true, true), "codex");
+        assert_eq!(picture_way(true, false), "codex");
+        assert_eq!(picture_way(false, true), "key");
+        assert_eq!(picture_way(false, false), "none");
     }
 
     #[test]

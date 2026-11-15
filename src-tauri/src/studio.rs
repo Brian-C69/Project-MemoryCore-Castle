@@ -123,33 +123,32 @@ pub fn studio_library(store: State<SettingsStore>) -> Library {
 }
 
 /// The Pictures card's state for a way to draw (`env::picture_way`): the plan is "builtin", the
-/// companion with the key is "ready", nothing is "prompt". Pure.
+/// key is "ready", nothing is "prompt". Pure.
 pub fn picture_state(way: &str) -> &'static str {
     match way {
         "codex" => "builtin",
-        "companion" => "ready",
+        "key" => "ready",
         _ => "prompt",
     }
 }
 
 /// How the next APPEARANCE or STUDIO picture would be drawn. Codex is asked whether it is signed in
 /// with ChatGPT (a process, so off the main thread); an installed Codex alone proves nothing.
-async fn current_picture_way(store: &SettingsStore) -> &'static str {
-    let cli = store.get().cli;
+async fn current_picture_way() -> &'static str {
     let has_key = key::load("openai").is_some();
     let codex = tauri::async_runtime::spawn_blocking(crate::providers::codex_signed_in).await.unwrap_or(false);
-    crate::env::picture_way(codex, cli, has_key)
+    crate::env::picture_way(codex, has_key)
 }
 
 #[tauri::command]
-pub async fn picture_way(store: State<'_, SettingsStore>) -> Result<&'static str, String> {
-    Ok(current_picture_way(&store).await)
+pub async fn picture_way() -> Result<&'static str, String> {
+    Ok(current_picture_way().await)
 }
 
 #[tauri::command]
 pub async fn studio_powers(store: State<'_, SettingsStore>) -> Result<Powers, String> {
     let mut available = powers(store.get().cli, &|name| key::load(name).is_some());
-    available.image = picture_state(current_picture_way(&store).await);
+    available.image = picture_state(current_picture_way().await);
     Ok(available)
 }
 
@@ -259,7 +258,7 @@ mod tests {
     #[test]
     fn the_pictures_card_keeps_its_three_states() {
         assert_eq!(picture_state("codex"), "builtin");
-        assert_eq!(picture_state("companion"), "ready");
+        assert_eq!(picture_state("key"), "ready");
         assert_eq!(picture_state("none"), "prompt");
     }
 }
