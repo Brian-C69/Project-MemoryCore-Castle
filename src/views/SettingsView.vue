@@ -1,6 +1,7 @@
 <script setup>
 // Settings: everything setup asked, changeable any time - the memory folder and companion, the
 // keys (masked, Show, Test, Remove), quick actions, the room, backup, startup and updates.
+import GlassSelect from '../components/GlassSelect.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import ModalSheet from '../components/ModalSheet.vue'
 import BackupPanel from '../components/BackupPanel.vue'
@@ -452,9 +453,7 @@ onMounted(async () => {
           <template v-if="settings.roomPicturesOn && pictures?.way !== 'none'">
             <div class="setting-row">
               <label class="toggle">Pictures a day
-                <select class="per-day" :value="settings.roomPicturesPerDay ?? 1" :disabled="!!busy" @change="savePictures({ roomPicturesPerDay: Number($event.target.value) })">
-                  <option v-for="n in 6" :key="n - 1" :value="n - 1">{{ n - 1 }}</option>
-                </select>
+                <GlassSelect class="per-day" :model-value="settings.roomPicturesPerDay ?? 1" :options="[0, 1, 2, 3, 4, 5].map((n) => ({ value: n, label: String(n) }))" :disabled="!!busy" aria-label="Pictures a day" @update:model-value="(n) => savePictures({ roomPicturesPerDay: Number(n) })" />
               </label>
               <HelpTip text="Your own limit, 0 to 5 a day. The room keeps its own count too and refuses past Kiyo's cap, whichever comes first." />
             </div>
@@ -505,10 +504,7 @@ onMounted(async () => {
       <section v-else-if="tab === 'startup'" class="pane">
         <label class="toggle"><input type="checkbox" :checked="!!settings.displayClock" :disabled="!!busy" @change="save({ displayClock: $event.target.checked })" /> Display clock</label>
         <label class="clock-format">Clock format
-          <select :value="settings.clockFormat || '24h'" :disabled="!settings.displayClock || !!busy" @change="save({ clockFormat: $event.target.value })">
-            <option value="24h">24-hour (14:30)</option>
-            <option value="12h">12-hour (2:30 PM)</option>
-          </select>
+          <GlassSelect :model-value="settings.clockFormat || '24h'" :options="[{ value: '24h', label: '24-hour (14:30)' }, { value: '12h', label: '12-hour (2:30 PM)' }]" :disabled="!settings.displayClock || !!busy" aria-label="Clock format" @update:model-value="(f) => save({ clockFormat: f })" />
         </label>
         <p class="hint">Shows your local time in the top-right corner, just before the music controls.</p>
         <label class="toggle"><input type="checkbox" :checked="settings.startWithWindows" @change="save({ startWithWindows: $event.target.checked })" /> Start Castle when Windows starts</label>
@@ -605,19 +601,6 @@ input.wide {
   flex: 1;
 }
 .clock-format { align-self: flex-start; }
-.clock-format select {
-  width: auto;
-  max-width: 100%;
-  min-height: 34px;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-background);
-  color: var(--text);
-  font: inherit;
-}
-.clock-format select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.clock-format select:disabled { opacity: .45; cursor: not-allowed; }
 label.toggle {
   flex-direction: row;
   align-items: center;
@@ -646,17 +629,6 @@ label.toggle {
 .alert-when input[type='radio'] {
   padding: 0;
   accent-color: var(--accent);
-}
-select.per-day {
-  width: auto;
-  min-height: 30px;
-  margin-left: 8px;
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-background);
-  color: var(--text);
-  font: inherit;
 }
 .alert-when:disabled {
   opacity: 0.5;

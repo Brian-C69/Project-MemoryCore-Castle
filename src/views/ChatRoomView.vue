@@ -5,6 +5,7 @@
 // Until the member is in, the room shows its guide door. The companion takes its own turns in
 // Castle's core (roomturn.rs: a room-only run with no tools) - nothing from the room ever reaches
 // its private main session; LOG shows those turns.
+import GlassSelect from '../components/GlassSelect.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../components/roomsteps.js'
 import { listen } from '@tauri-apps/api/event'
@@ -516,11 +517,7 @@ watch(() => props.visible, (on) => {
           <span class="toggle-track" :class="{ enabled: haveCompanionKey }" aria-hidden="true"><span class="toggle-thumb"></span></span>
         </button>
         <label for="room-participation" class="hint participation-label">Participation rule</label>
-        <select id="room-participation" class="participation-select" :value="mode" :disabled="!haveCompanionKey || roomSaving" @change="changeParticipation($event.target.value)">
-          <option value="off">Listening only</option>
-          <option value="named">When named</option>
-          <option value="joins">Joins in</option>
-        </select>
+        <GlassSelect id="room-participation" class="participation-select" :model-value="mode" :options="[{ value: 'off', label: 'Listening only' }, { value: 'named', label: 'When named' }, { value: 'joins', label: 'Joins in' }]" :disabled="!haveCompanionKey || roomSaving" @update:model-value="changeParticipation" />
         <p class="hint">{{ !haveCompanionKey ? `Switch on to let ${companion} enter, then choose a rule.` : mode === 'off' ? `${companion} listens without posting replies.` : mode === 'named' ? `${companion} replies when someone mentions its name.` : `${companion} may join the conversation on your usage, without sharing anything private.` }}</p>
         <p v-if="doorProblem" class="problem">{{ doorProblem }}</p>
         <button class="chat-settings-open" @click="emit('settings', 'chat')">Chat settings</button>

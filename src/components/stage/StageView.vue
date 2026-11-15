@@ -1,6 +1,7 @@
 <script setup>
 // The STORY stage: the shared engine (useStage) and bar, and the look the member chose. Every
 // look draws the same beat; only the layout differs (his rule: isolate layout, share logic).
+import GlassSelect from '../GlassSelect.vue'
 import { computed, reactive } from 'vue'
 import { useStage } from './useStage.js'
 import { LOOKS } from './stage.js'
@@ -55,9 +56,7 @@ const hasCinema = computed(() => ['classic', 'book', 'jrpg'].includes(props.look
       <span v-if="st.s.waiting" class="ready">The next scene is ready - click to continue</span>
       <label class="look-pick">
         Look
-        <select :value="look" @change="emit('look', $event.target.value)">
-          <option v-for="l in LOOKS" :key="l.id" :value="l.id">{{ l.title }}</option>
-        </select>
+        <GlassSelect :model-value="look" :options="LOOKS.map((l) => ({ value: l.id, label: l.title }))" aria-label="Look" @update:model-value="(v) => emit('look', v)" />
       </label>
       <button v-if="hasCinema" :class="{ on: st.s.cinema }" title="Only the scene and the words" @click="st.s.cinema = !st.s.cinema">Cinema</button>
       <button :class="{ on: st.s.music }" :title="st.s.music ? 'Music on' : 'Music off'" @click="st.s.music = !st.s.music">♪</button>
@@ -103,19 +102,6 @@ const hasCinema = computed(() => ['classic', 'book', 'jrpg'].includes(props.look
   background: rgba(8, 12, 34, 0.85);
 }
 .bar button,
-.bar select {
-  padding: 4px 10px;
-  border: 1px solid rgba(160, 170, 255, 0.25);
-  border-radius: 8px;
-  background: none;
-  color: #e3e1fb;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.bar select {
-  background: rgba(0, 0, 0, 0.3);
-}
 .bar button.on {
   border-color: #9fc4ff;
   color: #9fc4ff;

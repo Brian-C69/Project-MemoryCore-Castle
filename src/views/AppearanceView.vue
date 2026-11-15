@@ -3,6 +3,7 @@
 // sheets, today's outfit and hair, and Try on. A drawing is queued by its parts and castle-look.ps1
 // writes its prompt from the notes: Codex draws it on the ChatGPT plan, or Castle draws it with the
 // OpenAI key; with neither the prompt is saved and Castle says so. No AI reads the notes for it.
+import GlassSelect from '../components/GlassSelect.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
@@ -353,9 +354,7 @@ watch(() => props.stamp, load)
       <!-- the drawing bar: how the next picture is drawn -->
       <section class="drawing widget">
         <label class="inline">QUALITY
-          <select v-model="quality" :disabled="!!busy" aria-label="Picture quality">
-            <option v-for="q in QUALITIES" :key="q.id" :value="q.id">{{ qualityLabel(q) }}</option>
-          </select>
+          <GlassSelect v-model="quality" :options="QUALITIES.map((q) => ({ value: q.id, label: qualityLabel(q) }))" :disabled="!!busy" aria-label="Picture quality" />
         </label>
         <span class="divider" aria-hidden="true"></span>
         <label class="inline grow">CHANGES FOR THE NEXT DRAWING
@@ -612,8 +611,7 @@ h3,
 
 label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 input,
-textarea,
-select {
+textarea {
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;

@@ -2,6 +2,7 @@
 // WORLD: a settings room. Each of the member's other screens can show a world - the isles, a
 // world made of model pieces, a slideshow - with its own camera, switched on or off here. No
 // world is drawn in this room unless the member asks for the preview.
+import GlassSelect from '../components/GlassSelect.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WorldStage from '../worlds/WorldStage.vue'
 import { allWorlds, DEFAULT_WORLD, findWorld } from '../worlds/registry.js'
@@ -325,16 +326,12 @@ watch(
           <template v-if="!row.screen.isMain">
             <label class="field">
               <span>WORLD</span>
-              <select :value="row.entry.world" @change="setWorld(row, $event.target.value)">
-                <option v-for="w in worlds" :key="w.id" :value="w.id" :disabled="!ready(w)">{{ optionLabel(w) }}</option>
-              </select>
+              <GlassSelect :model-value="row.entry.world" :options="worlds.map((w) => ({ value: w.id, label: optionLabel(w), disabled: !ready(w) }))" aria-label="World" @update:model-value="(v) => setWorld(row, v)" />
             </label>
             <label class="field">
               <span>CAMERA</span>
-              <select v-if="kindOf(row.entry.world) === '3d'" :value="row.entry.camera" @change="change(row, { camera: $event.target.value })">
-                <option v-for="c in CAMERAS" :key="c.id" :value="c.id">{{ c.title }}</option>
-              </select>
-              <select v-else disabled><option>Slideshow</option></select>
+              <GlassSelect v-if="kindOf(row.entry.world) === '3d'" :model-value="row.entry.camera" :options="CAMERAS.map((c) => ({ value: c.id, label: c.title }))" aria-label="Camera" @update:model-value="(v) => change(row, { camera: v })" />
+              <GlassSelect v-else model-value="slideshow" :options="[{ value: 'slideshow', label: 'Slideshow' }]" disabled aria-label="Camera" />
             </label>
             <button @click.stop="identify(row)">Identify</button>
             <div class="menu-anchor">
@@ -549,7 +546,6 @@ h2 {
   color: var(--text-dim);
   letter-spacing: 0.08em;
 }
-select,
 input[type='number'] {
   padding: 6px 8px;
   border: 1px solid var(--line);
@@ -558,9 +554,6 @@ input[type='number'] {
   color: var(--text);
   font: inherit;
   font-size: 13px;
-}
-select {
-  min-width: 170px;
 }
 input[type='number'] {
   width: 64px;

@@ -1,4 +1,5 @@
 <script setup>
+import GlassSelect from '../../components/GlassSelect.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import ModalSheet from '../../components/ModalSheet.vue'
 import { backupSignIn, chooseFolder, openUrl } from '../../api/castle.js'
@@ -167,9 +168,7 @@ onMounted(async () => {
             </p>
             <label class="field">
               <span>Owner</span>
-              <select v-model="owner" :disabled="working || line !== 'ready' || !owners.length">
-                <option v-for="o in owners" :key="o" :value="o">{{ o }}</option>
-              </select>
+              <GlassSelect v-model="owner" :options="owners" :disabled="working || line !== 'ready' || !owners.length" aria-label="Owner" />
             </label>
           </template>
 
@@ -186,10 +185,7 @@ onMounted(async () => {
 
           <label class="field">
             <span>Kind</span>
-            <select v-model="kind" :disabled="working">
-              <option value="">(none - straight in the projects folder)</option>
-              <option v-for="k in kinds" :key="k" :value="k">{{ k }}</option>
-            </select>
+            <GlassSelect v-model="kind" :options="[{ value: '', label: '(none - straight in the projects folder)' }, ...kinds]" :disabled="working" aria-label="Kind" />
           </label>
 
           <p class="landing"><span>Folder</span><code>{{ landing }}</code></p>
@@ -309,31 +305,13 @@ code {
 }
 
 .field input,
-.field select {
-  flex: 1;
-  min-width: 0;
-  padding: 7px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.22);
-  color: var(--text);
-  font: inherit;
-}
 
-.field select option {
-  background: #14103a;
-  color: var(--text);
-}
 
 .field input[aria-invalid='true'] {
   border-color: var(--warn);
 }
 
 .field input:focus-visible,
-.field select:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
 
 .check {
   display: flex;

@@ -1,4 +1,5 @@
 <script setup>
+import GlassSelect from '../../components/GlassSelect.vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { devGitCommit, devGitDiff, devGitLog, devGitPush, devGitRemote, devGitShow, devGitStatus } from '../../api/devgit.js'
 import { devConnect, devGitInit, devGithub } from '../../api/devnew.js'
@@ -329,9 +330,7 @@ defineExpose({ refresh })
         <template v-else>
           <label class="field">
             <span>Owner</span>
-            <select v-model="connectOwner" :disabled="working || !owners.length">
-              <option v-for="o in owners" :key="o" :value="o">{{ o }}</option>
-            </select>
+            <GlassSelect v-model="connectOwner" :options="owners" :disabled="working || !owners.length" aria-label="Owner" />
           </label>
           <label class="field">
             <span>Name</span>
@@ -760,31 +759,13 @@ ul {
 }
 
 .field input,
-.field select {
-  flex: 1;
-  min-width: 0;
-  padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.22);
-  color: var(--text);
-  font: inherit;
-}
 
-.field select option {
-  background: #14103a;
-  color: var(--text);
-}
 
 .field input[aria-invalid='true'] {
   border-color: var(--warn);
 }
 
 .field input:focus-visible,
-.field select:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
 
 .check {
   display: flex;

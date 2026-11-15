@@ -4,6 +4,7 @@
 // on the stage's bar). The story's own session (in <memory>/adventures, with Castle's rulebook)
 // runs behind it - its terminal stays alive behind Log, and opens by itself when the companion
 // needs waking.
+import GlassSelect from '../components/GlassSelect.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import TerminalPanel from '../components/TerminalPanel.vue'
@@ -217,10 +218,10 @@ watch(() => props.visible, (on) => on && loadWorlds())
         <label class="field">Hero name <input v-model="setup.hero" :placeholder="member || 'Your hero'" maxlength="40" /></label>
         <div class="choices">
           <label class="field">Class
-            <select v-model="setup.heroClass"><option v-for="c in CLASSES" :key="c">{{ c }}</option></select>
+            <GlassSelect v-model="setup.heroClass" :options="CLASSES" aria-label="Hero class" />
           </label>
           <label class="field">World
-            <select v-model="setup.world"><option v-for="w in WORLDS" :key="w">{{ w }}</option></select>
+            <GlassSelect v-model="setup.world" :options="WORLDS" aria-label="World" />
           </label>
         </div>
         <button class="primary" @click="begin">Open the portal</button>
@@ -349,8 +350,7 @@ label {
   flex-direction: column;
   gap: 4px;
 }
-input:not([type='radio']),
-select {
+input:not([type='radio']) {
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
