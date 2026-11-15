@@ -331,6 +331,23 @@ fn ollama_address(url: &str) -> String {
     if url.is_empty() { "http://127.0.0.1:11434".into() } else { url.to_string() }
 }
 
+/// The model names Ollama already has pulled, so Settings can offer a list instead of a blind
+/// text box - private, for the member's own local-model switch only.
+#[tauri::command]
+pub fn ollama_models(url: String) -> Result<Vec<String>, String> {
+    let client = reqwest::blocking::Client::builder().timeout(Duration::from_secs(5)).build().map_err(|_| "The call to Ollama could not start.".to_string())?;
+    let answer = client.get(format!("{}/api/tags", ollama_address(&url))).send().map_err(|_| format!("{} did not answer. Is Ollama running?", ollama_address(&url)))?;
+    if !answer.status().is_success() {
+        return Err(format!("{} refused the request.", ollama_address(&url)));
+    }
+    let body: Value = answer.json().map_err(|_| "Ollama sent something unreadable.".to_string())?;
+    let names: Vec<String> = body.get("models").and_then(Value::as_array).into_iter().flatten().filter_map(|m| m.get("name").and_then(Value::as_str)).map(str::to_string).collect();
+    if names.is_empty() {
+        return Err("No models are pulled yet.".into());
+    }
+    Ok(names)
+}
+
 /// A room turn answered by the member's own local Ollama instead of their CLI, for self-hosters
 /// who would rather the chat room not spend their Claude Code or Codex usage: the same rules as the
 /// system prompt, the same handed lines as the one message, a plain text answer back, so every
