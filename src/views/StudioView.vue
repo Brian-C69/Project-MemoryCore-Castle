@@ -24,19 +24,24 @@ const lib = ref({ images: [], videos: [], songs: [], voices: [], saved: [], back
 
 // ---------- the Make bar ----------
 const power = ref('image')
+// true once the Picture power's real state (it asks Codex itself, which can take a moment) has
+// been read at least once this mount - until then its pill and button read "Checking..." rather
+// than defaulting to "missing"
+const powersLoaded = ref(false)
 const brief = ref('')
 const making = ref(false)
 const makeProblem = ref('')
 const makeDone = ref('')
 const voiceClip = ref('')
-const action = computed(() => makeAction(power.value, powers.value, voiceUp.value, props.companion))
+const action = computed(() => makeAction(power.value, powers.value, voiceUp.value, props.companion, powersLoaded.value))
 const placeholder = computed(() => ({ image: 'Describe the picture…', video: 'Describe the short video…', song: 'What should the song be about…', voice: 'Type the words to say…' })[power.value])
-const canMake = computed(() => action.value.kind === 'key' || (!!brief.value.trim() && !making.value))
+const canMake = computed(() => action.value.kind === 'key' || (action.value.kind !== 'checking' && !!brief.value.trim() && !making.value))
 
 async function make() {
   const a = action.value
   makeProblem.value = ''
   makeDone.value = ''
+  if (a.kind === 'checking') return
   if (a.kind === 'key') return emit('keys')
   if (!brief.value.trim() || making.value) return
   making.value = true
@@ -97,6 +102,7 @@ async function load() {
   try {
     voiceUp.value = await voiceStudioStatus().catch(() => false)
     powers.value = await studioPowers()
+    powersLoaded.value = true
     lib.value = await studioLibrary()
   } catch {
     // outside Castle's window
@@ -123,7 +129,7 @@ watch(() => props.stamp, load)
             @click="power = p.id"
           >
             <span class="power-name">{{ p.label }}</span>
-            <span class="pill" :class="powerPill(p.id, powers, voiceUp).tone">{{ powerPill(p.id, powers, voiceUp).text }}</span>
+            <span class="pill" :class="powerPill(p.id, powers, voiceUp, powersLoaded).tone">{{ powerPill(p.id, powers, voiceUp, powersLoaded).text }}</span>
           </button>
         </div>
         <button class="primary create" :disabled="!canMake" @click="make">{{ making ? 'Working…' : action.label }}</button>
@@ -294,6 +300,16 @@ h3 {
 .switch button.on .pill.missing {
   background: #b07a1f;
   color: #fff6e6;
+}
+/* Picture's sign-in check still answering: neutral, not the "missing" colour, so a brief check
+   never looks like a warning that something is actually wrong */
+.pill.checking {
+  background: color-mix(in srgb, var(--text-dim) 25%, transparent);
+  color: var(--text-dim);
+}
+.switch button.on .pill.checking {
+  background: color-mix(in srgb, #07142e 70%, transparent);
+  color: #e8ecf4;
 }
 .create {
   min-width: 150px;

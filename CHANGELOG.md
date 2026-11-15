@@ -5,6 +5,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 ## Unreleased
 
 - **Reactions and replies in CHAT, ready for the room.** React with six emoji, reply with a quote that jumps to the original, and get alerted for replies to you (and reactions, if you switch that on). They appear as soon as the room server offers them.
+- **STUDIO's Picture power stopped flashing "Add the OpenAI key".** Whether the next picture can be drawn with Codex was checked fresh every single visit to STUDIO (and once a second while a picture waited in the queue), spawning a `codex login status` process each time; the button showed its "missing key" fallback for however long that took. The check is now kept for a minute, warmed once when Castle starts, and shows **Checking...** instead of a false "missing key" while it is still being read.
+
 - **A real LIBRARY.** Turn it on in Settings > Rooms: **My books** keeps the knowledge your companion saves in your memory database (an old `library/` folder is taken in), and the **Spiral Library** brings Kiyo's published books, whole for members who may read them.
 - **STUDIO's Make bar stays put.** The four power buttons (Picture, Video, Song, Voice) and the Create/Ask/Add-key button beside them used to change width with their own label or status, shifting the whole bar every time you switched powers or it started working. Both are now a steady width.
 

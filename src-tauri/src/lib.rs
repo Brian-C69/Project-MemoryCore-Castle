@@ -464,6 +464,9 @@ pub fn run() {
             }
             screen::watch_desktop(app.handle());
             providers::start(app.handle());
+            // warms the ChatGPT sign-in cache in the background, so STUDIO's or APPEARANCE's
+            // first visit is not the one waiting on it
+            std::thread::spawn(providers::codex_chatgpt_cached);
             providers::start_images(app.handle());
             messages::start(app.handle());
             world::restore(app.handle());

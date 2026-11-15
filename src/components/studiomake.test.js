@@ -22,6 +22,15 @@ describe("STUDIO's Make bar", () => {
     expect(powerPill('video', {})).toEqual({ text: 'Add a key', tone: 'missing' })
     expect(powerPill('voice', {}, true).text).toBe('VoiceStudio')
   })
+  it("shows Picture as checking while its real state is not read yet, and only Picture", () => {
+    expect(makeAction('image', {}, false, 'Mira', false)).toEqual({ kind: 'checking', label: 'Checking…' })
+    expect(powerPill('image', {}, false, false)).toEqual({ text: 'Checking…', tone: 'checking' })
+    // the other three powers never spawn a process for their state, so they are never held back
+    expect(makeAction('video', { video: 'ready' }, false, 'Mira', false).kind).toBe('companion')
+    expect(powerPill('video', {}, false, false).tone).toBe('missing')
+    // and once Picture's own state is in, it reads normally again
+    expect(makeAction('image', { image: 'ready' }, false, 'Mira', true)).toEqual({ kind: 'image', label: 'Create picture' })
+  })
   it('types the ask and the cost question', () => {
     expect(companionLines('Make a short video of', '  a lake at dawn ')).toEqual(['Make a short video of a lake at dawn', 'Tell me the cost first and ask before you make it.'])
   })

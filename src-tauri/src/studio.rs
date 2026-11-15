@@ -180,7 +180,7 @@ pub fn picture_state(way: &str) -> &'static str {
 async fn current_picture_way(store: &SettingsStore) -> &'static str {
     let cli = store.get().cli;
     let has_key = key::load("openai").is_some();
-    tauri::async_runtime::spawn_blocking(move || crate::env::picture_way(cli, crate::providers::codex_signed_in, has_key))
+    tauri::async_runtime::spawn_blocking(move || crate::env::picture_way(cli, crate::providers::codex_chatgpt_cached, has_key))
         .await
         .unwrap_or("none")
 }
