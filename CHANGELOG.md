@@ -4,6 +4,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Every dropdown matches your theme.** Choices such as Quality, the clock format, a world's camera or the chat room's participation now open a glass list in the theme's colours instead of Windows' grey menu, and work with the keyboard.
 - **A new APPEARANCE.** The standard look and its words sit together in one profile card, Quality and the changes for the next drawing share a bar, and outfits and hairstyles fill one closet of large cards with small buttons and a Wear pill.
 - **Write the look right in APPEARANCE.** **The look in words**, its **Art style** and each outfit's and hairstyle's words are edited in the room and kept in your memory database instead of markdown files (the old notes are taken in the first time). Your companion can read and change its look too, and Export gives the files back.
 - **Delete in STUDIO, and a Backups shelf.** Every picture, video, song, voice line and saved prompt can be deleted (it goes to the Recycle Bin). The pictures Castle keeps before replacing one now sit under **Backups** instead of crowding **Pictures**.
