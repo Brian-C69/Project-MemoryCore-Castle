@@ -105,6 +105,12 @@ export const memoryFeatures = () => invoke('memory_features')
 export const memoryHome = (today) => invoke('memory_home', { today })
 // A room's shelves (room: diary | projects | library) -> [{ name, pages: [{ title, file, date }] }]
 export const memoryShelves = (room) => invoke('memory_shelves', { room })
+// LIBRARY: the member's own books (memory database) and the Spiral Library (the Portfolio, read-only)
+export const libraryBooks = () => invoke('library_books')
+export const libraryRead = (id) => invoke('library_read', { id })
+export const libraryDelete = (id) => invoke('library_delete', { id })
+export const spiralRoom = () => invoke('spiral_room')
+export const spiralRead = (reference) => invoke('spiral_read', { reference })
 // One memory page's markdown (only .md inside the memory folder).
 export const memoryRead = (file) => invoke('memory_read', { file })
 
