@@ -1,0 +1,211 @@
+<script setup>
+// One line of the chat room: a system note, the member's own bubble (on the right, with its
+// ticks), or someone else's (with a face). A reply shows its quote; reactions show as chips and a
+// small bar on hover or focus, only when the room offers them. Props in, events out.
+import { REACTIONS, reactionChips, replySnippet } from '../roomchat.js'
+
+const props = defineProps({
+  line: { type: Object, required: true },
+  mine: { type: Boolean, default: false },
+  // every kept line, so a reply's quote knows whether its original is loaded
+  lines: { type: Array, default: () => [] },
+  // { name, title } of the speaker (speakerPresentation)
+  speaker: { type: Object, default: () => ({ name: '', title: '' }) },
+  ai: { type: Boolean, default: false },
+  face: { type: String, default: null },
+  initial: { type: String, default: '' },
+  // { [fileId]: url } for voice lines and pictures
+  files: { type: Object, default: () => ({}) },
+  clock: { type: String, default: '' },
+  // the member's ticks: { mark, read, title }
+  tick: { type: Object, default: null },
+  // what the room offers: { replies, reactions }
+  can: { type: Object, default: () => ({ replies: false, reactions: false }) },
+})
+const emit = defineEmits(['react', 'reply', 'jump'])
+
+const quote = () => replySnippet(props.line, props.lines)
+const chips = () => reactionChips(props.line)
+</script>
+
+<template>
+  <p v-if="line.author?.kind === 'system'" class="system"><em>{{ line.text }}</em></p>
+  <div v-else-if="mine" :id="'room-line-' + line.id" class="bubble mine" tabindex="-1">
+    <button v-if="quote()" class="quote" :disabled="!quote().loaded" @click="emit('jump', line.replyTo.id)"><strong>{{ quote().name }}</strong> {{ quote().text }}</button>
+    <span class="text">{{ line.text }}</span>
+    <span class="meta">{{ clock }} <span v-if="tick" class="tick" :class="{ read: tick.read }" :title="tick.title">{{ tick.mark }}</span></span>
+    <span v-if="chips().length" class="chips">
+      <button v-for="r in chips()" :key="r.emoji" class="chip" :class="{ mine: r.mine }" :disabled="!can.reactions" @click="emit('react', r.emoji)">{{ r.emoji }} {{ r.count }}</button>
+    </span>
+    <span v-if="can.reactions || can.replies" class="tools" role="toolbar" aria-label="React or reply">
+      <template v-if="can.reactions"><button v-for="e in REACTIONS" :key="e" :aria-label="'React ' + e" @click="emit('react', e)">{{ e }}</button></template>
+      <button v-if="can.replies" @click="emit('reply')">Reply</button>
+    </span>
+  </div>
+  <div v-else :id="'room-line-' + line.id" class="bubble theirs" :class="[line.author?.kind, { ai }]" tabindex="-1">
+    <span class="face"><img v-if="face" :src="face" alt="" /><template v-else>{{ initial }}</template></span>
+    <div class="body">
+      <span class="who" :title="speaker.title" :tabindex="ai ? 0 : undefined" :aria-label="speaker.title ? `${speaker.name}, ${speaker.title}` : undefined">{{ speaker.name }}<span v-if="ai" class="spark"> ✦</span></span>
+      <button v-if="quote()" class="quote" :disabled="!quote().loaded" @click="emit('jump', line.replyTo.id)"><strong>{{ quote().name }}</strong> {{ quote().text }}</button>
+      <span class="text">{{ line.text }}</span>
+      <audio v-if="line.voice && files[line.voice.fileId]" :src="files[line.voice.fileId]" controls preload="none"></audio>
+      <img v-if="line.picture && files[line.picture.fileId]" :src="files[line.picture.fileId]" alt="" class="picture" />
+    </div>
+    <span class="meta">{{ clock }}</span>
+    <span v-if="chips().length" class="chips">
+      <button v-for="r in chips()" :key="r.emoji" class="chip" :class="{ mine: r.mine }" :disabled="!can.reactions" @click="emit('react', r.emoji)">{{ r.emoji }} {{ r.count }}</button>
+    </span>
+    <span v-if="can.reactions || can.replies" class="tools" role="toolbar" aria-label="React or reply">
+      <template v-if="can.reactions"><button v-for="e in REACTIONS" :key="e" :aria-label="'React ' + e" @click="emit('react', e)">{{ e }}</button></template>
+      <button v-if="can.replies" @click="emit('reply')">Reply</button>
+    </span>
+  </div>
+</template>
+
+<style scoped>
+.bubble {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  max-width: 78%;
+  font-size: 14px;
+}
+.bubble.mine {
+  align-self: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 12px 12px 2px 12px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.bubble.theirs .body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 12px 12px 12px 2px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.face {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 14px;
+  font-weight: 600;
+}
+.face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.meta {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.tick {
+  letter-spacing: -2px;
+}
+.tick.read {
+  color: #53bdeb;
+}
+.system {
+  align-self: center;
+  margin: 0;
+  color: var(--good);
+  font-size: 13px;
+}
+.who {
+  color: var(--text-dim);
+}
+.text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.body audio,
+.body .picture {
+  max-width: 320px;
+  border-radius: 8px;
+}
+.quote {
+  display: block;
+  max-width: 100%;
+  margin-bottom: 4px;
+  padding: 4px 8px;
+  overflow: hidden;
+  border: 0;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.quote:disabled {
+  cursor: default;
+}
+.quote strong {
+  margin-right: 4px;
+  color: var(--text);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.chip {
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chip.mine {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.tools {
+  position: absolute;
+  top: -14px;
+  right: 8px;
+  display: none;
+  gap: 2px;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-background) 92%, #050b1f);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.bubble:hover .tools,
+.bubble:focus-within .tools {
+  display: flex;
+}
+.tools button {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tools button:hover,
+.tools button:focus-visible {
+  background: var(--hover);
+}
+</style>

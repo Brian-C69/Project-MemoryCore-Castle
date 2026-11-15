@@ -6,11 +6,13 @@
 // Castle's core (roomturn.rs: a room-only run with no tools) - nothing from the room ever reaches
 // its private main session; LOG shows those turns.
 import GlassSelect from '../components/GlassSelect.vue'
+import RoomLine from '../components/room/RoomLine.vue'
+import RoomComposer from '../components/room/RoomComposer.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../components/roomsteps.js'
 import { listen } from '@tauri-apps/api/event'
 import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCompanionIn, roomFaceSet, roomFile, roomLog, roomMe, roomMine, roomPost, roomPresence, roomReact, roomReset, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
-import { avatarLoader, currentAvatar, datedLines, initial, isMine, REACTIONS, reactionChips, replySnippet, replyingLine, roomFeatures, roomMembers, roomPresenceState, speakerPresentation, ticks, toggleReaction } from '../components/roomchat.js'
+import { avatarLoader, currentAvatar, datedLines, initial, isMine, replyingLine, roomFeatures, roomMembers, roomPresenceState, speakerPresentation, ticks, toggleReaction } from '../components/roomchat.js'
 import { roomCompanionRefresh, roomNameSet, setupApply } from '../api/castle.js'
 import { avatarGet } from '../api/castle.js'
 
@@ -493,37 +495,22 @@ watch(() => props.visible, (on) => {
           <template v-for="item in shown" :key="item.key">
             <div v-if="item.kind === 'day'" class="day-divider"><time :datetime="item.key" :title="item.date">{{ item.label }}</time></div>
             <template v-else v-for="l in [item.line]" :key="l.id">
-            <p v-if="l.author?.kind === 'system'" class="system"><em>{{ l.text }}</em></p>
-            <div v-else-if="mine(l)" :id="'room-line-' + l.id" class="bubble mine" tabindex="-1">
-              <button v-if="replySnippet(l, lines)" class="quote" :disabled="!replySnippet(l, lines).loaded" @click="jumpTo(l.replyTo.id)"><strong>{{ replySnippet(l, lines).name }}</strong> {{ replySnippet(l, lines).text }}</button>
-              <span class="text">{{ l.text }}</span>
-              <span class="meta">{{ clock(l.at) }} <span class="tick" :class="{ read: ticks(l, seen, me).read }" :title="ticks(l, seen, me).title">{{ ticks(l, seen, me).mark }}</span></span>
-              <span v-if="reactionChips(l).length" class="chips">
-                <button v-for="r in reactionChips(l)" :key="r.emoji" class="chip" :class="{ mine: r.mine }" :disabled="!can.reactions" @click="react(l, r.emoji)">{{ r.emoji }} {{ r.count }}</button>
-              </span>
-              <span v-if="can.reactions || can.replies" class="tools" role="toolbar" aria-label="React or reply">
-                <template v-if="can.reactions"><button v-for="e in REACTIONS" :key="e" :aria-label="'React ' + e" @click="react(l, e)">{{ e }}</button></template>
-                <button v-if="can.replies" @click="reply(l)">Reply</button>
-              </span>
-            </div>
-            <div v-else :id="'room-line-' + l.id" class="bubble theirs" :class="[l.author?.kind, { ai: isAi(l) }]" tabindex="-1">
-              <span class="face"><img v-if="faces[avatarToken(l.author)]" :src="faces[avatarToken(l.author)]" alt="" /><template v-else>{{ initial(l.author) }}</template></span>
-              <div class="body">
-                <span class="who" :title="speaker(l.author).title" :tabindex="isAi(l) ? 0 : undefined" :aria-label="speaker(l.author).title ? `${speaker(l.author).name}, ${speaker(l.author).title}` : undefined">{{ speaker(l.author).name }}<span v-if="isAi(l)" class="spark"> ✦</span></span>
-                <button v-if="replySnippet(l, lines)" class="quote" :disabled="!replySnippet(l, lines).loaded" @click="jumpTo(l.replyTo.id)"><strong>{{ replySnippet(l, lines).name }}</strong> {{ replySnippet(l, lines).text }}</button>
-                <span class="text">{{ l.text }}</span>
-                <audio v-if="l.voice && files[l.voice.fileId]" :src="files[l.voice.fileId]" controls preload="none"></audio>
-                <img v-if="l.picture && files[l.picture.fileId]" :src="files[l.picture.fileId]" alt="" class="picture" />
-              </div>
-              <span class="meta">{{ clock(l.at) }}</span>
-              <span v-if="reactionChips(l).length" class="chips">
-                <button v-for="r in reactionChips(l)" :key="r.emoji" class="chip" :class="{ mine: r.mine }" :disabled="!can.reactions" @click="react(l, r.emoji)">{{ r.emoji }} {{ r.count }}</button>
-              </span>
-              <span v-if="can.reactions || can.replies" class="tools" role="toolbar" aria-label="React or reply">
-                <template v-if="can.reactions"><button v-for="e in REACTIONS" :key="e" :aria-label="'React ' + e" @click="react(l, e)">{{ e }}</button></template>
-                <button v-if="can.replies" @click="reply(l)">Reply</button>
-              </span>
-            </div>
+            <RoomLine
+              :line="l"
+              :mine="mine(l)"
+              :lines="lines"
+              :speaker="speaker(l.author)"
+              :ai="isAi(l)"
+              :face="faces[avatarToken(l.author)] || null"
+              :initial="initial(l.author)"
+              :files="files"
+              :clock="clock(l.at)"
+              :tick="mine(l) ? ticks(l, seen, me) : null"
+              :can="can"
+              @react="(e) => react(l, e)"
+              @reply="reply(l)"
+              @jump="jumpTo"
+            />
             </template>
           </template>
         </div>
@@ -532,14 +519,13 @@ watch(() => props.visible, (on) => {
           <pre v-if="turnLog" class="turns">{{ turnLog }}</pre>
           <p v-else class="hint">No turns yet.</p>
         </div>
-        <p v-if="replying" class="replying">
-          <span>Replying to {{ replyingLine(replying, mine(replying) ? 'yourself' : speaker(replying.author).name) }}</span>
-          <button aria-label="Stop replying" @click="replying = null">&#x2715;</button>
-        </p>
-        <form class="say" @submit.prevent="send">
-          <input v-model="draft" maxlength="1000" placeholder="Write to the room..." :disabled="me?.needsName || me?.muted" />
-          <button class="primary" :disabled="!draft.trim()">Send</button>
-        </form>
+        <RoomComposer
+          v-model="draft"
+          :replying="replying ? `Replying to ${replyingLine(replying, mine(replying) ? 'yourself' : speaker(replying.author).name)}` : ''"
+          :disabled="me?.needsName || me?.muted"
+          @send="send"
+          @cancel="replying = null"
+        />
       </section>
 
       <aside class="side widget">
@@ -666,30 +652,6 @@ watch(() => props.visible, (on) => {
   border-color: var(--accent);
   color: var(--accent);
 }
-.bubble {
-  display: flex;
-  gap: 10px;
-  align-items: flex-end;
-  max-width: 78%;
-  font-size: 14px;
-}
-.bubble.mine {
-  align-self: flex-end;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  padding: 8px 12px;
-  border-radius: 12px 12px 2px 12px;
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-}
-.bubble.theirs .body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 12px;
-  border-radius: 12px 12px 12px 2px;
-  background: rgba(255, 255, 255, 0.06);
-}
 .face {
   display: grid;
   flex: none;
@@ -714,22 +676,6 @@ watch(() => props.visible, (on) => {
   margin-right: 4px;
   font-size: 11px;
   vertical-align: middle;
-}
-.meta {
-  font-size: 11px;
-  color: var(--text-dim);
-}
-.tick {
-  letter-spacing: -2px;
-}
-.tick.read {
-  color: #53bdeb;
-}
-.system {
-  align-self: center;
-  margin: 0;
-  color: var(--good);
-  font-size: 13px;
 }
 .row.wrap {
   flex-wrap: wrap;
@@ -885,116 +831,6 @@ input:not([type='radio']) {
 .at {
   font-size: 12px;
   color: var(--text-dim);
-}
-.bubble {
-  position: relative;
-}
-.quote {
-  display: block;
-  max-width: 100%;
-  margin-bottom: 4px;
-  padding: 4px 8px;
-  overflow: hidden;
-  border: 0;
-  border-left: 3px solid var(--accent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--text-dim);
-  font: inherit;
-  font-size: 12px;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.quote:disabled {
-  cursor: default;
-}
-.quote strong {
-  margin-right: 4px;
-  color: var(--text);
-}
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
-}
-.chip {
-  padding: 1px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.2);
-  color: var(--text);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.chip.mine {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-}
-.tools {
-  position: absolute;
-  top: -14px;
-  right: 8px;
-  display: none;
-  gap: 2px;
-  padding: 2px 4px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--panel-background) 92%, #050b1f);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-}
-.bubble:hover .tools,
-.bubble:focus-within .tools {
-  display: flex;
-}
-.tools button {
-  padding: 2px 6px;
-  border: 0;
-  border-radius: 999px;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-.tools button:hover,
-.tools button:focus-visible {
-  background: var(--hover);
-}
-.replying {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 6px;
-  padding: 6px 10px;
-  border-left: 3px solid var(--accent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  font-size: 13px;
-}
-.replying span {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.replying button {
-  padding: 0 6px;
-  border: 0;
-  background: none;
-  color: var(--text);
-  cursor: pointer;
-}
-.say {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-}
-.say input {
-  flex: 1;
 }
 .side {
   display: flex;
