@@ -99,6 +99,31 @@ function dragEnd(e) {
   drag = null
   if (Math.abs(dx) > 50) slide(dx < 0 ? 1 : -1)
 }
+
+// the arrows each case already has, as one turn per case index - what the wheel calls when it
+// spins over that case specifically
+function innerTurn(i, by) {
+  if (i === 0) shownAt.value = step(shownAt.value, by, themes.value.length)
+  else if (i === 1) turnDiary(by)
+  else if (i === 2) turnStory(by)
+  else if (i === 3) turnProfile(by)
+}
+// the mouse wheel (or a trackpad's two-finger scroll): over the case in focus, it turns that
+// case's own setting, the same as its ‹ › arrows; over the showroom around the cases, it turns
+// the showroom itself, the same as the edge arrows. A short cooldown keeps one scroll gesture -
+// which fires many wheel events - to one step, the way the carousel's own slide already settles
+// before taking the next turn.
+let wheelBusy = false
+function onWheel(e) {
+  e.preventDefault()
+  if (wheelBusy) return
+  const by = (e.deltaY || e.deltaX) > 0 ? 1 : -1
+  const index = e.target.closest('.case')?.dataset.i
+  if (index !== undefined && place(Number(index)) === 0) innerTurn(Number(index), by)
+  else slide(by)
+  wheelBusy = true
+  setTimeout(() => { wheelBusy = false }, 150)
+}
 const busy = ref('')
 const problem = ref('')
 const done = ref('')
@@ -281,11 +306,12 @@ onMounted(load)
         @pointerup="dragEnd"
         @pointercancel="drag = null"
         @dragstart.prevent
+        @wheel="onWheel"
         @keydown.left.prevent="slide(-1)"
         @keydown.right.prevent="slide(1)"
       >
       <!-- the main theme: the whole Castle -->
-      <section class="case" :class="caseClass(0)" :style="caseStyle(0)" :inert="place(0) !== 0" @click="pick(0)">
+      <section class="case" data-i="0" :class="caseClass(0)" :style="caseStyle(0)" :inert="place(0) !== 0" @click="pick(0)">
         <h3>MAIN THEME</h3>
         <div class="glass">
           <span class="lamp" aria-hidden="true" />
@@ -319,7 +345,7 @@ onMounted(load)
       </section>
 
       <!-- the diary theme: how the DIARY is browsed, and the page it wears -->
-      <section class="case" :class="caseClass(1)" :style="caseStyle(1)" :inert="place(1) !== 0" @click="pick(1)">
+      <section class="case" data-i="1" :class="caseClass(1)" :style="caseStyle(1)" :inert="place(1) !== 0" @click="pick(1)">
         <h3>DIARY THEME</h3>
         <div class="glass">
           <span class="lamp" aria-hidden="true" />
@@ -337,7 +363,7 @@ onMounted(load)
       </section>
 
       <!-- the story theme: the STORY stage -->
-      <section class="case" :class="caseClass(2)" :style="caseStyle(2)" :inert="place(2) !== 0" @click="pick(2)">
+      <section class="case" data-i="2" :class="caseClass(2)" :style="caseStyle(2)" :inert="place(2) !== 0" @click="pick(2)">
         <h3>STORY THEME</h3>
         <div class="glass">
           <span class="lamp" aria-hidden="true" />
@@ -354,7 +380,7 @@ onMounted(load)
       </section>
 
       <!-- the profile theme: how HOME's PROFILE tab draws the emotion engine, with sample traits -->
-      <section class="case" :class="caseClass(3)" :style="caseStyle(3)" :inert="place(3) !== 0" @click="pick(3)">
+      <section class="case" data-i="3" :class="caseClass(3)" :style="caseStyle(3)" :inert="place(3) !== 0" @click="pick(3)">
         <h3>PROFILE THEME</h3>
         <div class="glass">
           <span class="lamp" aria-hidden="true" />
