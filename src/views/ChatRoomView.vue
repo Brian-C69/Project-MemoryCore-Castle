@@ -300,6 +300,12 @@ function signInOnLibrary() {
 }
 
 // The member's face in the room (their Google picture by default), and their companion's.
+// the small menu behind the pencil on the member's own picture; it closes when focus leaves the card
+const pictureMenu = ref(false)
+function pictureMenuOut(event) {
+  if (!event.currentTarget.contains(event.relatedTarget)) pictureMenu.value = false
+}
+
 async function setFace(companion, reset = false) {
   faceLine.value = ''
   try {
@@ -485,18 +491,25 @@ watch(() => props.visible, (on) => {
         <p class="hint">The alerts, and {{ companion }}'s voice here and public card once it is in.</p>
         <h3>YOUR PROFILE</h3>
         <div class="profile-pair">
-          <section class="profile-person" aria-label="Your room picture">
-            <span class="profile-picture"><img v-if="myPicture" :src="myPicture" :alt="`${me?.name || member?.name || 'Your'} profile picture`" /><span v-else>{{ initial(me) }}</span></span>
+          <section class="profile-person" aria-label="Your room picture" @focusout="pictureMenuOut">
+            <span class="pic-wrap">
+              <span class="profile-picture"><img v-if="myPicture" :src="myPicture" :alt="`${me?.name || member?.name || 'Your'} profile picture`" /><span v-else>{{ initial(me) }}</span></span>
+              <button class="pic-edit" aria-label="Edit my picture" title="Edit my picture" :aria-expanded="pictureMenu" @click="pictureMenu = !pictureMenu" @keydown.esc="pictureMenu = false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" /><path d="M13.5 6.5l4 4" /></svg></button>
+            </span>
             <strong :title="me?.name || member?.name">{{ me?.name || member?.name || 'You' }}</strong>
             <span class="hint">You</span>
-            <button @click="setFace(false)">Change my picture</button>
-            <button class="subtle" @click="setFace(false, true)">Use Google picture</button>
+            <div v-if="pictureMenu" class="pic-menu" role="menu">
+              <button role="menuitem" @click="pictureMenu = false; setFace(false)">Change my picture</button>
+              <button role="menuitem" class="subtle" @click="pictureMenu = false; setFace(false, true)">Use Google picture</button>
+            </div>
           </section>
           <section class="profile-person" :aria-label="`${companion}'s room picture`">
-            <span class="profile-picture"><img v-if="companionPicture" :src="companionPicture" :alt="`${companion}'s profile picture`" /><span v-else>✦</span></span>
+            <span class="pic-wrap">
+              <span class="profile-picture"><img v-if="companionPicture" :src="companionPicture" :alt="`${companion}'s profile picture`" /><span v-else>✦</span></span>
+              <button class="pic-edit" :aria-label="`Change ${companion}'s picture`" :disabled="!haveCompanionKey" :title="haveCompanionKey ? `Change ${companion}'s room picture` : `Let ${companion} in to change the room picture`" @click="setFace(true)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" /><path d="M13.5 6.5l4 4" /></svg></button>
+            </span>
             <strong :title="companion">{{ companion }}</strong>
             <span class="hint">Companion</span>
-            <button :disabled="!haveCompanionKey" :title="haveCompanionKey ? `Change ${companion}'s room picture` : `Let ${companion} in to change the room picture`" @click="setFace(true)">Change {{ companion }}'s picture</button>
           </section>
         </div>
         <p v-if="faceLine" role="status" class="hint">{{ faceLine }}</p>
@@ -532,11 +545,18 @@ watch(() => props.visible, (on) => {
 .participation-select:disabled { opacity: .45; cursor: not-allowed; }
 .room-toggle:focus-visible, .participation-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .profile-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
-.profile-person { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; padding: 12px 8px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.025); }
+.profile-person { position: relative; display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; padding: 12px 8px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.025); }
 .profile-picture { display: grid; place-items: center; width: 64px; height: 64px; flex-shrink: 0; border-radius: 16px; overflow: hidden; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); font-size: 24px; }
 .profile-picture img { width: 100%; height: 100%; object-fit: cover; }
 .profile-person strong { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: 13px; }
 .profile-person button { width: 100%; min-height: 38px; padding: 7px 5px; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+/* the pencil sits on the picture's top right corner; the member's own opens a small menu */
+.pic-wrap { position: relative; display: inline-flex; }
+.profile-person button.pic-edit { position: absolute; top: -6px; right: -8px; display: grid; place-items: center; width: 24px; min-height: 24px; height: 24px; padding: 0; border-radius: 50%; background: var(--panel-background); }
+.pic-edit svg { display: block; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.profile-person button.pic-edit:disabled { opacity: .45; }
+.pic-menu { position: absolute; z-index: 3; top: 62px; left: 6px; right: 6px; display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-background); backdrop-filter: blur(var(--glass-blur)); box-shadow: 0 10px 24px -10px rgba(0, 0, 0, .7); }
+.profile-person .pic-menu button { min-height: 32px; }
 .profile-person button.subtle { border-color: transparent; color: var(--text-dim); }
 .profile-footer { padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--line); }
 .profile-footer button { width: 100%; }
