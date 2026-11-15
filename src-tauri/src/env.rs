@@ -43,6 +43,20 @@ pub fn image_mode(cli: Cli, has_openai_key: bool) -> &'static str {
     }
 }
 
+/// How an APPEARANCE or STUDIO picture is drawn: "codex" (a separate Codex job on the member's
+/// ChatGPT plan), "companion" (the request goes to a Claude Code companion, which fills the style
+/// from the memory and draws with castle-image.ps1 and the OpenAI key) or "none" (the prompt is
+/// saved). The plan comes first: it costs the member nothing more.
+pub fn picture_way(codex_chatgpt: bool, cli: Cli, has_openai_key: bool) -> &'static str {
+    if codex_chatgpt {
+        "codex"
+    } else if cli == Cli::Claude && has_openai_key {
+        "companion"
+    } else {
+        "none"
+    }
+}
+
 /// Every variable Castle adds to the session. `key` reads a kept key by its account name.
 /// OPENAI_API_KEY is never given to Codex: Codex would switch from the member's ChatGPT login
 /// to paid API billing.
@@ -95,6 +109,16 @@ mod tests {
 
     fn get<'a>(vars: &'a [(String, String)], name: &str) -> Option<&'a str> {
         vars.iter().find(|(n, _)| n == name).map(|(_, v)| v.as_str())
+    }
+
+    #[test]
+    fn a_picture_goes_to_the_plan_first_then_the_key_through_the_companion() {
+        assert_eq!(picture_way(true, Cli::Claude, true), "codex");
+        assert_eq!(picture_way(true, Cli::Codex, false), "codex");
+        assert_eq!(picture_way(false, Cli::Claude, true), "companion");
+        // the key never reaches Codex (it would switch Codex to paid API billing)
+        assert_eq!(picture_way(false, Cli::Codex, true), "none");
+        assert_eq!(picture_way(false, Cli::Claude, false), "none");
     }
 
     #[test]

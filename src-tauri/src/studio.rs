@@ -122,11 +122,35 @@ pub fn studio_library(store: State<SettingsStore>) -> Library {
     store.get().memory_folder.map(|f| library(Path::new(&f))).unwrap_or_default()
 }
 
+/// The Pictures card's state for a way to draw (`env::picture_way`): the plan is "builtin", the
+/// companion with the key is "ready", nothing is "prompt". Pure.
+pub fn picture_state(way: &str) -> &'static str {
+    match way {
+        "codex" => "builtin",
+        "companion" => "ready",
+        _ => "prompt",
+    }
+}
+
+/// How the next APPEARANCE or STUDIO picture would be drawn. Codex is asked whether it is signed in
+/// with ChatGPT (a process, so off the main thread); an installed Codex alone proves nothing.
+async fn current_picture_way(store: &SettingsStore) -> &'static str {
+    let cli = store.get().cli;
+    let has_key = key::load("openai").is_some();
+    let codex = tauri::async_runtime::spawn_blocking(crate::providers::codex_signed_in).await.unwrap_or(false);
+    crate::env::picture_way(codex, cli, has_key)
+}
+
 #[tauri::command]
-pub fn studio_powers(store: State<SettingsStore>) -> Powers {
+pub async fn picture_way(store: State<'_, SettingsStore>) -> Result<&'static str, String> {
+    Ok(current_picture_way(&store).await)
+}
+
+#[tauri::command]
+pub async fn studio_powers(store: State<'_, SettingsStore>) -> Result<Powers, String> {
     let mut available = powers(store.get().cli, &|name| key::load(name).is_some());
-    available.image = if crate::env::find_on_path("codex").is_some() { "builtin" } else { "prompt" };
-    available
+    available.image = picture_state(current_picture_way(&store).await);
+    Ok(available)
 }
 
 /// Lets the page show files from the memory folder (and only there) through the asset protocol.
@@ -230,5 +254,12 @@ mod tests {
         let p = powers(Cli::Claude, &only_suno);
         assert_eq!((p.image, p.video, p.song, p.voice), ("prompt", "prompt", "ready", "prompt"));
         assert_eq!(powers(Cli::Codex, &only_suno).image, "builtin");
+    }
+
+    #[test]
+    fn the_pictures_card_keeps_its_three_states() {
+        assert_eq!(picture_state("codex"), "builtin");
+        assert_eq!(picture_state("companion"), "ready");
+        assert_eq!(picture_state("none"), "prompt");
     }
 }

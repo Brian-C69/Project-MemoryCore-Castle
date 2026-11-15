@@ -558,18 +558,26 @@ pub(crate) fn draw_once(brief: &str, folder: &Path, output: &Path, limit: std::t
     run_image_with_program(&job, &program, None, &|| false, limit)
 }
 
+/// What to do when no way to draw is open, in the member's words.
+const NO_WAY: &str = "Not drawn: sign in to Codex with ChatGPT, or think with Claude Code and add an OpenAI key in Settings > Keys. Prompt saved.";
+
+/// Codex is installed and signed in with ChatGPT (the plan, never an API key). Asks Codex itself.
+pub(crate) fn codex_signed_in() -> bool {
+    auth_output(Cli::Codex).is_some_and(|auth| {
+        let mode = format!(
+            "{} {}",
+            String::from_utf8_lossy(&auth.stdout),
+            String::from_utf8_lossy(&auth.stderr)
+        )
+        .to_lowercase();
+        auth.status.success() && mode.contains("chatgpt")
+    })
+}
+
 /// Codex signed in with ChatGPT, and where it is; the reason in words otherwise.
 fn codex_ready() -> Result<PathBuf, String> {
-    let auth = auth_output(Cli::Codex)
-        .ok_or("Codex sign-in could not be verified. Prompt saved; no API fallback.")?;
-    let mode = format!(
-        "{} {}",
-        String::from_utf8_lossy(&auth.stdout),
-        String::from_utf8_lossy(&auth.stderr)
-    )
-    .to_lowercase();
-    if !auth.status.success() || !mode.contains("chatgpt") {
-        return Err("Image jobs require Codex signed in with ChatGPT. Prompt saved; API-key fallback is disabled.".into());
+    if !codex_signed_in() {
+        return Err(NO_WAY.into());
     }
     crate::env::find_on_path("codex")
         .ok_or_else(|| "Codex is unavailable. The prompt is saved for retry; no API fallback was used.".to_string())

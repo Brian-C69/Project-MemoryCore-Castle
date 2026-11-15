@@ -309,6 +309,7 @@ pub fn run() {
             theme::theme_folder,
             studio::studio_library,
             studio::studio_powers,
+            studio::picture_way,
             voicestudio::voicestudio_status,
             voicestudio::voicestudio_speak,
             appearance::appearance_look,
