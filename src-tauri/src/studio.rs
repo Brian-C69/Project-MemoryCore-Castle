@@ -32,6 +32,18 @@ pub struct Library {
     pub voices: Vec<Made>,
     /// prompts, lyrics and lines saved instead of a render (no key)
     pub saved: Vec<Made>,
+    /// the pictures Castle kept before replacing one (`<name>.<job>-previous.png`,
+    /// `<name>-previous-<n>.png`), on their own shelf so they never crowd Pictures
+    pub backups: Vec<Made>,
+}
+
+/// The folders STUDIO shows, and the only ones it may delete from.
+pub const SHELVES: [&str; 4] = ["media-generation", "music", "adventures", "appearance"];
+
+/// A copy Castle kept before replacing a picture.
+pub fn is_backup(name: &str) -> bool {
+    let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(name).to_lowercase();
+    stem.contains("-previous")
 }
 
 fn ext(path: &Path) -> String {
@@ -60,7 +72,7 @@ fn made(path: &Path, group: Option<String>) -> Made {
 /// (albums and singles), adventures/*/scenes and music, appearance/.
 pub fn library(folder: &Path) -> Library {
     let mut files = Vec::new();
-    for dir in ["media-generation", "music", "adventures", "appearance"] {
+    for dir in SHELVES {
         walk(&folder.join(dir), 0, &mut files);
     }
     let mut lib = Library::default();
@@ -78,6 +90,7 @@ pub fn library(folder: &Path) -> Library {
             continue;
         }
         match ext(&path).as_str() {
+            "png" | "jpg" | "jpeg" | "webp" if is_backup(&name) => lib.backups.push(made(&path, group)),
             "png" | "jpg" | "jpeg" | "webp" if !name.starts_with("cover") || parts.first() != Some(&"music") => lib.images.push(made(&path, group)),
             "mp4" | "webm" => lib.videos.push(made(&path, group)),
             "mp3" | "wav" | "m4a" | "ogg" => {
@@ -90,7 +103,7 @@ pub fn library(folder: &Path) -> Library {
             _ => {}
         }
     }
-    for list in [&mut lib.images, &mut lib.videos, &mut lib.songs, &mut lib.voices, &mut lib.saved] {
+    for list in [&mut lib.images, &mut lib.videos, &mut lib.songs, &mut lib.voices, &mut lib.saved, &mut lib.backups] {
         list.sort_by(|a, b| b.at.cmp(&a.at));
         list.truncate(LIMIT);
     }
@@ -115,6 +128,35 @@ pub fn powers(cli: Cli, has: &dyn Fn(&str) -> bool) -> Powers {
         song: state("suno"),
         voice: state("elevenlabs"),
     }
+}
+
+/// A file STUDIO may delete: inside one of the memory's shelves, never the standard look itself
+/// (the panel's avatar and every drawing's reference).
+pub fn deletable(memory: &Path, path: &str) -> Result<PathBuf, String> {
+    let file = crate::files::fenced(memory, path)?;
+    let root = memory.canonicalize().map_err(|_| "The memory folder is gone.".to_string())?;
+    let inside = file.strip_prefix(&root).map_err(|_| "That file is outside your memory.".to_string())?;
+    let shelf = inside.components().next().and_then(|c| c.as_os_str().to_str()).unwrap_or("");
+    if !SHELVES.contains(&shelf) {
+        return Err("Only STUDIO's own pictures, videos, songs and voice lines can be deleted here.".into());
+    }
+    let is_portrait = inside.parent() == Some(Path::new("appearance")) && inside.file_stem().and_then(|s| s.to_str()) == Some("portrait");
+    if is_portrait {
+        return Err("The standard look is kept; replace it in APPEARANCE instead.".into());
+    }
+    Ok(file)
+}
+
+/// Sends one made thing to the Recycle Bin, where it can be restored.
+#[tauri::command]
+pub async fn studio_delete(path: String, store: State<'_, SettingsStore>) -> Result<(), String> {
+    let memory = store.get().memory_folder.map(PathBuf::from).ok_or("No MemoryCore folder is chosen yet.")?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let file = deletable(&memory, &path)?;
+        trash::delete(&file).map_err(|_| "It could not be moved to the Recycle Bin. Close any app holding it and try again.".to_string())
+    })
+    .await
+    .map_err(|_| "The delete could not finish.".to_string())?
 }
 
 #[tauri::command]
@@ -247,6 +289,33 @@ mod tests {
         assert_eq!(lib.songs[0].group.as_deref(), Some("sky-songs"));
         assert_eq!(lib.saved.len(), 2);
         assert!(lib.images.iter().any(|m| m.group.as_deref() == Some("celestial")));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_kept_copy_goes_to_backups_and_only_shelf_files_can_be_deleted() {
+        let root = std::env::temp_dir().join(format!("castle-studio-del-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for (dir, file) in [
+            ("appearance", "portrait.png"),
+            ("appearance", "portrait.1794731540694128500-previous.png"),
+            ("appearance", "portrait-previous-1.png"),
+            ("media-generation/image-generation", "lake.png"),
+            ("main", "memory.md"),
+        ] {
+            std::fs::create_dir_all(root.join(dir)).unwrap();
+            std::fs::write(root.join(dir).join(file), b"x").unwrap();
+        }
+        let lib = library(&root);
+        assert_eq!(lib.backups.len(), 2);
+        assert_eq!(lib.images.len(), 2, "the portrait and the lake, not the copies");
+        let p = |rel: &str| root.join(rel).display().to_string();
+        assert!(deletable(&root, &p("appearance/portrait.1794731540694128500-previous.png")).is_ok());
+        assert!(deletable(&root, &p("media-generation/image-generation/lake.png")).is_ok());
+        assert!(deletable(&root, &p("appearance/portrait.png")).is_err(), "the standard look is kept");
+        assert!(deletable(&root, &p("main/memory.md")).is_err(), "not a shelf");
+        assert!(deletable(&root, &p("media-generation/../main/memory.md")).is_err(), "no climbing out");
+        assert!(deletable(&root, r"C:\Windows\win.ini").is_err());
         let _ = std::fs::remove_dir_all(root);
     }
 

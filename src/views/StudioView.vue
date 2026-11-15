@@ -20,7 +20,7 @@ async function drawImage() {
     imageProblem.value = String(e?.message ?? e)
   }
 }
-import { chatMediaOpen, studioLibrary, studioPowers, voiceStudioSpeak, voiceStudioStatus } from '../api/castle.js'
+import { chatMediaOpen, studioDelete, studioLibrary, studioPowers, voiceStudioSpeak, voiceStudioStatus } from '../api/castle.js'
 
 // VoiceStudio (optional, switched on in Settings) is the Voice power while it is on and running
 const voiceUp = ref(false)
@@ -62,18 +62,35 @@ const STATE = {
 }
 
 const powers = ref({})
-const lib = ref({ images: [], videos: [], songs: [], voices: [], saved: [] })
+const lib = ref({ images: [], videos: [], songs: [], voices: [], saved: [], backups: [] })
 const tab = ref('images')
 const viewerStart = ref(null)
 const src = (path) => convertFileSrc(path)
 
-const pictures = computed(() => lib.value.images.map((m) => ({ path: m.path, name: m.name, url: src(m.path) })))
+// the viewer walks the shelf in view: Pictures, or the Backups Castle kept
+const shelfPictures = computed(() => (tab.value === 'backups' ? lib.value.backups : lib.value.images))
+const pictures = computed(() => shelfPictures.value.map((m) => ({ path: m.path, name: m.name, url: src(m.path) })))
+
+// Delete asks once, in place ("Delete? Yes / No"), then sends the file to the Recycle Bin.
+const asking = ref('')
+const deleteProblem = ref('')
+async function remove(path) {
+  deleteProblem.value = ''
+  try {
+    await studioDelete(path)
+    asking.value = ''
+    await load()
+  } catch (e) {
+    deleteProblem.value = String(e?.message ?? e)
+  }
+}
 const counts = computed(() => ({
   images: lib.value.images.length,
   videos: lib.value.videos.length,
   songs: lib.value.songs.length,
   voices: lib.value.voices.length,
   saved: lib.value.saved.length,
+  backups: lib.value.backups.length,
 }))
 
 function when(at) {
@@ -119,29 +136,43 @@ watch(() => props.stamp, load)
 
     <section class="gallery widget">
       <nav class="tabs">
-        <button v-for="t in ['images', 'videos', 'songs', 'voices', 'saved']" :key="t" :class="{ active: tab === t }" @click="tab = t">
-          {{ { images: 'Pictures', videos: 'Videos', songs: 'Songs', voices: 'Voice', saved: 'Saved prompts' }[t] }} ({{ counts[t] }})
+        <button v-for="t in ['images', 'videos', 'songs', 'voices', 'saved', 'backups']" :key="t" :class="{ active: tab === t }" @click="tab = t; asking = ''">
+          {{ { images: 'Pictures', videos: 'Videos', songs: 'Songs', voices: 'Voice', saved: 'Saved prompts', backups: 'Backups' }[t] }} ({{ counts[t] }})
         </button>
         <span class="spacer"></span>
         <ImageJobs @finished="load" />
         <button @click="load">Refresh</button>
       </nav>
 
-      <div v-if="tab === 'images'" class="grid">
-        <button v-for="(m, i) in lib.images" :key="m.path" class="thumb" :title="m.name" @click="viewerStart = i">
-          <img :src="src(m.path)" :alt="m.name" loading="lazy" />
-        </button>
+      <p v-if="deleteProblem" role="alert" class="problem">{{ deleteProblem }}</p>
+      <p v-if="tab === 'backups'" class="hint">Castle keeps the picture it replaces when it draws or you upload a new one. Delete the ones you no longer need; they go to the Recycle Bin.</p>
+      <div v-if="tab === 'images' || tab === 'backups'" class="grid">
+        <div v-for="(m, i) in shelfPictures" :key="m.path" class="tile">
+          <button class="thumb" :title="m.name" @click="viewerStart = i">
+            <img :src="src(m.path)" :alt="m.name" loading="lazy" />
+          </button>
+          <div v-if="asking === m.path" class="confirm" role="group" aria-label="Delete this picture">
+            <span>Delete?</span>
+            <button class="danger" @click="remove(m.path)">Yes</button>
+            <button @click="asking = ''">No</button>
+          </div>
+          <button v-else class="delete" :title="`Delete ${m.name}`" :aria-label="`Delete ${m.name}`" @click="asking = m.path">✕</button>
+        </div>
       </div>
       <div v-else-if="tab === 'videos'" class="list">
         <div v-for="m in lib.videos" :key="m.path" class="video">
           <video :src="src(m.path)" controls preload="metadata"></video>
           <span>{{ m.name }} · {{ when(m.at) }}</span>
+          <span v-if="asking === m.path" class="inline-confirm">Delete? <button class="danger" @click="remove(m.path)">Yes</button> <button @click="asking = ''">No</button></span>
+          <button v-else class="text-delete" @click="asking = m.path">Delete</button>
         </div>
       </div>
       <div v-else-if="tab === 'songs' || tab === 'voices'" class="list">
         <div v-for="m in lib[tab]" :key="m.path" class="audio">
           <div><strong>{{ m.name }}</strong><span v-if="m.group" class="group">{{ m.group }}</span></div>
           <audio :src="src(m.path)" controls preload="none"></audio>
+          <span v-if="asking === m.path" class="inline-confirm">Delete? <button class="danger" @click="remove(m.path)">Yes</button> <button @click="asking = ''">No</button></span>
+          <button v-else class="text-delete" @click="asking = m.path">Delete</button>
         </div>
       </div>
       <div v-else class="list">
@@ -149,6 +180,8 @@ watch(() => props.stamp, load)
         <div v-for="m in lib.saved" :key="m.path" class="saved">
           <span>{{ m.name }}</span><span class="group">{{ when(m.at) }}</span>
           <button @click="chatMediaOpen(m.path, true)">Show file</button>
+          <span v-if="asking === m.path" class="inline-confirm">Delete? <button class="danger" @click="remove(m.path)">Yes</button> <button @click="asking = ''">No</button></span>
+          <button v-else class="text-delete" @click="asking = m.path">Delete</button>
         </div>
       </div>
       <p v-if="!counts[tab]" class="empty">Nothing here yet.</p>
@@ -250,6 +283,52 @@ h3 {
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 10px;
   overflow-y: auto;
+}
+.tile {
+  position: relative;
+}
+.tile .thumb {
+  width: 100%;
+}
+.delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel-background) 85%, transparent);
+  color: var(--text);
+  opacity: 0;
+  cursor: pointer;
+}
+.tile:hover .delete,
+.delete:focus-visible {
+  opacity: 1;
+}
+.confirm {
+  position: absolute;
+  inset: auto 6px 6px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-background) 92%, transparent);
+  font-size: 13px;
+}
+.danger {
+  border-color: color-mix(in srgb, #ff6b81 60%, var(--line));
+  color: #ff9aa9;
+}
+.inline-confirm {
+  font-size: 13px;
+}
+.text-delete {
+  justify-self: start;
 }
 .thumb {
   padding: 0;

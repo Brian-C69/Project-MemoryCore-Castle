@@ -254,6 +254,8 @@ export const onDbInstall = on('castle://db-install')
 // STUDIO: what the companion made, and each power's state (ready | builtin | prompt).
 export const studioLibrary = () => invoke('studio_library')
 export const studioPowers = () => invoke('studio_powers')
+// sends one made thing to the Recycle Bin (only inside the memory's shelves, never the standard look)
+export const studioDelete = (path) => invoke('studio_delete', { path })
 // "codex" | "companion" | "none": how the next APPEARANCE or STUDIO picture is drawn
 export const pictureWay = () => invoke('picture_way')
 export const voiceStudioStatus = () => invoke('voicestudio_status')

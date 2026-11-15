@@ -310,6 +310,7 @@ pub fn run() {
             studio::studio_library,
             studio::studio_powers,
             studio::picture_way,
+            studio::studio_delete,
             voicestudio::voicestudio_status,
             voicestudio::voicestudio_speak,
             appearance::appearance_look,
