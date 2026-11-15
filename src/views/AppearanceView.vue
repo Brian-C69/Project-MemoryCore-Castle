@@ -8,8 +8,9 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
 import ClosetCard from '../components/ClosetCard.vue'
+import HelpTip from '../components/HelpTip.vue'
 import { appearanceImport, appearanceLook, appearanceNew, appearanceSaveItem, appearanceSaveLook, appearanceWear, choosePicture, imageRequest, studioPowers } from '../api/castle.js'
-import { lookSpec, pictureCost, QUALITIES } from '../components/appearance.js'
+import { closetShelf, lookSpec, pictureCost, QUALITIES } from '../components/appearance.js'
 
 const props = defineProps({
   companion: { type: String, default: 'Your companion' },
@@ -59,6 +60,29 @@ function rememberedQuality() {
   }
 }
 const quality = ref(rememberedQuality())
+// The closet shelf in view (Outfits or Hairstyles), remembered on this computer only.
+const SHELF_KEY = 'castle.appearance.shelf'
+function rememberedShelf() {
+  try {
+    return localStorage.getItem(SHELF_KEY) === 'hair' ? 'hair' : 'outfit'
+  } catch {
+    return 'outfit'
+  }
+}
+const shelfKind = ref(rememberedShelf())
+watch(shelfKind, (k) => {
+  try {
+    localStorage.setItem(SHELF_KEY, k)
+  } catch {
+    // the choice still holds until Castle closes
+  }
+})
+const shelf = computed(() => closetShelf(look.value, shelfKind.value))
+// What the (?) beside the look explains, in place of a paragraph on the page.
+const helpText = computed(
+  () =>
+    `Castle writes each drawing's prompt from these words itself, so no AI tokens are spent. With Claude Code, Castle draws with your OpenAI key at the price on the button; with Codex, on your ChatGPT plan when Codex is signed in, otherwise with your key. Kept in your memory database; you can also ask ${props.companion} to change it. Uploads: PNG, JPEG or WebP up to 25 MB.`,
+)
 watch(quality, (q) => {
   try {
     localStorage.setItem(QUALITY_KEY, q)
@@ -275,11 +299,6 @@ watch(() => props.stamp, load)
     <header class="bar">
       <h2>APPEARANCE</h2>
       <span class="state" :class="image">{{ STATE[image] ?? '…' }}</span>
-      <label class="quality">Quality
-        <select v-model="quality" :disabled="!!busy" aria-label="Picture quality">
-          <option v-for="q in QUALITIES" :key="q.id" :value="q.id">{{ qualityLabel(q) }}</option>
-        </select>
-      </label>
       <span class="spacer"></span>
       <span v-if="busy" class="busy">{{ busy }}</span>
       <span v-else-if="problem" class="problem">{{ problem }}</span>
@@ -288,66 +307,89 @@ watch(() => props.stamp, load)
       <button @click="load">Refresh</button>
     </header>
 
-    <label class="edit-request">Changes for the next drawing
-      <textarea v-model="changes" rows="2" placeholder="For example: keep the face and proportions, change only the jacket colour." :disabled="!!busy"></textarea>
-    </label>
+    <template v-if="look">
+      <!-- the profile card: the standard look beside the look in words -->
+      <section class="profile widget">
+        <div class="frame">
+          <div class="carousel" @keydown.left.prevent="step(-1)" @keydown.right.prevent="step(1)">
+            <button v-if="slide" class="portrait" @click="openSheet(slide.path, slide.label)">
+              <img :src="src(slide.path)" :alt="slide.label" />
+            </button>
+            <div v-else class="portrait empty"><span class="crystal">◆</span></div>
+            <template v-if="slides.length > 1">
+              <button class="nav prev" aria-label="Previous picture" @click="step(-1)">‹</button>
+              <button class="nav next" aria-label="Next picture" @click="step(1)">›</button>
+            </template>
+            <button class="replace" :disabled="!!busy" :title="look.portrait ? 'Replace image' : 'Upload image'" @click="upload('standard')">{{ look.portrait ? 'Replace' : 'Upload' }}</button>
+          </div>
+          <p v-if="slide" class="hint caption">{{ slide.label }}<template v-if="slides.length > 1"> · {{ slideIndex + 1 }}/{{ slides.length }}</template></p>
+        </div>
 
-    <div v-if="look" class="columns">
-      <section class="standard widget">
-        <h3>STANDARD LOOK</h3>
-        <div class="carousel" @keydown.left.prevent="step(-1)" @keydown.right.prevent="step(1)">
-          <button v-if="slide" class="portrait" @click="openSheet(slide.path, slide.label)">
-            <img :src="src(slide.path)" :alt="slide.label" />
-          </button>
-          <div v-else class="portrait empty"><span class="crystal">◆</span></div>
-          <template v-if="slides.length > 1">
-            <button class="nav prev" aria-label="Previous picture" @click="step(-1)">‹</button>
-            <button class="nav next" aria-label="Next picture" @click="step(1)">›</button>
-          </template>
-        </div>
-        <p v-if="slide" class="hint caption">{{ slide.label }}<template v-if="slides.length > 1"> · {{ slideIndex + 1 }}/{{ slides.length }}</template></p>
-        <button :disabled="!!busy" @click="upload('standard')">{{ look.portrait ? 'Replace image' : 'Upload image' }}</button>
-        <button class="primary" :disabled="!!busy" @click="drawPortrait(false)">{{ priced(look.portrait ? 'Redraw' : 'Draw the standard look', 'standard') }}</button>
-        <button v-if="look.portrait" :disabled="!!busy" @click="drawPortrait(true)">{{ priced('Improve from image', 'standard') }}</button>
-        <p v-if="tryOnLine" class="hint">{{ tryOnLine }}</p>
-        <button :disabled="!!busy" @click="tryOn()">{{ !look.tryOn?.exists || look.tryOn.stale ? "Try on today's look" : "Show today's look" }}</button>
-        <button v-if="look.tryOn?.exists && !look.tryOn.stale" :disabled="!!busy" @click="tryOn(true)">{{ priced('Draw again', 'tryon') }}</button>
-        <p class="hint">Upload PNG, JPEG or WebP (up to 25 MB). Castle writes each drawing's prompt from your notes itself. When {{ companion }} thinks with Claude Code, Castle draws it with your OpenAI key at the price on the button; with Codex, it is drawn on your ChatGPT plan when Codex is signed in, otherwise with your key. With no way to draw, the prompt is saved.</p>
-        <div class="words">
-          <label>The look in words
-            <textarea v-model="lookWords" rows="5" maxlength="4000" placeholder="Face, eyes, hair colour, build, age look, and anything that always stays the same." :disabled="!!busy"></textarea>
+        <div class="look-words">
+          <label class="title">THE LOOK IN WORDS
+            <HelpTip :text="helpText" />
+            <textarea v-model="lookWords" rows="6" maxlength="4000" placeholder="Face, eyes, hair colour, build, age look, and anything that always stays the same." :disabled="!!busy"></textarea>
           </label>
-          <label>Art style
-            <input v-model="lookStyle" maxlength="120" placeholder="anime, soft watercolor illustration, semi-realistic..." :disabled="!!busy" />
-          </label>
-          <button class="primary" :disabled="!lookChanged || !!busy" @click="saveLook">Save the look</button>
+          <p v-if="followsPortrait" class="hint">No words yet, so Redraw follows the picture.</p>
         </div>
-        <p v-if="followsPortrait" class="hint">The look has no words yet, so Redraw follows this picture. Write the look above to draw from words.</p>
-        <p class="hint">Kept in your memory database. You can also ask {{ companion }} to change it.</p>
+
+        <div class="look-side">
+          <label class="title">ART STYLE
+            <input v-model="lookStyle" maxlength="120" placeholder="anime, soft watercolor illustration..." :disabled="!!busy" />
+          </label>
+          <div class="actions">
+            <button class="primary" :disabled="!lookChanged || !!busy" @click="saveLook">Save the look</button>
+            <button :disabled="!!busy" @click="drawPortrait(false)">{{ priced(look.portrait ? 'Redraw' : 'Draw the standard look', 'standard') }}</button>
+            <button v-if="look.portrait" :disabled="!!busy" @click="drawPortrait(true)">{{ priced('Improve from image', 'standard') }}</button>
+          </div>
+          <div class="actions">
+            <button :disabled="!!busy" @click="tryOn()">{{ !look.tryOn?.exists || look.tryOn.stale ? "Try on today's look" : "Show today's look" }}</button>
+            <button v-if="look.tryOn?.exists && !look.tryOn.stale" :disabled="!!busy" @click="tryOn(true)">{{ priced('Draw again', 'tryon') }}</button>
+          </div>
+          <p v-if="tryOnLine" class="hint">{{ tryOnLine }}</p>
+        </div>
       </section>
 
-      <section v-for="shelf in [{ kind: 'outfit', title: 'WARDROBE', items: look.wardrobe, current: look.current.outfit }, { kind: 'hair', title: 'HAIR', items: look.hairstyles, current: look.current.hair }]" :key="shelf.kind" class="shelf widget">
-        <header class="shelf-head">
-          <h3>{{ shelf.title }}</h3>
+      <!-- the drawing bar: how the next picture is drawn -->
+      <section class="drawing widget">
+        <label class="inline">QUALITY
+          <select v-model="quality" :disabled="!!busy" aria-label="Picture quality">
+            <option v-for="q in QUALITIES" :key="q.id" :value="q.id">{{ qualityLabel(q) }}</option>
+          </select>
+        </label>
+        <span class="divider" aria-hidden="true"></span>
+        <label class="inline grow">CHANGES FOR THE NEXT DRAWING
+          <input v-model="changes" placeholder="For example: keep the face and proportions, change only the jacket colour." :disabled="!!busy" />
+        </label>
+      </section>
+
+      <!-- the closet: outfits or hairstyles, as large cards -->
+      <section class="closet widget">
+        <header class="closet-head">
+          <h3>CLOSET</h3>
+          <span class="spacer"></span>
+          <div class="switch" role="tablist" aria-label="Closet shelf">
+            <button role="tab" :aria-selected="shelfKind === 'outfit'" :class="{ on: shelfKind === 'outfit' }" @click="shelfKind = 'outfit'">Outfits</button>
+            <button role="tab" :aria-selected="shelfKind === 'hair'" :class="{ on: shelfKind === 'hair' }" @click="shelfKind = 'hair'">Hairstyles</button>
+          </div>
           <button :disabled="!!busy" @click="newForm(shelf.kind)">+ New</button>
         </header>
-        <div v-if="form.kind === shelf.kind" class="new">
-          <label>Name<input v-model="form.name" :placeholder="shelf.kind === 'outfit' ? 'Winter coat' : 'Twin tails'" maxlength="40" /></label>
-          <label>Description<input v-model="form.description" :placeholder="shelf.kind === 'outfit' ? 'a long navy coat with silver buttons, a white scarf' : 'high twin tails tied with blue ribbons'" /></label>
-          <button :disabled="!!busy" @click="pickFormPicture">{{ formPicture ? 'Change reference image' : 'Add reference image' }}</button>
-          <span v-if="formPicture" class="hint">{{ formPicture.split(/[\\/]/).pop() }}</span>
-          <div class="row">
-            <button class="primary" :disabled="!form.name.trim() || !!busy" @click="create">Add</button>
-            <button :disabled="!!busy" @click="newForm('')">Cancel</button>
+        <div class="cards">
+          <div v-if="form.kind === shelf.kind" class="new">
+            <label>Name<input v-model="form.name" :placeholder="shelf.kind === 'outfit' ? 'Winter coat' : 'Twin tails'" maxlength="40" /></label>
+            <label>Description<textarea v-model="form.description" rows="3" :placeholder="shelf.kind === 'outfit' ? 'a long navy coat with silver buttons, a white scarf' : 'high twin tails tied with blue ribbons'"></textarea></label>
+            <button :disabled="!!busy" @click="pickFormPicture">{{ formPicture ? 'Change reference image' : 'Add reference image' }}</button>
+            <span v-if="formPicture" class="hint">{{ formPicture.split(/[\\/]/).pop() }}</span>
+            <div class="actions">
+              <button class="primary" :disabled="!form.name.trim() || !!busy" @click="create">Add</button>
+              <button :disabled="!!busy" @click="newForm('')">Cancel</button>
+            </div>
           </div>
-        </div>
-        <p v-if="!shelf.items.length && form.kind !== shelf.kind" class="hint">Nothing here yet. Press + New and describe it.</p>
-        <div class="items">
           <ClosetCard
             v-for="item in shelf.items"
             :key="item.id"
             :item="item"
-            :worn="shelf.current === item.id"
+            :worn="shelf.worn === item.id"
             :busy="!!busy"
             :draw-label="priced(item.reference || item.sheet ? 'Improve / draw turnaround' : 'Draw turnaround', shelf.kind)"
             :price="priceTag(shelf.kind)"
@@ -359,8 +401,9 @@ watch(() => props.stamp, load)
             @view="openSheet(item.sheet || item.reference, item.name)"
           />
         </div>
+        <p v-if="!shelf.items.length && form.kind !== shelf.kind" class="hint">{{ shelf.empty }}</p>
       </section>
-    </div>
+    </template>
     <p v-else-if="problem" class="problem">{{ problem }}</p>
 
     <ImageViewer v-if="viewer" :pictures="viewer" :start="0" @close="viewer = null" />
@@ -374,6 +417,7 @@ watch(() => props.stamp, load)
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
 }
 .widget {
   background: var(--panel-background);
@@ -382,8 +426,8 @@ watch(() => props.stamp, load)
   backdrop-filter: blur(var(--glass-blur));
 }
 .bar,
-.row,
-.shelf-head {
+.actions,
+.closet-head {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -399,49 +443,14 @@ h2 {
   letter-spacing: 0.2em;
   color: var(--accent);
 }
-h3 {
+h3,
+.title,
+.inline {
   margin: 0;
   font-size: 13px;
   font-weight: 500;
-  letter-spacing: 0.14em;
-}
-.words {
-  display: grid;
-  gap: 6px;
-  margin-top: 10px;
-}
-.words label {
-  display: grid;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--text-dim);
-}
-.words textarea,
-.words input,
-.item input,
-.item textarea {
-  font: inherit;
+  letter-spacing: 0.18em;
   color: var(--text);
-  background: var(--panel-background);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 6px 8px;
-  resize: vertical;
-}
-.quality {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.quality select {
-  font: inherit;
-  color: var(--text);
-  background: var(--panel-background);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 2px 6px;
 }
 .state {
   padding: 3px 10px;
@@ -454,65 +463,40 @@ h3 {
   background: color-mix(in srgb, var(--warn) 22%, transparent);
   color: var(--warn);
 }
-.columns {
+
+/* the profile card */
+.profile {
   display: grid;
-  grid-template-columns: 300px 1fr 1fr;
-  gap: 16px;
-  flex: 1;
-  min-height: 0;
+  grid-template-columns: 240px minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 24px;
+  padding: 20px;
+  flex-shrink: 0;
 }
-.standard,
-.shelf {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-  overflow-y: auto;
+.frame {
+  display: grid;
+  gap: 6px;
 }
-.shelf-head {
-  justify-content: space-between;
+.carousel {
+  position: relative;
 }
 .portrait {
+  display: block;
+  width: 100%;
   padding: 0;
   overflow: hidden;
-  aspect-ratio: 2 / 3;
-  border-radius: 12px;
+  aspect-ratio: 3 / 4;
+  border: 1px solid var(--line);
+  border-radius: 14px;
 }
-.portrait img,
-.sheet img {
+.portrait img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.carousel {
-  position: relative;
-  flex-shrink: 0;
-}
-.carousel .portrait {
-  display: block;
-  width: 100%;
-}
-.carousel .portrait img {
-  object-fit: contain;
-}
-.carousel .nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: 50%;
-  font-size: 20px;
-  line-height: 1;
-}
-.carousel .prev { left: 8px; }
-.carousel .next { right: 8px; }
-.caption { text-align: center; }
 .portrait.empty {
   display: grid;
   place-items: center;
-  border: 1px dashed var(--line);
+  border-style: dashed;
   background: radial-gradient(circle at 50% 40%, #1d3b8a, transparent 70%);
 }
 .crystal {
@@ -520,45 +504,116 @@ h3 {
   color: #cfe0ff;
   text-shadow: 0 0 24px #7aa6ff;
 }
-.items {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+.carousel .nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  background: color-mix(in srgb, var(--panel-background) 80%, transparent);
 }
-.item {
+.carousel .prev { left: 6px; }
+.carousel .next { right: 6px; }
+.replace {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--panel-background) 85%, transparent);
+}
+.caption { text-align: center; }
+.look-words,
+.look-side {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px;
+  gap: 12px;
+  min-width: 0;
+}
+.look-words .title textarea {
+  flex: 1;
+  min-height: 150px;
+}
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* the drawing bar */
+.drawing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  flex-shrink: 0;
+}
+.inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-direction: row;
+}
+.inline.grow {
+  flex: 1;
+  min-width: 320px;
+}
+.inline.grow input {
+  flex: 1;
+}
+.divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--line);
+}
+
+/* the closet */
+.closet {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+.switch {
+  display: inline-flex;
+  padding: 3px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 999px;
 }
-.item.worn {
-  border-color: var(--accent);
+.switch button {
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 18px;
 }
-.sheet {
-  padding: 0;
-  overflow: hidden;
-  aspect-ratio: 3 / 2;
-  border-radius: 8px;
+.switch button.on {
+  background: var(--accent);
+  color: #07142e;
+  font-weight: 600;
 }
-.sheet.empty {
+.cards {
   display: grid;
-  place-items: center;
-  padding: 8px;
-  border: 1px dashed var(--line);
-  font-size: 12px;
-  color: var(--text-dim);
-  text-align: center;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
 }
 .new {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 14px;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
 }
+
 label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 input,
-textarea {
+textarea,
+select {
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -566,18 +621,23 @@ textarea {
   color: var(--text);
   font: inherit;
   font-size: 14px;
+  letter-spacing: normal;
 }
 textarea { resize: vertical; min-height: 48px; }
-.edit-request { flex-shrink: 0; }
-@media (max-width: 900px) {
-  .appearance { overflow-y: auto; }
-  .columns { grid-template-columns: 1fr; flex: none; }
-  .portrait { max-height: 400px; }
+@media (max-width: 1100px) {
+  .profile { grid-template-columns: 200px minmax(0, 1fr); }
+  .look-side { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .profile { grid-template-columns: 1fr; }
+  .frame { max-width: 280px; }
 }
 .hint {
   margin: 0;
   font-size: 12px;
   color: var(--text-dim);
+  letter-spacing: normal;
+  font-weight: 400;
 }
 .busy {
   font-size: 13px;
@@ -592,13 +652,14 @@ textarea { resize: vertical; min-height: 48px; }
   color: var(--good);
 }
 button {
-  padding: 6px 12px;
+  padding: 7px 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: none;
   color: var(--text);
   font: inherit;
   font-size: 13px;
+  letter-spacing: normal;
   cursor: pointer;
 }
 button.primary {
