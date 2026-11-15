@@ -8,7 +8,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
 import { appearanceImport, appearanceLook, appearanceNew, appearanceWear, choosePicture, studioPowers } from '../api/castle.js'
-import { referenceLine, improvementLine, itemReferenceLine } from '../components/appearance.js'
+import { referenceLine, improvementLine, itemReferenceLine, qualityLine, QUALITIES } from '../components/appearance.js'
 import { askImage } from '../api/ask.js'
 
 const props = defineProps({
@@ -30,6 +30,26 @@ const done = ref('')
 const form = ref({ kind: '', name: '', description: '' })
 const viewer = ref(null)
 const changes = ref('')
+// The quality chosen for every drawing here, remembered on this computer only.
+const QUALITY_KEY = 'castle.appearance.quality'
+function rememberedQuality() {
+  try {
+    const saved = localStorage.getItem(QUALITY_KEY)
+    return QUALITIES.some((q) => q.id === saved) ? saved : 'style'
+  } catch {
+    return 'style'
+  }
+}
+const quality = ref(rememberedQuality())
+watch(quality, (q) => {
+  try {
+    localStorage.setItem(QUALITY_KEY, q)
+  } catch {
+    // the choice still holds until Castle closes
+  }
+})
+// The price shows only when the next picture is paid with the key; on the ChatGPT plan it is not.
+const qualityLabel = (q) => (q.usd !== null && image.value === 'ready' ? `${q.label} - about $${q.usd.toFixed(2)}` : q.label)
 const revision = ref(0)
 const formPicture = ref('')
 const src = (path) => convertFileSrc(path) + `?v=${props.stamp}-${revision.value}`
@@ -116,6 +136,7 @@ async function drawPortrait(fromImage = false) {
         styleLine('standard-appearance.md'),
         reference ? referenceLine(reference) : 'Draw it from the words in companion.md; do not use the existing portrait as a reference.',
         improvementLine(changes.value),
+        qualityLine(quality.value),
         'Keep the original reference unchanged; preserve a backup before replacing any existing output.',
         `Save it as ${path('portrait.png')}.`,
         'Tell me the cost first and ask before you draw.',
@@ -145,6 +166,7 @@ async function drawSheet(kind, item) {
         item.sheet && item.sheet !== identity ? `Also inspect the earlier turnaround to improve on: ${JSON.stringify(item.sheet)}.` : '',
         itemReferenceLine(kind, item.reference),
         improvementLine(changes.value),
+        qualityLine(quality.value),
         identity ? '' : 'Keep the face as companion.md describes it.',
         'Keep imported references unchanged and preserve a backup before replacing any existing output.',
         `Save it as ${path(dir, item.id, 'turnaround.png')}.`,
@@ -181,6 +203,7 @@ async function tryOn(again = false) {
         itemReferenceLine('outfit', outfit?.reference),
         itemReferenceLine('hair', hair?.reference),
         improvementLine(changes.value),
+        qualityLine(quality.value),
         `Save it as ${saved.path}.`,
         'Tell me the cost first and ask before you draw.',
       ].filter(Boolean),
@@ -271,6 +294,11 @@ watch(() => props.stamp, load)
     <header class="bar">
       <h2>APPEARANCE</h2>
       <span class="state" :class="image">{{ STATE[image] ?? '…' }}</span>
+      <label class="quality">Quality
+        <select v-model="quality" :disabled="!!busy" aria-label="Picture quality">
+          <option v-for="q in QUALITIES" :key="q.id" :value="q.id">{{ qualityLabel(q) }}</option>
+        </select>
+      </label>
       <span class="spacer"></span>
       <span v-if="busy" class="busy">{{ busy }}</span>
       <span v-else-if="problem" class="problem">{{ problem }}</span>
@@ -382,6 +410,21 @@ h3 {
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.14em;
+}
+.quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.quality select {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-background);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 6px;
 }
 .state {
   padding: 3px 10px;

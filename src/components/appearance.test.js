@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { improvementLine, itemReferenceLine, referenceLine } from './appearance.js'
+import { improvementLine, itemReferenceLine, qualityLine, QUALITIES, referenceLine } from './appearance.js'
+
+describe('the chosen quality', () => {
+  it('overrides the style only when the member chose one', () => {
+    expect(qualityLine('style')).toBe('')
+    expect(qualityLine(undefined)).toBe('')
+    expect(qualityLine('ultra')).toBe('')
+    for (const q of ['low', 'medium', 'high']) expect(qualityLine(q)).toContain(`-Quality ${q}`)
+  })
+  it('prices every quality but the style default', () => {
+    expect(QUALITIES.map((q) => q.id)).toEqual(['style', 'low', 'medium', 'high'])
+    expect(QUALITIES.filter((q) => q.usd === null).map((q) => q.id)).toEqual(['style'])
+  })
+})
 
 describe('appearance image edit requests', () => {
   it('carries reference paths with spaces and quotes as data and preserves identity', () => {
