@@ -292,6 +292,14 @@ function openKeys() {
   openSettings('keys')
 }
 
+// THEME's own saves (the main theme, and the diary/story/profile looks) go through here too, so
+// every settingsStamp listener (HOME's PROFILE tab among them) hears about them the same as a
+// save from Settings does.
+async function themeChanged() {
+  await loadSettingsAndTheme()
+  settingsStamp.value += 1
+}
+
 async function settingsSaved() {
   await loadSettingsAndTheme()
   settingsStamp.value += 1
@@ -504,7 +512,7 @@ watch(settingsStamp, () => {
       <StoryView v-show="active === 'story'" v-if="storyOpened" :companion="companion" :member="memberName" :cli="cli" :visible="active === 'story'" />
       <AppearanceView v-if="active === 'appearance'" :companion="companion" :stamp="memoryStamp" @keys="openKeys" />
       <StudioView v-if="active === 'studio'" :companion="companion" :stamp="memoryStamp" @keys="openKeys" />
-      <ThemeView v-if="active === 'theme'" :companion="companion" @changed="loadSettingsAndTheme" @show-chat="active = 'home'" />
+      <ThemeView v-if="active === 'theme'" :companion="companion" @changed="themeChanged" @show-chat="active = 'home'" />
       <MemoryRoom v-if="['diary', 'projects'].includes(active)" :room="active" :stamp="memoryStamp" :open-file="roomFile" />
       <LibraryView v-if="active === 'library'" :companion="companion" :stamp="memoryStamp" />
       <div v-if="!BUILT.has(active)" class="room-soon">
