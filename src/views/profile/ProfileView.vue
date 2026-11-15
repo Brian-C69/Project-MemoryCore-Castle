@@ -12,6 +12,9 @@ import { activeTraits, AUDIENCES, audienceOf, profileLookOf, traitNote, waitingI
 const props = defineProps({
   shown: { type: Boolean, default: false },
   companion: { type: String, default: 'Your companion' },
+  // goes up whenever settings save anywhere, THEME's profile-look change among them - read again
+  // if this tab is the one on screen, the same way the other tabs already do
+  settingsStamp: { type: Number, default: 0 },
 })
 const emit = defineEmits(['settings'])
 
@@ -160,6 +163,10 @@ async function retireOpen() {
 watch(
   () => props.shown,
   (on) => on && load(),
+)
+watch(
+  () => props.settingsStamp,
+  () => props.shown && load(),
 )
 onMounted(() => props.shown && load())
 </script>

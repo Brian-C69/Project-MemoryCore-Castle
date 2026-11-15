@@ -454,7 +454,7 @@ defineExpose({ wake, screenLines, writeToSession, addPaths })
     </div>
 
     <div v-if="view === 'profile'" class="profile-area">
-      <ProfileView :shown="view === 'profile'" :companion="companion" @settings="emit('settings', 'database')" />
+      <ProfileView :shown="view === 'profile'" :companion="companion" :settings-stamp="settingsStamp" @settings="emit('settings', 'database')" />
     </div>
 
     <div v-if="dropping && view !== 'profile'" class="drop-hint">{{ view === 'chat' ? `Drop to share with ${companion}` : 'Drop to type the path into the Log' }}</div>
