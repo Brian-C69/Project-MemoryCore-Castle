@@ -222,6 +222,12 @@ New-Item -ItemType Directory -Path (Join-Path $blank 'appearance') -Force | Out-
 [System.IO.File]::WriteAllText((Join-Path $blank 'appearance\companion.md'), "# Mira's look`n`nDescribe the look here: face, eyes, hair colour.`n", $utf8)
 $r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Memory', $blank, '-PromptOnly')
 Report ($r.Code -eq 2 -and $r.Out -match 'starting words') 'look: the starting words alone are refused (they describe nobody)' "exit $($r.Code): $($r.Out)"
+$blankRef = Join-Path $blank 'appearance\portrait.png'
+[System.IO.File]::WriteAllBytes($blankRef, [byte[]](0x89, 0x50, 0x4E, 0x47))
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Memory', $blank, '-Reference', $blankRef, '-PromptOnly')
+$look = $null
+try { $look = $r.Out | ConvertFrom-Json } catch {}
+Report ($r.Code -eq 0 -and $look.prompt -match 'same person as in the reference picture' -and $look.prompt -notmatch 'Describe the look here') 'look: with a picture, the starting words give way to the picture' "exit $($r.Code): $($r.Out)"
 
 $lookOut = Join-Path $out 'portrait.png'
 $before = Get-NoticeCount

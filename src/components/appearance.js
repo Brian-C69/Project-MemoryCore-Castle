@@ -28,6 +28,12 @@ export const QUALITIES = [
   { id: 'high', label: 'High', usd: 0.25 },
 ]
 
+// companion.md still holds the words Castle started it with (they describe nobody yet).
+export function isStartingWords(canon = '') {
+  const body = String(canon).replace(/^\s*#[^\n]*\n/, '').trim()
+  return body.startsWith('Describe the look here')
+}
+
 // The quality each style file gives a drawing (castle-look.ps1 reads the same files).
 const STYLE_QUALITY = { standard: 'high', outfit: 'high', hair: 'high', tryon: 'medium' }
 

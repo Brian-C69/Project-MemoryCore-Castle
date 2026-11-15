@@ -8,7 +8,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
 import { appearanceImport, appearanceLook, appearanceNew, appearanceWear, choosePicture, imageRequest, pictureWay, studioPowers } from '../api/castle.js'
-import { lookSpec, pictureCost, QUALITIES } from '../components/appearance.js'
+import { isStartingWords, lookSpec, pictureCost, QUALITIES } from '../components/appearance.js'
 
 const props = defineProps({
   companion: { type: String, default: 'Your companion' },
@@ -130,10 +130,13 @@ const priced = (text, kind) => {
 }
 
 // Redraw draws the standard look again from the words in companion.md alone; Improve from image
-// gives the current portrait as the reference and changes only what is asked.
+// gives the current portrait as the reference and changes only what is asked. While companion.md
+// still has Castle's starting words, the portrait is the only description there is, so Redraw
+// follows it too.
+const followsPortrait = computed(() => !!look.value?.portrait && isStartingWords(look.value?.canon))
 async function drawPortrait(fromImage = false) {
   const label = fromImage ? 'Standard look (improved)' : 'Standard look'
-  const reference = fromImage ? look.value.portrait : null
+  const reference = fromImage || followsPortrait.value ? look.value.portrait : null
   const ok = await attempt('Asking…', () => queueLook(label, specFor('standard'), path('portrait.png'), reference))
   if (ok) after(label)
 }
@@ -289,6 +292,7 @@ watch(() => props.stamp, load)
         <button :disabled="!!busy" @click="tryOn()">{{ !look.tryOn?.exists || look.tryOn.stale ? "Try on today's look" : "Show today's look" }}</button>
         <button v-if="look.tryOn?.exists && !look.tryOn.stale" :disabled="!!busy" @click="tryOn(true)">{{ priced('Draw again', 'tryon') }}</button>
         <p class="hint">Upload PNG, JPEG or WebP (up to 25 MB). Castle writes each drawing's prompt from your notes itself. When {{ companion }} thinks with Claude Code, Castle draws it with your OpenAI key at the price on the button; with Codex, it is drawn on your ChatGPT plan when Codex is signed in, otherwise with your key. With no way to draw, the prompt is saved.</p>
+        <p v-if="followsPortrait" class="hint">appearance/companion.md still has Castle's starting words, so Redraw follows this picture. Describe the look there to draw from words.</p>
         <p class="hint">The look in words lives in <code>appearance/companion.md</code> - ask {{ companion }} to change it, or edit it yourself.</p>
       </section>
 
