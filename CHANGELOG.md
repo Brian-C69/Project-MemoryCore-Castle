@@ -6,6 +6,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **Reactions and replies in CHAT, ready for the room.** React with six emoji, reply with a quote that jumps to the original, and get alerted for replies to you (and reactions, if you switch that on). They appear as soon as the room server offers them.
 - **A real LIBRARY.** Turn it on in Settings > Rooms: **My books** keeps the knowledge your companion saves in your memory database (an old `library/` folder is taken in), and the **Spiral Library** brings Kiyo's published books, whole for members who may read them.
+- **STUDIO's Make bar stays put.** The four power buttons (Picture, Video, Song, Voice) and the Create/Ask/Add-key button beside them used to change width with their own label or status, shifting the whole bar every time you switched powers or it started working. Both are now a steady width.
+
 - **New project can choose its stack.** Frontend, backend, database, hosting and mobile (or your own with Other...), and your companion is told what to set up when the project opens.
 - **A new STUDIO.** One Make bar for pictures, videos, songs and voice lines, with each one's state at a glance, and a gallery that fills the room with your creations at their own shape.
 - **Every dropdown matches your theme.** Choices such as Quality, the clock format, a world's camera or the chat room's participation now open a glass list in the theme's colours instead of Windows' grey menu, and work with the keyboard.
