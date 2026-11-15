@@ -417,6 +417,8 @@ watch(() => props.stamp, load)
   flex-direction: column;
   gap: 16px;
   overflow-y: auto;
+  scrollbar-color: var(--line) transparent;
+  scrollbar-width: thin;
 }
 .widget {
   background: var(--panel-background);
