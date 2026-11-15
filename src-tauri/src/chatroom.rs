@@ -563,6 +563,17 @@ pub async fn room_react(id: u64, emoji: String, on: bool, store: State<'_, Setti
     blocking(move || room.react(id, &emoji, on)).await
 }
 
+/// A line the member wrote somewhere else (their phone, through their own Mira Inbox), posted as
+/// them and remembered as theirs, as a line written in Castle is. Private: used only by the
+/// member's own Mira Inbox bridge (inboxbridge.rs), never a public command.
+pub fn post_as_member(store: &SettingsStore, text: &str) -> Result<Value, RoomRefusal> {
+    let line = room_for(store, "me")?.post(text)?;
+    if let Some(id) = line.get("id").and_then(Value::as_u64) {
+        remember_mine(store, id);
+    }
+    Ok(line)
+}
+
 /// The ids of the lines this member posted from Castle.
 #[tauri::command]
 pub fn room_mine(store: State<SettingsStore>) -> Vec<u64> {

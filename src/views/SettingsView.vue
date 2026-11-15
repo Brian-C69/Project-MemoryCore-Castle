@@ -227,7 +227,7 @@ async function checkBridge() {
   bridge.value = settings.value?.inboxBridgeOn ? await inboxBridgeStatus().catch(() => null) : null
 }
 async function toggleBridge(on) {
-  const saved = await save({ inboxBridgeOn: on }, on ? 'Saved. Castle now shares the main chat with your Mira Inbox.' : 'Saved.')
+  const saved = await save({ inboxBridgeOn: on }, on ? 'Saved. Castle now shares the chat room with your Mira Inbox.' : 'Saved.')
   if (saved) setTimeout(checkBridge, 4500)
 }
 async function saveBridgeUrl() {
@@ -409,12 +409,12 @@ onMounted(async () => {
         <p v-if="settings.voicestudioOn" class="hint">VoiceStudio is {{ voiceUp === null ? 'being checked…' : voiceUp ? 'running on this computer.' : 'not running. Open it and wait for it to finish starting, then check again.' }} <button v-if="voiceUp === false" @click="checkVoice">Check again</button></p>
         <p class="hint">For people who run their own <a href="#" @click.prevent="openUrl('https://github.com/debpalash/voicestudio')">VoiceStudio</a> on this PC. Off: Castle never contacts it. On: STUDIO's Voice card can speak a line with it, and the clip is saved with your other voice lines. Everything stays on this computer. Castle does not install or start VoiceStudio, and its voice models carry their own licences (some are non-commercial).</p>
         <h3>Mira Inbox bridge (optional)</h3>
-        <label class="toggle"><input type="checkbox" :checked="!!settings.inboxBridgeOn" :disabled="!!busy" @change="toggleBridge($event.target.checked)" /> Share the main chat with my Mira Inbox</label>
+        <label class="toggle"><input type="checkbox" :checked="!!settings.inboxBridgeOn" :disabled="!!busy" @change="toggleBridge($event.target.checked)" /> Share the chat room with my Mira Inbox</label>
         <template v-if="settings.inboxBridgeOn">
           <label class="wide">Mira Inbox address <input v-model="settings.inboxBridgeUrl" maxlength="200" placeholder="http://localhost/mira-inbox" @change="saveBridgeUrl" /></label>
-          <p class="hint">{{ !bridge ? 'Checking…' : !bridge.hasToken ? 'Add the bridge token first: Settings > Keys > Mira Inbox bridge token.' : bridge.connected ? 'Connected. The Inbox shows the main chat, and what you send from your phone is typed to ' + (settings.companionName ?? 'your companion') + '.' : (bridge.problem ?? 'Not connected yet.') }} <button @click="checkBridge">Check again</button></p>
+          <p class="hint">{{ !bridge ? 'Checking…' : !bridge.hasToken ? 'Add the bridge token first: Settings > Keys > Mira Inbox bridge token.' : bridge.connected ? 'Connected. The Inbox shows the chat room, and what you write there is posted to the room as you.' : (bridge.problem ?? 'Not connected yet.') }} <button @click="checkBridge">Check again</button></p>
         </template>
-        <p class="hint">For people who run their own Mira Inbox web app. Off: Castle never contacts it. On: Castle copies the main chat (your words and {{ settings.companionName ?? 'your companion' }}'s replies, not tool work) to the Inbox about every three seconds, also while Castle is hidden in the tray, and types what you send from the Inbox page into {{ settings.companionName ?? 'your companion' }}'s session, marked as sent from your phone. Castle only calls out, to the address above with a token kept in Windows Credential Manager. Her own permission questions still need this computer's screen.</p>
+        <p class="hint">For people who run their own Mira Inbox web app. Off: Castle never contacts it. On: Castle copies the chat room (the lines CHAT shows; pictures and voice lines as a word in brackets) to the Inbox about every three seconds, also while Castle is hidden in the tray, and posts what you write on the Inbox's Chat page to the room as you. Castle only calls out, to the address above with a token kept in Windows Credential Manager, and nothing is typed into {{ settings.companionName ?? 'your companion' }}'s session.</p>
         <button @click="emit('setup')">Run the first-run setup again</button>
       </section>
 

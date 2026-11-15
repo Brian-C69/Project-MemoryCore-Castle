@@ -135,7 +135,7 @@ pub fn names_someone(text: &str, names: &[String]) -> bool {
 /// sign-in, sign-out or a display-name change forgets it.
 static ROOM_NAME: Mutex<Option<String>> = Mutex::new(None);
 
-fn room_name() -> Option<String> {
+pub(crate) fn room_name() -> Option<String> {
     if let Some(name) = ROOM_NAME.lock().unwrap().clone() {
         return Some(name);
     }

@@ -32,6 +32,13 @@ pub struct RoomReader {
     problem: Mutex<Option<RoomRefusal>>,
 }
 
+impl RoomReader {
+    /// The lines kept so far, oldest first (the Mira Inbox bridge copies them).
+    pub(crate) fn snapshot(&self) -> Vec<Value> {
+        self.lines.lock().unwrap().clone()
+    }
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Backlog {
