@@ -7,6 +7,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
+import ClosetCard from '../components/ClosetCard.vue'
 import { appearanceImport, appearanceLook, appearanceNew, appearanceSaveItem, appearanceSaveLook, appearanceWear, choosePicture, imageRequest, studioPowers } from '../api/castle.js'
 import { lookSpec, pictureCost, QUALITIES } from '../components/appearance.js'
 
@@ -39,17 +40,11 @@ async function saveLook() {
   })
   if (saved) done.value = 'The look is saved in your memory.'
 }
-// One outfit or hairstyle whose words are being edited in place.
-const editing = ref(null) // { kind, id, name, words }
-function editItem(kind, item) {
-  editing.value = { kind, id: item.id, name: item.name, words: item.note }
-}
-async function saveItem() {
-  const e = editing.value
-  const saved = await attempt('Saving…', async () => {
-    look.value = await appearanceSaveItem(e.kind, e.id, e.name, e.words)
+// New name or words for one outfit or hairstyle (edited in place on its closet card).
+async function saveItem(kind, id, { name, words }) {
+  await attempt('Saving…', async () => {
+    look.value = await appearanceSaveItem(kind, id, name, words)
   })
-  if (saved) editing.value = null
 }
 const viewer = ref(null)
 const changes = ref('')
@@ -150,6 +145,11 @@ async function queueLook(label, spec, output, reference) {
 }
 const specFor = (kind, items = {}) => lookSpec(kind, { ...items, changes: changes.value, quality: quality.value })
 // The price on a Draw button, only when the key pays.
+// The small price chip on a card's Draw icon, only when the key pays.
+const priceTag = (kind) => {
+  const usd = pictureCost(kind, quality.value)
+  return image.value === 'ready' && usd !== null ? `$${usd.toFixed(2)}` : ''
+}
 const priced = (text, kind) => {
   const usd = pictureCost(kind, quality.value)
   return image.value === 'ready' && usd !== null ? `${text} · about $${usd.toFixed(2)}` : text
@@ -343,29 +343,21 @@ watch(() => props.stamp, load)
         </div>
         <p v-if="!shelf.items.length && form.kind !== shelf.kind" class="hint">Nothing here yet. Press + New and describe it.</p>
         <div class="items">
-          <article v-for="item in shelf.items" :key="item.id" class="item" :class="{ worn: shelf.current === item.id }">
-            <button v-if="item.sheet" class="sheet" @click="openSheet(item.sheet, item.name)"><img :src="src(item.sheet)" :alt="item.name" /></button>
-            <button v-else-if="item.reference" class="sheet" @click="openSheet(item.reference, item.name + ' reference')"><img :src="src(item.reference)" :alt="item.name + ' reference'" /></button>
-            <div v-else class="sheet empty">{{ item.savedPrompt ? 'Prompt saved - add the key to draw' : 'Not drawn yet' }}</div>
-            <template v-if="editing?.kind === shelf.kind && editing.id === item.id">
-              <input v-model="editing.name" maxlength="80" aria-label="Name" />
-              <textarea v-model="editing.words" rows="3" maxlength="4000" aria-label="Words"></textarea>
-              <div class="row">
-                <button class="primary" :disabled="!editing.name.trim() || !!busy" @click="saveItem">Save</button>
-                <button :disabled="!!busy" @click="editing = null">Cancel</button>
-              </div>
-            </template>
-            <template v-else>
-              <strong>{{ item.name }}</strong>
-              <p class="hint">{{ item.note }}</p>
-            </template>
-            <div class="row">
-              <button :disabled="!!busy" :class="{ primary: shelf.current !== item.id }" @click="wear(shelf.kind, item.id)">{{ shelf.current === item.id ? 'Wearing' : 'Wear' }}</button>
-              <button :disabled="!!busy" @click="upload(shelf.kind, item.id)">{{ item.reference ? 'Replace reference' : 'Upload reference' }}</button>
-              <button :disabled="!!busy" @click="drawSheet(shelf.kind, item)">{{ priced(item.reference || item.sheet ? 'Improve / draw turnaround' : 'Draw', shelf.kind) }}</button>
-              <button v-if="!(editing?.kind === shelf.kind && editing.id === item.id)" :disabled="!!busy" @click="editItem(shelf.kind, item)">Edit words</button>
-            </div>
-          </article>
+          <ClosetCard
+            v-for="item in shelf.items"
+            :key="item.id"
+            :item="item"
+            :worn="shelf.current === item.id"
+            :busy="!!busy"
+            :draw-label="priced(item.reference || item.sheet ? 'Improve / draw turnaround' : 'Draw turnaround', shelf.kind)"
+            :price="priceTag(shelf.kind)"
+            :stamp="`${stamp}-${revision}`"
+            @wear="wear(shelf.kind, item.id)"
+            @upload="upload(shelf.kind, item.id)"
+            @draw="drawSheet(shelf.kind, item)"
+            @save="(w) => saveItem(shelf.kind, item.id, w)"
+            @view="openSheet(item.sheet || item.reference, item.name)"
+          />
         </div>
       </section>
     </div>

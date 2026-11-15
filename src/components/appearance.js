@@ -28,6 +28,17 @@ export const QUALITIES = [
   { id: 'high', label: 'High', usd: 0.25 },
 ]
 
+// One shelf of the closet: its items, which one is worn, and what an empty shelf says.
+export function closetShelf(look, kind) {
+  const outfits = kind !== 'hair'
+  return {
+    kind: outfits ? 'outfit' : 'hair',
+    items: (outfits ? look?.wardrobe : look?.hairstyles) ?? [],
+    worn: (outfits ? look?.current?.outfit : look?.current?.hair) ?? null,
+    empty: outfits ? 'No outfits yet. Press + New and describe one.' : 'No hairstyles yet. Press + New and describe one.',
+  }
+}
+
 // The quality each style file gives a drawing (castle-look.ps1 reads the same files).
 const STYLE_QUALITY = { standard: 'high', outfit: 'high', hair: 'high', tryon: 'medium' }
 

@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { improvementLine, itemReferenceLine, lookSpec, pictureCost, qualityLine, QUALITIES, referenceLine } from './appearance.js'
+import { closetShelf, improvementLine, itemReferenceLine, lookSpec, pictureCost, qualityLine, QUALITIES, referenceLine } from './appearance.js'
+
+describe('a shelf of the closet', () => {
+  const look = { wardrobe: [{ id: 'coat' }], hairstyles: [{ id: 'bob' }, { id: 'tails' }], current: { outfit: 'coat', hair: null } }
+  it('gives the outfits with the worn one', () => {
+    expect(closetShelf(look, 'outfit')).toMatchObject({ kind: 'outfit', items: [{ id: 'coat' }], worn: 'coat' })
+  })
+  it('gives the hairstyles, none worn', () => {
+    const shelf = closetShelf(look, 'hair')
+    expect(shelf.items.length).toBe(2)
+    expect(shelf.worn).toBeNull()
+  })
+  it('says what an empty shelf holds before the look has loaded', () => {
+    expect(closetShelf(null, 'hair')).toMatchObject({ items: [], worn: null, empty: expect.stringContaining('No hairstyles yet') })
+  })
+})
 
 describe('a drawing named by its parts', () => {
   it('carries the ids, the trimmed words and the quality', () => {
