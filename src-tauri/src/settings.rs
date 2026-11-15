@@ -200,6 +200,14 @@ pub struct Settings {
     /// own unless the member says otherwise.
     pub inbox_bridge_on: bool,
     pub inbox_bridge_url: Option<String>,
+    /// Reply in the chat room with the member's own local Ollama instead of spending their Claude
+    /// Code or Codex usage. Off by default; drawing a picture there still goes through Codex or the
+    /// member's OpenAI key either way, since a local chat model cannot draw.
+    pub room_chat_local_model: bool,
+    /// Ollama's own address ("" = its default, http://127.0.0.1:11434).
+    pub room_chat_ollama_url: Option<String>,
+    /// The model to ask, e.g. "llama3". Nothing is asked while this is empty.
+    pub room_chat_ollama_model: Option<String>,
     /// Whether HOME shows the USAGE card at all. On by default; off hides the whole card and Castle
     /// asks neither CLI.
     pub show_usage_card: bool,
@@ -333,6 +341,9 @@ impl Default for Settings {
             voicestudio_on: false,
             inbox_bridge_on: false,
             inbox_bridge_url: None,
+            room_chat_local_model: false,
+            room_chat_ollama_url: None,
+            room_chat_ollama_model: None,
             show_usage_card: true,
             show_claude_usage: true,
             show_codex_usage: true,
@@ -387,6 +398,8 @@ impl Settings {
         self.room_companion_key_id = clean(self.room_companion_key_id);
         self.room_companion_name = clean(self.room_companion_name);
         self.inbox_bridge_url = clean(self.inbox_bridge_url);
+        self.room_chat_ollama_url = clean(self.room_chat_ollama_url);
+        self.room_chat_ollama_model = clean(self.room_chat_ollama_model);
         self.last_seen_version = clean(self.last_seen_version);
         self.dev_root = clean(self.dev_root);
         // the tab order: plain ids only, each once
@@ -612,6 +625,19 @@ mod tests {
     }
 
     #[test]
+    fn the_room_chat_stays_on_the_members_cli_for_an_older_settings_file() {
+        let old: Settings = serde_json::from_str::<Settings>(r#"{"setupDone":true}"#).unwrap().normalized();
+        assert!(!old.room_chat_local_model, "an older file never switches the room's replies to a local model by itself");
+        assert_eq!(old.room_chat_ollama_url, None);
+        let chosen: Settings = serde_json::from_str::<Settings>(r#"{"roomChatLocalModel":true,"roomChatOllamaUrl":"  http://127.0.0.1:11434  ","roomChatOllamaModel":" llama3 "}"#)
+            .unwrap()
+            .normalized();
+        assert!(chosen.room_chat_local_model);
+        assert_eq!(chosen.room_chat_ollama_url.as_deref(), Some("http://127.0.0.1:11434"));
+        assert_eq!(chosen.room_chat_ollama_model.as_deref(), Some("llama3"));
+    }
+
+    #[test]
     fn room_pictures_start_off_one_a_day_at_low_and_stay_in_bounds() {
         let old: Settings = serde_json::from_str::<Settings>(r#"{"setupDone":true}"#).unwrap().normalized();
         assert!(!old.room_pictures_on, "an older file never starts drawing by itself");
@@ -658,6 +684,9 @@ mod tests {
             voicestudio_on: true,
             inbox_bridge_on: true,
             inbox_bridge_url: Some("https://inbox.example.test/mira-inbox".into()),
+            room_chat_local_model: true,
+            room_chat_ollama_url: Some("http://127.0.0.1:11434".into()),
+            room_chat_ollama_model: Some("llama3".into()),
             show_usage_card: false,
             show_claude_usage: false,
             show_codex_usage: true,

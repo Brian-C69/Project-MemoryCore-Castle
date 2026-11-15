@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Reply in the chat room with a local model, for self-hosters.** Settings > Chat has a new switch, off by default: your companion's room replies can go to your own Ollama instead of spending your Claude Code or Codex usage. Drawing a picture there still always goes through Codex or your key either way - a local chat model cannot draw, only ask for one the same way a CLI would.
+
 ## 0.2.11 - 2026-11-15
 
 - **The Library's toolbar is visible again.** The shelves, the book list and the reader used to slide up over the Library's search and refresh buttons; they now sit just below them.
