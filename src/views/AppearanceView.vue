@@ -1,26 +1,22 @@
 <script setup>
 // APPEARANCE: the companion's standard look, the wardrobe and the hairstyles as turnaround
-// sheets, today's outfit and hair, and Try on. Drawing is the companion's work: a request goes to
-// it with the right style file; with Codex it draws by itself, with Claude Code it needs the
-// ChatGPT key, and without one the prompt is saved and Castle says so.
+// sheets, today's outfit and hair, and Try on. A drawing is queued by its parts and castle-look.ps1
+// writes its prompt from the notes: Codex draws it on the ChatGPT plan, or Castle draws it with the
+// OpenAI key; with neither the prompt is saved and Castle says so. No AI reads the notes for it.
 import { computed, onMounted, ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
-import { appearanceImport, appearanceLook, appearanceNew, appearanceWear, choosePicture, studioPowers } from '../api/castle.js'
-import { referenceLine, improvementLine, itemReferenceLine, qualityLine, QUALITIES } from '../components/appearance.js'
-import { askImage } from '../api/ask.js'
+import { appearanceImport, appearanceLook, appearanceNew, appearanceWear, choosePicture, imageRequest, pictureWay, studioPowers } from '../api/castle.js'
+import { lookSpec, pictureCost, QUALITIES } from '../components/appearance.js'
 
 const props = defineProps({
   companion: { type: String, default: 'Your companion' },
   stamp: { type: Number, default: 0 },
 })
-const emit = defineEmits(['keys', 'show-chat'])
-// The way the last picture went ("codex", "companion" or "none"), for the line after asking.
+const emit = defineEmits(['keys'])
+// The way the last picture went ("codex", "key" or "none"), for the line after asking.
 let lastWay = 'codex'
-const askCompanion = async (lines, label) => {
-  lastWay = await askImage(lines, label, props.companion)
-}
 
 const look = ref(null)
 const image = ref('')
@@ -120,8 +116,17 @@ async function attempt(label, work) {
   }
 }
 
-function styleLine(file) {
-  return `Use the drawing style in %CASTLE_STYLES%\\${file} and fill its slots from ${path('companion.md')}.`
+// A drawing is queued by its parts; castle-look.ps1 writes the prompt from the member's notes, so
+// no AI reads them. The way it goes is asked first, for the line after.
+async function queueLook(label, spec, output, reference) {
+  lastWay = await pictureWay().catch(() => 'codex')
+  await imageRequest(label, output, reference ? [reference] : [], 'appearance', label, spec)
+}
+const specFor = (kind, items = {}) => lookSpec(kind, { ...items, changes: changes.value, quality: quality.value })
+// The price on a Draw button, only when the key pays.
+const priced = (text, kind) => {
+  const usd = pictureCost(kind, quality.value)
+  return image.value === 'ready' && usd !== null ? `${text} · about $${usd.toFixed(2)}` : text
 }
 
 // Redraw draws the standard look again from the words in companion.md alone; Improve from image
@@ -129,52 +134,19 @@ function styleLine(file) {
 async function drawPortrait(fromImage = false) {
   const label = fromImage ? 'Standard look (improved)' : 'Standard look'
   const reference = fromImage ? look.value.portrait : null
-  const ok = await attempt('Asking…', () =>
-    askCompanion(
-      [
-        `Please draw your standard appearance for Castle's APPEARANCE room.`,
-        styleLine('standard-appearance.md'),
-        reference ? referenceLine(reference) : 'Draw it from the words in companion.md; do not use the existing portrait as a reference.',
-        improvementLine(changes.value),
-        qualityLine(quality.value),
-        'Keep the original reference unchanged; preserve a backup before replacing any existing output.',
-        `Save it as ${path('portrait.png')}.`,
-        'Tell me the cost first and ask before you draw.',
-      ].filter(Boolean),
-      label,
-    ),
-  )
+  const ok = await attempt('Asking…', () => queueLook(label, specFor('standard'), path('portrait.png'), reference))
   if (ok) after(label)
 }
 
-// The single -Reference is always who the companion is: the standard look, or this item's own
+// The single reference is always who the companion is: the standard look, or this item's own
 // earlier turnaround when there is no standard look yet. An imported outfit or hairstyle picture
-// may show someone else, so it is only described as the source for the clothes or the hair.
+// may show someone else, so it is never the reference; the item's words describe the clothes or hair.
 async function drawSheet(kind, item) {
   const label = `${kind === 'outfit' ? 'Outfit' : 'Hairstyle'} turnaround: ${item.name}`
   const dir = kind === 'outfit' ? 'wardrobe' : 'hairstyles'
-  const note = kind === 'outfit' ? 'outfit.md' : 'hair.md'
-  const style = kind === 'outfit' ? 'outfit-turnaround.md' : 'hair-turnaround.md'
   const identity = look.value.portrait || item.sheet
-  const ok = await attempt('Asking…', () =>
-    askCompanion(
-      [
-        `Please draw the ${kind === 'outfit' ? 'outfit' : 'hairstyle'} turnaround (front, side, back) for "${item.name}".`,
-        styleLine(style),
-        `The ${kind === 'outfit' ? 'outfit' : 'hairstyle'} is described in ${path(dir, item.id, note)}.`,
-        referenceLine(identity),
-        item.sheet && item.sheet !== identity ? `Also inspect the earlier turnaround to improve on: ${JSON.stringify(item.sheet)}.` : '',
-        itemReferenceLine(kind, item.reference),
-        improvementLine(changes.value),
-        qualityLine(quality.value),
-        identity ? '' : 'Keep the face as companion.md describes it.',
-        'Keep imported references unchanged and preserve a backup before replacing any existing output.',
-        `Save it as ${path(dir, item.id, 'turnaround.png')}.`,
-        'Tell me the cost first and ask before you draw.',
-      ].filter(Boolean),
-      label,
-    ),
-  )
+  const spec = specFor(kind, kind === 'outfit' ? { outfit: item.id } : { hair: item.id })
+  const ok = await attempt('Asking…', () => queueLook(label, spec, path(dir, item.id, 'turnaround.png'), identity))
   if (ok) after(label)
 }
 
@@ -194,31 +166,16 @@ async function tryOn(again = false) {
     done.value = 'Already drawn for this outfit and hairstyle - showing the saved picture. Use Draw again for a new one.'
     return
   }
-  const ok = await attempt('Asking…', () =>
-    askCompanion(
-      [
-        `Please draw a try-on picture: you in ${outfit ? `the outfit "${outfit.name}" (${path('wardrobe', outfit.id, 'outfit.md')})` : 'your usual clothes'} with ${hair ? `the hairstyle "${hair.name}" (${path('hairstyles', hair.id, 'hair.md')})` : 'your usual hair'}.`,
-        styleLine('try-on.md'),
-        referenceLine(look.value.portrait),
-        itemReferenceLine('outfit', outfit?.reference),
-        itemReferenceLine('hair', hair?.reference),
-        improvementLine(changes.value),
-        qualityLine(quality.value),
-        `Save it as ${saved.path}.`,
-        'Tell me the cost first and ask before you draw.',
-      ].filter(Boolean),
-      label,
-    ),
-  )
+  const spec = specFor('tryon', { outfit: outfit?.id ?? null, hair: hair?.id ?? null })
+  const ok = await attempt('Asking…', () => queueLook(label, spec, saved.path, look.value.portrait))
   if (ok) after(label)
 }
 
 function after(label) {
-  if (lastWay === 'companion') {
-    done.value = `Asked ${props.companion}: ${label}. It tells you the cost and asks before it draws - answer in Chat; the picture appears here once it is saved.`
-    emit('show-chat')
+  if (lastWay === 'key') {
+    done.value = `Drawing with your OpenAI key: ${label}. Watch it under Image requests; the picture appears here when it is done.`
   } else if (lastWay === 'none') {
-    done.value = `Not drawn: ${label}. Sign in to Codex with ChatGPT, or think with Claude Code and add an OpenAI key in Settings > Keys. The prompt is saved under Image requests.`
+    done.value = `Not drawn: ${label}. Sign in to Codex with ChatGPT, or add an OpenAI key in Settings > Keys. The prompt is saved under Image requests.`
   } else {
     done.value = `Queued for Codex: ${label}. Watch it under Image requests; the picture appears here when it is done.`
   }
@@ -326,12 +283,12 @@ watch(() => props.stamp, load)
         </div>
         <p v-if="slide" class="hint caption">{{ slide.label }}<template v-if="slides.length > 1"> · {{ slideIndex + 1 }}/{{ slides.length }}</template></p>
         <button :disabled="!!busy" @click="upload('standard')">{{ look.portrait ? 'Replace image' : 'Upload image' }}</button>
-        <button class="primary" :disabled="!!busy" @click="drawPortrait(false)">{{ look.portrait ? 'Redraw' : 'Draw the standard look' }}</button>
-        <button v-if="look.portrait" :disabled="!!busy" @click="drawPortrait(true)">Improve from image</button>
+        <button class="primary" :disabled="!!busy" @click="drawPortrait(false)">{{ priced(look.portrait ? 'Redraw' : 'Draw the standard look', 'standard') }}</button>
+        <button v-if="look.portrait" :disabled="!!busy" @click="drawPortrait(true)">{{ priced('Improve from image', 'standard') }}</button>
         <p v-if="tryOnLine" class="hint">{{ tryOnLine }}</p>
         <button :disabled="!!busy" @click="tryOn()">{{ !look.tryOn?.exists || look.tryOn.stale ? "Try on today's look" : "Show today's look" }}</button>
-        <button v-if="look.tryOn?.exists && !look.tryOn.stale" :disabled="!!busy" @click="tryOn(true)">Draw again</button>
-        <p class="hint">Upload PNG, JPEG or WebP (up to 25 MB). Pictures are drawn by Codex on your ChatGPT plan when it is signed in; otherwise {{ companion }} draws them with your OpenAI key (it tells you the cost and asks first). With neither, the prompt is saved.</p>
+        <button v-if="look.tryOn?.exists && !look.tryOn.stale" :disabled="!!busy" @click="tryOn(true)">{{ priced('Draw again', 'tryon') }}</button>
+        <p class="hint">Upload PNG, JPEG or WebP (up to 25 MB). Castle writes each drawing's prompt from your notes itself. Codex draws it on your ChatGPT plan when it is signed in; otherwise Castle draws it with your OpenAI key at the price on the button. With neither, the prompt is saved.</p>
         <p class="hint">The look in words lives in <code>appearance/companion.md</code> - ask {{ companion }} to change it, or edit it yourself.</p>
       </section>
 
@@ -361,7 +318,7 @@ watch(() => props.stamp, load)
             <div class="row">
               <button :disabled="!!busy" :class="{ primary: shelf.current !== item.id }" @click="wear(shelf.kind, item.id)">{{ shelf.current === item.id ? 'Wearing' : 'Wear' }}</button>
               <button :disabled="!!busy" @click="upload(shelf.kind, item.id)">{{ item.reference ? 'Replace reference' : 'Upload reference' }}</button>
-              <button :disabled="!!busy" @click="drawSheet(shelf.kind, item)">{{ item.reference || item.sheet ? 'Improve / draw turnaround' : 'Draw' }}</button>
+              <button :disabled="!!busy" @click="drawSheet(shelf.kind, item)">{{ priced(item.reference || item.sheet ? 'Improve / draw turnaround' : 'Draw', shelf.kind) }}</button>
             </div>
           </article>
         </div>

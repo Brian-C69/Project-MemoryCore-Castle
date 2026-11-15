@@ -28,6 +28,21 @@ export const QUALITIES = [
   { id: 'high', label: 'High', usd: 0.25 },
 ]
 
+// The quality each style file gives a drawing (castle-look.ps1 reads the same files).
+const STYLE_QUALITY = { standard: 'high', outfit: 'high', hair: 'high', tryon: 'medium' }
+
+// About what one drawing of `kind` costs with the OpenAI key at the chosen quality, in USD.
+export function pictureCost(kind, quality) {
+  const q = quality === 'style' || !quality ? STYLE_QUALITY[kind] ?? 'medium' : quality
+  return QUALITIES.find((x) => x.id === q)?.usd ?? null
+}
+
+// What castle-look.ps1 is asked to draw: the kind, the items by id, the member's words, the quality.
+export function lookSpec(kind, { outfit = null, hair = null, changes = '', quality = 'style' } = {}) {
+  const words = changes.trim()
+  return { kind, outfit, hair, changes: words || null, quality }
+}
+
 export function qualityLine(quality) {
   return ['low', 'medium', 'high'].includes(quality)
     ? `Draw it at ${quality} quality (castle-image.ps1 -Quality ${quality}); this overrides the style's quality.`

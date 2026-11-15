@@ -217,6 +217,12 @@ Report ($r.Code -eq 0 -and $look.quality -eq 'low' -and $look.prompt -match 'the
 $r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'outfit', '-Memory', $memory, '-Outfit', '..\..\secret', '-PromptOnly')
 Report ($r.Code -eq 2) 'look: an item id that leaves its folder is refused' "exit $($r.Code): $($r.Out)"
 
+$blank = Join-Path $root 'blank memory'
+New-Item -ItemType Directory -Path (Join-Path $blank 'appearance') -Force | Out-Null
+[System.IO.File]::WriteAllText((Join-Path $blank 'appearance\companion.md'), "# Mira's look`n`nDescribe the look here: face, eyes, hair colour.`n", $utf8)
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Memory', $blank, '-PromptOnly')
+Report ($r.Code -eq 2 -and $r.Out -match 'starting words') 'look: the starting words alone are refused (they describe nobody)' "exit $($r.Code): $($r.Out)"
+
 $lookOut = Join-Path $out 'portrait.png'
 $before = Get-NoticeCount
 $r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Memory', $memory, '-OutFile', $lookOut)

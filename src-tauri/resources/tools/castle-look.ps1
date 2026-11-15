@@ -85,6 +85,10 @@ $look = Join-Path $Memory 'appearance'
 $canonPath = Join-Path $look 'companion.md'
 $canon = Get-NoteBody $canonPath
 if (-not $canon) { Stop-CastleBadInput "the look in words is empty: $canonPath" }
+# Castle's own starting words describe nobody: without a picture to follow, the drawing would be a stranger.
+if (-not $Reference -and $canon -match '^Describe the look here') {
+    Stop-CastleBadInput 'appearance/companion.md still has the starting words. Describe the look there first, or use Improve from image so the portrait is followed.'
+}
 $artStyle = [regex]::Match($canon, '(?im)^\s*[-*]?\s*\**\s*art style\s*\**\s*[:\-]\s*\**\s*(.+?)\s*\**\s*$').Groups[1].Value.Trim().TrimEnd('.')
 if (-not $artStyle) { $artStyle = 'stylized (in the art style the character notes describe)' }
 

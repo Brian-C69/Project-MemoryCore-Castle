@@ -54,7 +54,8 @@ export const imageRetry = (id) => invoke('image_retry', { id })
 export const imageDismiss = (id = null) => invoke('image_dismiss', { id })
 export const imageCancel = (id) => invoke('image_cancel', { id })
 // `label`: what the picture is for, shown in the Image requests list ("Try-on: Winter coat + Twin tails").
-export const imageRequest = (brief, output = null, references = [], room = 'studio', label = null) => invoke('image_request', { brief, output, references, room, label })
+// `look` names an APPEARANCE drawing by its parts (kind, outfit, hair, changes, quality); castle-look.ps1 writes its prompt
+export const imageRequest = (brief, output = null, references = [], room = 'studio', label = null, look = null) => invoke('image_request', { brief, output, references, room, label, look })
 export const providerSwitch = (target) => invoke('provider_switch', { target })
 export const providerSwitchStatus = () => invoke('provider_switch_status')
 export const providerSwitchCancel = () => invoke('provider_switch_cancel')

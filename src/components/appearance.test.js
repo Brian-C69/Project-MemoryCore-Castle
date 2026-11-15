@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { improvementLine, itemReferenceLine, qualityLine, QUALITIES, referenceLine } from './appearance.js'
+import { improvementLine, itemReferenceLine, lookSpec, pictureCost, qualityLine, QUALITIES, referenceLine } from './appearance.js'
+
+describe('a drawing named by its parts', () => {
+  it('carries the ids, the trimmed words and the quality', () => {
+    expect(lookSpec('tryon', { outfit: 'coat', hair: 'bob', changes: '  warmer  ', quality: 'low' })).toEqual({ kind: 'tryon', outfit: 'coat', hair: 'bob', changes: 'warmer', quality: 'low' })
+    expect(lookSpec('standard', { changes: '   ' })).toEqual({ kind: 'standard', outfit: null, hair: null, changes: null, quality: 'style' })
+  })
+  it('prices the style default as the style file does', () => {
+    expect(pictureCost('standard', 'style')).toBe(0.25)
+    expect(pictureCost('tryon', 'style')).toBe(0.06)
+    expect(pictureCost('outfit', 'low')).toBe(0.03)
+  })
+})
 
 describe('the chosen quality', () => {
   it('overrides the style only when the member chose one', () => {

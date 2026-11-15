@@ -808,16 +808,18 @@ fn helper_command(tools: &Path, script: &str, args: &[String], styles: Option<&P
         .filter(|p| p.is_file())
         .unwrap_or_else(|| PathBuf::from("powershell.exe"));
     let mut command = std::process::Command::new(shell);
+    // Windows PowerShell 5.1 loses $PSScriptRoot on a `\\?\` path (the resource folder and the
+    // canonical memory folder both carry one), so every path goes over without it.
     command
         .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
-        .arg(tools.join(script))
-        .args(args);
+        .arg(crate::tree::plain_path(&tools.join(script)))
+        .args(args.iter().map(|a| crate::tree::plain_path(Path::new(a))));
     for name in crate::env::NEVER_INHERITED {
         command.env_remove(name);
     }
     command.env_remove("CASTLE_IMAGE");
     if let Some(styles) = styles {
-        command.env("CASTLE_STYLES", styles);
+        command.env("CASTLE_STYLES", crate::tree::plain_path(styles));
     }
     if let Some(key) = key {
         command.env("OPENAI_API_KEY", key);
@@ -858,12 +860,15 @@ fn save_changes(job: &ImageJob, look: &LookSpec) -> Result<Option<PathBuf>, Stri
     Ok(Some(file))
 }
 
-/// A helper's last "Error: ..." line, for the member (keys are already masked by the helper).
+/// A helper's last "Error: ..." line, for the member (keys are already masked by the helper); when
+/// PowerShell itself failed before the helper could say so, its first line of complaint.
 fn last_error(output: &str) -> String {
-    output
-        .lines()
+    let lines: Vec<&str> = output.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    lines
+        .iter()
         .rev()
-        .find_map(|l| l.trim().strip_prefix("Error:").map(|e| e.trim().to_string()))
+        .find_map(|l| l.strip_prefix("Error:").map(|e| e.trim().to_string()))
+        .or_else(|| lines.first().map(|l| l.chars().take(200).collect()))
         .unwrap_or_else(|| "the helper gave no reason.".into())
 }
 
@@ -1191,7 +1196,8 @@ mod tests {
     #[test]
     fn a_helper_reason_is_its_last_error_line() {
         assert_eq!(last_error("Saved prompt\nError: OpenAI said no\n"), "OpenAI said no");
-        assert_eq!(last_error("nothing"), "the helper gave no reason.");
+        assert_eq!(last_error("Join-Path : Cannot process argument\nAt line 27"), "Join-Path : Cannot process argument");
+        assert_eq!(last_error("  \n"), "the helper gave no reason.");
     }
 
     fn temp(name: &str) -> PathBuf {
