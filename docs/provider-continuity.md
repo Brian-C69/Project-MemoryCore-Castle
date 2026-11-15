@@ -12,6 +12,10 @@ The running session retains its own provider identity. Existing Story sessions c
 
 Main-chat messages submitted during switching/image work are saved in a private queue. Queued messages can be cancelled. Interrupted messages are held after restart and require a deliberate retry after checking the visible history, avoiding blind replay of an action that might already have run. Drafts remain in the composer when acceptance fails.
 
+## Room turns
+
+The companion's replies in the Foundation chat room (section 13 of the user guide) do not need HOME's main session: a new line runs the member's selected CLI once, in its own folder holding only the room rules and the companion's public card, no tools, no MCP servers, no project settings, no memory folder. It answers once in plain text and that run ends; the main session, if any, is untouched. Model choice is the same as the main chat: each CLI's own configured default, since Castle never passes a model flag to this run either. At most one turn a minute; lines that arrive mid-turn or too soon stay owed for the next one. The emotion engine's own proposals (not covered here) use the same one-shot mechanism in a separate folder.
+
 ## Images
 
 Appearance and Studio route image requests to a separate Codex process. Requests are serialized and wait for a safe main-chat boundary. The process receives the image brief and selected image attachments rather than the Castle conversation handoff. It uses normal Codex permissions, strips inherited API keys, and requires ChatGPT authentication. It does not retry through the stored OpenAI API key. Capability, sign-in, permission, or output failures retain a prompt and provide Retry with Codex. Model-generated instructions are not a security sandbox; normal CLI filesystem permissions still apply.

@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Docs: the room doesn't need HOME awake.** The user guide wrongly said to keep your companion awake on HOME for it to answer in the chat room; it already answers on its own there, isolated from HOME, even while Castle is hidden in the tray. Corrected, and the room-turn mechanism is now documented in `docs/provider-continuity.md`.
+
 ## 0.2.9 - 2026-11-15
 
 - **MY PROFILE: you, read from your own diary.** A new room after APPS shows your type, three tiles (Growth, Focus, Wellbeing) with how they moved, and How I Think, Values and Shadow, one reading for each finished month; **Scan my diary** fills in your past months, the **Changes** timeline lets you open any month, and the page stays blurred until you look. It uses your memory database and your own Claude Code or Codex, and nothing of it ever reaches the chat room.
