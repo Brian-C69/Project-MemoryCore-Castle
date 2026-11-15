@@ -281,11 +281,12 @@ Everything lives in your MemoryCore folder (`media-generation/`, `music/`, and t
 
 Castle writes every Appearance drawing's prompt itself, straight from your notes: the look in `appearance/companion.md`, and the outfit's or hairstyle's own words. No AI has to read them, so drawing spends no conversation tokens. A line such as `Art style: soft watercolor illustration` in `companion.md` sets the art style. While `companion.md` still has Castle's starting words, **Redraw** is refused (it would draw a stranger); describe the look first, or use **Improve from image**, which follows your portrait.
 
-Then Castle draws the picture the first way that is open to you:
+Then the app your companion thinks with decides how the picture is drawn:
 
-1. **Codex on your ChatGPT plan.** When Codex is installed and signed in with ChatGPT, Codex draws the finished prompt as a separate job, even when the main conversation uses Claude Code. It costs nothing beyond your plan.
-2. **Your OpenAI key.** When you added a ChatGPT (OpenAI) key in **Settings > Keys**, Castle draws the picture itself with gpt-image-2, whichever CLI your companion thinks with. Your companion does not need to be awake, and nothing is typed into your conversation. The price is on the button before you press it.
-3. **Neither.** The prompt is saved under **Image requests**, with what to add.
+- **Claude Code** - Castle draws it itself with your ChatGPT (OpenAI) key from **Settings > Keys**, using gpt-image-2. Codex is never used. Without a key, the prompt is saved.
+- **Codex** - Codex draws the finished prompt as a separate job on your ChatGPT plan when it is signed in with ChatGPT, at no cost beyond your plan. If it is not, Castle draws with your key; with neither, the prompt is saved.
+
+A drawing with your key starts at once, your companion does not need to be awake, nothing is typed into your conversation, and you can keep chatting while it draws. The price is on the button before you press it.
 
 The badge at the top of the room says which way the next picture goes:
 
@@ -297,7 +298,7 @@ The badge at the top of the room says which way the next picture goes:
 
 Your OpenAI key is never given to Codex, because Codex would then bill your API account instead of your plan. Image jobs show queued, working, completed, or prompt-saved status. Video, music and voice keep their separate key requirements.
 
-A Codex job starts once the main conversation reaches a confirmed turn boundary. Normal Codex permissions remain in effect; if the noninteractive job cannot proceed, Castle saves the prompt. Press **Refresh** after completion. Saved prompts can be retried from the room. Interrupted jobs are not automatically rerun after Castle restarts.
+A Codex job waits until the main conversation reaches a confirmed turn boundary, and holds new messages while it draws. Normal Codex permissions remain in effect; if the noninteractive job cannot proceed, Castle saves the prompt. Press **Refresh** after completion. Saved prompts can be retried from the room. Interrupted jobs are not automatically rerun after Castle restarts.
 
 ### The standard look
 
