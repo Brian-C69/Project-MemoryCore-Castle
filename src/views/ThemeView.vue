@@ -513,14 +513,19 @@ input {
   width: min(31%, 440px);
   min-width: 300px; /* the buttons of your own themes (Use, Polish, Paint, Delete) fit on one row */
   transform: translateX(calc(var(--d) * (100% + 28px))) scale(var(--s, 1));
-  transition: transform 0.45s ease, filter 0.45s ease, opacity 0.45s ease;
+  /* Clear the incoming case before its slide finishes, so it arrives already solid and sharp. */
+  transition: transform 0.45s ease, filter 0.24s ease-out, opacity 0.24s ease-out;
   display: flex;
   flex-direction: column;
   min-height: 0;
   gap: 8px;
   text-align: center;
 }
-.case.focus { --s: 1; }
+.case.focus {
+  --s: 1;
+  filter: blur(0);
+  opacity: 1;
+}
 .case.side {
   --s: 0.86;
   filter: blur(3px);
