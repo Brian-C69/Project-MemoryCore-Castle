@@ -455,7 +455,9 @@ Keep your companion awake on HOME for it to answer. Room lines reach your compan
 
 ### Arranging HOME
 
-Press **Arrange on HOME**. HOME opens with a dashed edge around every card: drag a card wherever you like and let go. It always stays wholly on the screen, and Castle remembers where you put it.
+On HOME you can simply drag a card by any part that is not a button or a link, and let it go where you want it. A press that does not move stays a click, so the cards' buttons work as before. It always stays wholly on the screen, and Castle remembers where you put it.
+
+**Arrange on HOME** (in WIDGETS) shows a dashed edge around every card, so you can see them all while you move them.
 
 Each theme keeps its own places: change theme and the cards sit where that theme (or your arrangement for it) puts them; come back and your places return. **Back to the theme's places** (in the bar at the bottom of HOME, or in WIDGETS) puts the cards back where the theme in use had them, without touching your other themes. Press **Done** or **Esc**, or open another room, to finish arranging.
 
