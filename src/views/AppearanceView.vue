@@ -7,7 +7,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
-import { appearanceImport, appearanceLook, appearanceNew, appearanceWear, choosePicture, imageRequest, pictureWay, studioPowers } from '../api/castle.js'
+import { appearanceImport, appearanceLook, appearanceNew, appearanceWear, choosePicture, imageRequest, studioPowers } from '../api/castle.js'
 import { isStartingWords, lookSpec, pictureCost, QUALITIES } from '../components/appearance.js'
 
 const props = defineProps({
@@ -15,8 +15,6 @@ const props = defineProps({
   stamp: { type: Number, default: 0 },
 })
 const emit = defineEmits(['keys'])
-// The way the last picture went ("codex", "key" or "none"), for the line after asking.
-let lastWay = 'codex'
 
 const look = ref(null)
 const image = ref('')
@@ -117,9 +115,8 @@ async function attempt(label, work) {
 }
 
 // A drawing is queued by its parts; castle-look.ps1 writes the prompt from the member's notes, so
-// no AI reads them. The way it goes is asked first, for the line after.
+// no AI reads them.
 async function queueLook(label, spec, output, reference) {
-  lastWay = await pictureWay().catch(() => 'codex')
   await imageRequest(label, output, reference ? [reference] : [], 'appearance', label, spec)
 }
 const specFor = (kind, items = {}) => lookSpec(kind, { ...items, changes: changes.value, quality: quality.value })
@@ -174,14 +171,9 @@ async function tryOn(again = false) {
   if (ok) after(label)
 }
 
-function after(label) {
-  if (lastWay === 'key') {
-    done.value = `Drawing with your OpenAI key: ${label}. Watch it under Image requests; the picture appears here when it is done.`
-  } else if (lastWay === 'none') {
-    done.value = `Not drawn: ${label}. Sign in to Codex with ChatGPT, or add an OpenAI key in Settings > Keys. The prompt is saved under Image requests.`
-  } else {
-    done.value = `Queued for Codex: ${label}. Watch it under Image requests; the picture appears here when it is done.`
-  }
+// The request line in the bar says where the picture went and how it is doing.
+function after() {
+  done.value = ''
 }
 
 // Adds the outfit or hairstyle folder with its words and, when one was chosen, its reference image.
@@ -263,6 +255,7 @@ watch(() => props.stamp, load)
       <span v-if="busy" class="busy">{{ busy }}</span>
       <span v-else-if="problem" class="problem">{{ problem }}</span>
       <span v-else-if="done" class="good">{{ done }}</span>
+      <ImageJobs @finished="load" />
       <button @click="load">Refresh</button>
     </header>
 
@@ -270,7 +263,6 @@ watch(() => props.stamp, load)
       <textarea v-model="changes" rows="2" placeholder="For example: keep the face and proportions, change only the jacket colour." :disabled="!!busy"></textarea>
     </label>
 
-    <ImageJobs @finished="load" />
     <div v-if="look" class="columns">
       <section class="standard widget">
         <h3>STANDARD LOOK</h3>

@@ -6,19 +6,15 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
 import ThemedAudio from '../components/ThemedAudio.vue'
-import { imageRequest, pictureWay } from '../api/castle.js'
+import { imageRequest } from '../api/castle.js'
 const imageBrief = ref('')
 const imageProblem = ref('')
-const imageDone = ref('')
-// The picture goes the way Castle can draw now (env::picture_way): a Codex job on the ChatGPT plan,
-// or castle-image.ps1 with the OpenAI key (no AI in between), or the queue saves the prompt.
+// The picture goes the way Castle can draw now (env::picture_way); its progress shows in the
+// request line beside the shelves' Refresh.
 async function drawImage() {
   imageProblem.value = ''
-  imageDone.value = ''
   try {
-    const way = await pictureWay().catch(() => 'codex')
     await imageRequest(imageBrief.value)
-    imageDone.value = way === 'none' ? 'Not drawn - the prompt is saved under Image requests. Add an OpenAI key or sign in to Codex.' : way === 'key' ? 'Drawing with your OpenAI key (about $0.04) - watch it under Image requests.' : 'Queued for Codex - watch it under Image requests.'
     imageBrief.value = ''
   } catch (e) {
     imageProblem.value = String(e?.message ?? e)
@@ -100,7 +96,6 @@ watch(() => props.stamp, load)
 
 <template>
   <div class="studio">
-    <ImageJobs />
     <section class="powers">
       <article v-for="p in POWERS" :key="p.id" class="power widget">
         <h3>{{ p.label }}</h3>
@@ -110,7 +105,6 @@ watch(() => props.stamp, load)
         <template v-if="p.id === 'image'">
           <textarea v-model="imageBrief" rows="2" placeholder="Describe the picture…" aria-label="Picture request" @keydown.ctrl.enter="drawImage"></textarea>
           <button :disabled="!imageBrief.trim()" @click="drawImage">Create picture</button>
-          <p v-if="imageDone" class="hint">{{ imageDone }}</p>
           <p v-if="imageProblem" role="alert" class="problem">{{ imageProblem }}</p>
         </template>
         <template v-else-if="p.id === 'voice' && voiceUp">
@@ -129,6 +123,7 @@ watch(() => props.stamp, load)
           {{ { images: 'Pictures', videos: 'Videos', songs: 'Songs', voices: 'Voice', saved: 'Saved prompts' }[t] }} ({{ counts[t] }})
         </button>
         <span class="spacer"></span>
+        <ImageJobs @finished="load" />
         <button @click="load">Refresh</button>
       </nav>
 

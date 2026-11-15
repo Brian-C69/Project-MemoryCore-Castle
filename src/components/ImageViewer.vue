@@ -139,6 +139,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 
 .stage {
   display: grid;
+  /* one cell with a real height, so the picture's max-height: 100% can measure it and a tall
+     picture fits whole instead of running past the bottom (as the Keep's viewer does) */
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
   flex: 1;
   min-height: 0;
