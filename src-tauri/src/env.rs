@@ -45,10 +45,11 @@ pub fn image_mode(cli: Cli, has_openai_key: bool) -> &'static str {
 
 /// How an APPEARANCE or STUDIO picture is drawn: "codex" (a separate Codex job on the member's
 /// ChatGPT plan), "key" (Castle runs castle-look.ps1 / castle-image.ps1 itself with the OpenAI key:
-/// no AI writes the prompt, whichever CLI the companion thinks with; the key still never reaches
-/// Codex) or "none" (the prompt is saved). The plan comes first: it costs the member nothing more.
-pub fn picture_way(codex_chatgpt: bool, has_openai_key: bool) -> &'static str {
-    if codex_chatgpt {
+/// no AI writes the prompt; the key never reaches Codex) or "none" (the prompt is saved). A
+/// companion that thinks with Claude Code never draws through Codex; one that thinks with Codex
+/// draws on the plan first and falls back to the key. `codex_chatgpt` is only asked for Codex.
+pub fn picture_way(cli: Cli, codex_chatgpt: impl FnOnce() -> bool, has_openai_key: bool) -> &'static str {
+    if cli == Cli::Codex && codex_chatgpt() {
         "codex"
     } else if has_openai_key {
         "key"
@@ -112,11 +113,15 @@ mod tests {
     }
 
     #[test]
-    fn a_picture_goes_to_the_plan_first_then_to_the_key() {
-        assert_eq!(picture_way(true, true), "codex");
-        assert_eq!(picture_way(true, false), "codex");
-        assert_eq!(picture_way(false, true), "key");
-        assert_eq!(picture_way(false, false), "none");
+    fn a_picture_follows_the_brain() {
+        let asked = std::cell::Cell::new(false);
+        let plan = || { asked.set(true); true };
+        assert_eq!(picture_way(Cli::Claude, plan, true), "key");
+        assert!(!asked.get(), "Claude Code never asks Codex");
+        assert_eq!(picture_way(Cli::Claude, || true, false), "none");
+        assert_eq!(picture_way(Cli::Codex, || true, true), "codex");
+        assert_eq!(picture_way(Cli::Codex, || false, true), "key");
+        assert_eq!(picture_way(Cli::Codex, || false, false), "none");
     }
 
     #[test]

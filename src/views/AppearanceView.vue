@@ -288,7 +288,7 @@ watch(() => props.stamp, load)
         <p v-if="tryOnLine" class="hint">{{ tryOnLine }}</p>
         <button :disabled="!!busy" @click="tryOn()">{{ !look.tryOn?.exists || look.tryOn.stale ? "Try on today's look" : "Show today's look" }}</button>
         <button v-if="look.tryOn?.exists && !look.tryOn.stale" :disabled="!!busy" @click="tryOn(true)">{{ priced('Draw again', 'tryon') }}</button>
-        <p class="hint">Upload PNG, JPEG or WebP (up to 25 MB). Castle writes each drawing's prompt from your notes itself. Codex draws it on your ChatGPT plan when it is signed in; otherwise Castle draws it with your OpenAI key at the price on the button. With neither, the prompt is saved.</p>
+        <p class="hint">Upload PNG, JPEG or WebP (up to 25 MB). Castle writes each drawing's prompt from your notes itself. When {{ companion }} thinks with Claude Code, Castle draws it with your OpenAI key at the price on the button; with Codex, it is drawn on your ChatGPT plan when Codex is signed in, otherwise with your key. With no way to draw, the prompt is saved.</p>
         <p class="hint">The look in words lives in <code>appearance/companion.md</code> - ask {{ companion }} to change it, or edit it yourself.</p>
       </section>
 

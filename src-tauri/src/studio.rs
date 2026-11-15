@@ -133,22 +133,25 @@ pub fn picture_state(way: &str) -> &'static str {
 }
 
 /// How the next APPEARANCE or STUDIO picture would be drawn. Codex is asked whether it is signed in
-/// with ChatGPT (a process, so off the main thread); an installed Codex alone proves nothing.
-async fn current_picture_way() -> &'static str {
+/// with ChatGPT only when the companion thinks with Codex (a process, so off the main thread); an
+/// installed Codex alone proves nothing.
+async fn current_picture_way(store: &SettingsStore) -> &'static str {
+    let cli = store.get().cli;
     let has_key = key::load("openai").is_some();
-    let codex = tauri::async_runtime::spawn_blocking(crate::providers::codex_signed_in).await.unwrap_or(false);
-    crate::env::picture_way(codex, has_key)
+    tauri::async_runtime::spawn_blocking(move || crate::env::picture_way(cli, crate::providers::codex_signed_in, has_key))
+        .await
+        .unwrap_or("none")
 }
 
 #[tauri::command]
-pub async fn picture_way() -> Result<&'static str, String> {
-    Ok(current_picture_way().await)
+pub async fn picture_way(store: State<'_, SettingsStore>) -> Result<&'static str, String> {
+    Ok(current_picture_way(&store).await)
 }
 
 #[tauri::command]
 pub async fn studio_powers(store: State<'_, SettingsStore>) -> Result<Powers, String> {
     let mut available = powers(store.get().cli, &|name| key::load(name).is_some());
-    available.image = picture_state(current_picture_way().await);
+    available.image = picture_state(current_picture_way(&store).await);
     Ok(available)
 }
 
