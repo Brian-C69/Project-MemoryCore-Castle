@@ -531,9 +531,9 @@ watch(() => props.visible, (on) => {
             <strong :title="me?.name || member?.name">{{ me?.name || member?.name || 'You' }}</strong>
             <span class="hint">You</span>
             <div v-if="menu === 'me'" class="pic-menu" role="menu">
-              <button role="menuitem" @click="menu = ''; setFace(false)">Change my picture</button>
-              <button role="menuitem" class="subtle" @click="menu = ''; setFace(false, true)">Use Google picture</button>
-              <button role="menuitem" @click="menu = ''; displayName = me?.name || member?.name || ''; nameEditing = true; companionEditing = false; nameLine = ''">Change display name</button>
+              <button role="menuitem" @click="menu = ''; setFace(false)">Change picture</button>
+              <button role="menuitem" @click="menu = ''; displayName = me?.name || member?.name || ''; nameEditing = true; companionEditing = false; nameLine = ''">Change name</button>
+              <button role="menuitem" @click="menu = ''; setFace(false, true)">Use Google picture</button>
             </div>
           </section>
           <section class="profile-person" :aria-label="`${companion}'s room picture`" @focusout="menuOut">
