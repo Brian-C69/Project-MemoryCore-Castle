@@ -248,6 +248,8 @@ export const profileScan = () => invoke('profile_scan')
 export const onProfileProgress = on('profile-progress')
 // Castle just went out of sight (minus button, tray, hotkey, close button)
 export const onCastleHidden = on('castle-hidden')
+// the member clicked a chat notification: show the CHAT tab
+export const onOpenChat = on('castle-open-chat')
 // "Set it up for me": install, start, create, check - then it stops and gives the move's counts
 export const dbSetupAll = () => invoke('db_setup_all')
 // while it runs: { step: install | start | create | check, state: running | done }

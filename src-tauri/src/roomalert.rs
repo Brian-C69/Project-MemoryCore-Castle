@@ -12,6 +12,9 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::NotificationExt;
 
 const PREVIEW: usize = 80;
+/// Told to the page when the member clicks the notification, so it shows the CHAT tab.
+#[cfg(windows)]
+const OPEN_CHAT_EVENT: &str = "castle-open-chat";
 
 /// The notification for a batch of new lines, leaving out lines the member posted from Castle
 /// (`mine`, by id): (title, body), or None when nothing is left to tell. Pure, tested.
@@ -124,8 +127,43 @@ pub fn new_lines(app: &AppHandle, fresh: &[Value], chat_shown: bool) {
         // No `.sound(..)`: with tauri-plugin-notification 2.8 / notify-rust 4.19 a Windows toast built
         // without one is `<audio silent="true"/>`, so the Sound switch is the only sound (checked in
         // the dependency source, not by ear).
+        toast(app, &title, &body);
+    }
+}
+
+/// The desktop notification. On Windows a click on it brings Castle forward (out of the tray, or
+/// minimised) and opens the CHAT tab, which the plugin's notification cannot do. Elsewhere it is the
+/// plugin's plain notification.
+#[cfg(windows)]
+fn toast(app: &AppHandle, title: &str, body: &str) {
+    use tauri::Emitter;
+    use tauri_winrt_notification::{Sound, Toast};
+    // the id the plugin uses: Castle's own when installed, PowerShell's while running from a build folder
+    let app_id = match std::env::current_exe() {
+        Ok(exe) if exe.parent().is_some_and(|d| d.ends_with("target/release") || d.ends_with("target/debug")) => Toast::POWERSHELL_APP_ID.to_string(),
+        _ => app.config().identifier.clone(),
+    };
+    let clicked = app.clone();
+    let shown = Toast::new(&app_id)
+        .title(title)
+        .text1(body)
+        // silent: the Sound switch is the only sound (a toast without this plays Windows' own chime)
+        .sound(None::<Sound>)
+        .on_activated(move |_| {
+            crate::tray::show_main(&clicked);
+            let _ = clicked.emit(OPEN_CHAT_EVENT, ());
+            Ok(())
+        })
+        .show();
+    if shown.is_err() {
+        // the toast could not be made: the plugin's plain one still tells the member
         let _ = app.notification().builder().title(title).body(body).show();
     }
+}
+
+#[cfg(not(windows))]
+fn toast(app: &AppHandle, title: &str, body: &str) {
+    let _ = app.notification().builder().title(title).body(body).show();
 }
 
 #[cfg(test)]

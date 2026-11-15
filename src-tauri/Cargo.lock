@@ -2397,6 +2397,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
+ "tauri-winrt-notification",
  "trash",
  "windows-sys 0.60.2",
  "zip 2.6.1",

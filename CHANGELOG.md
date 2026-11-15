@@ -14,6 +14,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 - **Drag a card on HOME.** Any card on HOME follows your pointer and stays where you let go, without opening Arrange first; a press that does not move is still a click.
 - **Choose what a picture costs.** APPEARANCE has a **Quality** choice (Low, Medium, High, or as the style says) with the price of each when your key pays, so a standard look can cost about $0.03 instead of $0.25.
 - **MY PROFILE sits straight on your theme.** The big card around the whole page is gone, so its own cards stand on the theme like the other pages, and hide / show works as before. The page uses Castle's thin themed scrollbar, and the eye button's icon is centred in its box.
+- **Click a chat notification to open CHAT.** Clicking the desktop notification for a new chat message now brings Castle forward, out of the tray or minimised, and opens the CHAT tab. It was doing nothing before.
 
 ## 0.2.9 - 2026-11-15
 
