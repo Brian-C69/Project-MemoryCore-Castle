@@ -318,6 +318,8 @@ pub fn run() {
             appearance::appearance_new,
             appearance::appearance_import,
             appearance::appearance_wear,
+            appearance::appearance_save_look,
+            appearance::appearance_save_item,
             story::story_prepare,
             story::story_worlds,
             story::story_beat,

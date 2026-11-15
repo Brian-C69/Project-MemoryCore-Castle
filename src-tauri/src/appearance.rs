@@ -1,24 +1,27 @@
-//! APPEARANCE: the companion's look, kept in the memory folder so it belongs to the memory:
-//!   appearance/companion.md          the look in words (seeded from master-memory's
-//!                                    "## Character Appearance" when Image Prompt is installed)
+//! APPEARANCE: the companion's look. The words live in the memory database (`appearance_db`:
+//! the look, its art style, what is worn today, the wardrobe and hairstyles); the pictures stay
+//! files in the memory folder so they belong to the memory:
 //!   appearance/portrait.png          the standard appearance (also the panel's avatar)
-//!   appearance/current.json          { outfit, hair } worn today
-//!   appearance/wardrobe/<id>/        outfit.md + turnaround.png
-//!   appearance/hairstyles/<id>/      hair.md + turnaround.png
+//!   appearance/wardrobe/<slug>/      turnaround.png, reference.png
+//!   appearance/hairstyles/<slug>/    turnaround.png, reference.png
 //!   appearance/try-on/<outfit>__<hair>.png   the drawn picture of one outfit with one hairstyle,
 //!                                    kept so it is never drawn twice unless something it is made
 //!                                    from has changed since
 
+use crate::appearance_db::{self, ItemRow, LookRow};
 use crate::settings::SettingsStore;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::State;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Item {
+    /// the slug: its picture folder's name
     pub id: String,
     pub name: String,
+    /// its words
     pub note: String,
     /// the turnaround sheet, when it has been drawn (absolute path)
     pub sheet: Option<String>,
@@ -49,7 +52,9 @@ pub struct TryOn {
 #[serde(rename_all = "camelCase")]
 pub struct Look {
     pub folder: String,
-    pub canon: String,
+    /// the look in words (empty until the member writes it)
+    pub words: String,
+    pub art_style: String,
     pub portrait: Option<String>,
     pub wardrobe: Vec<Item>,
     pub hairstyles: Vec<Item>,
@@ -79,57 +84,39 @@ pub fn canon_from_memory(memory: &Path) -> Option<String> {
     (!body.is_empty()).then_some(body)
 }
 
-/// Makes appearance/ with companion.md the first time (from the memory's own words when it has
-/// them); never overwrites what is there.
-pub fn ensure(memory: &Path, companion: &str) -> std::io::Result<()> {
+/// The picture folders (the words are in the database).
+pub fn ensure(memory: &Path) -> std::io::Result<()> {
     let root = root(memory);
     std::fs::create_dir_all(root.join("wardrobe"))?;
-    std::fs::create_dir_all(root.join("hairstyles"))?;
-    let canon = root.join("companion.md");
-    if !canon.exists() {
-        let words = canon_from_memory(memory).unwrap_or_else(|| {
-            "Describe the look here: face, eyes, hair colour, build, the art style you like (for example anime, watercolor, semi-realistic), and anything that always stays the same.".into()
-        });
-        std::fs::write(canon, format!("# {companion}'s look\n\n{words}\n"))?;
+    std::fs::create_dir_all(root.join("hairstyles"))
+}
+
+fn shelf(kind: &str) -> &'static str {
+    if kind == "outfit" { "wardrobe" } else { "hairstyles" }
+}
+
+/// One item as the room shows it: its words from the database, its pictures from its folder.
+fn item_of(memory: &Path, row: &ItemRow) -> Item {
+    let p = root(memory).join(shelf(&row.kind)).join(&row.slug);
+    let sheet = ["turnaround.png", "turnaround.jpg", "turnaround.webp"].iter().map(|n| p.join(n)).find(|f| f.is_file());
+    let prompt = p.join("turnaround.prompt.md");
+    Item {
+        id: row.slug.clone(),
+        name: row.name.clone(),
+        note: row.words.clone(),
+        sheet: sheet.map(|s| s.display().to_string()),
+        reference: p.join("reference.png").is_file().then(|| p.join("reference.png").display().to_string()),
+        saved_prompt: prompt.is_file().then(|| prompt.display().to_string()),
     }
-    Ok(())
 }
 
-fn items(dir: &Path, note_file: &str) -> Vec<Item> {
-    let mut found: Vec<Item> = std::fs::read_dir(dir)
-        .map(|entries| {
-            entries
-                .flatten()
-                .map(|e| e.path())
-                .filter(|p| p.is_dir())
-                .map(|p| {
-                    let note = std::fs::read_to_string(p.join(note_file)).unwrap_or_default();
-                    let name = note
-                        .lines()
-                        .find_map(|l| l.trim().strip_prefix("# ").map(|h| h.trim().to_string()))
-                        .unwrap_or_else(|| p.file_name().unwrap_or_default().to_string_lossy().replace('-', " "));
-                    let body = note.lines().filter(|l| !l.trim_start().starts_with('#')).collect::<Vec<_>>().join(" ").trim().to_string();
-                    let sheet = ["turnaround.png", "turnaround.jpg", "turnaround.webp"].iter().map(|n| p.join(n)).find(|f| f.is_file());
-                    let prompt = p.join("turnaround.prompt.md");
-                    Item {
-                        id: p.file_name().unwrap_or_default().to_string_lossy().to_string(),
-                        name,
-                        note: body,
-                        sheet: sheet.map(|s| s.display().to_string()),
-                        reference: p.join("reference.png").is_file().then(|| p.join("reference.png").display().to_string()),
-                        saved_prompt: prompt.is_file().then(|| prompt.display().to_string()),
-                    }
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    found.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    found
-}
-
-/// The newest change to anything in a folder (the words, the reference, the drawn sheet).
-fn newest_in(dir: &Path) -> Option<std::time::SystemTime> {
+/// The newest change to any picture in a folder (the reference, the drawn sheet).
+fn newest_in(dir: &Path) -> Option<SystemTime> {
     std::fs::read_dir(dir).ok()?.flatten().filter_map(|e| e.metadata().ok()?.modified().ok()).max()
+}
+
+fn at(secs: u64) -> Option<SystemTime> {
+    (secs > 0).then(|| UNIX_EPOCH + Duration::from_secs(secs))
 }
 
 /// An outfit or hairstyle id is a folder name Castle made itself: letters, digits and dashes only,
@@ -139,7 +126,7 @@ pub fn valid_id(id: &str) -> bool {
 }
 
 /// Where the picture of this outfit with this hairstyle is kept: one file per combination.
-/// None when current.json names an id that is not a plain folder name - such a file is never read.
+/// None when an id is not a plain folder name - such a file is never read.
 pub fn try_on_path(memory: &Path, current: &Current) -> Option<PathBuf> {
     let part = |id: &Option<String>, none: &str| match id.as_deref() {
         None | Some("") => Some(none.to_string()),
@@ -151,8 +138,8 @@ pub fn try_on_path(memory: &Path, current: &Current) -> Option<PathBuf> {
 }
 
 /// The saved try-on for what is worn, and whether it is still good. It is out of date once the
-/// outfit, the hairstyle or the standard look has changed after it was drawn.
-pub fn try_on(memory: &Path, current: &Current) -> Option<TryOn> {
+/// outfit's or hairstyle's words or pictures, or the standard look, changed after it was drawn.
+pub fn try_on(memory: &Path, current: &Current, outfits: &[ItemRow], hairs: &[ItemRow]) -> Option<TryOn> {
     if current.outfit.is_none() && current.hair.is_none() {
         return None;
     }
@@ -161,11 +148,11 @@ pub fn try_on(memory: &Path, current: &Current) -> Option<TryOn> {
     let path = try_on_path(memory, current)?;
     let drawn = std::fs::metadata(&path).ok().and_then(|m| m.modified().ok());
     let mut inputs = vec![];
-    if let Some(id) = &current.outfit {
-        inputs.push(newest_in(&root.join("wardrobe").join(id)));
-    }
-    if let Some(id) = &current.hair {
-        inputs.push(newest_in(&root.join("hairstyles").join(id)));
+    for (id, rows, dir) in [(&current.outfit, outfits, "wardrobe"), (&current.hair, hairs, "hairstyles")] {
+        if let Some(id) = id {
+            inputs.push(rows.iter().find(|r| &r.slug == id).and_then(|r| at(r.updated_at)));
+            inputs.push(newest_in(&root.join(dir).join(id)));
+        }
     }
     for name in ["portrait.png", "portrait.jpg", "portrait.webp"] {
         inputs.push(std::fs::metadata(root.join(name)).ok().and_then(|m| m.modified().ok()));
@@ -175,52 +162,21 @@ pub fn try_on(memory: &Path, current: &Current) -> Option<TryOn> {
     Some(TryOn { path: path.display().to_string(), exists: drawn.is_some(), stale })
 }
 
-pub fn look(memory: &Path) -> Look {
+/// The room's whole view: the rows, and the pictures found on disk.
+pub fn build_look(memory: &Path, look: &LookRow, outfits: &[ItemRow], hairs: &[ItemRow]) -> Look {
     let root = root(memory);
-    let current: Current = std::fs::read_to_string(root.join("current.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    let current = Current { outfit: look.outfit.clone(), hair: look.hair.clone() };
     let portrait = ["portrait.png", "portrait.jpg", "portrait.webp"].iter().map(|n| root.join(n)).find(|p| p.is_file());
     Look {
         folder: root.display().to_string(),
-        canon: std::fs::read_to_string(root.join("companion.md")).unwrap_or_default(),
+        words: look.words.clone(),
+        art_style: look.art_style.clone(),
         portrait: portrait.map(|p| p.display().to_string()),
-        wardrobe: items(&root.join("wardrobe"), "outfit.md"),
-        hairstyles: items(&root.join("hairstyles"), "hair.md"),
-        try_on: try_on(memory, &current),
+        wardrobe: outfits.iter().map(|r| item_of(memory, r)).collect(),
+        hairstyles: hairs.iter().map(|r| item_of(memory, r)).collect(),
+        try_on: try_on(memory, &current, outfits, hairs),
         current,
     }
-}
-
-/// A new outfit or hairstyle folder with its words; the companion draws its sheet into it.
-pub fn new_item(memory: &Path, kind: &str, name: &str, description: &str) -> Result<String, String> {
-    let (dir, note) = match kind {
-        "outfit" => ("wardrobe", "outfit.md"),
-        "hair" => ("hairstyles", "hair.md"),
-        _ => return Err("Choose an outfit or a hairstyle.".into()),
-    };
-    if name.trim().is_empty() {
-        return Err("Give it a name.".into());
-    }
-    let base = crate::theme::theme_id(name);
-    let parent = root(memory).join(dir);
-    let mut id = base.clone();
-    let mut n = 2;
-    while parent.join(&id).exists() {
-        id = format!("{base}-{n}");
-        n += 1;
-    }
-    std::fs::create_dir_all(parent.join(&id)).map_err(|_| "The folder could not be created.".to_string())?;
-    std::fs::write(parent.join(&id).join(note), format!("# {}\n\n{}\n", name.trim(), description.trim()))
-        .map_err(|_| "The description could not be written.".to_string())?;
-    Ok(id)
-}
-
-pub fn set_current(memory: &Path, current: &Current) -> Result<(), String> {
-    if [&current.outfit, &current.hair].into_iter().flatten().any(|id| !valid_id(id)) {
-        return Err("Choose an existing outfit or hairstyle.".into());
-    }
-    std::fs::create_dir_all(root(memory)).map_err(|_| "The appearance folder could not be created.".to_string())?;
-    std::fs::write(root(memory).join("current.json"), serde_json::to_string_pretty(current).unwrap_or_default())
-        .map_err(|_| "Today's look could not be saved.".to_string())
 }
 
 /// Validate and keep a local PNG copy. Replacements retain the previous image as a backup.
@@ -297,45 +253,81 @@ pub fn import_picture(memory: &Path, kind: &str, id: Option<&str>, source: &Path
     }
 }
 
+fn memory_of(store: &SettingsStore) -> Result<PathBuf, String> {
+    store.get().memory_folder.map(PathBuf::from).filter(|f| f.is_dir()).ok_or_else(|| "No MemoryCore folder is chosen yet.".to_string())
+}
+
+/// The memory database, migrated, with the old notes taken in the first time.
+fn open(memory: &Path) -> Result<mysql::Conn, String> {
+    let mut conn = crate::store::source(memory).ok_or("APPEARANCE lives in the memory database. Move your memory in first (Settings > Database).")?;
+    crate::memdb::migrate(&mut conn)?;
+    appearance_db::take_in(&mut conn, memory)?;
+    Ok(conn)
+}
+
+/// The look as the room shows it, read from the database.
+pub fn look_from(conn: &mut impl mysql::prelude::Queryable, memory: &Path) -> Result<Look, String> {
+    let row = appearance_db::read(conn)?.unwrap_or_default();
+    let outfits = appearance_db::items(conn, "outfit")?;
+    let hairs = appearance_db::items(conn, "hair")?;
+    Ok(build_look(memory, &row, &outfits, &hairs))
+}
+
+/// Runs `work` with the database off the main thread, then answers with the whole look.
+async fn with_look(store: &SettingsStore, work: impl FnOnce(&mut mysql::Conn, &Path) -> Result<(), String> + Send + 'static) -> Result<Look, String> {
+    crate::rooms::need(store, "appearance")?;
+    let memory = memory_of(store)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        ensure(&memory).map_err(|_| "The appearance folder could not be created.")?;
+        let mut conn = open(&memory)?;
+        work(&mut conn, &memory)?;
+        look_from(&mut conn, &memory)
+    })
+    .await
+    .map_err(|_| "APPEARANCE could not finish.".to_string())?
+}
+
+#[tauri::command]
+pub async fn appearance_look(store: State<'_, SettingsStore>) -> Result<Look, String> {
+    with_look(&store, |_, _| Ok(())).await
+}
+
 #[tauri::command]
 pub async fn appearance_import(kind: String, id: Option<String>, source: String, store: State<'_, SettingsStore>) -> Result<Look, String> {
+    with_look(&store, move |_, memory| import_picture(memory, &kind, id.as_deref(), Path::new(&source))).await
+}
+
+/// A new outfit or hairstyle: its row, and its picture folder.
+#[tauri::command]
+pub async fn appearance_new(kind: String, name: String, description: String, store: State<'_, SettingsStore>) -> Result<String, String> {
     crate::rooms::need(&store, "appearance")?;
-    let (memory, companion) = memory_of(&store)?;
+    let memory = memory_of(&store)?;
     tauri::async_runtime::spawn_blocking(move || {
-        ensure(&memory, &companion).map_err(|_| "The appearance folder could not be created.")?;
-        import_picture(&memory, &kind, id.as_deref(), Path::new(&source))?;
-        Ok(look(&memory))
-    }).await.map_err(|_| "The picture import could not finish.".to_string())?
-}
-
-fn memory_of(store: &SettingsStore) -> Result<(PathBuf, String), String> {
-    let s = store.get();
-    let folder = s.memory_folder.clone().map(PathBuf::from).ok_or("No MemoryCore folder is chosen yet.")?;
-    Ok((folder, s.companion_label()))
-}
-
-#[tauri::command]
-pub fn appearance_look(store: State<SettingsStore>) -> Result<Look, String> {
-    crate::rooms::need(&store, "appearance")?;
-    let (memory, companion) = memory_of(&store)?;
-    ensure(&memory, &companion).map_err(|_| "The appearance folder could not be created.".to_string())?;
-    Ok(look(&memory))
+        ensure(&memory).map_err(|_| "The appearance folder could not be created.")?;
+        let mut conn = open(&memory)?;
+        let slug = appearance_db::add_item(&mut conn, &kind, &name, &description)?;
+        std::fs::create_dir_all(root(&memory).join(shelf(&kind)).join(&slug)).map_err(|_| "The picture folder could not be created.")?;
+        Ok(slug)
+    })
+    .await
+    .map_err(|_| "APPEARANCE could not finish.".to_string())?
 }
 
 #[tauri::command]
-pub fn appearance_new(kind: String, name: String, description: String, store: State<SettingsStore>) -> Result<String, String> {
-    crate::rooms::need(&store, "appearance")?;
-    let (memory, companion) = memory_of(&store)?;
-    ensure(&memory, &companion).map_err(|_| "The appearance folder could not be created.".to_string())?;
-    new_item(&memory, &kind, &name, &description)
+pub async fn appearance_wear(outfit: Option<String>, hair: Option<String>, store: State<'_, SettingsStore>) -> Result<Look, String> {
+    with_look(&store, move |conn, _| appearance_db::wear(conn, outfit.as_deref(), hair.as_deref())).await
 }
 
+/// The look in words and its art style, as the member wrote them.
 #[tauri::command]
-pub fn appearance_wear(outfit: Option<String>, hair: Option<String>, store: State<SettingsStore>) -> Result<Look, String> {
-    crate::rooms::need(&store, "appearance")?;
-    let (memory, _) = memory_of(&store)?;
-    set_current(&memory, &Current { outfit, hair })?;
-    Ok(look(&memory))
+pub async fn appearance_save_look(words: String, art_style: String, store: State<'_, SettingsStore>) -> Result<Look, String> {
+    with_look(&store, move |conn, _| appearance_db::save_look(conn, &words, &art_style).map(|_| ())).await
+}
+
+/// New name or words for one outfit or hairstyle.
+#[tauri::command]
+pub async fn appearance_save_item(kind: String, id: String, name: String, words: String, store: State<'_, SettingsStore>) -> Result<Look, String> {
+    with_look(&store, move |conn, _| appearance_db::set_item(conn, &kind, &id, &name, &words).map(|_| ())).await
 }
 
 #[cfg(test)]
@@ -349,8 +341,12 @@ mod tests {
         root
     }
 
+    fn row(kind: &str, slug: &str, name: &str, words: &str, updated_at: u64) -> ItemRow {
+        ItemRow { kind: kind.into(), slug: slug.into(), name: name.into(), words: words.into(), updated_at }
+    }
+
     #[test]
-    fn the_memorys_own_appearance_words_seed_the_look_and_are_never_overwritten() {
+    fn the_memorys_own_appearance_words_are_found_and_no_note_is_written() {
         let memory = temp("seed");
         std::fs::write(
             memory.join("master-memory.md"),
@@ -358,27 +354,22 @@ mod tests {
         )
         .unwrap();
         assert_eq!(canon_from_memory(&memory).as_deref(), Some("- Silver hair, violet eyes\n- Soft anime style"));
-        ensure(&memory, "Lyra").unwrap();
-        let canon = std::fs::read_to_string(memory.join("appearance").join("companion.md")).unwrap();
-        assert!(canon.contains("Silver hair") && canon.starts_with("# Lyra's look"));
-        std::fs::write(memory.join("appearance").join("companion.md"), "# mine\n").unwrap();
-        ensure(&memory, "Lyra").unwrap();
-        assert_eq!(std::fs::read_to_string(memory.join("appearance").join("companion.md")).unwrap(), "# mine\n");
+        ensure(&memory).unwrap();
+        assert!(memory.join("appearance/wardrobe").is_dir() && !memory.join("appearance/companion.md").exists());
         let _ = std::fs::remove_dir_all(memory);
     }
 
     #[test]
     fn outfits_and_hairstyles_are_listed_with_their_sheets_and_today_is_kept() {
         let memory = temp("items");
-        ensure(&memory, "Lyra").unwrap();
-        let id = new_item(&memory, "outfit", "Winter Coat", "a long navy coat").unwrap();
-        assert_eq!(id, "winter-coat");
-        assert_eq!(new_item(&memory, "outfit", "Winter Coat", "again").unwrap(), "winter-coat-2");
-        new_item(&memory, "hair", "Twin Tails", "high twin tails").unwrap();
+        ensure(&memory).unwrap();
+        std::fs::create_dir_all(memory.join("appearance/wardrobe/winter-coat")).unwrap();
         std::fs::write(memory.join("appearance/wardrobe/winter-coat/turnaround.png"), b"png").unwrap();
-        assert!(new_item(&memory, "hat", "x", "y").is_err());
-        set_current(&memory, &Current { outfit: Some("winter-coat".into()), hair: Some("twin-tails".into()) }).unwrap();
-        let look = look(&memory);
+        let outfits = vec![row("outfit", "winter-coat", "Winter Coat", "a long navy coat", 0), row("outfit", "winter-coat-2", "Winter Coat", "again", 0)];
+        let hairs = vec![row("hair", "twin-tails", "Twin Tails", "high twin tails", 0)];
+        let look_row = LookRow { words: "Violet eyes.".into(), art_style: "anime".into(), outfit: Some("winter-coat".into()), hair: Some("twin-tails".into()), updated_at: 0 };
+        let look = build_look(&memory, &look_row, &outfits, &hairs);
+        assert_eq!((look.words.as_str(), look.art_style.as_str()), ("Violet eyes.", "anime"));
         assert_eq!(look.wardrobe.len(), 2);
         assert_eq!(look.wardrobe[0].name, "Winter Coat");
         assert!(look.wardrobe[0].sheet.is_some() && look.wardrobe[1].sheet.is_none());
@@ -390,38 +381,32 @@ mod tests {
 
     #[test]
     fn a_drawn_try_on_is_kept_per_combination_and_goes_stale_only_when_its_parts_change() {
-        use std::time::{Duration, SystemTime};
         let memory = temp("tryon");
-        ensure(&memory, "Lyra").unwrap();
-        let outfit = new_item(&memory, "outfit", "Winter Coat", "a navy coat").unwrap();
-        let hair = new_item(&memory, "hair", "Twin Tails", "high twin tails").unwrap();
-        let both = Current { outfit: Some(outfit.clone()), hair: Some(hair.clone()) };
-        assert!(try_on(&memory, &Current::default()).is_none(), "nothing worn, nothing to try on");
+        ensure(&memory).unwrap();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let both = Current { outfit: Some("winter-coat".into()), hair: Some("twin-tails".into()) };
+        let outfits = vec![row("outfit", "winter-coat", "Winter Coat", "a navy coat", now - 300)];
+        let hairs = vec![row("hair", "twin-tails", "Twin Tails", "high twin tails", now - 300)];
+        assert!(try_on(&memory, &Current::default(), &outfits, &hairs).is_none(), "nothing worn, nothing to try on");
 
-        let none_yet = try_on(&memory, &both).unwrap();
+        let none_yet = try_on(&memory, &both, &outfits, &hairs).unwrap();
         assert!(!none_yet.exists && !none_yet.stale);
         assert!(none_yet.path.replace('\\', "/").ends_with("appearance/try-on/winter-coat__twin-tails.png"));
-        assert_ne!(try_on_path(&memory, &both), try_on_path(&memory, &Current { outfit: Some(outfit.clone()), hair: None }));
-        assert!(try_on_path(&memory, &both).is_some());
+        assert_ne!(try_on_path(&memory, &both), try_on_path(&memory, &Current { outfit: Some("winter-coat".into()), hair: None }));
 
         // the picture is drawn after its parts were written
-        let picture = std::path::PathBuf::from(&none_yet.path);
+        let picture = PathBuf::from(&none_yet.path);
         std::fs::create_dir_all(picture.parent().unwrap()).unwrap();
         std::fs::write(&picture, b"png").unwrap();
-        let now = SystemTime::now();
-        let set = |p: &Path, t: SystemTime| std::fs::File::options().write(true).open(p).unwrap().set_modified(t).unwrap();
-        set(&memory.join("appearance/wardrobe").join(&outfit).join("outfit.md"), now - Duration::from_secs(300));
-        set(&memory.join("appearance/hairstyles").join(&hair).join("hair.md"), now - Duration::from_secs(300));
-        set(&picture, now - Duration::from_secs(100));
-        let kept = try_on(&memory, &both).unwrap();
+        std::fs::File::options().write(true).open(&picture).unwrap().set_modified(UNIX_EPOCH + Duration::from_secs(now - 100)).unwrap();
+        let kept = try_on(&memory, &both, &outfits, &hairs).unwrap();
         assert!(kept.exists && !kept.stale, "same outfit and hair: reuse the picture");
 
-        // the outfit changes after the picture
-        set(&memory.join("appearance/wardrobe").join(&outfit).join("outfit.md"), now);
-        assert!(try_on(&memory, &both).unwrap().stale);
+        // the outfit's words change after the picture
+        let changed = vec![row("outfit", "winter-coat", "Winter Coat", "a red coat", now)];
+        assert!(try_on(&memory, &both, &changed, &hairs).unwrap().stale);
         // a different outfit is a different picture, not a stale one
-        let other = new_item(&memory, "outfit", "Summer Dress", "a light dress").unwrap();
-        let different = try_on(&memory, &Current { outfit: Some(other), hair: Some(hair) }).unwrap();
+        let different = try_on(&memory, &Current { outfit: Some("summer-dress".into()), hair: Some("twin-tails".into()) }, &outfits, &hairs).unwrap();
         assert!(!different.exists);
         let _ = std::fs::remove_dir_all(memory);
     }
@@ -429,21 +414,20 @@ mod tests {
     #[test]
     fn imported_images_survive_replacement_and_are_listed_as_references() {
         let memory = temp("import");
-        ensure(&memory, "Lyra").unwrap();
+        ensure(&memory).unwrap();
         let source = memory.join("source.png");
         image::RgbaImage::from_pixel(2, 2, image::Rgba([12, 34, 56, 255])).save(&source).unwrap();
         import_picture(&memory, "standard", None, &source).unwrap();
         let original = std::fs::read(memory.join("appearance/portrait.png")).unwrap();
         import_picture(&memory, "standard", None, &source).unwrap();
         assert_eq!(std::fs::read(memory.join("appearance/portrait-previous-1.png")).unwrap(), original);
-        assert!(look(&memory).portrait.is_some());
-        for kind in ["outfit", "hair"] {
-            let id = new_item(&memory, kind, "Imported", "Existing artwork").unwrap();
-            import_picture(&memory, kind, Some(&id), &source).unwrap();
+        for (kind, dir) in [("outfit", "wardrobe"), ("hair", "hairstyles")] {
+            std::fs::create_dir_all(memory.join("appearance").join(dir).join("imported")).unwrap();
+            import_picture(&memory, kind, Some("imported"), &source).unwrap();
         }
-        let view = look(&memory);
-        assert!(view.wardrobe[0].reference.is_some());
-        assert!(view.hairstyles[0].reference.is_some());
+        let view = build_look(&memory, &LookRow::default(), &[row("outfit", "imported", "Imported", "", 0)], &[row("hair", "imported", "Imported", "", 0)]);
+        assert!(view.portrait.is_some());
+        assert!(view.wardrobe[0].reference.is_some() && view.hairstyles[0].reference.is_some());
         assert!(view.wardrobe[0].sheet.is_none());
         assert!(source.exists());
         let _ = std::fs::remove_dir_all(memory);
@@ -452,7 +436,7 @@ mod tests {
     #[test]
     fn invalid_images_and_destinations_do_not_replace_the_portrait() {
         let memory = temp("invalid-import");
-        ensure(&memory, "Lyra").unwrap();
+        ensure(&memory).unwrap();
         let source = memory.join("not-a-picture.png");
         std::fs::write(&source, b"not an image").unwrap();
         let target = memory.join("appearance/portrait.png");
@@ -466,24 +450,19 @@ mod tests {
     }
 
     #[test]
-    fn a_crafted_id_in_current_json_never_becomes_a_try_on_path() {
+    fn a_crafted_id_never_becomes_a_try_on_path() {
         let memory = temp("crafted-id");
-        ensure(&memory, "Lyra").unwrap();
+        ensure(&memory).unwrap();
         for bad in ["../../secret", "..", "a/b", "a\\b", "C:", "coat.png", "x y"] {
             let outfit = Current { outfit: Some(bad.into()), hair: None };
             let hair = Current { outfit: None, hair: Some(bad.into()) };
             assert!(try_on_path(&memory, &outfit).is_none(), "{bad} as an outfit");
             assert!(try_on_path(&memory, &hair).is_none(), "{bad} as a hairstyle");
-            assert!(try_on(&memory, &outfit).is_none() && try_on(&memory, &hair).is_none());
-            assert!(set_current(&memory, &outfit).is_err() && set_current(&memory, &hair).is_err());
+            assert!(try_on(&memory, &outfit, &[], &[]).is_none() && try_on(&memory, &hair, &[], &[]).is_none());
         }
-        // a hand-edited current.json is read, but its crafted id shows no try-on
-        std::fs::write(memory.join("appearance/current.json"), r#"{ "outfit": "../../secret", "hair": null }"#).unwrap();
-        assert!(look(&memory).try_on.is_none());
         // plain ids still work, and an empty id counts as nothing worn
         let fine = Current { outfit: Some("winter-coat-2".into()), hair: Some(String::new()) };
         assert!(try_on_path(&memory, &fine).unwrap().ends_with("winter-coat-2__no-hair.png"));
-        assert!(set_current(&memory, &Current { outfit: Some("winter-coat".into()), hair: None }).is_ok());
         let _ = std::fs::remove_dir_all(memory);
     }
 }
