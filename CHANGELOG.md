@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **A long name in IN THE ROOM stays on one line.** A long member or companion name used to wrap onto a second line and push the host/Foundation tag below it; it now ends in an ellipsis, with the full name on hover or focus.
+
 ## 0.2.9 - 2026-11-15
 
 - **MY PROFILE: you, read from your own diary.** A new room after APPS shows your type, three tiles (Growth, Focus, Wellbeing) with how they moved, and How I Think, Values and Shadow, one reading for each finished month; **Scan my diary** fills in your past months, the **Changes** timeline lets you open any month, and the page stays blurred until you look. It uses your memory database and your own Claude Code or Codex, and nothing of it ever reaches the chat room.
