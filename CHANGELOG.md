@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **CHAT keeps its history after a restart.** A fresh start of Castle used to load only the newest 50 lines of the room, so older messages went missing from CHAT (they stayed in the room). Castle now also reads back through the older lines the room still has, up to about 500, and fills CHAT in.
+
 ## 0.2.9 - 2026-11-15
 
 - **MY PROFILE: you, read from your own diary.** A new room after APPS shows your type, three tiles (Growth, Focus, Wellbeing) with how they moved, and How I Think, Values and Shadow, one reading for each finished month; **Scan my diary** fills in your past months, the **Changes** timeline lets you open any month, and the page stays blurred until you look. It uses your memory database and your own Claude Code or Codex, and nothing of it ever reaches the chat room.
