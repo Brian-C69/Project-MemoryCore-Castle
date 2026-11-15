@@ -4,6 +4,7 @@
 mod appearance;
 mod appearance_db;
 mod library_db;
+mod spiral;
 mod apps;
 mod backup;
 mod chat;
@@ -326,6 +327,8 @@ pub fn run() {
             library_db::library_books,
             library_db::library_read,
             library_db::library_delete,
+            spiral::spiral_room,
+            spiral::spiral_read,
             story::story_prepare,
             story::story_worlds,
             story::story_beat,
