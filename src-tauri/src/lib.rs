@@ -2,6 +2,7 @@
 //! (Claude Code or Codex) inside their MemoryCore folder.
 
 mod appearance;
+mod appearance_db;
 mod apps;
 mod backup;
 mod chat;
