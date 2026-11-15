@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Scroll the THEME carousel with the mouse wheel.** Over the case in focus, it turns that case's own setting, the same as its own arrows; over the showroom around the cases, it turns the carousel itself, the same as the edge arrows.
+
 ## 0.2.11 - 2026-11-15
 
 - **The Library's toolbar is visible again.** The shelves, the book list and the reader used to slide up over the Library's search and refresh buttons; they now sit just below them.
