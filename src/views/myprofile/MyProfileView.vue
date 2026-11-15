@@ -221,11 +221,10 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 16px;
   overflow-y: auto;
+  scrollbar-color: var(--line) transparent;
+  scrollbar-width: thin;
   padding: 20px 24px;
-  background: var(--panel-background);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  backdrop-filter: blur(var(--glass-blur));
+  /* no card around the page: its own cards (hero, timeline, ...) stand straight on the theme */
   color: var(--text);
 }
 
@@ -245,7 +244,8 @@ onBeforeUnmount(() => {
 .card {
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--panel-background);
+  backdrop-filter: blur(var(--glass-blur));
   padding: 16px 18px;
 }
 
@@ -390,6 +390,8 @@ h3 {
   display: flex;
   gap: 0;
   overflow-x: auto;
+  scrollbar-color: var(--line) transparent;
+  scrollbar-width: thin;
   padding: 6px 4px 4px;
 }
 
@@ -506,6 +508,7 @@ h3 {
   height: 30px;
   display: grid;
   place-items: center;
+  padding: 0; /* the shared button padding pushed the icon off centre */
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.25);
@@ -514,6 +517,7 @@ h3 {
 }
 
 .eye svg {
+  display: block;
   width: 20px;
   height: 20px;
   fill: none;
@@ -531,10 +535,16 @@ h3 {
 }
 
 /* the empty room and the invite */
+/* these two have nothing else around them, so they keep a panel to stay readable */
 .empty,
 .invite {
   max-width: 460px;
   margin: 12% auto 0;
+  padding: 24px 28px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-background);
+  backdrop-filter: blur(var(--glass-blur));
   text-align: center;
   display: flex;
   flex-direction: column;

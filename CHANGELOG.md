@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **MY PROFILE sits straight on your theme.** The big card around the whole page is gone, so its own cards stand on the theme like the other pages, and hide / show works as before. The page uses Castle's thin themed scrollbar, and the eye button's icon is centred in its box.
+
 ## 0.2.9 - 2026-11-15
 
 - **MY PROFILE: you, read from your own diary.** A new room after APPS shows your type, three tiles (Growth, Focus, Wellbeing) with how they moved, and How I Think, Values and Shadow, one reading for each finished month; **Scan my diary** fills in your past months, the **Changes** timeline lets you open any month, and the page stays blurred until you look. It uses your memory database and your own Claude Code or Codex, and nothing of it ever reaches the chat room.
