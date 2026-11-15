@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Scroll the THEME carousel with the mouse wheel.** Over the case in focus, it turns that case's own setting, the same as its own arrows; over the showroom around the cases, it turns the carousel itself, the same as the edge arrows.
+
 - **Reply in the chat room with a local model, for self-hosters.** Settings > Chat has a new switch, off by default: your companion's room replies can go to your own Ollama instead of spending your Claude Code or Codex usage. Drawing a picture there still always goes through Codex or your key either way - a local chat model cannot draw, only ask for one the same way a CLI would.
 
 ## 0.2.11 - 2026-11-15
