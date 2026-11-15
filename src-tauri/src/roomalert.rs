@@ -18,6 +18,60 @@ const OPEN_CHAT_EVENT: &str = "castle-open-chat";
 
 /// The notification for a batch of new lines, leaving out lines the member posted from Castle
 /// (`mine`, by id): (title, body), or None when nothing is left to tell. Pure, tested.
+/// The line answers one of `mine`. Pure.
+pub fn replies_to(line: &Value, mine: &[u64]) -> bool {
+    line.pointer("/replyTo/id").and_then(Value::as_u64).is_some_and(|id| mine.contains(&id))
+}
+
+fn reaction(line: &Value, emoji: &str) -> (u64, bool) {
+    line.get("reactions")
+        .and_then(Value::as_array)
+        .and_then(|r| r.iter().find(|x| x.get("emoji").and_then(Value::as_str) == Some(emoji)))
+        .map(|x| (x.get("count").and_then(Value::as_u64).unwrap_or(0), x.get("mine").and_then(Value::as_bool).unwrap_or(false)))
+        .unwrap_or((0, false))
+}
+
+/// The news of reactions on the member's own lines (before, after): only a count that grew by
+/// someone else's tap, never the member's own. Pure, tested.
+pub fn reaction_news(changed: &[(Value, Value)], mine: &[u64]) -> Option<(String, String)> {
+    let mut told = Vec::new();
+    for (before, after) in changed {
+        if !after.get("id").and_then(Value::as_u64).is_some_and(|id| mine.contains(&id)) {
+            continue;
+        }
+        for r in after.get("reactions").and_then(Value::as_array).cloned().unwrap_or_default() {
+            let emoji = r.get("emoji").and_then(Value::as_str).unwrap_or("").to_string();
+            let (now, mine_now) = reaction(after, &emoji);
+            let (was, mine_before) = reaction(before, &emoji);
+            let by_me = u64::from(mine_now && !mine_before);
+            if now > was + by_me {
+                let said = after.get("text").and_then(Value::as_str).unwrap_or("").split_whitespace().collect::<Vec<_>>().join(" ");
+                let what = if said.is_empty() { "your picture or voice line".to_string() } else { preview(&said) };
+                told.push(format!("{emoji} on \"{what}\""));
+            }
+        }
+    }
+    let first = told.first()?.clone();
+    let body = if told.len() > 1 { format!("{} new reactions. Latest: {}", told.len(), told.last().unwrap()) } else { format!("Someone reacted {first}") };
+    Some(("A reaction in the room".to_string(), body))
+}
+
+/// Reactions to the member's own lines, told only when Settings > Chat > Reaction alerts is on.
+pub fn reactions(app: &AppHandle, changed: &[(Value, Value)], chat_shown: bool) {
+    let store = app.state::<SettingsStore>();
+    let settings = store.get();
+    if !settings.alert_reactions || !(settings.alert_sound || settings.alert_notify) || looking(app, chat_shown) {
+        return;
+    }
+    let Some((title, body)) = reaction_news(changed, &crate::chatroom::my_line_ids(&store)) else { return };
+    if settings.alert_sound {
+        beep();
+    }
+    if settings.alert_notify {
+        toast(app, &title, &body);
+    }
+}
+
 pub fn summary(fresh: &[Value], mine: &[u64]) -> Option<(String, String)> {
     let others: Vec<&Value> = fresh.iter().filter(|l| l.get("id").and_then(Value::as_u64).is_none_or(|id| !mine.contains(&id))).collect();
     let last = others.last()?;
@@ -117,7 +171,9 @@ pub fn new_lines(app: &AppHandle, fresh: &[Value], chat_shown: bool) {
     let mut fresh: Vec<Value> = fresh.iter().filter(|l| !crate::roomturn::companion_said(&settings, l)).cloned().collect();
     if settings.alert_when == "named" {
         let names = names_to_hear(&settings);
-        fresh.retain(|l| l.get("text").and_then(Value::as_str).is_some_and(|t| names_someone(t, &names)));
+        let mine = crate::chatroom::my_line_ids(&store);
+        // a reply to one of the member's own lines counts as naming them
+        fresh.retain(|l| l.get("text").and_then(Value::as_str).is_some_and(|t| names_someone(t, &names)) || replies_to(l, &mine));
     }
     let Some((title, body)) = summary(&fresh, &crate::chatroom::my_line_ids(&store)) else { return };
     if settings.alert_sound {
@@ -242,5 +298,24 @@ mod tests {
         assert!(!names_someone("hello everyone", &[]));
         assert!(!names_someone("hello everyone", &names(&["", "   "])), "empty names never match everything");
         assert!(!names_someone("", &names(&["Kiyo"])));
+    }
+
+    #[test]
+    fn a_reply_to_my_line_counts_and_only_others_reactions_are_news() {
+        use serde_json::json;
+        assert!(replies_to(&json!({"id": 9, "replyTo": {"id": 4, "name": "Me", "text": "hi"}}), &[4]));
+        assert!(!replies_to(&json!({"id": 9, "replyTo": {"id": 5}}), &[4]));
+        assert!(!replies_to(&json!({"id": 9}), &[4]));
+        let before = json!({"id": 4, "text": "my line", "reactions": [{"emoji": "👍", "count": 1, "mine": false}]});
+        let after = json!({"id": 4, "text": "my line", "reactions": [{"emoji": "👍", "count": 2, "mine": false}]});
+        let (title, body) = reaction_news(&[(before.clone(), after)], &[4]).unwrap();
+        assert_eq!(title, "A reaction in the room");
+        assert!(body.contains("👍") && body.contains("my line"));
+        // the member's own tap is not news
+        let mine = json!({"id": 4, "text": "my line", "reactions": [{"emoji": "👍", "count": 2, "mine": true}]});
+        assert!(reaction_news(&[(before.clone(), mine)], &[4]).is_none());
+        // someone else's line is not the member's news
+        let other = json!({"id": 7, "text": "x", "reactions": [{"emoji": "👍", "count": 5, "mine": false}]});
+        assert!(reaction_news(&[(json!({"id": 7}), other)], &[4]).is_none());
     }
 }

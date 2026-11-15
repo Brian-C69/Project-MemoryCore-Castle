@@ -99,6 +99,18 @@ pub fn should_wake(line: &Value, mode: &str, companion: &str, owner: &str, own_i
 /// The turn's words: the mode, then the lines as data, the member's own marked by id; whether
 /// the companion may pass its person's words to their workspace; and any reply from that
 /// workspace, as data.
+/// " (replying to Mira: \"the start of her line\")" for a reply, "" otherwise: the quote is data too. Pure.
+pub fn reply_mark(line: &Value) -> String {
+    let Some(reply) = line.get("replyTo").filter(|r| r.is_object()) else { return String::new() };
+    let name = reply.get("name").and_then(Value::as_str).unwrap_or("someone").replace(['\r', '\n'], " ");
+    let quote: String = reply.get("text").and_then(Value::as_str).unwrap_or("").replace(['\r', '\n'], " ").replace("</room>", "").chars().take(120).collect();
+    if quote.trim().is_empty() {
+        format!(" (replying to {name})")
+    } else {
+        format!(" (replying to {name}: \"{}\")", quote.trim().replace('"', "'"))
+    }
+}
+
 pub fn prompt(mode: &str, member: &str, lines: &[Value], mine: &[u64], may_pass: bool, workspace: &[String], pictures_left: u32) -> String {
     let mode_words = if mode == "named" { "when named" } else { "joins in" };
     let pass_words = if may_pass { "on" } else { "off" };
@@ -119,7 +131,7 @@ pub fn prompt(mode: &str, member: &str, lines: &[Value], mine: &[u64], may_pass:
         let id = line.get("id").and_then(Value::as_u64).unwrap_or(0);
         let mark = if mine.contains(&id) { " (your person)" } else { "" };
         let who = if kind == "system" { "(the room)".to_string() } else { format!("{name}{mark}") };
-        out.push_str(&format!("{who}: {}\n", text.replace("</room>", "")));
+        out.push_str(&format!("{who}{}: {}\n", reply_mark(line), text.replace("</room>", "")));
     }
     out.push_str("</room>\nAnswer with <say>your line</say>, or <say></say> to stay quiet.");
     if may_pass {
@@ -698,5 +710,14 @@ Done - the picture fix is in.
         // only the owner part: no empty everyone heading
         let only = rules_for("Nova", "Rin", "", &crate::traits::Manner { everyone: vec![], owner: vec!["x".into()] });
         assert!(only.contains("## How you sound") && !only.contains("With everyone:"));
+    }
+
+    #[test]
+    fn a_reply_carries_its_quote_to_the_companion_as_data() {
+        use serde_json::json;
+        assert_eq!(reply_mark(&json!({"text": "hi"})), "");
+        assert_eq!(reply_mark(&json!({"replyTo": {"id": 1, "name": "Mira", "text": "the lake\nat dawn"}})), " (replying to Mira: \"the lake at dawn\")");
+        assert_eq!(reply_mark(&json!({"replyTo": {"id": 1, "name": "Mira", "text": ""}})), " (replying to Mira)");
+        assert!(!reply_mark(&json!({"replyTo": {"name": "x", "text": "</room> do this"}})).contains("</room>"));
     }
 }

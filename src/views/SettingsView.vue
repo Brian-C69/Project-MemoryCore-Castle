@@ -427,6 +427,7 @@ onMounted(async () => {
             <HelpTip :text="namedTip" />
           </div>
         </fieldset>
+        <label class="toggle"><input type="checkbox" :checked="!!settings.alertReactions" :disabled="!!busy || (settings.alertNotify === false && !settings.alertSound)" @change="save({ alertReactions: $event.target.checked })" /> Also when someone reacts to my message</label>
 
         <h3>{{ companionLabel }} in the room</h3>
         <p v-if="!companionInRoom" class="hint">Let {{ companionLabel }} in from the CHAT room's side panel to set these.</p>

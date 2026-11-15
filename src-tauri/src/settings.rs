@@ -179,6 +179,9 @@ pub struct Settings {
     /// "all" (every new line, the default) or "named" (only a line that names the member or
     /// their companion, as a whole word): which lines the chat alerts tell about.
     pub alert_when: String,
+    /// Also tell the member when someone reacts to one of their lines (off by default; needs a
+    /// room that offers reactions).
+    pub alert_reactions: bool,
     /// The companion may draw a picture in the chat room when someone asks (off by default), at
     /// most this many a day (0..5, under the room's own cap), at this quality when the drawing
     /// spends the member's ChatGPT key ("low" or "medium"; Codex uses the subscription).
@@ -316,6 +319,7 @@ impl Default for Settings {
             alert_sound: false,
             alert_notify: true,
             alert_when: "all".into(),
+            alert_reactions: false,
             room_pictures_on: false,
             room_pictures_per_day: 1,
             room_picture_quality: "low".into(),
@@ -637,6 +641,7 @@ mod tests {
             alert_sound: true,
             alert_notify: false,
             alert_when: "named".into(),
+            alert_reactions: false,
             room_pictures_on: true,
             room_pictures_per_day: 3,
             room_picture_quality: "medium".into(),

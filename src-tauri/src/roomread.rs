@@ -151,6 +151,9 @@ pub fn start(app: &AppHandle) {
                 if !fresh.is_empty() || !cleared.is_empty() || !updated.is_empty() {
                     let _ = app.emit("room-lines", Fresh { lines: fresh.clone(), cleared, updated });
                 }
+                if !reacted.is_empty() && cursor.is_some() {
+                    crate::roomalert::reactions(&app, &reacted, reader.visible.load(Ordering::Relaxed));
+                }
                 if !fresh.is_empty() && cursor.is_some() {
                     crate::roomturn::heard(&app, &fresh);
                     // read again: a held read can last 20 s, and the member may have left CHAT meanwhile
