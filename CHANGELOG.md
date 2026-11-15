@@ -4,6 +4,9 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.11 - 2026-11-15
+
+- **The Library's toolbar is visible again.** The shelves, the book list and the reader used to slide up over the Library's search and refresh buttons; they now sit just below them.
 - **HOME's PROFILE tab now hears a theme change right away.** Changing the profile look in THEME and coming back to HOME while PROFILE was already the tab open there used to still show the old look, unlike the diary and story looks. THEME's saves now tell every tab the same way Settings' own saves do.
 
 ## 0.2.10 - 2026-11-15
