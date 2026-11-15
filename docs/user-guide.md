@@ -289,6 +289,8 @@ The badge at the top of the room says which way the next picture goes:
 - **Ready - drawn with your OpenAI key** - your companion draws with your key.
 - **Prompt only - add an OpenAI key or sign in to Codex** - nothing can draw yet; requests are saved.
 
+**Quality** beside the badge sets how carefully every drawing in this room is made, and so what it costs with your key: **As the style says** (high for the standard look and turnarounds, medium for a try-on), **Low** (about $0.03 a picture), **Medium** (about $0.06) or **High** (about $0.25). The prices show only when your key pays; on your ChatGPT plan they do not apply. Each picture's size stays with its shape (the standard look and a try-on are tall, a turnaround is wide). Castle remembers your choice on this computer.
+
 Your OpenAI key is never given to Codex, because Codex would then bill your API account instead of your plan. Image jobs show queued, working, completed, or prompt-saved status. Video, music and voice keep their separate key requirements.
 
 A Codex job starts once the main conversation reaches a confirmed turn boundary. Normal Codex permissions remain in effect; if the noninteractive job cannot proceed, Castle saves the prompt. Press **Refresh** after completion. Saved prompts can be retried from the room. Interrupted jobs are not automatically rerun after Castle restarts.
