@@ -1,0 +1,28 @@
+import { describe, expect, it } from 'vitest'
+import { companionLines, makeAction, powerPill } from './studiomake.js'
+
+describe("STUDIO's Make bar", () => {
+  it('queues a picture with the key or on Codex, else asks for the key', () => {
+    expect(makeAction('image', { image: 'ready' })).toEqual({ kind: 'image', label: 'Create picture' })
+    expect(makeAction('image', { image: 'builtin' }).kind).toBe('image')
+    expect(makeAction('image', { image: 'prompt' })).toEqual({ kind: 'key', label: 'Add the OpenAI key' })
+  })
+  it('asks the companion for a video or a song when its key is there', () => {
+    expect(makeAction('video', { video: 'ready' }, false, 'Alice')).toEqual({ kind: 'companion', label: 'Ask Alice', ask: 'Make a short video of' })
+    expect(makeAction('song', { song: 'prompt' })).toEqual({ kind: 'key', label: 'Add the Suno key' })
+  })
+  it('speaks with VoiceStudio first, then the companion with the key, then asks for it', () => {
+    expect(makeAction('voice', { voice: 'prompt' }, true).kind).toBe('voicestudio')
+    expect(makeAction('voice', { voice: 'ready' }, false).kind).toBe('companion')
+    expect(makeAction('voice', {}, false)).toEqual({ kind: 'key', label: 'Add the ElevenLabs key' })
+  })
+  it('shows each power its pill', () => {
+    expect(powerPill('image', { image: 'ready' })).toEqual({ text: 'Ready', tone: 'ready' })
+    expect(powerPill('image', { image: 'builtin' }).text).toBe('Codex')
+    expect(powerPill('video', {})).toEqual({ text: 'Add a key', tone: 'missing' })
+    expect(powerPill('voice', {}, true).text).toBe('VoiceStudio')
+  })
+  it('types the ask and the cost question', () => {
+    expect(companionLines('Make a short video of', '  a lake at dawn ')).toEqual(['Make a short video of a lake at dawn', 'Tell me the cost first and ask before you make it.'])
+  })
+})
