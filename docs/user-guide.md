@@ -277,13 +277,21 @@ Everything lives in your MemoryCore folder (`media-generation/`, `music/`, and t
 
 ### How drawing works here
 
-Castle sends Appearance and Studio picture requests to a separate Codex job, even when the main conversation uses Claude Code. Codex must be installed and signed in with ChatGPT. An installed CLI is not proof that image generation is available for that account; the actual request is checked when it runs.
+Castle draws an Appearance or Studio picture the first way that is open to you:
 
-- **Codex available — checked when drawing** means Castle found the CLI.
-- **Codex unavailable — prompts are saved** means you can keep the request and retry after installing/signing in.
-- Image jobs show queued, working, completed, or prompt-saved status. Failure never silently falls back to an API key. Video, music and voice keep their separate key requirements.
+1. **Codex on your ChatGPT plan.** When Codex is installed and signed in with ChatGPT, the picture is a separate Codex job, even when the main conversation uses Claude Code. It costs nothing beyond your plan.
+2. **Your companion, with your OpenAI key.** When your companion thinks with Claude Code and you added a ChatGPT (OpenAI) key in **Settings > Keys**, the request goes to your companion as if you typed it in Chat. It reads the drawing style and your companion's look, tells you the cost, and draws only after you say yes. Castle opens Chat so you can answer.
+3. **Neither.** The prompt is saved under **Image requests**, with what to add.
 
-Submitting an image request starts a Codex task once the main conversation reaches a confirmed turn boundary. Normal Codex permissions remain in effect; if the noninteractive job cannot proceed, Castle saves the prompt. Press **Refresh** after completion. Saved prompts can be retried from the room. Interrupted jobs are not automatically rerun after Castle restarts.
+The badge at the top of the room says which way the next picture goes:
+
+- **Codex on your ChatGPT plan** - Codex is signed in with ChatGPT (Castle asks Codex itself; an installed Codex alone is not enough).
+- **Ready - drawn with your OpenAI key** - your companion draws with your key.
+- **Prompt only - add an OpenAI key or sign in to Codex** - nothing can draw yet; requests are saved.
+
+Your OpenAI key is never given to Codex, because Codex would then bill your API account instead of your plan. Image jobs show queued, working, completed, or prompt-saved status. Video, music and voice keep their separate key requirements.
+
+A Codex job starts once the main conversation reaches a confirmed turn boundary. Normal Codex permissions remain in effect; if the noninteractive job cannot proceed, Castle saves the prompt. Press **Refresh** after completion. Saved prompts can be retried from the room. Interrupted jobs are not automatically rerun after Castle restarts.
 
 ### The standard look
 

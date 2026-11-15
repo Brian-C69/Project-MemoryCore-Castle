@@ -14,13 +14,13 @@ Main-chat messages submitted during switching/image work are saved in a private 
 
 ## Images
 
-Appearance and Studio route image requests to a separate Codex process. Requests are serialized and wait for a safe main-chat boundary. The process receives the image brief and selected image attachments rather than the Castle conversation handoff. It uses normal Codex permissions, strips inherited API keys, and requires ChatGPT authentication. It does not retry through the stored OpenAI API key. Capability, sign-in, permission, or output failures retain a prompt and provide Retry with Codex. Model-generated instructions are not a security sandbox; normal CLI filesystem permissions still apply.
+Appearance and Studio route image requests to a separate Codex process. Requests are serialized and wait for a safe main-chat boundary. The process receives the image brief and selected image attachments rather than the Castle conversation handoff. It uses normal Codex permissions, strips inherited API keys, and requires ChatGPT authentication; the stored OpenAI API key never reaches Codex. When Codex is not signed in with ChatGPT and the companion thinks with Claude Code with an OpenAI key stored, the rooms send the request to the companion instead (it states the cost and asks before drawing with castle-image.ps1); with neither, the prompt is saved (`env::picture_way`). Capability, sign-in, permission, or output failures retain a prompt and provide Retry with Codex. Model-generated instructions are not a security sandbox; normal CLI filesystem permissions still apply.
 
 Image-job status and prompts survive restart. Interrupted jobs become saved prompts rather than running automatically. A completed job must produce a changed, decodable image. Existing output is backed up before replacement. No Windows startup entry, shared memory identity, or provider configuration file is changed by these features.
 
 ## Verification boundaries
 
-Automated coverage includes explicit end-of-turn detection, bounded handoffs, tool-output exclusion, journal deduplication and separation, corruption preservation, multiline message packaging, and fake-CLI image success/unchanged-output/failure behaviour. Frontend tests verify image routing does not write to the main terminal or fall back to an API.
+Automated coverage includes explicit end-of-turn detection, bounded handoffs, tool-output exclusion, journal deduplication and separation, corruption preservation, multiline message packaging, and fake-CLI image success/unchanged-output/failure behaviour. Frontend tests verify the three picture ways: Codex jobs never write to the main terminal, the companion way keeps the cost question, and no way still saves the prompt.
 
 Browser checks use the actual served header/Appearance components with a mocked Tauri bridge: provider selection/cancellation, output and reference routing, saved-prompt retry, and no main-terminal image writes. This is component verification, not a real model-session smoke test.
 
