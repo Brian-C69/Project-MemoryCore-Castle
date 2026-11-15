@@ -3,7 +3,7 @@
 //!   GET  {portfolio}/api/member/read/{ref}         a signed-in member (their purchases, or an
 //!                                                  approved Foundation member: every priced book)
 //!   GET  {portfolio}/api/public/library/read/{ref} anyone else: a free book, or a priced one's preview
-//! Nothing is written to the Portfolio and nothing is kept beyond the answer.
+//! Nothing is written to the Portfolio. A book read whole may be kept in My books (spiral_keep).
 
 use serde::Serialize;
 use serde_json::Value;
@@ -60,6 +60,8 @@ pub struct SpiralBook {
     pub join_to_read: bool,
     pub word_count: u64,
     pub preview_words: u64,
+    /// the edition (the Portfolio's updatedAt), kept beside a book taken into My books
+    pub updated_at: String,
 }
 
 fn text(v: &Value, key: &str) -> String {
@@ -111,7 +113,26 @@ pub fn book_of(answer: &Value) -> SpiralBook {
         join_to_read: flag(answer, "joinToRead"),
         word_count: number(answer, "wordCount"),
         preview_words: number(answer, "previewWords"),
+        updated_at: text(answer, "updatedAt"),
     }
+}
+
+/// The shelf a kept book sits on in My books: the ref's first part ("architecture/books/keys" ->
+/// "architecture"), or "general" for a ref with no shelf. Pure, tested.
+pub fn shelf_of(reference: &str) -> String {
+    let parts: Vec<&str> = reference.split('/').filter(|s| !s.is_empty()).collect();
+    crate::library_db::shelf_slug(if parts.len() > 1 { parts[0] } else { "" })
+}
+
+/// Only a book read whole may be kept; a preview never is. Pure, tested.
+pub fn may_keep(book: &SpiralBook) -> Result<(), String> {
+    if book.preview {
+        return Err("Only a whole book can be kept. This is a preview.".to_string());
+    }
+    if book.body.trim().is_empty() {
+        return Err("That book came back empty, so nothing was kept.".to_string());
+    }
+    Ok(())
 }
 
 /// A book's ref as a URL path: each segment percent-encoded, the slashes kept. Pure, tested.
@@ -167,24 +188,52 @@ pub async fn spiral_room(store: tauri::State<'_, crate::settings::SettingsStore>
     .map_err(|_| "The Spiral Library could not finish.".to_string())?
 }
 
+/// One book from the Portfolio: whole for a member who may read it, else what a guest may read.
+fn fetch(reference: &str) -> Result<SpiralBook, String> {
+    let base = crate::signin::portfolio();
+    let path = ref_path(reference);
+    if path.is_empty() {
+        return Err("That is not a book of the Spiral Library.".to_string());
+    }
+    let answer = match member_token() {
+        Some(token) => get(&format!("{base}/api/member/read/{path}"), Some(&token)).or_else(|_| get(&format!("{base}/api/public/library/read/{path}"), None))?,
+        None => get(&format!("{base}/api/public/library/read/{path}"), None)?,
+    };
+    Ok(book_of(&answer))
+}
+
 /// One book: whole for a member who may read it, else what a guest may read.
 #[tauri::command]
 pub async fn spiral_read(reference: String, store: tauri::State<'_, crate::settings::SettingsStore>) -> Result<SpiralBook, String> {
     crate::rooms::need(&store, "library")?;
+    tauri::async_runtime::spawn_blocking(move || fetch(&reference)).await.map_err(|_| "The Spiral Library could not finish.".to_string())?
+}
+
+/// Keep a Spiral book in My books. The book is read again here, on the Portfolio's word (never
+/// on what the screen holds), and only a whole read is copied; keeping it again updates the copy.
+#[tauri::command]
+pub async fn spiral_keep(reference: String, store: tauri::State<'_, crate::settings::SettingsStore>) -> Result<Vec<crate::library_db::Book>, String> {
+    let memory = crate::library_db::memory_of(&store)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let base = crate::signin::portfolio();
-        let path = ref_path(&reference);
-        if path.is_empty() {
-            return Err("That is not a book of the Spiral Library.".to_string());
-        }
-        let answer = match member_token() {
-            Some(token) => get(&format!("{base}/api/member/read/{path}"), Some(&token)).or_else(|_| get(&format!("{base}/api/public/library/read/{path}"), None))?,
-            None => get(&format!("{base}/api/public/library/read/{path}"), None)?,
-        };
-        Ok(book_of(&answer))
+        let book = fetch(&reference)?;
+        may_keep(&book)?;
+        let origin = if book.reference.is_empty() { reference.clone() } else { book.reference.clone() };
+        let title = if book.title.trim().is_empty() { origin.rsplit('/').next().unwrap_or("Book").to_string() } else { book.title.clone() };
+        let mut conn = crate::library_db::open_at(&memory)?;
+        crate::library_db::keep_from(&mut conn, &shelf_of(&origin), &title, &book.body, &origin, &book.updated_at)?;
+        crate::library_db::books(&mut conn)
     })
     .await
     .map_err(|_| "The Spiral Library could not finish.".to_string())?
+}
+
+/// Every Spiral book in My books: ref -> the edition kept.
+#[tauri::command]
+pub async fn spiral_kept(store: tauri::State<'_, crate::settings::SettingsStore>) -> Result<std::collections::BTreeMap<String, String>, String> {
+    let memory = crate::library_db::memory_of(&store)?;
+    tauri::async_runtime::spawn_blocking(move || Ok(crate::library_db::kept_origins(&mut crate::library_db::open_at(&memory)?)?.into_iter().collect()))
+        .await
+        .map_err(|_| "The Spiral Library could not finish.".to_string())?
 }
 
 #[cfg(test)]
@@ -213,6 +262,24 @@ mod tests {
         let b = book_of(&serde_json::json!({ "ref": "a.md", "title": "A", "body": "first part", "preview": true, "owned": false, "free": false, "wordCount": 1000, "previewWords": 100 }));
         assert!(b.preview && !b.owned);
         assert_eq!((b.word_count, b.preview_words), (1000, 100));
+    }
+
+    #[test]
+    fn a_kept_book_sits_on_its_refs_first_shelf() {
+        assert_eq!(shelf_of("architecture/books/keys"), "architecture");
+        assert_eq!(shelf_of("keys.md"), "general");
+        assert_eq!(shelf_of(""), "general");
+    }
+
+    #[test]
+    fn a_preview_is_never_kept() {
+        let mut b = book_of(&serde_json::json!({ "ref": "a/b", "title": "B", "body": "first part", "preview": true, "updatedAt": "2026-11-15T10:00:00Z" }));
+        assert_eq!(b.updated_at, "2026-11-15T10:00:00Z");
+        assert!(may_keep(&b).unwrap_err().contains("preview"));
+        b.preview = false;
+        assert!(may_keep(&b).is_ok());
+        b.body = "  ".to_string();
+        assert!(may_keep(&b).is_err(), "an empty body is not kept");
     }
 
     #[test]

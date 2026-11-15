@@ -259,13 +259,13 @@ pub fn take_in(conn: &mut mysql::Conn, memory: &Path) -> Result<usize, String> {
 // ---------- the room's commands ----------
 
 /// The member's memory folder, once the Library room is on.
-fn memory_of(store: &crate::settings::SettingsStore) -> Result<PathBuf, String> {
+pub(crate) fn memory_of(store: &crate::settings::SettingsStore) -> Result<PathBuf, String> {
     crate::rooms::need(store, "library")?;
     store.get().memory_folder.map(PathBuf::from).filter(|f| f.is_dir()).ok_or_else(|| "Choose your MemoryCore folder first.".to_string())
 }
 
 /// The memory database, migrated, with the old library taken in the first time.
-fn open_at(memory: &Path) -> Result<mysql::Conn, String> {
+pub(crate) fn open_at(memory: &Path) -> Result<mysql::Conn, String> {
     let mut conn = crate::store::source(memory).ok_or("Your library lives in the memory database. Move your memory in first (Settings > Database).")?;
     crate::memdb::migrate(&mut conn)?;
     take_in(&mut conn, memory)?;

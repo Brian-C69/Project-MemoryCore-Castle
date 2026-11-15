@@ -329,6 +329,8 @@ pub fn run() {
             library_db::library_delete,
             spiral::spiral_room,
             spiral::spiral_read,
+            spiral::spiral_keep,
+            spiral::spiral_kept,
             story::story_prepare,
             story::story_worlds,
             story::story_beat,
