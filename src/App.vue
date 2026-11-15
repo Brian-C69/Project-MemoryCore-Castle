@@ -49,7 +49,7 @@ const allTabs = [
   { id: 'myprofile', label: 'MY PROFILE' },
   { id: 'diary', label: 'DIARY', needs: 'diary' },
   { id: 'projects', label: 'PROJECTS', needs: 'projects' },
-  { id: 'library', label: 'LIBRARY', needs: 'library' },
+  { id: 'library', label: 'LIBRARY' },
   { id: 'appearance', label: 'APPEARANCE' },
   { id: 'studio', label: 'STUDIO' },
   { id: 'story', label: 'STORY' },

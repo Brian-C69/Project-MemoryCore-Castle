@@ -295,8 +295,10 @@ pub const DIARY_LOOKS: [&str; 3] = ["list", "calendar", "book"];
 pub const PROFILE_LOOKS: [&str; 2] = ["cards", "constellation"];
 pub const STORY_LOOKS: [&str; 5] = ["classic", "cinema", "book", "messenger", "jrpg"];
 
+/// Every room on for a new Castle, except LIBRARY: it is the member's switch to turn on
+/// (Settings > Rooms). A choice already stored is kept as it is.
 fn all_rooms_on() -> std::collections::BTreeMap<String, bool> {
-    ROOMS.iter().map(|r| (r.to_string(), true)).collect()
+    ROOMS.iter().map(|r| (r.to_string(), *r != "library")).collect()
 }
 
 impl Default for Settings {
@@ -768,9 +770,10 @@ mod tests {
     }
 
     #[test]
-    fn every_room_starts_on_home_cannot_be_off_and_unknown_rooms_go() {
+    fn every_room_starts_on_but_the_library_home_cannot_be_off_and_unknown_rooms_go() {
         let fresh = Settings::default();
-        assert!(ROOMS.iter().all(|r| fresh.room_on(r)));
+        assert!(ROOMS.iter().filter(|r| **r != "library").all(|r| fresh.room_on(r)));
+        assert!(!fresh.room_on("library"), "the Library waits for the member's switch");
         let mut rooms = std::collections::BTreeMap::new();
         rooms.insert("story".to_string(), false);
         rooms.insert("home".to_string(), false);

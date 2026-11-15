@@ -474,6 +474,7 @@ onMounted(async () => {
             <input type="checkbox" :checked="settings.rooms?.[r.id] !== false" :disabled="!!busy" @change="switchRoom(r.id, $event.target.checked)" /> {{ r.label }}
           </label>
         </div>
+        <p class="hint">LIBRARY is off to begin with: turn it on for your own books (kept in your memory database) and the Spiral Library.</p>
         <p class="hint">Turning STORY off ends the story session; turning WORLD off closes the world screens; CHAT stops reading the room. Their files stay.</p>
         <p class="hint">Arrange the tabs your way: drag a tab in the top bar onto another, or press Alt+Left / Alt+Right on a tab. Castle remembers the order.</p>
         <button v-if="settings.tabOrder?.length" :disabled="!!busy" @click="save({ tabOrder: [] }, 'The tabs are back in their first order.')">Put the tabs back in their first order</button>
