@@ -139,6 +139,10 @@ export const appearanceLook = () => invoke('appearance_look')
 export const appearanceNew = (kind, name, description) => invoke('appearance_new', { kind, name, description })
 export const appearanceImport = (kind, id, source) => invoke('appearance_import', { kind, id, source })
 export const appearanceWear = (outfit, hair) => invoke('appearance_wear', { outfit, hair })
+// the look in words and its art style, kept in the memory database
+export const appearanceSaveLook = (words, artStyle) => invoke('appearance_save_look', { words, artStyle })
+// new name or words for one outfit or hairstyle
+export const appearanceSaveItem = (kind, id, name, words) => invoke('appearance_save_item', { kind, id, name, words })
 
 // STORY: adventures/ prepared with Castle's rulebook; the saved worlds.
 export const storyPrepare = () => invoke('story_prepare')

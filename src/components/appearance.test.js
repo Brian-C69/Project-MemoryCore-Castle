@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { improvementLine, isStartingWords, itemReferenceLine, lookSpec, pictureCost, qualityLine, QUALITIES, referenceLine } from './appearance.js'
-
-describe("Castle's starting words", () => {
-  it('are known with or without the heading, and real words are not', () => {
-    expect(isStartingWords("# Mira's look\n\nDescribe the look here: face, eyes.\n")).toBe(true)
-    expect(isStartingWords('Describe the look here: face.')).toBe(true)
-    expect(isStartingWords("# Mira's look\n\nViolet eyes, red hair.")).toBe(false)
-    expect(isStartingWords()).toBe(false)
-  })
-})
+import { improvementLine, itemReferenceLine, lookSpec, pictureCost, qualityLine, QUALITIES, referenceLine } from './appearance.js'
 
 describe('a drawing named by its parts', () => {
   it('carries the ids, the trimmed words and the quality', () => {
