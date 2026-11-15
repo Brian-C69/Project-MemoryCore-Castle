@@ -446,6 +446,18 @@ onMounted(async () => {
             <p v-if="card.saved" class="hint">{{ card.saved }}</p>
           </div>
 
+          <h3 class="with-tip">Local model for replies <HelpTip :text="`For self-hosters who run their own Ollama. Only the words ${companionLabel} speaks in the room move to it; drawing a picture there still goes through Codex or your OpenAI key either way, since a local chat model cannot draw.`" /></h3>
+          <div class="setting-row">
+            <label class="toggle"><input type="checkbox" :checked="!!settings.roomChatLocalModel" :disabled="!!busy" @change="save({ roomChatLocalModel: $event.target.checked })" /> Reply in the room with a local model instead of {{ settings.cli === 'claude' ? 'Claude Code' : 'Codex' }}</label>
+          </div>
+          <template v-if="settings.roomChatLocalModel">
+            <div class="row">
+              <label class="wide">Ollama address <input v-model="settings.roomChatOllamaUrl" maxlength="200" placeholder="http://127.0.0.1:11434" @change="save({ roomChatOllamaUrl: settings.roomChatOllamaUrl })" /></label>
+              <label class="wide">Model <input v-model="settings.roomChatOllamaModel" maxlength="80" placeholder="llama3" @change="save({ roomChatOllamaModel: settings.roomChatOllamaModel })" /></label>
+            </div>
+            <p class="hint">Your Claude Code or Codex usage is never spent on room replies while this is on. {{ companionLabel }} still only answers under the rule above, and nothing from your memory reaches this model - the same room rules and public card any CLI would get.</p>
+          </template>
+
           <h3 class="with-tip">Pictures <HelpTip :text="`${companionLabel} draws only when someone in the room asks for a picture, and never a real person, anything adult, violent or hateful, words in the picture, or anything private. Kiyo's daily cap for the room still applies on top of yours.`" /></h3>
           <div class="setting-row">
             <label class="toggle"><input type="checkbox" :checked="!!settings.roomPicturesOn" :disabled="!!busy || pictures?.way === 'none'" @change="savePictures({ roomPicturesOn: $event.target.checked })" /> Let {{ companionLabel }} draw pictures in the room</label>

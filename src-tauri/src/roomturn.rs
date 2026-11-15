@@ -325,6 +325,41 @@ fn run_cli(cli: Cli, folder: &Path, words: &str) -> Result<String, String> {
     crate::oneshot::run(cli, folder, "rules.md", words, RUN_LIMIT).map_err(|why| if why.starts_with("It took too long") { "The turn took too long and was stopped.".into() } else { why })
 }
 
+/// Ollama's own address, or its default when the member left it blank. Pure, tested.
+fn ollama_address(url: &str) -> String {
+    let url = url.trim().trim_end_matches('/');
+    if url.is_empty() { "http://127.0.0.1:11434".into() } else { url.to_string() }
+}
+
+/// A room turn answered by the member's own local Ollama instead of their CLI, for self-hosters
+/// who would rather the chat room not spend their Claude Code or Codex usage: the same rules as the
+/// system prompt, the same handed lines as the one message, a plain text answer back, so every
+/// <say>/<draw>/<note> reader downstream treats it exactly like a CLI's output. Drawing a picture
+/// still goes through Codex or the member's key either way - a local chat model cannot draw; it can
+/// only ask for one with the same <draw>...</draw> tag a CLI would use.
+fn run_local_model(url: &str, model: &str, folder: &Path, words: &str) -> Result<String, String> {
+    if model.trim().is_empty() {
+        return Err("Choose a local model in Settings > Chat first.".into());
+    }
+    let system = std::fs::read_to_string(folder.join("rules.md")).map_err(|_| "The room's rules could not be read.".to_string())?;
+    let client = reqwest::blocking::Client::builder().timeout(RUN_LIMIT).build().map_err(|_| "The local model call could not start.".to_string())?;
+    let answer = client
+        .post(format!("{}/api/chat", ollama_address(url)))
+        .json(&serde_json::json!({
+            "model": model.trim(),
+            "stream": false,
+            "messages": [{ "role": "system", "content": system }, { "role": "user", "content": words }],
+            "options": { "temperature": 0.3 },
+        }))
+        .send()
+        .map_err(|_| format!("{} did not answer. Is Ollama running?", ollama_address(url)))?;
+    if !answer.status().is_success() {
+        return Err(format!("{} refused the request.", ollama_address(url)));
+    }
+    let body: Value = answer.json().map_err(|_| "The local model sent something unreadable.".to_string())?;
+    body.pointer("/message/content").and_then(Value::as_str).map(str::to_string).filter(|s| !s.trim().is_empty()).ok_or_else(|| "The local model gave no answer.".to_string())
+}
+
 fn take_turn(app: &AppHandle) {
     // a workspace note that arrives from here on owes the next turn
     with_turns(|t| t.workspace = false);
@@ -371,7 +406,11 @@ fn take_turn(app: &AppHandle) {
     let pictures = crate::roomdraw::pictures_left(&settings, &store, &ai_room);
     let words = prompt(&mode, &member_name, &lines, &mine, may_pass, &reply_words, pictures);
     log(&folder, &format!("handed {} line(s):\n{words}", lines.len()));
-    let ran = run_cli(settings.cli, &folder, &words);
+    let ran = if settings.room_chat_local_model {
+        run_local_model(settings.room_chat_ollama_url.as_deref().unwrap_or(""), settings.room_chat_ollama_model.as_deref().unwrap_or(""), &folder, &words)
+    } else {
+        run_cli(settings.cli, &folder, &words)
+    };
     if let (Ok(output), Some(link)) = (&ran, &link) {
         // the replies were handed to a turn that ran: they are read
         for (name, _) in &replies {
@@ -526,6 +565,17 @@ mod tests {
 
     fn line(id: u64, name: &str, kind: &str, text: &str) -> Value {
         json!({"id": id, "text": text, "author": {"name": name, "kind": kind}})
+    }
+
+    #[test]
+    fn ollama_falls_back_to_its_own_default_address() {
+        assert_eq!(ollama_address(""), "http://127.0.0.1:11434");
+        assert_eq!(ollama_address("  http://127.0.0.1:1356/  "), "http://127.0.0.1:1356");
+    }
+
+    #[test]
+    fn a_local_model_refuses_to_run_with_nothing_chosen() {
+        assert_eq!(run_local_model("", "  ", Path::new("x"), "hi").unwrap_err(), "Choose a local model in Settings > Chat first.");
     }
 
     #[test]
