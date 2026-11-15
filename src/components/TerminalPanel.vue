@@ -96,6 +96,8 @@ const MAX_WIDTH = 75
 const surface = ref(null)
 const panel = ref(null)
 const running = ref(false)
+// the companion is working on a reply (from Chat), for the header's dot
+const busy = ref(false)
 let starting = false
 const activeProvider = ref(null)
 const ended = ref(false)
@@ -416,7 +418,7 @@ defineExpose({ wake, screenLines, writeToSession, addPaths })
     :aria-label="companion"
   >
     <div v-if="!isDev" class="header">
-      <div v-if="$slots.header && !expanded" class="portrait"><slot name="header" :write="writeToSession" :running="running" /></div>
+      <div v-if="$slots.header && !expanded" class="portrait"><slot name="header" :write="writeToSession" :running="running" :busy="busy" /></div>
       <div class="tabs" role="tablist" aria-label="Chat or log">
         <button role="tab" :aria-selected="view === 'chat'" :class="{ active: view === 'chat' }" @click="setView('chat')">CHAT</button>
         <button role="tab" :aria-selected="view === 'log'" :class="{ active: view === 'log' }" @click="setView('log')">LOG</button>
@@ -446,7 +448,7 @@ defineExpose({ wake, screenLines, writeToSession, addPaths })
         :room="chatRoom"
         :cli="activeProvider || cli"
         @show-log="setView('log')"
-        @busy="emit('busy', $event)"
+        @busy="busy = $event; emit('busy', $event)"
         @context="emit('context', $event)"
       />
     </div>

@@ -70,7 +70,6 @@ const databaseOffer = ref(false)
 const databaseBytes = ref(0)
 const offerFacts = ref({ offerSeen: true, hadCastleBefore: false, hasFolder: false })
 const avatar = ref(null)
-const cliLabel = ref('Claude Code')
 const memoryFolder = ref('')
 const backupOpen = ref(false)
 // the Settings sheet and the section it opens on
@@ -220,7 +219,6 @@ async function loadSettingsAndTheme() {
     offerFacts.value = { offerSeen: !!view.settings.dbOfferSeen, hadCastleBefore: lastSeen !== null, hasFolder: !!view.settings.memoryFolder }
     companion.value = view.companionLabel
     cli.value = view.settings.cli
-    cliLabel.value = view.cliLabel
     memoryFolder.value = view.settings.memoryFolder ?? ''
     memberName.value = view.settings.memberName ?? ''
     rooms.value = view.settings.rooms ?? {}
@@ -450,7 +448,7 @@ watch(settingsStamp, () => {
           @settings="openSettings"
           @setup="openSetup"
         >
-          <template #header="{ write, running }"><CompanionHeader :name="companion" :cli-label="cliLabel" :avatar="avatar" :write="write" :running="running" /></template>
+          <template #header="{ running, busy }"><CompanionHeader :name="companion" :avatar="avatar" :running="running" :busy="busy" /></template>
         </TerminalPanel>
         <div
           v-for="id in shownWidgets"

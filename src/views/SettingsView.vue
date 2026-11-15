@@ -160,7 +160,7 @@ async function switchRoom(id, on) {
 }
 
 // the room sign-in and the companion's room key are made by CHAT itself, never shown or pasted here
-const shownKeys = computed(() => keys.value.filter((k) => k.name !== 'member' && !k.name.startsWith('room') && !(k.name === 'openai' && settings.value?.cli === 'codex')))
+const shownKeys = computed(() => keys.value.filter((k) => k.name !== 'member' && !k.name.startsWith('room')))
 
 async function attempt(label, work) {
   problem.value = ''
@@ -382,7 +382,7 @@ onMounted(async () => {
           </div>
           <p v-if="tests[k.name]" :class="tests[k.name].ok === false ? 'warn' : 'good'">{{ tests[k.name].message }}</p>
         </div>
-        <p v-if="settings.cli === 'codex'" class="hint">The ChatGPT key is hidden: Codex draws with your ChatGPT account.</p>
+        <p class="hint">APPEARANCE and STUDIO draw on your ChatGPT plan when Codex is signed in with ChatGPT; otherwise Castle draws with the ChatGPT key, whichever app your companion thinks with. The key is never given to Codex.</p>
         <p class="hint">Room keys for the MemoryCore Foundation room are set at the CHAT room's door.</p>
       </section>
 
