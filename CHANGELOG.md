@@ -4,6 +4,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **New project can choose its stack.** Frontend, backend, database, hosting and mobile (or your own with Other...), and your companion is told what to set up when the project opens.
 - **A new STUDIO.** One Make bar for pictures, videos, songs and voice lines, with each one's state at a glance, and a gallery that fills the room with your creations at their own shape.
 - **Every dropdown matches your theme.** Choices such as Quality, the clock format, a world's camera or the chat room's participation now open a glass list in the theme's colours instead of Windows' grey menu, and work with the keyboard.
 - **A new APPEARANCE.** The standard look and its words sit together in one profile card, Quality and the changes for the next drawing share a bar, and outfits and hairstyles fill one closet of large cards with small buttons and a Wear pill.

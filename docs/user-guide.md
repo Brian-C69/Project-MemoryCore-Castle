@@ -499,6 +499,8 @@ Each theme keeps its own places: change theme and the cards sit where that theme
 
 **+ New project** clones a repo from a link, or creates a new one on GitHub. The whole form is there at once. If you haven't chosen a projects folder yet, Castle suggests one in your user folder (`Projects`, marked *suggested*). It is made the first time a project goes in, and **Change…** picks another folder any time. To create on GitHub, install the GitHub CLI and press **Sign in to GitHub**; Castle finds it even when it was installed after Castle started.
 
+**Stack (optional).** Choose what the project is built with: **Frontend**, **Backend**, **Database**, **Hosting** and **Mobile**, each **none** by default, with **Other...** for anything not listed (type its name). The line under them shows what your companion will set up. When the project opens, your companion wakes, answers once, and then hears one plain sentence, for example *"Set up a new project: Next.js frontend, NestJS backend, PostgreSQL database, deployed on Vercel. Start with a plan: set up the environment, scaffold the project, then deployment."* It plans before it builds, and asks before anything costs money or goes online. Leave everything on none to start with an empty project, as before.
+
 ### Live servers
 
 **SERVERS: N live** in the tab strip lists every developer server listening on this computer: its port, the program, the project it belongs to, and whether your companion started it in a tab or it runs in a project's folder. **open ↗** opens it in your browser. Each tab also shows a **LIVE** line with its own servers. Castle only shows them: it never stops a server, so a port another project uses is always left alone.
