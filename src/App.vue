@@ -10,7 +10,7 @@ import UsageWidget from './components/widgets/UsageWidget.vue'
 import DatabaseOffer from './components/DatabaseOffer.vue'
 import { shouldOffer } from './components/database.js'
 import CompanionHeader from './components/CompanionHeader.vue'
-import { onProviderChanged } from './api/castle.js'
+import { onOpenChat, onProviderChanged } from './api/castle.js'
 import ModalSheet from './components/ModalSheet.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import AppsView from './views/AppsView.vue'
@@ -392,9 +392,14 @@ let refresh
 let stopBackupEvents
 let stopStoryEvents
 let stopProviderEvents
+let stopOpenChat
 onMounted(async () => {
   window.addEventListener('keydown', onArrangeKey)
   stopProviderEvents = await onProviderChanged(async () => { await settingsSaved(); window.dispatchEvent(new Event('castle-provider-changed')) }).catch(() => null)
+  stopOpenChat = await onOpenChat(() => {
+    active.value = 'chat'
+    marks.value = marks.value.filter((m) => m !== 'chat')
+  }).catch(() => null)
   await loadSettingsAndTheme()
   loadHome()
   loadBackup()
@@ -413,6 +418,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onArrangeKey)
   stopProviderEvents?.()
+  stopOpenChat?.()
   clearInterval(refresh)
   stopBackupEvents?.()
   stopStoryEvents?.()
