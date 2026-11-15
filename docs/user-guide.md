@@ -196,7 +196,7 @@ In **Settings › Rooms** you can switch off any room you don't use (HOME always
 
 ### Rooms that appear by themselves
 
-Some rooms only show in the top bar once your MemoryCore has that feature: **DIARY**, **PROJECTS** and **LIBRARY**. Install the feature (ask your companion), and the room appears within a minute.
+Some rooms only show in the top bar once your MemoryCore has that feature: **DIARY** and **PROJECTS**. **LIBRARY** is a switch of its own (below). Install the feature (ask your companion), and the room appears within a minute.
 
 ---
 
@@ -229,9 +229,18 @@ These rooms let you read your companion's memory without leaving Castle (they ap
 
 - **DIARY** - every page, newest first, grouped by month. Older diaries are read too.
 - **PROJECTS** - your active and archived projects.
-- **LIBRARY** - your saved knowledge by section, wherever your library lives.
+- **LIBRARY** - see below.
 
 Pick a page on the left to read it on the right; type in **Search** to find one. **Show file** opens the page's folder. The rooms only read - your companion is the one who writes your memory. Clicking a project or the diary on HOME opens it here.
+
+### LIBRARY
+
+**LIBRARY** is off to begin with: turn it on in **Settings > Rooms**. It has two sides, switched at the top:
+
+- **My books** - the knowledge your companion saved for you ("save library"), shelf by shelf. They are kept in your memory database, not in files: if your memory still has a `library/` folder, its pages are taken in the first time the room opens (the files are kept safely in the database and then removed). **Export to markdown** writes them back as files. Hover a book and press **✕** to delete it (Castle asks **Yes / No** first). LIBRARY needs the memory database: if your memory is still kept in files, move it in first (Settings > Database).
+- **Spiral Library** - Kiyo's published books from the Portfolio, with their covers and prices. Free books read whole. A priced book shows a preview, or reads whole once you **Sign in with your Library card** and it is on your shelf (an approved MemoryCore Foundation member reads every priced book). Castle only reads the Spiral Library; buying stays on the Portfolio's website.
+
+Choose a shelf on the left, search at the top, and press a book to read it on the right.
 
 ---
 

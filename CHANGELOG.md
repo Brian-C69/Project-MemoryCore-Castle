@@ -4,6 +4,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **A real LIBRARY.** Turn it on in Settings > Rooms: **My books** keeps the knowledge your companion saves in your memory database (an old `library/` folder is taken in), and the **Spiral Library** brings Kiyo's published books, whole for members who may read them.
 - **New project can choose its stack.** Frontend, backend, database, hosting and mobile (or your own with Other...), and your companion is told what to set up when the project opens.
 - **A new STUDIO.** One Make bar for pictures, videos, songs and voice lines, with each one's state at a glance, and a gallery that fills the room with your creations at their own shape.
 - **Every dropdown matches your theme.** Choices such as Quality, the clock format, a world's camera or the chat room's participation now open a glass list in the theme's colours instead of Windows' grey menu, and work with the keyboard.
