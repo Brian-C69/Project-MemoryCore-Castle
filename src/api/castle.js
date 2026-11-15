@@ -255,6 +255,8 @@ export const studioLibrary = () => invoke('studio_library')
 export const studioPowers = () => invoke('studio_powers')
 export const voiceStudioStatus = () => invoke('voicestudio_status')
 export const voiceStudioSpeak = (text) => invoke('voicestudio_speak', { text })
+// the Mira Inbox bridge (self-hosters): { on, connected, hasToken, problem }
+export const inboxBridgeStatus = () => invoke('inbox_bridge_status')
 // A helper's notice (a key was missing): { at, kind, file, reason, settings }
 export const onNotice = on('castle-notice')
 // The tray's Wake companion.
