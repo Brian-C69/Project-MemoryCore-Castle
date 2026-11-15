@@ -486,6 +486,9 @@ pub fn move_in(conn: &mut Conn, folder: &Path, before_delete: impl FnOnce() -> R
         return Ok(counts);
     }
     load(conn, &bundle)?;
+    // APPEARANCE's notes come in too (kept in imported_files, then removed); its pictures stay
+    crate::memdb::migrate(conn)?;
+    crate::appearance_db::take_in(conn, folder)?;
     crate::door::dump(conn, &folder.join("backup").join("memory.sql"))?;
     before_delete()?;
     delete_originals(folder, &bundle)?;
@@ -646,6 +649,7 @@ mod tests {
         // the memory files went; the skills' files stay (they are the mirror)
         assert!(!root.join("master-memory.md").exists() && !root.join("main/identity-core.md").exists());
         assert!(root.join("plugins/rin-skills/skills/save-diary/SKILL.md").is_file());
+        // APPEARANCE's notes are taken in by move_in (appearance_db::take_in), never by this
         assert!(root.join("appearance/companion.md").is_file());
         std::fs::remove_dir_all(&root).unwrap();
     }

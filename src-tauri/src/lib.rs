@@ -18,6 +18,7 @@ mod dev_tabs;
 mod door;
 mod door_plan;
 mod door_trait;
+mod door_look;
 mod emotion;
 mod env;
 mod files;

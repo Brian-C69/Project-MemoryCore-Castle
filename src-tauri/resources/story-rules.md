@@ -86,7 +86,7 @@ Berserker | Greataxe / Fists | Raw power, rage, area destruction
 
 Map loose words to the nearest class ("Mage" or "Wizard" = Archmage, "Samurai" or "Swordsman" = Sword Saint, "Assassin" or "Rogue" = Shadow Reaper, "Tank" or "Paladin" = Guardian, "Archer" = Ranger, "Support" or "Healer" = Enchanter, "Warrior" = Berserker). Give the hero 3-4 named abilities that match the class.
 
-**Your own class (Duo only):** if the parent memory describes how you look (for example an appearance section, or `../appearance/companion.md`), choose a class that fits that look. Otherwise pick one that complements the hero (a defender beside an attacker, a support beside a fighter). Give yourself 3-4 named abilities too.
+**Your own class (Duo only):** if the parent memory describes how you look (for example an appearance section, or your look from `castle-memory look show`), choose a class that fits that look. Otherwise pick one that complements the hero (a defender beside an attacker, a support beside a fighter). Give yourself 3-4 named abilities too.
 
 **5. World type**
 
@@ -354,7 +354,7 @@ Offer a picture at the start of a chapter, a boss entrance, a finisher, or any m
 
 - `<NN>` is a two-digit running number (01, 02, ...), `<slug>` a few hyphenated words (`03-dragon-gate.png`).
 - When `CASTLE_IMAGE` is `codex`, draw it with your own image tool instead and save it to the same path.
-- Describe the scene, its light and mood, and the characters by their look. For yourself and the hero, use the look from `../appearance/companion.md` when it exists, and add `-Reference "../appearance/portrait.png"` when that file exists so your face stays the same.
+- Describe the scene, its light and mood, and the characters by their look. For yourself and the hero, use your look from `castle-memory look show` when it has words, and add `-Reference "../appearance/portrait.png"` when that file exists so your face stays the same.
 
 ### Cast portraits - when a character first appears
 

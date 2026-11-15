@@ -40,6 +40,7 @@ use crate::memdb;
 use crate::mirror;
 use crate::door_plan::{next_line, plan_copy, plan_mark, plan_show, plan_status, project_folder};
 use crate::door_trait::{trait_list, trait_propose, trait_retire, trait_set, trait_show};
+use crate::door_look::{look_item_add, look_item_set, look_json, look_set, look_show};
 use mysql::prelude::Queryable;
 use mysql::{Conn, Row, Value};
 use std::collections::BTreeMap;
@@ -193,10 +194,15 @@ pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> 
         ["trait", "propose"] => trait_propose(conn, ask),
         ["trait", "set"] => trait_set(conn, ask),
         ["trait", "retire"] => trait_retire(conn, ask),
+        ["look", "show"] => look_show(conn, memory),
+        ["look", "json"] => look_json(conn, ask, memory),
+        ["look", "set"] => look_set(conn, ask, memory),
+        ["look", "item", "add"] => look_item_add(conn, ask, memory),
+        ["look", "item", "set"] => look_item_set(conn, ask, memory),
         ["export"] => export(conn, Path::new(ask.need("to")?)),
         ["dump"] => dump(conn, Path::new(ask.need("to")?)),
         ["restore"] => restore(conn, Path::new(ask.need("from")?)),
-        _ => Err(format!("castle-memory does not know `{}`. Verbs: boot, memory, session, skill, diary, reminder, project, link, plan, trait, export, dump, restore.", words.join(" "))),
+        _ => Err(format!("castle-memory does not know `{}`. Verbs: boot, memory, session, skill, diary, reminder, project, link, plan, trait, look, export, dump, restore.", words.join(" "))),
     }
 }
 
@@ -601,6 +607,15 @@ fn export(conn: &mut Conn, to: &Path) -> Result<String, String> {
     let readings = crate::profile::all(conn).unwrap_or_default();
     if !readings.is_empty() {
         write(&to.join(crate::profile::EXPORT_FILE), &crate::profile::to_json(&readings))?;
+    }
+    // the look in words, the wardrobe and today's choice, as APPEARANCE's old files (over any
+    // older copy kept from moving in); the pictures never left the folder
+    if let Ok(Some(look)) = crate::appearance_db::read(conn) {
+        let mut items = crate::appearance_db::items(conn, "outfit").unwrap_or_default();
+        items.extend(crate::appearance_db::items(conn, "hair").unwrap_or_default());
+        for (path, body) in crate::appearance_db::to_files(&look, &items, "Your companion") {
+            write(&to.join(path), &body)?;
+        }
     }
 
     // 2. diary entries written since then: appended to their day's file, MemoryCore's own shape
