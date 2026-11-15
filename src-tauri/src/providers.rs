@@ -280,14 +280,10 @@ impl LookSpec {
     }
 }
 
-/// castle-look.ps1's arguments for a job (the changes go in a file, so no quote is lost on the way).
-pub(crate) fn look_args(look: &LookSpec, memory: &Path, reference: Option<&str>, changes_file: Option<&Path>) -> Vec<String> {
-    let mut args = vec!["-Kind".into(), look.kind.clone(), "-Memory".into(), memory.display().to_string()];
-    for (flag, value) in [("-Outfit", &look.outfit), ("-Hair", &look.hair)] {
-        if let Some(v) = value {
-            args.extend([flag.to_string(), v.clone()]);
-        }
-    }
+/// castle-look.ps1's arguments for a job: the look's words in a file Castle wrote from the
+/// database, the changes in a file too (so no quote is lost on the way).
+pub(crate) fn look_args(look: &LookSpec, words_file: &Path, reference: Option<&str>, changes_file: Option<&Path>) -> Vec<String> {
+    let mut args = vec!["-Kind".into(), look.kind.clone(), "-Words".into(), words_file.display().to_string()];
     if let Some(file) = changes_file {
         args.extend(["-Changes".into(), file.display().to_string()]);
     }
@@ -298,6 +294,16 @@ pub(crate) fn look_args(look: &LookSpec, memory: &Path, reference: Option<&str>,
         args.extend(["-Reference".into(), r.to_string()]);
     }
     args
+}
+
+/// The look's words for this drawing, read from the memory database and written beside the job
+/// for castle-look.ps1 (the script never opens the database).
+fn save_words(job: &ImageJob, look: &LookSpec) -> Result<PathBuf, String> {
+    let mut conn = crate::store::source(&job.memory).ok_or("APPEARANCE lives in the memory database. Move your memory in first (Settings > Database). Prompt saved.")?;
+    let words = crate::appearance_db::words_json(&mut conn, look.outfit.as_deref(), look.hair.as_deref())?;
+    let file = job.prompt.with_extension("look.json");
+    std::fs::write(&file, serde_json::to_string_pretty(&words).unwrap_or_default()).map_err(|_| "The look's words could not be saved for the drawing.".to_string())?;
+    Ok(file)
 }
 
 #[tauri::command]
@@ -850,7 +856,8 @@ fn helper_command(tools: &Path, script: &str, args: &[String], styles: Option<&P
 /// castle-look.ps1 -PromptOnly: the drawing's prompt, written from the member's notes. Fast; no key.
 fn look_prompt(job: &ImageJob, look: &LookSpec, tools: &Path, styles: Option<&Path>) -> Result<String, String> {
     let changes = save_changes(job, look)?;
-    let mut args = look_args(look, &job.memory, job.references.first().map(String::as_str), changes.as_deref());
+    let words = save_words(job, look)?;
+    let mut args = look_args(look, &words, job.references.first().map(String::as_str), changes.as_deref());
     args.push("-PromptOnly".into());
     let out = helper_command(tools, "castle-look.ps1", &args, styles, None)
         .stdin(std::process::Stdio::null())
@@ -893,7 +900,8 @@ fn run_with_key(job: &ImageJob, key: &str, tools: &Path, styles: Option<&Path>, 
     let (script, args) = match &job.look {
         Some(look) => {
             let changes = save_changes(job, look)?;
-            let mut args = look_args(look, &job.memory, job.references.first().map(String::as_str), changes.as_deref());
+            let words = save_words(job, look)?;
+            let mut args = look_args(look, &words, job.references.first().map(String::as_str), changes.as_deref());
             args.extend(["-OutFile".into(), job.output.clone()]);
             ("castle-look.ps1", args)
         }
@@ -1182,13 +1190,13 @@ mod tests {
     #[test]
     fn a_look_reaches_the_script_as_its_own_arguments() {
         let look = LookSpec { kind: "tryon".into(), outfit: Some("winter-coat".into()), hair: Some("long-bob".into()), changes: None, quality: Some("low".into()) };
-        let args = look_args(&look, Path::new("C:\\Memory"), Some("C:\\Memory\\appearance\\portrait.png"), Some(Path::new("C:\\Q\\1.changes.txt")));
+        let args = look_args(&look, Path::new("C:\\Q\\1.look.json"), Some("C:\\Memory\\appearance\\portrait.png"), Some(Path::new("C:\\Q\\1.changes.txt")));
         assert_eq!(
             args,
-            ["-Kind", "tryon", "-Memory", "C:\\Memory", "-Outfit", "winter-coat", "-Hair", "long-bob", "-Changes", "C:\\Q\\1.changes.txt", "-Quality", "low", "-Reference", "C:\\Memory\\appearance\\portrait.png"]
+            ["-Kind", "tryon", "-Words", "C:\\Q\\1.look.json", "-Changes", "C:\\Q\\1.changes.txt", "-Quality", "low", "-Reference", "C:\\Memory\\appearance\\portrait.png"]
         );
         let plain = LookSpec { kind: "standard".into(), quality: Some("style".into()), ..Default::default() };
-        assert_eq!(look_args(&plain, Path::new("M"), None, None), ["-Kind", "standard", "-Memory", "M"], "the style's own quality is not passed");
+        assert_eq!(look_args(&plain, Path::new("w.json"), None, None), ["-Kind", "standard", "-Words", "w.json"], "the style's own quality is not passed");
     }
 
     #[test]

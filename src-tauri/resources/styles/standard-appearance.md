@@ -6,7 +6,7 @@
 
 | Slot | What goes in |
 |---|---|
-| `{{COMPANION_CANON}}` | The companion's look, word for word, from `<memory>/appearance/companion.md` (face, eyes, skin, build, age look, signature details) |
+| `{{COMPANION_CANON}}` | The companion's look, word for word, from the look in words (APPEARANCE, kept in the memory database; `castle-memory look show`) (face, eyes, skin, build, age look, signature details) |
 | `{{ART_STYLE}}` | The art style word or phrase the member chose in the companion's canon (for example "anime", "soft watercolor illustration", "semi-realistic digital painting") |
 | `{{OUTFIT}}` | The outfit to wear in the portrait (the canon's default outfit if none is chosen) |
 | `{{HAIR}}` | The hairstyle (the canon's default hairstyle if none is chosen) |

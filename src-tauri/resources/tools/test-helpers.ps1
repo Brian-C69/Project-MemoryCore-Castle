@@ -195,46 +195,46 @@ $escape = Join-Path $root 'escape-card.json'
 $r = Invoke-Beat @('card', '-World', 'sky-kingdom', '-Json', ('"' + $escape + '"'))
 Report ($r.Code -eq 2) 'beat: a scene outside the world is refused' "exit $($r.Code): $($r.Out)"
 
-# 7b) castle-look: the style's slots are filled from the member's notes, never by an AI.
-$memory = Join-Path $root 'memory folder'
+# 7b) castle-look: the style's slots are filled from the look's words (from the database), never by an AI.
 $utf8 = New-Object System.Text.UTF8Encoding($false)
-New-Item -ItemType Directory -Path (Join-Path $memory 'appearance\wardrobe\winter-coat') -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $memory 'appearance\hairstyles\long-bob') -Force | Out-Null
-[System.IO.File]::WriteAllText((Join-Path $memory 'appearance\companion.md'), "# Mira's look`n`nViolet eyes, pale skin, slender build.`nArt style: soft watercolor illustration`n", $utf8)
-[System.IO.File]::WriteAllText((Join-Path $memory 'appearance\wardrobe\winter-coat\outfit.md'), "# Winter coat`n`nA long cream wool coat with brass buttons.`n", $utf8)
-[System.IO.File]::WriteAllText((Join-Path $memory 'appearance\hairstyles\long-bob\hair.md'), "# Long bob`n`nShoulder length, curled inward.`n", $utf8)
+function Write-Words([string]$Name, $Object) {
+    $path = Join-Path $root $Name
+    [System.IO.File]::WriteAllText($path, ($Object | ConvertTo-Json -Depth 5), $utf8)
+    return $path
+}
+$full = Write-Words 'look.json' @{ words = 'Violet eyes, pale skin, slender build.'; artStyle = 'soft watercolor illustration'; outfit = @{ name = 'Winter coat'; words = 'A long cream wool coat with brass buttons.' }; hair = @{ name = 'Long bob'; words = 'Shoulder length, curled inward.' } }
+$plain = Write-Words 'plain.json' @{ words = 'Violet eyes.'; artStyle = ''; outfit = $null; hair = $null }
+$empty = Write-Words 'empty.json' @{ words = ''; artStyle = ''; outfit = $null; hair = $null }
 
-$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'tryon', '-Memory', $memory, '-Outfit', 'winter-coat', '-Hair', 'long-bob', '-Changes', 'warmer light', '-PromptOnly')
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'tryon', '-Words', $full, '-Changes', 'warmer light', '-PromptOnly')
 $look = $null
 try { $look = $r.Out | ConvertFrom-Json } catch {}
-Report ($r.Code -eq 0 -and $look -and $look.prompt -notmatch '\{\{' -and $look.prompt -match 'soft watercolor illustration character portrait' -and $look.prompt -match 'Violet eyes' -and $look.prompt -notmatch "Mira's look" -and $look.prompt -match 'Winter coat - A long cream wool coat' -and $look.prompt -match 'Long bob - Shoulder length' -and $look.prompt -match 'Requested changes.*warmer light' -and $look.size -eq '1024x1536' -and $look.quality -eq 'medium') 'look: -PromptOnly fills every slot from the notes, with the style''s size and quality' "exit $($r.Code): $($r.Out)"
+Report ($r.Code -eq 0 -and $look -and $look.prompt -notmatch '\{\{' -and $look.prompt -match 'soft watercolor illustration character portrait' -and $look.prompt -match 'Violet eyes' -and $look.prompt -match 'Winter coat - A long cream wool coat' -and $look.prompt -match 'Long bob - Shoulder length' -and $look.prompt -match 'Requested changes.*warmer light' -and $look.size -eq '1024x1536' -and $look.quality -eq 'medium') 'look: -PromptOnly fills every slot from the words, with the style''s size and quality' "exit $($r.Code): $($r.Out)"
 
-$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Memory', $memory, '-Quality', 'low', '-PromptOnly')
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Words', $plain, '-Quality', 'low', '-PromptOnly')
 $look = $null
 try { $look = $r.Out | ConvertFrom-Json } catch {}
-Report ($r.Code -eq 0 -and $look.quality -eq 'low' -and $look.prompt -match 'the outfit described in the character notes') 'look: the chosen quality wins over the style, and an unnamed outfit points at the notes' "exit $($r.Code): $($r.Out)"
+Report ($r.Code -eq 0 -and $look.quality -eq 'low' -and $look.prompt -match 'the outfit described in the character notes') 'look: the chosen quality wins over the style, and no outfit points at the notes' "exit $($r.Code): $($r.Out)"
 
-$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'outfit', '-Memory', $memory, '-Outfit', '..\..\secret', '-PromptOnly')
-Report ($r.Code -eq 2) 'look: an item id that leaves its folder is refused' "exit $($r.Code): $($r.Out)"
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Words', $empty, '-PromptOnly')
+Report ($r.Code -eq 2 -and $r.Out -match 'no words yet') 'look: no words and no picture are refused (they describe nobody)' "exit $($r.Code): $($r.Out)"
 
-$blank = Join-Path $root 'blank memory'
-New-Item -ItemType Directory -Path (Join-Path $blank 'appearance') -Force | Out-Null
-[System.IO.File]::WriteAllText((Join-Path $blank 'appearance\companion.md'), "# Mira's look`n`nDescribe the look here: face, eyes, hair colour.`n", $utf8)
-$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Memory', $blank, '-PromptOnly')
-Report ($r.Code -eq 2 -and $r.Out -match 'starting words') 'look: the starting words alone are refused (they describe nobody)' "exit $($r.Code): $($r.Out)"
-$blankRef = Join-Path $blank 'appearance\portrait.png'
-[System.IO.File]::WriteAllBytes($blankRef, [byte[]](0x89, 0x50, 0x4E, 0x47))
-$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Memory', $blank, '-Reference', $blankRef, '-PromptOnly')
+$ref = Join-Path $root 'portrait.png'
+[System.IO.File]::WriteAllBytes($ref, [byte[]](0x89, 0x50, 0x4E, 0x47))
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Words', $empty, '-Reference', $ref, '-PromptOnly')
 $look = $null
 try { $look = $r.Out | ConvertFrom-Json } catch {}
-Report ($r.Code -eq 0 -and $look.prompt -match 'same person as in the reference picture' -and $look.prompt -notmatch 'Describe the look here') 'look: with a picture, the starting words give way to the picture' "exit $($r.Code): $($r.Out)"
+Report ($r.Code -eq 0 -and $look.prompt -match 'same person as in the reference picture') 'look: with a picture and no words, the picture is followed' "exit $($r.Code): $($r.Out)"
+
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Words', (Join-Path $root 'missing.json'), '-PromptOnly')
+Report ($r.Code -eq 2) 'look: a missing words file is refused' "exit $($r.Code): $($r.Out)"
 
 $lookOut = Join-Path $out 'portrait.png'
 $before = Get-NoticeCount
-$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Memory', $memory, '-OutFile', $lookOut)
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Words', $plain, '-OutFile', $lookOut)
 Report ($r.Code -eq 3 -and -not (Test-Path -LiteralPath $lookOut) -and (Get-NoticeCount) -eq ($before + 1)) 'look: no key -> castle-image saves the prompt (exit 3), nothing drawn' "exit $($r.Code): $($r.Out)"
 
-$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Memory', $memory, '-OutFile', $lookOut) @{ OPENAI_API_KEY = $fakeKey }
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Words', $plain, '-OutFile', $lookOut) @{ OPENAI_API_KEY = $fakeKey }
 Report ($r.Code -eq 9 -or $r.Out -match 'CASTLE_NO_NETWORK') 'look: with a key the request goes out through castle-image (the network guard fires)' "exit $($r.Code): $($r.Out)"
 
 # 8) Unit checks on the shared functions.

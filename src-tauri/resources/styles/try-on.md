@@ -6,7 +6,7 @@
 
 | Slot | What goes in |
 |---|---|
-| `{{COMPANION_CANON}}` | The companion's look, word for word, from `<memory>/appearance/companion.md` |
+| `{{COMPANION_CANON}}` | The companion's look, word for word, from the look in words (APPEARANCE, kept in the memory database; `castle-memory look show`) |
 | `{{ART_STYLE}}` | The art style word or phrase the member chose in the companion's canon |
 | `{{OUTFIT}}` | The outfit to try on: every garment, colors, materials, accessories visible down to the waist |
 | `{{HAIR}}` | The hairstyle to wear with it |

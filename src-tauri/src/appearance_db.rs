@@ -206,6 +206,20 @@ pub fn set_item(conn: &mut impl Queryable, kind: &str, slug: &str, name: &str, w
     item(conn, kind, slug)?.ok_or_else(|| "The item could not be read back.".to_string())
 }
 
+/// castle-look.ps1's words file: the look, its art style, and the outfit and hairstyle named. Pure.
+pub fn words_value(look: &LookRow, outfit: Option<&ItemRow>, hair: Option<&ItemRow>) -> serde_json::Value {
+    let part = |i: Option<&ItemRow>| i.map(|i| serde_json::json!({ "name": i.name, "words": i.words }));
+    serde_json::json!({ "words": look.words, "artStyle": look.art_style, "outfit": part(outfit), "hair": part(hair) })
+}
+
+/// The words file for a drawing of `outfit` with `hair`, read from the rows.
+pub fn words_json(conn: &mut impl Queryable, outfit: Option<&str>, hair: Option<&str>) -> Result<serde_json::Value, String> {
+    let look = read(conn)?.unwrap_or_default();
+    let outfit = match outfit { Some(s) => item(conn, "outfit", s)?, None => None };
+    let hair = match hair { Some(s) => item(conn, "hair", s)?, None => None };
+    Ok(words_value(&look, outfit.as_ref(), hair.as_ref()))
+}
+
 // ---------- taking the old files in, once ----------
 
 /// What the old files hold, read without changing anything: (relative path, body) of every file
@@ -311,6 +325,17 @@ mod tests {
         assert_eq!(files[1], ("appearance/wardrobe/coat/outfit.md".into(), "# Winter coat\n\nCream wool.\n".into()));
         assert!(files[2].0 == "appearance/current.json" && files[2].1.contains("\"coat\""));
         assert_eq!(art_style_line(&canon_words(&files[0].1)), ("Violet eyes.".into(), "anime".into()));
+    }
+
+    #[test]
+    fn the_words_file_names_the_look_and_the_items_worn() {
+        let look = LookRow { words: "Violet eyes.".into(), art_style: "anime".into(), ..Default::default() };
+        let coat = ItemRow { kind: "outfit".into(), slug: "coat".into(), name: "Winter coat".into(), words: "Cream wool.".into(), updated_at: 0 };
+        let v = words_value(&look, Some(&coat), None);
+        assert_eq!(v["words"], "Violet eyes.");
+        assert_eq!(v["artStyle"], "anime");
+        assert_eq!(v["outfit"]["name"], "Winter coat");
+        assert!(v["hair"].is_null());
     }
 
     #[test]
