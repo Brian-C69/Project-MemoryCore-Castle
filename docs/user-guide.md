@@ -239,21 +239,28 @@ Pick a page on the left to read it on the right; type in **Search** to find one.
 
 Your companion can make pictures, short videos, songs and voice lines. Just ask in Chat - for example *"Draw me a picture of our garden at night"* or *"Write and sing a song about today"*.
 
-### The four cards
+### The Make bar
 
-At the top of **STUDIO**, each power shows its state:
+At the top of **STUDIO**, the **MAKE** bar is one box for what you want and a switch: **Picture**, **Video**, **Song** or **Voice**. Each shows its state in a small pill:
 
-| State | Meaning |
+| Pill | Meaning |
 |-------|---------|
-| **Ready** | The key is kept, so your companion can make the real thing |
-| **Built in (Codex)** | Codex draws pictures with your ChatGPT account - no key needed |
-| **Prompt only - add a key** | No key yet: your companion saves the idea (the picture description, the lyrics, the words) instead, and Castle tells you |
+| **Ready** | The key is kept, so the real thing can be made |
+| **Codex** | Pictures are drawn on your ChatGPT plan - no key needed |
+| **VoiceStudio** | Voice lines are spoken by VoiceStudio on this computer (below) |
+| **Add a key** | No key yet: the main button becomes **Add the ... key** (see chapter 4, Keys) |
 
-Press **Add the ... key** on a card to add it (see chapter 4, Keys).
+Write what you want and press the main button (or **Ctrl + Enter**):
+- **Create picture** draws it straight away; its progress shows beside **Refresh**, and the picture appears in the gallery.
+- For a **video**, a **song** or a **voice line**, the button is **Ask <your companion>**: the request goes to your companion in Chat, and it tells you the cost and asks before it makes it.
+
+### The gallery
+
+Below the Make bar, everything your companion made fills the room: **Pictures** and **Backups** as large tiles at their own shape, **Videos**, **Songs**, **Voice** and **Saved prompts** as rows you can play.
 
 ### Your own voice (optional, for self-hosters)
 
-If you run [VoiceStudio](https://github.com/debpalash/voicestudio) on this PC, you can use it for the Voice card instead of a key. It is off by default: turn it on in **Settings > Companion > Local voice**. With it on and VoiceStudio running, the Voice card says **Ready - VoiceStudio (on this computer)**: type a line, press **Speak with VoiceStudio**, and the clip plays and is saved with your other voice lines. Castle uses your first saved VoiceStudio voice (a saved voice also keeps one-word lines from coming out as noise) and checks each clip with VoiceStudio's own transcriber, making it again if it came out as noise. Everything stays on your computer, Castle never installs or starts VoiceStudio, and while the switch is off Castle never contacts it. VoiceStudio's models have their own licences; some are non-commercial.
+If you run [VoiceStudio](https://github.com/debpalash/voicestudio) on this PC, you can use it for Voice instead of a key. It is off by default: turn it on in **Settings > Companion > Local voice**. With it on and VoiceStudio running, Voice shows **VoiceStudio**: type a line in the Make bar, press **Speak with VoiceStudio**, and the clip plays and is saved with your other voice lines. Castle uses your first saved VoiceStudio voice (a saved voice also keeps one-word lines from coming out as noise) and checks each clip with VoiceStudio's own transcriber, making it again if it came out as noise. Everything stays on your computer, Castle never installs or starts VoiceStudio, and while the switch is off Castle never contacts it. VoiceStudio's models have their own licences; some are non-commercial.
 
 ### Before anything costs money
 
