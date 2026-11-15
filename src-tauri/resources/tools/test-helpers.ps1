@@ -195,6 +195,36 @@ $escape = Join-Path $root 'escape-card.json'
 $r = Invoke-Beat @('card', '-World', 'sky-kingdom', '-Json', ('"' + $escape + '"'))
 Report ($r.Code -eq 2) 'beat: a scene outside the world is refused' "exit $($r.Code): $($r.Out)"
 
+# 7b) castle-look: the style's slots are filled from the member's notes, never by an AI.
+$memory = Join-Path $root 'memory folder'
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+New-Item -ItemType Directory -Path (Join-Path $memory 'appearance\wardrobe\winter-coat') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $memory 'appearance\hairstyles\long-bob') -Force | Out-Null
+[System.IO.File]::WriteAllText((Join-Path $memory 'appearance\companion.md'), "# Mira's look`n`nViolet eyes, pale skin, slender build.`nArt style: soft watercolor illustration`n", $utf8)
+[System.IO.File]::WriteAllText((Join-Path $memory 'appearance\wardrobe\winter-coat\outfit.md'), "# Winter coat`n`nA long cream wool coat with brass buttons.`n", $utf8)
+[System.IO.File]::WriteAllText((Join-Path $memory 'appearance\hairstyles\long-bob\hair.md'), "# Long bob`n`nShoulder length, curled inward.`n", $utf8)
+
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'tryon', '-Memory', $memory, '-Outfit', 'winter-coat', '-Hair', 'long-bob', '-Changes', 'warmer light', '-PromptOnly')
+$look = $null
+try { $look = $r.Out | ConvertFrom-Json } catch {}
+Report ($r.Code -eq 0 -and $look -and $look.prompt -notmatch '\{\{' -and $look.prompt -match 'soft watercolor illustration character portrait' -and $look.prompt -match 'Violet eyes' -and $look.prompt -notmatch "Mira's look" -and $look.prompt -match 'Winter coat - A long cream wool coat' -and $look.prompt -match 'Long bob - Shoulder length' -and $look.prompt -match 'Requested changes.*warmer light' -and $look.size -eq '1024x1536' -and $look.quality -eq 'medium') 'look: -PromptOnly fills every slot from the notes, with the style''s size and quality' "exit $($r.Code): $($r.Out)"
+
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Memory', $memory, '-Quality', 'low', '-PromptOnly')
+$look = $null
+try { $look = $r.Out | ConvertFrom-Json } catch {}
+Report ($r.Code -eq 0 -and $look.quality -eq 'low' -and $look.prompt -match 'the outfit described in the character notes') 'look: the chosen quality wins over the style, and an unnamed outfit points at the notes' "exit $($r.Code): $($r.Out)"
+
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'outfit', '-Memory', $memory, '-Outfit', '..\..\secret', '-PromptOnly')
+Report ($r.Code -eq 2) 'look: an item id that leaves its folder is refused' "exit $($r.Code): $($r.Out)"
+
+$lookOut = Join-Path $out 'portrait.png'
+$before = Get-NoticeCount
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Memory', $memory, '-OutFile', $lookOut)
+Report ($r.Code -eq 3 -and -not (Test-Path -LiteralPath $lookOut) -and (Get-NoticeCount) -eq ($before + 1)) 'look: no key -> castle-image saves the prompt (exit 3), nothing drawn' "exit $($r.Code): $($r.Out)"
+
+$r = Invoke-Helper 'castle-look.ps1' @('-Kind', 'standard', '-Memory', $memory, '-OutFile', $lookOut) @{ OPENAI_API_KEY = $fakeKey }
+Report ($r.Code -eq 9 -or $r.Out -match 'CASTLE_NO_NETWORK') 'look: with a key the request goes out through castle-image (the network guard fires)' "exit $($r.Code): $($r.Out)"
+
 # 8) Unit checks on the shared functions.
 . (Join-Path $here 'castle-common.ps1')
 $leak = Protect-Secret 'HTTP 401 - Incorrect API key provided: sk-proj-AbCdEf1234567890XyZ. Authorization: Bearer abc.def.ghi xi-api-key: 0123456789abcdef'
