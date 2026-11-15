@@ -41,6 +41,7 @@ use crate::mirror;
 use crate::door_plan::{next_line, plan_copy, plan_mark, plan_show, plan_status, project_folder};
 use crate::door_trait::{trait_list, trait_propose, trait_retire, trait_set, trait_show};
 use crate::door_look::{look_item_add, look_item_set, look_json, look_set, look_show};
+use crate::door_library::{library_add, library_list, library_set, library_show};
 use mysql::prelude::Queryable;
 use mysql::{Conn, Row, Value};
 use std::collections::BTreeMap;
@@ -199,10 +200,14 @@ pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> 
         ["look", "set"] => look_set(conn, ask, memory),
         ["look", "item", "add"] => look_item_add(conn, ask, memory),
         ["look", "item", "set"] => look_item_set(conn, ask, memory),
+        ["library", "list"] => library_list(conn, memory),
+        ["library", "show"] => library_show(conn, ask, memory),
+        ["library", "add"] => library_add(conn, ask, memory),
+        ["library", "set"] => library_set(conn, ask, memory),
         ["export"] => export(conn, Path::new(ask.need("to")?)),
         ["dump"] => dump(conn, Path::new(ask.need("to")?)),
         ["restore"] => restore(conn, Path::new(ask.need("from")?)),
-        _ => Err(format!("castle-memory does not know `{}`. Verbs: boot, memory, session, skill, diary, reminder, project, link, plan, trait, look, export, dump, restore.", words.join(" "))),
+        _ => Err(format!("castle-memory does not know `{}`. Verbs: boot, memory, session, skill, diary, reminder, project, link, plan, trait, look, library, export, dump, restore.", words.join(" "))),
     }
 }
 
@@ -607,6 +612,10 @@ fn export(conn: &mut Conn, to: &Path) -> Result<String, String> {
     let readings = crate::profile::all(conn).unwrap_or_default();
     if !readings.is_empty() {
         write(&to.join(crate::profile::EXPORT_FILE), &crate::profile::to_json(&readings))?;
+    }
+    // the member's own books, one file each on its shelf (over any older copy kept from moving in)
+    for (path, body) in crate::library_db::to_files(conn).unwrap_or_default() {
+        write(&to.join(path), &body)?;
     }
     // the look in words, the wardrobe and today's choice, as APPEARANCE's old files (over any
     // older copy kept from moving in); the pictures never left the folder

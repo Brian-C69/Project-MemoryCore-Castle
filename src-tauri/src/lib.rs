@@ -3,6 +3,7 @@
 
 mod appearance;
 mod appearance_db;
+mod library_db;
 mod apps;
 mod backup;
 mod chat;
@@ -19,6 +20,7 @@ mod door;
 mod door_plan;
 mod door_trait;
 mod door_look;
+mod door_library;
 mod emotion;
 mod env;
 mod files;
@@ -321,6 +323,9 @@ pub fn run() {
             appearance::appearance_wear,
             appearance::appearance_save_look,
             appearance::appearance_save_item,
+            library_db::library_books,
+            library_db::library_read,
+            library_db::library_delete,
             story::story_prepare,
             story::story_worlds,
             story::story_beat,

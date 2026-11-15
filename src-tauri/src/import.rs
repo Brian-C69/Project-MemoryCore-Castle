@@ -489,6 +489,7 @@ pub fn move_in(conn: &mut Conn, folder: &Path, before_delete: impl FnOnce() -> R
     // APPEARANCE's notes come in too (kept in imported_files, then removed); its pictures stay
     crate::memdb::migrate(conn)?;
     crate::appearance_db::take_in(conn, folder)?;
+    crate::library_db::take_in(conn, folder)?;
     crate::door::dump(conn, &folder.join("backup").join("memory.sql"))?;
     before_delete()?;
     delete_originals(folder, &bundle)?;
