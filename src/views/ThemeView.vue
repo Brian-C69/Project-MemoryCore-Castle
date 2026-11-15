@@ -280,6 +280,7 @@ onMounted(load)
         @pointerdown="dragStart"
         @pointerup="dragEnd"
         @pointercancel="drag = null"
+        @dragstart.prevent
         @keydown.left.prevent="slide(-1)"
         @keydown.right.prevent="slide(1)"
       >
@@ -341,7 +342,7 @@ onMounted(load)
         <div class="glass">
           <span class="lamp" aria-hidden="true" />
           <!-- the same picture of each stage that the STORY room's own Look uses -->
-          <div class="stage shot"><img :src="`/story-looks/${story.id}.jpg`" :alt="story.name" /></div>
+          <div class="stage shot"><img :src="`/story-looks/${story.id}.jpg`" :alt="story.name" draggable="false" /></div>
         </div>
         <div class="pick">
           <button class="arrow" aria-label="Earlier story theme" @click="turnStory(-1)">‹</button>
@@ -473,6 +474,8 @@ input {
   box-sizing: border-box;
   cursor: grab;
   user-select: none;
+  /* Horizontal gestures turn the cases; vertical gestures can still scroll the room. */
+  touch-action: pan-y;
   outline: none;
 }
 .showroom-wrap {
@@ -510,14 +513,19 @@ input {
   width: min(31%, 440px);
   min-width: 300px; /* the buttons of your own themes (Use, Polish, Paint, Delete) fit on one row */
   transform: translateX(calc(var(--d) * (100% + 28px))) scale(var(--s, 1));
-  transition: transform 0.45s ease, filter 0.45s ease, opacity 0.45s ease;
+  /* Clear the incoming case before its slide finishes, so it arrives already solid and sharp. */
+  transition: transform 0.45s ease, filter 0.24s ease-out, opacity 0.24s ease-out;
   display: flex;
   flex-direction: column;
   min-height: 0;
   gap: 8px;
   text-align: center;
 }
-.case.focus { --s: 1; }
+.case.focus {
+  --s: 1;
+  filter: blur(0);
+  opacity: 1;
+}
 .case.side {
   --s: 0.86;
   filter: blur(3px);
@@ -550,7 +558,8 @@ input {
   border-radius: 10px;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 34%),
-    color-mix(in srgb, var(--panel-background) 82%, transparent);
+    linear-gradient(var(--panel-background), var(--panel-background)),
+    #04081c;
   box-shadow:
     inset 0 0 0 5px color-mix(in srgb, var(--accent) 7%, transparent),
     inset 0 -30px 40px -26px color-mix(in srgb, var(--accent) 30%, transparent),
@@ -644,7 +653,8 @@ input {
 .pick,
 .dots,
 .line {
-  background: color-mix(in srgb, var(--panel-background) 88%, #04081c);
+  /* Theme panel colours can contain alpha: back them with a solid surface. */
+  background: linear-gradient(var(--panel-background), var(--panel-background)), #04081c;
   backdrop-filter: blur(var(--glass-blur));
 }
 .pick {
@@ -740,7 +750,7 @@ input {
   padding: 6px 22px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel-background) 88%, #04081c);
+  background: linear-gradient(var(--panel-background), var(--panel-background)), #04081c;
   backdrop-filter: blur(var(--glass-blur));
   font-family: 'Palatino Linotype', Palatino, Georgia, serif;
   font-style: italic;
