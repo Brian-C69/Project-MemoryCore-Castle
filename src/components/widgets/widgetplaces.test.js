@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dropPlace, isOn, memberPlace, placeFor, placePatch, resetPatch, sizeOf, sizePatch, switchPatch, WIDGETS } from './widgetplaces.js'
+import { dragBegins, dropPlace, isOn, startsOnControl, memberPlace, placeFor, placePatch, resetPatch, sizeOf, sizePatch, switchPatch, WIDGETS } from './widgetplaces.js'
 
 describe('HOME widgets as the member arranges them', () => {
   it('lists every widget the themes place', () => {
@@ -49,3 +49,19 @@ describe('HOME widgets as the member arranges them', () => {
     expect(resetPatch(s, 'seed')).toEqual({ widgetPlaces: { crystal: { clock: { left: 70, top: 5 } } } })
   })
 })
+
+describe('dragging a widget on HOME', () => {
+  it('begins only past a few pixels, so a still press is a click', () => {
+    expect(dragBegins(0, 0)).toBe(false)
+    expect(dragBegins(3, 4)).toBe(false)
+    expect(dragBegins(5, 5)).toBe(true)
+    expect(dragBegins(-7, 0)).toBe(true)
+  })
+  it('never starts on a button, link or field', () => {
+    expect(startsOnControl(['SPAN', 'BUTTON', 'DIV'])).toBe(true)
+    expect(startsOnControl(['a'])).toBe(true)
+    expect(startsOnControl(['DIV', 'P', 'SECTION'])).toBe(false)
+    expect(startsOnControl()).toBe(false)
+  })
+})
+

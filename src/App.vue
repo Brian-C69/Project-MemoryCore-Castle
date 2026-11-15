@@ -31,7 +31,7 @@ import UsageReveal from './components/UsageReveal.vue'
 import WhatsNew from './components/WhatsNew.vue'
 import { sectionFor, unseenSections } from './components/changelog.js'
 import { moveTab, orderTabs } from './components/taborder.js'
-import { SIZES, WIDGETS, dropPlace, isOn, memberPlace, placeFor, placePatch, resetPatch, sizeOf } from './components/widgets/widgetplaces.js'
+import { SIZES, WIDGETS, dragBegins, dropPlace, isOn, memberPlace, placeFor, placePatch, resetPatch, sizeOf, startsOnControl } from './components/widgets/widgetplaces.js'
 import changelog from '../CHANGELOG.md?raw'
 import { version as appVersion } from '../package.json'
 import NoticeToasts from './components/NoticeToasts.vue'
@@ -151,25 +151,41 @@ async function saveWidgets(patch) {
   }
 }
 
-// Arrange mode: a widget follows the pointer and is put down where it is dropped, kept on HOME.
+// A widget follows the pointer and is put down where it is dropped, kept on HOME - in arrange mode
+// at once, and on HOME itself once the pointer has moved a few pixels (a still press stays a click,
+// and a press on a button, link or field never drags).
+let pressed = null // { id, x, y, box, pointerId, el } until the drag begins
 function startDrag(event, id) {
-  if (!arranging.value || event.button !== 0) return
+  if (event.button !== 0) return
+  const tags = event.composedPath().filter((n) => n instanceof Element && event.currentTarget.contains(n)).map((n) => n.tagName)
+  if (!arranging.value && startsOnControl(tags)) return
   const home = homeEl.value.getBoundingClientRect()
   const rect = event.currentTarget.getBoundingClientRect()
-  event.currentTarget.setPointerCapture(event.pointerId)
-  drag.value = { id, x: event.clientX, y: event.clientY, dx: 0, dy: 0, box: { left: rect.left - home.left, top: rect.top - home.top, width: rect.width, height: rect.height } }
+  pressed = { id, x: event.clientX, y: event.clientY, pointerId: event.pointerId, el: event.currentTarget, box: { left: rect.left - home.left, top: rect.top - home.top, width: rect.width, height: rect.height } }
+  if (arranging.value) beginDrag()
+}
+
+function beginDrag() {
+  pressed.el.setPointerCapture(pressed.pointerId)
+  drag.value = { id: pressed.id, x: pressed.x, y: pressed.y, dx: 0, dy: 0, box: pressed.box }
 }
 
 function moveDrag(event) {
+  if (pressed && !drag.value && dragBegins(event.clientX - pressed.x, event.clientY - pressed.y)) beginDrag()
   if (!drag.value) return
   drag.value = { ...drag.value, dx: event.clientX - drag.value.x, dy: event.clientY - drag.value.y }
 }
 
 async function endDrag() {
+  pressed = null
   const d = drag.value
   if (!d) return
   drag.value = null
   if (!d.dx && !d.dy) return
+  // the release after a drag is not a click on whatever card row it ended over
+  const swallow = (e) => { e.stopPropagation(); e.preventDefault() }
+  window.addEventListener('click', swallow, { capture: true, once: true })
+  setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 0)
   const home = homeEl.value.getBoundingClientRect()
   const place = dropPlace({ ...d.box, left: d.box.left + d.dx, top: d.box.top + d.dy }, { width: home.width, height: home.height })
   await saveWidgets(placePatch(widgetPrefs.value, theme.value?.id, d.id, place))
@@ -586,6 +602,7 @@ body {
 
 .widget-slot.moving {
   cursor: grabbing;
+  user-select: none;
   z-index: 5;
   opacity: 0.9;
 }

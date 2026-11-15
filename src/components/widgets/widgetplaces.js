@@ -86,3 +86,17 @@ export function resetPatch(settings = {}, themeId) {
   delete all[themeId]
   return { widgetPlaces: all }
 }
+
+// HOME without arrange mode: a press on a widget becomes a drag only once the pointer has moved
+// this far, so a press that stays put is still a click.
+export const DRAG_START_PX = 6
+
+export function dragBegins(dx, dy) {
+  return Math.hypot(dx, dy) > DRAG_START_PX
+}
+
+// A press that starts on something the member works with (a button, a link, a field) never drags.
+const CONTROL_TAGS = ['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA', 'LABEL', 'SUMMARY']
+export function startsOnControl(path = []) {
+  return path.some((tag) => CONTROL_TAGS.includes(String(tag).toUpperCase()))
+}
