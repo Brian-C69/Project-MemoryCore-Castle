@@ -354,11 +354,24 @@ pub fn ollama_models(url: String) -> Result<Vec<String>, String> {
 /// <say>/<draw>/<note> reader downstream treats it exactly like a CLI's output. Drawing a picture
 /// still goes through Codex or the member's key either way - a local chat model cannot draw; it can
 /// only ask for one with the same <draw>...</draw> tag a CLI would use.
+/// A smaller local model tends to float a generic, agreeable line that answers no one in
+/// particular ("It's nice to see everyone getting along"), where Claude Code or Codex would
+/// pick up on its own that the room is full of people addressing each other by name. This is
+/// the extra nudge that difference needs - appended only for the local model, since Claude Code
+/// and Codex read the room's own rules and do this without being told.
+const LOCAL_MODEL_NUDGE: &str = "\n\n## Speaking directly (for you specifically)\n\nYou tend to answer with a thought that floats on its own, answering no one. Instead:\n- Name who you are replying to, the way everyone else at the table does.\n- Answer the one specific thing they just said - a word they used, a question they asked, a detail they gave - not just the general topic.\n- A short question back to them often reads better than a flat statement.\n\nFor example, someone says \"the tea is finally ready.\" A floating reply: \"It's nice that everyone is enjoying themselves.\" A direct reply: \"Lucky you - what kind did you brew?\"";
+
+/// The room's own rules, plus the extra nudge above. Pure, tested.
+fn local_model_system(rules: &str) -> String {
+    format!("{rules}{LOCAL_MODEL_NUDGE}")
+}
+
 fn run_local_model(url: &str, model: &str, folder: &Path, words: &str) -> Result<String, String> {
     if model.trim().is_empty() {
         return Err("Choose a local model in Settings > Chat first.".into());
     }
-    let system = std::fs::read_to_string(folder.join("rules.md")).map_err(|_| "The room's rules could not be read.".to_string())?;
+    let rules = std::fs::read_to_string(folder.join("rules.md")).map_err(|_| "The room's rules could not be read.".to_string())?;
+    let system = local_model_system(&rules);
     let client = reqwest::blocking::Client::builder().timeout(RUN_LIMIT).build().map_err(|_| "The local model call could not start.".to_string())?;
     let answer = client
         .post(format!("{}/api/chat", ollama_address(url)))
@@ -588,6 +601,13 @@ mod tests {
     fn ollama_falls_back_to_its_own_default_address() {
         assert_eq!(ollama_address(""), "http://127.0.0.1:11434");
         assert_eq!(ollama_address("  http://127.0.0.1:1356/  "), "http://127.0.0.1:1356");
+    }
+
+    #[test]
+    fn the_local_models_prompt_keeps_the_rules_and_adds_the_nudge_after() {
+        let said = local_model_system("rule one\nrule two");
+        assert!(said.starts_with("rule one\nrule two"), "the room's own rules come first, unchanged");
+        assert!(said.contains("Name who you are replying to"));
     }
 
     #[test]
