@@ -90,13 +90,26 @@ impl Room {
 
     /// The lines after `after` (the newest 50 without it); `wait` holds the read up to 25 s.
     pub fn lines(&self, after: Option<u64>, wait: u64) -> Result<Value, RoomRefusal> {
+        self.lines_since(after, wait, None, None)
+    }
+
+    /// A read of the room that also asks what was cleared and what was reacted to since the
+    /// cursors the last answer gave (`clearedAt`, `reactedAt`); a room without reactions ignores it.
+    pub fn lines_since(&self, after: Option<u64>, wait: u64, cleared_after: Option<&str>, reacted_after: Option<&str>) -> Result<Value, RoomRefusal> {
         let wait = wait.min(25);
-        let path = match after {
-            Some(id) => format!("/lines?after={id}&wait={wait}"),
-            None => format!("/lines?wait={wait}"),
-        };
         // the HTTP timeout stays well above the held read
-        self.get_json(&path, Duration::from_secs(wait + 10))
+        self.get_json(&lines_path(after, wait, cleared_after, reacted_after), Duration::from_secs(wait + 10))
+    }
+
+    /// Adds (`on`) or removes the caller's reaction on a line: `{ id, reactions }`.
+    pub fn react(&self, id: u64, emoji: &str, on: bool) -> Result<Value, RoomRefusal> {
+        if !REACTIONS.contains(&emoji) {
+            return Err(refusal("other", "That reaction is not one the room knows."));
+        }
+        let url = room_url(&self.base, &format!("/lines/{id}/reactions/{}", encode_part(emoji)));
+        let client = self.client(Duration::from_secs(20))?;
+        let request = if on { client.put(url) } else { client.delete(url) };
+        Self::answer(request.bearer_auth(&self.key).send())?.json().map_err(|_| refusal("other", "The room sent something unreadable."))
     }
 
     /// A picture line (multipart `{text?, picture}`), for a member's AI within its daily cap: the
@@ -123,6 +136,11 @@ impl Room {
     }
 
     pub fn post(&self, text: &str) -> Result<Value, RoomRefusal> {
+        self.post_reply(text, None)
+    }
+
+    /// A line, as a reply to `reply_to` when given (the room keeps a quote of it).
+    pub fn post_reply(&self, text: &str, reply_to: Option<u64>) -> Result<Value, RoomRefusal> {
         let text = text.trim();
         if text.is_empty() {
             return Err(refusal("other", "Write something first."));
@@ -134,7 +152,7 @@ impl Room {
             .client(Duration::from_secs(20))?
             .post(room_url(&self.base, "/lines"))
             .bearer_auth(&self.key)
-            .json(&serde_json::json!({ "text": text }))
+            .json(&post_body(text, reply_to))
             .send();
         Self::answer(response)?.json().map_err(|_| refusal("other", "The room sent something unreadable."))
     }
@@ -183,6 +201,41 @@ pub const ROOM_LINE_PICTURE_MAX: usize = 1536 * 1024;
 const ROOM_LINE_PICTURE_SIDE: u32 = 1024;
 
 /// `me().media.caps.pictures` and `me().media.today.pictures` (a member's AI only). Pure, tested.
+/// The reactions the room knows (the room server holds the same list).
+pub const REACTIONS: [&str; 6] = ["👍", "❤️", "👏", "😂", "😮", "😢"];
+
+/// What the room says it can do (`/me`'s `features`); none from a room that says nothing. Pure.
+pub fn features(me: &Value) -> Vec<String> {
+    me.get("features").and_then(Value::as_array).map(|f| f.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default()
+}
+
+/// The read's path with its cursors. Pure, tested.
+pub fn lines_path(after: Option<u64>, wait: u64, cleared_after: Option<&str>, reacted_after: Option<&str>) -> String {
+    let mut path = match after {
+        Some(id) => format!("/lines?after={id}&wait={wait}"),
+        None => format!("/lines?wait={wait}"),
+    };
+    if let Some(at) = cleared_after.filter(|a| !a.is_empty()) {
+        path.push_str(&format!("&clearedAfter={}", encode_part(at)));
+    }
+    if let Some(at) = reacted_after.filter(|a| !a.is_empty()) {
+        path.push_str(&format!("&reactedAfter={}", encode_part(at)));
+    }
+    path
+}
+
+/// The body of a post, with `replyTo` only when it is a reply. Pure, tested.
+pub fn post_body(text: &str, reply_to: Option<u64>) -> Value {
+    match reply_to {
+        Some(id) => serde_json::json!({ "text": text, "replyTo": id }),
+        None => serde_json::json!({ "text": text }),
+    }
+}
+
+fn encode_part(text: &str) -> String {
+    text.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
+}
+
 pub fn media_pictures(me: &Value) -> Option<(u64, u64)> {
     let media = me.get("media")?;
     Some((media.pointer("/caps/pictures")?.as_u64()?, media.pointer("/today/pictures").and_then(Value::as_u64).unwrap_or(0)))
@@ -491,16 +544,23 @@ pub async fn room_presence(store: State<'_, SettingsStore>) -> Result<Value, Roo
 
 /// Posts a line as the member ("me") or as their companion ("companion", its own room key).
 #[tauri::command]
-pub async fn room_post(text: String, who: Option<String>, store: State<'_, SettingsStore>) -> Result<Value, RoomRefusal> {
+pub async fn room_post(text: String, who: Option<String>, reply_to: Option<u64>, store: State<'_, SettingsStore>) -> Result<Value, RoomRefusal> {
     let as_member = who.as_deref().unwrap_or("me") == "me";
     let room = room_for(&store, who.as_deref().unwrap_or("me"))?;
-    let line = blocking(move || room.post(&text)).await?;
+    let line = blocking(move || room.post_reply(&text, reply_to)).await?;
     if as_member {
         if let Some(id) = line.get("id").and_then(Value::as_u64) {
             remember_mine(&store, id);
         }
     }
     Ok(line)
+}
+
+/// The member's reaction on a line, added (`on`) or taken back: `{ id, reactions }`.
+#[tauri::command]
+pub async fn room_react(id: u64, emoji: String, on: bool, store: State<'_, SettingsStore>) -> Result<Value, RoomRefusal> {
+    let room = room_for(&store, "me")?;
+    blocking(move || room.react(id, &emoji, on)).await
 }
 
 /// The ids of the lines this member posted from Castle.
@@ -880,5 +940,21 @@ mod tests {
         let url = Room::new(&base, "member-test-token").file("abc123").unwrap();
         assert_eq!(url, "data:image/png;base64,UE5H");
         let _ = seen.join();
+    }
+
+    #[test]
+    fn a_read_sends_its_cursors_and_a_reply_carries_its_line() {
+        assert_eq!(lines_path(Some(7), 20, None, None), "/lines?after=7&wait=20");
+        assert_eq!(lines_path(None, 0, Some("2026-11-15T20:00:00"), Some("2026-11-15T20:01:00")), "/lines?wait=0&clearedAfter=2026-11-15T20%3A00%3A00&reactedAfter=2026-11-15T20%3A01%3A00");
+        assert_eq!(lines_path(Some(1), 0, Some(""), None), "/lines?after=1&wait=0");
+        assert_eq!(post_body("hi", Some(12)), serde_json::json!({"text": "hi", "replyTo": 12}));
+        assert_eq!(post_body("hi", None), serde_json::json!({"text": "hi"}));
+    }
+
+    #[test]
+    fn a_room_that_says_nothing_has_no_features() {
+        assert!(features(&serde_json::json!({"name": "Kiyo"})).is_empty());
+        assert_eq!(features(&serde_json::json!({"features": ["replies", 3, "reactions"]})), vec!["replies", "reactions"]);
+        assert!(REACTIONS.contains(&"👍") && REACTIONS.len() == 6);
     }
 }

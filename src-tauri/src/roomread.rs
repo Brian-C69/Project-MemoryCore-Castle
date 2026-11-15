@@ -26,6 +26,9 @@ pub struct RoomReader {
     visible: AtomicBool,
     lines: Mutex<Vec<Value>>,
     cursor: Mutex<Option<u64>>,
+    /// the room's time cursors for what was cleared / reacted to since (sent back as they came)
+    cleared_at: Mutex<Option<String>>,
+    reacted_at: Mutex<Option<String>>,
     problem: Mutex<Option<RoomRefusal>>,
 }
 
@@ -40,6 +43,8 @@ pub struct Backlog {
 struct Fresh {
     lines: Vec<Value>,
     cleared: Vec<u64>,
+    /// lines already shown whose reactions changed, whole (the page replaces them by id)
+    updated: Vec<Value>,
 }
 
 fn id_of(line: &Value) -> Option<u64> {
@@ -53,6 +58,21 @@ pub fn backfill_start(oldest: u64) -> Option<u64> {
 }
 
 /// Lines kept so far + one read's answer -> (all lines kept, the ones that are new). Pure, tested.
+/// The reactions that changed since the last read, put on the lines still kept: the changed lines,
+/// whole, before and after (a line not kept is left out). Pure, tested.
+pub fn apply_reacted(lines: &mut [Value], answer: &Value) -> Vec<(Value, Value)> {
+    let mut changed = Vec::new();
+    for update in answer.get("reacted").and_then(Value::as_array).cloned().unwrap_or_default() {
+        let (Some(id), Some(reactions)) = (id_of(&update), update.get("reactions")) else { continue };
+        if let Some(line) = lines.iter_mut().find(|l| id_of(l) == Some(id)) {
+            let before = line.clone();
+            line["reactions"] = reactions.clone();
+            changed.push((before, line.clone()));
+        }
+    }
+    changed
+}
+
 pub fn merge(kept: &[Value], answer: &Value) -> (Vec<Value>, Vec<Value>) {
     let cleared: Vec<u64> = answer.get("cleared").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
     let mut all: Vec<Value> = kept.iter().filter(|l| id_of(l).is_none_or(|id| !cleared.contains(&id))).cloned().collect();
@@ -81,7 +101,7 @@ fn backfill(app: &AppHandle, room: &Room, reader: &RoomReader) {
         let (all, fresh) = merge(&kept, &answer);
         *reader.lines.lock().unwrap() = all;
         if !fresh.is_empty() {
-            let _ = app.emit("room-lines", Fresh { lines: fresh, cleared: Vec::new() });
+            let _ = app.emit("room-lines", Fresh { lines: fresh, cleared: Vec::new(), updated: Vec::new() });
         }
         let last = answer.get("lines").and_then(Value::as_array).and_then(|l| l.last()).and_then(id_of);
         let more = answer.get("more").and_then(Value::as_bool).unwrap_or(false);
@@ -105,22 +125,31 @@ pub fn start(app: &AppHandle) {
         let reader = app.state::<RoomReader>();
         let visible = reader.visible.load(Ordering::Relaxed);
         let cursor = *reader.cursor.lock().unwrap();
+        let cleared_at = reader.cleared_at.lock().unwrap().clone();
+        let reacted_at = reader.reacted_at.lock().unwrap().clone();
         let room = Room::new(&crate::signin::portfolio(), &token);
-        match room.lines(cursor, if visible && cursor.is_some() { 20 } else { 0 }) {
+        match room.lines_since(cursor, if visible && cursor.is_some() { 20 } else { 0 }, cleared_at.as_deref(), reacted_at.as_deref()) {
             Ok(answer) => {
                 let kept = reader.lines.lock().unwrap().clone();
-                let (all, fresh) = merge(&kept, &answer);
+                let (mut all, fresh) = merge(&kept, &answer);
+                let reacted = apply_reacted(&mut all, &answer);
                 *reader.lines.lock().unwrap() = all;
                 if let Some(next) = answer.get("cursor").and_then(Value::as_u64) {
                     *reader.cursor.lock().unwrap() = Some(next);
+                }
+                for (key, slot) in [("clearedAt", &reader.cleared_at), ("reactedAt", &reader.reacted_at)] {
+                    if let Some(at) = answer.get(key).and_then(Value::as_str).filter(|a| !a.is_empty()) {
+                        *slot.lock().unwrap() = Some(at.to_string());
+                    }
                 }
                 if cursor.is_none() {
                     backfill(&app, &room, &reader);
                 }
                 *reader.problem.lock().unwrap() = None;
                 let cleared: Vec<u64> = answer.get("cleared").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
-                if !fresh.is_empty() || !cleared.is_empty() {
-                    let _ = app.emit("room-lines", Fresh { lines: fresh.clone(), cleared });
+                let updated: Vec<Value> = reacted.iter().map(|(_, after)| after.clone()).collect();
+                if !fresh.is_empty() || !cleared.is_empty() || !updated.is_empty() {
+                    let _ = app.emit("room-lines", Fresh { lines: fresh.clone(), cleared, updated });
                 }
                 if !fresh.is_empty() && cursor.is_some() {
                     crate::roomturn::heard(&app, &fresh);
@@ -159,6 +188,8 @@ pub fn room_backlog(reader: State<RoomReader>) -> Backlog {
 pub fn room_reset(reader: State<RoomReader>) {
     reader.lines.lock().unwrap().clear();
     *reader.cursor.lock().unwrap() = None;
+    *reader.cleared_at.lock().unwrap() = None;
+    *reader.reacted_at.lock().unwrap() = None;
     *reader.problem.lock().unwrap() = None;
 }
 
@@ -197,5 +228,17 @@ mod tests {
         assert_eq!(all.iter().map(|l| l["id"].as_u64().unwrap()).collect::<Vec<_>>(), vec![1, 3, 4]);
         assert_eq!(fresh.len(), 2, "a line already kept is not new again");
         assert_eq!(all[0]["text"], "hi");
+    }
+
+    #[test]
+    fn a_reaction_changes_a_kept_line_in_place_without_counting_it_again() {
+        let mut lines = vec![json!({"id": 3, "text": "hi"}), json!({"id": 4, "text": "yo"})];
+        let answer = json!({"lines": [], "reacted": [{"id": 3, "reactions": [{"emoji": "👍", "count": 2, "mine": true}]}, {"id": 99, "reactions": []}]});
+        let changed = apply_reacted(&mut lines, &answer);
+        assert_eq!(changed.len(), 1, "a line not kept is left out");
+        assert!(changed[0].0.get("reactions").is_none());
+        assert_eq!(lines[0]["reactions"][0]["count"], 2);
+        assert_eq!(lines.len(), 2);
+        assert!(apply_reacted(&mut lines, &json!({"lines": []})).is_empty(), "a room without reactions changes nothing");
     }
 }
