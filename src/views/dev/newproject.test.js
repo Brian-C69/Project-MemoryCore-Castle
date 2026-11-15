@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canSubmit, cleanRepoName, githubLine, landingFolder, nameFromLink, validRepoName } from './newproject.js'
+import { canSubmit, cleanRepoName, githubLine, landingFolder, nameFromLink, OTHER, setupSentence, STACK, stackChoice, stackPreview, validRepoName } from './newproject.js'
 
 describe('the New project helpers', () => {
   it('reads the name from a clone link', () => {
@@ -72,3 +72,34 @@ describe('the New project helpers', () => {
     expect(canSubmit({ ...create, mode: 'other' })).toBe(false)
   })
 })
+
+describe('the stack a new project may start with', () => {
+  it('says nothing when nothing is chosen', () => {
+    expect(stackPreview({})).toBe('')
+    expect(setupSentence({})).toBe('')
+  })
+  it('names one choice', () => {
+    expect(stackPreview({ frontend: 'Vue.js' })).toBe('Vue.js')
+    expect(setupSentence({ frontend: 'Vue.js' })).toBe('Set up a new project: Vue.js frontend. Start with a plan: set up the environment, then scaffold the project. Ask me before anything costs money or goes online.')
+  })
+  it('names all five in order, hosting last', () => {
+    const picks = { mobile: 'Flutter', hosting: 'Vercel', database: 'PostgreSQL', backend: 'NestJS', frontend: 'Next.js' }
+    expect(stackPreview(picks)).toBe('Next.js + NestJS + PostgreSQL + Flutter on Vercel')
+    expect(setupSentence(picks)).toContain('Next.js frontend, NestJS backend, PostgreSQL database, Flutter mobile app, deployed on Vercel. Start with a plan: set up the environment, scaffold the project, then deployment.')
+  })
+  it("passes the member's own words for Other through, trimmed and cut", () => {
+    expect(stackChoice(OTHER, '  Elixir   Phoenix ')).toBe('Elixir Phoenix')
+    expect(stackChoice(OTHER, 'x'.repeat(80)).length).toBe(60)
+    expect(stackPreview({ backend: OTHER }, { backend: 'Elixir Phoenix' })).toBe('Elixir Phoenix')
+    expect(stackPreview({ backend: OTHER }, { backend: '   ' })).toBe('')
+  })
+  it('handles hosting alone and mobile alone', () => {
+    expect(stackPreview({ hosting: 'Render' })).toBe('hosted on Render')
+    expect(setupSentence({ hosting: 'Render' })).toContain('Set up a new project, deployed on Render.')
+    expect(setupSentence({ mobile: 'Android (Kotlin)' })).toContain('Android (Kotlin) mobile app.')
+  })
+  it('keeps one table for every choice', () => {
+    expect(STACK.map((s) => s.id)).toEqual(['frontend', 'backend', 'database', 'hosting', 'mobile'])
+  })
+})
+
