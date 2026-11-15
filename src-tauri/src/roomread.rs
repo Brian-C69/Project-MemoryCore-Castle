@@ -15,6 +15,11 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 const KEEP: usize = 500;
+/// How many ids before the newest page a fresh start looks back. A read with no starting point
+/// gets only the newest 50 lines, so CHAT began each Castle start with a short room.
+const BACKFILL: u64 = 300;
+/// At most this many extra pages (200 lines each) are read to fill the room back in.
+const BACKFILL_PAGES: usize = 3;
 
 #[derive(Default)]
 pub struct RoomReader {
@@ -41,6 +46,12 @@ fn id_of(line: &Value) -> Option<u64> {
     line.get("id").and_then(Value::as_u64)
 }
 
+/// Where to read from to fill the room back in: BACKFILL ids before the oldest line the first
+/// read gave. None when that line is already the first in the room. Pure, tested.
+pub fn backfill_start(oldest: u64) -> Option<u64> {
+    (oldest > 1).then(|| oldest.saturating_sub(BACKFILL))
+}
+
 /// Lines kept so far + one read's answer -> (all lines kept, the ones that are new). Pure, tested.
 pub fn merge(kept: &[Value], answer: &Value) -> (Vec<Value>, Vec<Value>) {
     let cleared: Vec<u64> = answer.get("cleared").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
@@ -55,6 +66,30 @@ pub fn merge(kept: &[Value], answer: &Value) -> (Vec<Value>, Vec<Value>) {
     all.sort_by_key(|l| id_of(l).unwrap_or(0));
     let keep = all.len().saturating_sub(KEEP);
     (all[keep..].to_vec(), fresh)
+}
+
+/// After the first read of a start (the newest 50 lines), reads the older lines the server still
+/// has, by asking for the lines after an earlier id a page at a time, and merges them in. The page
+/// gets them as room-lines, which it keeps once each and in order. A failure just leaves the room
+/// as the first read made it.
+fn backfill(app: &AppHandle, room: &Room, reader: &RoomReader) {
+    let Some(oldest) = reader.lines.lock().unwrap().first().and_then(id_of) else { return };
+    let Some(mut after) = backfill_start(oldest) else { return };
+    for _ in 0..BACKFILL_PAGES {
+        let Ok(answer) = room.lines(Some(after), 0) else { return };
+        let kept = reader.lines.lock().unwrap().clone();
+        let (all, fresh) = merge(&kept, &answer);
+        *reader.lines.lock().unwrap() = all;
+        if !fresh.is_empty() {
+            let _ = app.emit("room-lines", Fresh { lines: fresh, cleared: Vec::new() });
+        }
+        let last = answer.get("lines").and_then(Value::as_array).and_then(|l| l.last()).and_then(id_of);
+        let more = answer.get("more").and_then(Value::as_bool).unwrap_or(false);
+        match last {
+            Some(last) if more && last < oldest => after = last,
+            _ => return,
+        }
+    }
 }
 
 /// Starts the reader with Castle.
@@ -78,6 +113,9 @@ pub fn start(app: &AppHandle) {
                 *reader.lines.lock().unwrap() = all;
                 if let Some(next) = answer.get("cursor").and_then(Value::as_u64) {
                     *reader.cursor.lock().unwrap() = Some(next);
+                }
+                if cursor.is_none() {
+                    backfill(&app, &room, &reader);
                 }
                 *reader.problem.lock().unwrap() = None;
                 let cleared: Vec<u64> = answer.get("cleared").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
@@ -128,6 +166,24 @@ pub fn room_reset(reader: State<RoomReader>) {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_fresh_start_looks_back_from_before_the_oldest_line_it_got() {
+        assert_eq!(backfill_start(308), Some(8));
+        assert_eq!(backfill_start(150), Some(0));
+        assert_eq!(backfill_start(2), Some(0));
+        assert_eq!(backfill_start(1), None, "the first line of the room has nothing before it");
+        assert_eq!(backfill_start(0), None);
+    }
+
+    #[test]
+    fn older_lines_merge_in_before_the_newest_without_being_counted_twice() {
+        let newest = vec![json!({"id": 308, "text": "n"}), json!({"id": 309, "text": "m"})];
+        let older = json!({"lines": [{"id": 8, "text": "a"}, {"id": 308, "text": "n"}], "more": false});
+        let (all, fresh) = merge(&newest, &older);
+        assert_eq!(all.iter().map(|l| l["id"].as_u64().unwrap()).collect::<Vec<_>>(), vec![8, 308, 309]);
+        assert_eq!(fresh.len(), 1);
+    }
 
     #[test]
     fn every_speakers_lines_are_kept_once_in_order_and_cleared_ones_go() {
