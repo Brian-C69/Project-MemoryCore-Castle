@@ -61,12 +61,18 @@ function dayName(date) {
   return Number.isNaN(d.getTime()) ? date : d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })
 }
 
-async function open(page) {
+// `refresh` reads the open page again in place: its text stays until the new text arrives and is
+// replaced only when it differs, so the reader keeps their place.
+async function open(page, refresh = false) {
   current.value = page
-  problem.value = ''
-  text.value = ''
+  if (!refresh) {
+    problem.value = ''
+    text.value = ''
+  }
   try {
-    text.value = await memoryRead(page.file)
+    const got = await memoryRead(page.file)
+    if (got !== text.value) text.value = got
+    problem.value = ''
   } catch (reason) {
     problem.value = String(reason)
   }
@@ -79,7 +85,9 @@ function openOutside() {
 
 async function load() {
   try {
-    shelves.value = await memoryShelves(props.room)
+    // HOME refreshes every minute: the same shelves keep their identity, so nothing redraws
+    const fresh = await memoryShelves(props.room)
+    if (JSON.stringify(fresh) !== JSON.stringify(shelves.value)) shelves.value = fresh
     const settings = (await getSettings()).settings
     memoryFolder.value = settings.memoryFolder ?? ''
     diaryLook.value = lookOf(settings.diaryLook)
@@ -92,7 +100,7 @@ async function load() {
   const first = shelves.value[0]?.pages[0]
   const next = wanted || keep || first
   if (next && next.file !== current.value?.file) open(next)
-  else if (keep) open(keep)
+  else if (keep) open(keep, true)
 }
 
 onMounted(load)

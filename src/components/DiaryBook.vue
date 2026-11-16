@@ -59,13 +59,27 @@ watch(
   },
   { immediate: true },
 )
-// the memory may have changed: read the shown pages again
+// The memory may have changed: read the shown pages again, keeping their text on screen until the
+// new text arrives and replacing it only when it differs - so a refresh never blanks the page and
+// the reader keeps their place. Pages not shown are forgotten and read again when turned to.
+async function reread(page) {
+  if (!page) return
+  let got
+  try {
+    got = await memoryRead(page.file)
+  } catch (reason) {
+    got = { problem: String(reason) }
+  }
+  if (JSON.stringify(texts.value[page.file]) !== JSON.stringify(got)) texts.value = { ...texts.value, [page.file]: got }
+}
+
 watch(
   () => props.shelves,
   () => {
-    texts.value = {}
-    read(spread.value.left)
-    read(spread.value.right)
+    const shown = [spread.value.left?.file, spread.value.right?.file].filter(Boolean)
+    texts.value = Object.fromEntries(Object.entries(texts.value).filter(([file]) => shown.includes(file)))
+    reread(spread.value.left)
+    reread(spread.value.right)
   },
 )
 
