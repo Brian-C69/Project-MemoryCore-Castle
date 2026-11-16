@@ -107,6 +107,8 @@ const day = (ms) => new Date(ms).toLocaleDateString('en-US', { month: 'short', d
   display: flex;
   flex-direction: column;
   gap: 12px;
+  scrollbar-color: var(--line) transparent;
+  scrollbar-width: thin;
 }
 
 .top {

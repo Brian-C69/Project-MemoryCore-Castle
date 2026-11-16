@@ -69,7 +69,7 @@ pub struct Book {
 }
 
 /// One candle. Lists are always oldest first. Volume is zero for a mark price candle.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Candle {
     pub open_ms: i64,
@@ -465,6 +465,18 @@ impl BybitFeed {
     /// `interval` is Bybit's name: "1", "5", "15", "60", "240", "D".
     pub fn candles(&self, symbol: &str, interval: &str, limit: u32) -> Result<Vec<Candle>, String> {
         let query = [("symbol", symbol.to_string()), ("interval", interval.to_string()), ("limit", limit.clamp(1, 1000).to_string())];
+        parse_candles(&self.get("kline", &query)?)
+    }
+
+    /// The `limit` traded candles right before `end_ms` (Bybit allows up to 1000), oldest first -
+    /// scrolling a chart back past what it already has asks for more this way, one page at a time.
+    pub fn candles_before(&self, symbol: &str, interval: &str, limit: u32, end_ms: i64) -> Result<Vec<Candle>, String> {
+        let query = [
+            ("symbol", symbol.to_string()),
+            ("interval", interval.to_string()),
+            ("end", end_ms.to_string()),
+            ("limit", limit.clamp(1, 1000).to_string()),
+        ];
         parse_candles(&self.get("kline", &query)?)
     }
 

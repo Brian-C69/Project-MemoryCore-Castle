@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { edgeEnabled, labelOf, nextEnabled, normalise } from './glassselect.js'
+import { edgeEnabled, filterByQuery, labelOf, nextEnabled, normalise } from './glassselect.js'
 
 describe('the glass dropdown', () => {
   it('takes objects or plain strings', () => {
@@ -25,5 +25,12 @@ describe('the glass dropdown', () => {
   it('finds nothing when every option is disabled', () => {
     expect(nextEnabled(normalise([{ value: 'x', disabled: true }]), 0, 1)).toBe(-1)
     expect(nextEnabled([], 0, 1)).toBe(-1)
+  })
+  it('filters by label, case-insensitively, and keeps everything when the query is blank', () => {
+    const o = normalise(['BTCUSDT', 'ETHUSDT', 'XAUUSD'])
+    expect(filterByQuery(o, 'xau')).toEqual([{ value: 'XAUUSD', label: 'XAUUSD', disabled: false }])
+    expect(filterByQuery(o, 'USDT')).toHaveLength(2)
+    expect(filterByQuery(o, '  ')).toEqual(o)
+    expect(filterByQuery(o, '')).toEqual(o)
   })
 })

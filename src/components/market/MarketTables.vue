@@ -48,7 +48,7 @@ watch([tab, kind, page, runId], () => {
     </nav>
 
     <table v-if="tab === 'positions'">
-      <thead><tr><th>SYMBOL</th><th>SIDE</th><th>QTY</th><th>ENTRY</th><th>MARK</th><th>PNL</th><th>LIQ.</th><th>OPENED BY</th></tr></thead>
+      <thead><tr><th>SYMBOL</th><th>SIDE</th><th>QTY</th><th>ENTRY</th><th>MARK</th><th>TP</th><th>SL</th><th>PNL</th><th>LIQ.</th><th>OPENED BY</th></tr></thead>
       <tbody>
         <tr v-for="p in positions" :key="p.id" class="clickable" @click="emit('open', p)">
           <td>{{ p.symbol }}</td>
@@ -56,11 +56,13 @@ watch([tab, kind, page, runId], () => {
           <td>{{ p.qty }}</td>
           <td>{{ price(p.entryPrice, tick) }}</td>
           <td>{{ price(p.mark, tick) }}</td>
+          <td class="gain">{{ p.tpPrice ? price(p.tpPrice, tick) : '—' }}</td>
+          <td class="loss">{{ p.slPrice ? price(p.slPrice, tick) : '—' }}</td>
           <td :class="tone(p.unrealisedPnl)">{{ signedUsd(p.unrealisedPnl) }}</td>
           <td>{{ p.liquidationPrice ? price(p.liquidationPrice, tick) : '—' }}</td>
           <td>{{ openedBy(p.openedBy, companion) }}</td>
         </tr>
-        <tr v-if="!positions.length"><td colspan="8" class="empty">No open positions.</td></tr>
+        <tr v-if="!positions.length"><td colspan="10" class="empty">No open positions.</td></tr>
       </tbody>
     </table>
 
@@ -119,6 +121,8 @@ watch([tab, kind, page, runId], () => {
   flex-direction: column;
   min-height: 0;
   overflow: auto;
+  scrollbar-color: var(--line) transparent;
+  scrollbar-width: thin;
 }
 
 .tabs,

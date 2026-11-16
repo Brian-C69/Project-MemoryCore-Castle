@@ -10,6 +10,7 @@ pub mod companion;
 pub mod desk;
 pub mod engine;
 pub mod feed;
+pub mod indicators;
 pub mod rules;
 pub mod store;
 pub mod trade;

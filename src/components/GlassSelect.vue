@@ -3,14 +3,18 @@
 // the theme's colours (a native <select> lets Windows draw a grey list that ignores the theme).
 // v-model; options as [{ value, label, disabled }] or plain strings. The list is teleported to the
 // page so no card clips it, opens below or above by the room left, and works as a listbox does.
-import { computed, nextTick, onBeforeUnmount, ref, useId } from 'vue'
-import { edgeEnabled, labelOf, nextEnabled, normalise } from './glassselect.js'
+import { computed, nextTick, onBeforeUnmount, ref, watch, useId } from 'vue'
+import { edgeEnabled, filterByQuery, labelOf, nextEnabled, normalise } from './glassselect.js'
 
 const props = defineProps({
   modelValue: { type: [String, Number, Boolean, null], default: null },
   options: { type: Array, default: () => [] },
   disabled: { type: Boolean, default: false },
   placeholder: { type: String, default: '' },
+  // Opt-in: the trigger becomes a text input that filters the list as it's typed into, for a
+  // list long enough that scrolling to find one entry (MARKET's symbol picker) is the wrong tool.
+  // Every other GlassSelect keeps its plain click-to-open button, unchanged.
+  searchable: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue', 'change'])
 defineOptions({ inheritAttrs: false })
@@ -23,12 +27,16 @@ const active = ref(-1)
 const button = ref(null)
 const panel = ref(null)
 const place = ref({})
+const query = ref('')
+const filtering = ref(false) // typing a search, before a choice is made or the panel closes
+const shown = computed(() => (props.searchable && filtering.value ? filterByQuery(list.value, query.value) : list.value))
+watch(label, (l) => { if (!filtering.value) query.value = l }, { immediate: true })
 
 function position() {
   const r = button.value?.getBoundingClientRect()
   if (!r) return
   const room = window.innerHeight - r.bottom
-  const tall = Math.min(280, list.value.length * 34 + 10)
+  const tall = Math.min(280, shown.value.length * 34 + 10)
   const above = room < tall + 12 && r.top > room
   place.value = {
     left: `${Math.round(r.left)}px`,
@@ -44,26 +52,31 @@ function onScroll(event) {
   if (!panel.value?.contains(event.target)) close()
 }
 
-async function show() {
-  if (props.disabled || open.value) return
-  const at = list.value.findIndex((o) => o.value === props.modelValue && !o.disabled)
-  active.value = at >= 0 ? at : edgeEnabled(list.value)
+function openPanel() {
   position()
   open.value = true
   document.addEventListener('pointerdown', onOutside, true)
   window.addEventListener('scroll', onScroll, true)
   window.addEventListener('resize', close)
+}
+async function show() {
+  if (props.disabled || open.value) return
+  const at = list.value.findIndex((o) => o.value === props.modelValue && !o.disabled)
+  active.value = at >= 0 ? at : edgeEnabled(list.value)
+  openPanel()
   await nextTick()
   panel.value?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
 }
 function close() {
   open.value = false
+  filtering.value = false
+  query.value = label.value
   document.removeEventListener('pointerdown', onOutside, true)
   window.removeEventListener('scroll', onScroll, true)
   window.removeEventListener('resize', close)
 }
 function choose(index) {
-  const option = list.value[index]
+  const option = shown.value[index]
   if (!option || option.disabled) return
   if (option.value !== props.modelValue) {
     emit('update:modelValue', option.value)
@@ -72,11 +85,24 @@ function choose(index) {
   close()
   button.value?.focus()
 }
+function onType(event) {
+  filtering.value = true
+  query.value = event.target.value
+  if (!open.value) openPanel()
+  active.value = edgeEnabled(shown.value)
+}
+// Selecting the current text on focus means typing straight away replaces it - no one has to
+// notice this is editable and manually clear it first, the way a plain button's label would read.
+function onSearchFocus(event) {
+  if (!open.value) show()
+  event.target.select()
+}
 function key(event) {
   if (props.disabled) return
   const k = event.key
   if (!open.value) {
-    if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(k)) {
+    // the search input opens on focus/typing already; only the plain button needs a key to open
+    if (!props.searchable && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(k)) {
       event.preventDefault()
       show()
     }
@@ -87,12 +113,13 @@ function key(event) {
     close()
   } else if (k === 'ArrowDown' || k === 'ArrowUp') {
     event.preventDefault()
-    const next = nextEnabled(list.value, active.value, k === 'ArrowDown' ? 1 : -1)
+    const next = nextEnabled(shown.value, active.value, k === 'ArrowDown' ? 1 : -1)
     if (next >= 0) active.value = next
   } else if (k === 'Home' || k === 'End') {
     event.preventDefault()
-    active.value = edgeEnabled(list.value, k === 'End')
-  } else if (k === 'Enter' || k === ' ') {
+    active.value = edgeEnabled(shown.value, k === 'End')
+  } else if (k === 'Enter' || (k === ' ' && !props.searchable)) {
+    // space is a normal character while typing a search - only Enter chooses then
     event.preventDefault()
     choose(active.value)
   } else if (k === 'Tab') {
@@ -103,7 +130,29 @@ onBeforeUnmount(close)
 </script>
 
 <template>
+  <span v-if="searchable" class="search-wrap">
+    <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+    <input
+      ref="button"
+      v-bind="$attrs"
+      type="text"
+      class="glass-select glass-search"
+      role="combobox"
+      :aria-expanded="open"
+      :aria-controls="`${id}-list`"
+      aria-haspopup="listbox"
+      :aria-activedescendant="open && active >= 0 ? `${id}-${active}` : undefined"
+      :disabled="disabled"
+      :placeholder="placeholder"
+      :value="query"
+      autocomplete="off"
+      @focus="onSearchFocus"
+      @input="onType"
+      @keydown="key"
+    />
+  </span>
   <button
+    v-else
     ref="button"
     v-bind="$attrs"
     type="button"
@@ -122,8 +171,9 @@ onBeforeUnmount(close)
   </button>
   <Teleport to="body">
     <ul v-if="open" :id="`${id}-list`" ref="panel" class="glass-list" role="listbox" :style="place">
+      <li v-if="searchable && !shown.length" class="empty">No match</li>
       <li
-        v-for="(o, i) in list"
+        v-for="(o, i) in shown"
         :id="`${id}-${i}`"
         :key="String(o.value)"
         role="option"
@@ -168,6 +218,33 @@ onBeforeUnmount(close)
 .glass-select:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+.search-wrap {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+}
+.search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.glass-search {
+  width: 100%;
+  padding-left: 30px;
+  cursor: text;
+}
+.glass-search::placeholder {
+  color: var(--text-dim);
 }
 .value {
   overflow: hidden;
@@ -226,5 +303,9 @@ onBeforeUnmount(close)
 .glass-list li.disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+.glass-list li.empty {
+  color: var(--text-dim);
+  cursor: default;
 }
 </style>
