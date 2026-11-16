@@ -331,24 +331,18 @@ fn codex_usage() -> CliUsage {
         .unwrap_or_else(|| usage(Cli::Codex, "unknown"))
 }
 
-/// The CLIs the member wants on the USAGE card, in the card's order. One that is off is not asked.
-pub fn shown_clis(claude: bool, codex: bool) -> Vec<Cli> {
-    [(Cli::Claude, claude), (Cli::Codex, codex)].into_iter().filter(|(_, on)| *on).map(|(cli, _)| cli).collect()
-}
-
 /// Codex's line on the USAGE card and Codex's weekly limit for the crystal, each kept five minutes.
 /// Claude Code's two share one cached answer instead (see `claude_cached`).
 static CODEX_CARD: Mutex<Option<(Instant, CliUsage)>> = Mutex::new(None);
 static CODEX_GLOW: Mutex<Option<(Instant, Option<Quota>)>> = Mutex::new(None);
 
-/// The five-hour and weekly limits of the CLIs switched on in Settings > Companion, asked at most
-/// every five minutes. None switched on gives an empty list. Each CLI is looked up on its own, so
-/// a changed toggle never shows a CLI that was just switched off.
+/// The five-hour and weekly limits of Claude Code and Codex, in the card's order, asked at most
+/// every five minutes. The card itself is switched on or off in WIDGETS; off, neither CLI is asked.
 #[tauri::command]
 pub async fn cli_usage(store: State<'_, SettingsStore>) -> Result<Vec<CliUsage>, String> {
     let settings = store.get();
     // the card switched off asks neither CLI
-    let wanted = if settings.show_usage_card { shown_clis(settings.show_claude_usage, settings.show_codex_usage) } else { Vec::new() };
+    let wanted = if settings.show_usage_card { vec![Cli::Claude, Cli::Codex] } else { Vec::new() };
     tauri::async_runtime::spawn_blocking(move || {
         wanted.into_iter().map(|cli| if cli == Cli::Claude { claude_usage() } else { cached(&CODEX_CARD, codex_usage) }).collect::<Vec<_>>()
     })
@@ -406,14 +400,6 @@ mod tests {
     fn used_over_a_hundred_never_goes_below_nothing_left() {
         assert_eq!(quota("claude", 130.0, None).left_percent, 0.0);
         assert_eq!(quota("claude", -5.0, None).left_percent, 100.0);
-    }
-
-    #[test]
-    fn only_the_clis_switched_on_are_asked() {
-        assert_eq!(shown_clis(true, true), vec![Cli::Claude, Cli::Codex]);
-        assert_eq!(shown_clis(false, true), vec![Cli::Codex]);
-        assert_eq!(shown_clis(true, false), vec![Cli::Claude]);
-        assert!(shown_clis(false, false).is_empty());
     }
 
     #[test]
