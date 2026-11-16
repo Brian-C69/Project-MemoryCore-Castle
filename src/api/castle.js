@@ -119,6 +119,13 @@ export const memoryRead = (file) => invoke('memory_read', { file })
 
 // The desktop.
 export const systemMeters = () => invoke('system_meters')
+// The gauges' gear: watch CPU and RAM, tidy RAM, the last trips, close an ordinary app.
+export const meterWatchGet = () => invoke('meter_watch_get')
+export const meterWatchSave = (on, cpu, memory) => invoke('meter_watch_save', { on, cpu, memory })
+export const meterTrimNow = () => invoke('meter_trim_now')
+export const meterTrips = () => invoke('meter_trips')
+export const meterClose = (pid, name) => invoke('meter_close', { pid, name })
+export const onMeterTrip = (handler) => listen('castle://meter-trip', (event) => handler(event.payload))
 export const appsList = () => invoke('apps_list')
 export const appsDrawIcons = () => invoke('apps_draw_icons')
 export const appOpen = (path) => invoke('app_open', { path })

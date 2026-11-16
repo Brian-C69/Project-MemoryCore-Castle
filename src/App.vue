@@ -36,6 +36,7 @@ import { SIZES, WIDGETS, dragBegins, dropPlace, isOn, memberPlace, placeFor, pla
 import changelog from '../CHANGELOG.md?raw'
 import { version as appVersion } from '../package.json'
 import NoticeToasts from './components/NoticeToasts.vue'
+import MeterAlert from './components/MeterAlert.vue'
 import AmbientMusic from './components/AmbientMusic.vue'
 import { avatarGet, backupNow, backupStatus, dbMemory, dbStart, dbStatus, getSettings, hideCastle, memoryHome, saveSettings, onBackupDone, onStoryOutput, userThemes, versionSeen } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
@@ -535,6 +536,7 @@ watch(settingsStamp, () => {
         <BackupPanel :companion="companion" />
       </ModalSheet>
       <NoticeToasts @keys="openKeys" />
+      <MeterAlert />
       <AmbientMusic />
       <UpdateChip @status="updateInfo = $event" @about="openSettings('about')" />
       <SetupView v-if="setupOpen" :reopened="setupReopened" @done="setupDone" @close="setupOpen = false" />
