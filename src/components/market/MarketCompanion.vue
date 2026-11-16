@@ -108,17 +108,20 @@ h4 {
   gap: 8px;
   scrollbar-color: var(--line) transparent;
   scrollbar-width: thin;
+  /* Issue #44: the list sits inside a backdrop-filter panel, where Chromium/WebView2 may scroll it
+     without a layer of its own, and lines promoted to their own layers inside such a scroller can
+     be drawn at a stale scroll offset - text over text while every box measures correctly. The
+     scroller gets the layer and its own paint boundary instead, and the lines paint normally. */
+  will-change: transform;
+  contain: paint;
+  isolation: isolate;
 }
 
 .line {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   max-width: 88%;
-  /* The measured layout here is always correct (checked live) - this is purely to work around a
-     WebView2/Chromium compositor bug where a bubble's old paint can visually linger after new
-     ones are added, surviving even a full remount. Promoting each line to its own GPU layer
-     forces a clean repaint instead of reusing a stale cached tile. */
-  transform: translateZ(0);
 }
 
 .line.member {
