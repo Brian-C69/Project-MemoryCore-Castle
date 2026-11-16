@@ -53,6 +53,8 @@ onMounted(async () => {
 onBeforeUnmount(() => stop?.())
 
 const when = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+// the newest lessons that ride into every desk turn (DESK_LESSONS on the Rust side)
+const RIDE = 12
 const day = (ms) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 </script>
 
@@ -83,19 +85,31 @@ const day = (ms) => new Date(ms).toLocaleDateString('en-US', { month: 'short', d
       <p v-if="!turns.length" class="dim empty">{{ companion }}'s turns appear here.</p>
     </template>
 
-    <template v-else>
-      <h3>WHAT {{ companion.toUpperCase() }} LEARNED FROM EACH CLOSED TRADE</h3>
-      <div v-for="l in lessons" :key="l.id" class="panel row">
-        <span class="dim">{{ day(l.createdAt) }}</span>
-        <span class="sym">{{ l.symbol }}</span>
-        <span :class="l.resultPct >= 0 ? 'ok' : 'no'">{{ percent(l.resultPct) }}</span>
-        <span class="tag" :class="{ auto: l.tradedBy === 'COMPANION' }">{{ l.tradedBy === 'COMPANION' ? companion : 'You' }}</span>
-        <span class="lesson">{{ l.lesson }}</span>
-        <button class="trash" aria-label="Delete this lesson" title="Delete" @click="remove(l.id)">🗑</button>
-      </div>
-      <p v-if="!lessons.length" class="dim empty">A lesson appears after each closed trade.</p>
-      <p v-else class="dim foot">The newest 12 ride into every decision.</p>
-    </template>
+    <section v-else class="panel lessons" aria-label="Lessons">
+      <header class="lessons-head">
+        <h3>WHAT {{ companion.toUpperCase() }} LEARNED FROM EACH CLOSED TRADE</h3>
+        <p v-if="lessons.length" class="rides-note"><span class="bracket"></span>The newest {{ RIDE }} ride into every decision.</p>
+      </header>
+      <ol v-if="lessons.length" class="timeline">
+        <li v-for="(l, i) in lessons" :key="l.id" :class="{ rides: i < RIDE }">
+          <span class="dot" :class="l.resultPct >= 0 ? 'up' : 'down'" aria-hidden="true"></span>
+          <article class="bubble">
+            <div class="facts">
+              <time>{{ day(l.createdAt) }}</time>
+              <span class="sym">{{ l.symbol }}</span>
+              <span class="side">{{ l.side }}</span>
+              <span :class="l.resultPct >= 0 ? 'ok' : 'no'">{{ percent(l.resultPct) }}</span>
+            </div>
+            <p class="lesson">{{ l.lesson }}</p>
+            <span class="tag" :class="{ auto: l.tradedBy === 'COMPANION' }">{{ l.tradedBy === 'COMPANION' ? companion : 'You' }}</span>
+            <button class="trash" aria-label="Delete this lesson" title="Delete" @click="remove(l.id)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9zm4 2v8h2v-8h-2zm4 0v8h2v-8h-2z" /></svg>
+            </button>
+          </article>
+        </li>
+      </ol>
+      <p v-else class="dim empty">A lesson appears after each closed trade.</p>
+    </section>
   </section>
 </template>
 
@@ -216,34 +230,163 @@ h3 {
   color: var(--text-dim);
 }
 
-.row {
-  display: grid;
-  grid-template-columns: 60px 110px 70px auto 1fr 32px;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+.lessons {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 24px;
 }
 
-.sym {
-  padding: 3px 10px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  text-align: center;
+.lessons-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+}
+
+.rides-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.bracket {
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: start;
+}
+
+/* the line: lavender and glowing where the lessons ride into decisions, quiet after */
+.timeline li::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 0;
+  bottom: -14px;
+  width: 2px;
+  background: var(--line);
+}
+
+.timeline li:last-child::before {
+  bottom: 50%;
+}
+
+.timeline li.rides::before {
+  background: color-mix(in srgb, var(--accent) 75%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.dot {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  margin: 22px 0 0 10px;
+  border-radius: 50%;
+}
+
+.dot.up {
+  background: var(--good);
+  box-shadow: 0 0 8px var(--good);
+}
+
+.dot.down {
+  background: var(--bad);
+  box-shadow: 0 0 8px var(--bad);
+}
+
+.bubble {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'facts tag trash'
+    'lesson lesson lesson';
+  align-items: center;
+  gap: 8px 12px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-background) 70%, transparent);
+}
+
+.facts {
+  grid-area: facts;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 20px;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.facts time {
+  text-transform: uppercase;
+}
+
+.sym,
+.side {
+  color: var(--text);
+}
+
+.bubble .tag {
+  grid-area: tag;
 }
 
 .lesson {
-  line-height: 1.4;
+  grid-area: lesson;
+  margin: 0;
+  line-height: 1.45;
 }
 
 .trash {
-  border: 0;
+  grid-area: trash;
+  display: inline-flex;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   background: none;
+  color: var(--text-dim);
   cursor: pointer;
-  opacity: 0.7;
 }
 
-.empty,
-.foot {
+.trash svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.trash:hover {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.empty {
   text-align: center;
 }
 
