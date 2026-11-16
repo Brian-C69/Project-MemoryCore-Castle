@@ -9,7 +9,7 @@ use crate::key;
 use crate::settings::SettingsStore;
 use serde::Serialize;
 use serde_json::Value;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -30,6 +30,10 @@ pub struct RoomReader {
     cleared_at: Mutex<Option<String>>,
     reacted_at: Mutex<Option<String>>,
     problem: Mutex<Option<RoomRefusal>>,
+    /// Which reader loop is the live one. Every start takes the next number; a loop that sees a
+    /// newer number stops at its next turn and drops what it was holding, so a reconnect never
+    /// leaves two loops reading - and the companion never hears the same lines twice.
+    generation: AtomicU64,
 }
 
 #[derive(Clone, Serialize)]
@@ -112,10 +116,20 @@ fn backfill(app: &AppHandle, room: &Room, reader: &RoomReader) {
     }
 }
 
-/// Starts the reader with Castle.
+/// Whether a loop started as `mine` is still the live one. Pure, tested.
+pub fn still_live(generation: &AtomicU64, mine: u64) -> bool {
+    generation.load(Ordering::SeqCst) == mine
+}
+
+/// Starts the reader with Castle, and again on a reconnect: the new loop takes over at once and
+/// the one before it stops at its next turn (after its held read or its pause), keeping nothing.
 pub fn start(app: &AppHandle) {
     let app = app.clone();
+    let mine = app.state::<RoomReader>().generation.fetch_add(1, Ordering::SeqCst) + 1;
     std::thread::spawn(move || loop {
+        if !still_live(&app.state::<RoomReader>().generation, mine) {
+            return;
+        }
         let settings = app.state::<SettingsStore>().get();
         let token = key::load("member");
         let (true, Some(token)) = (settings.room_on("chat"), token) else {
@@ -128,7 +142,12 @@ pub fn start(app: &AppHandle) {
         let cleared_at = reader.cleared_at.lock().unwrap().clone();
         let reacted_at = reader.reacted_at.lock().unwrap().clone();
         let room = Room::new(&crate::signin::portfolio(), &token);
-        match room.lines_since(cursor, if visible && cursor.is_some() { 20 } else { 0 }, cleared_at.as_deref(), reacted_at.as_deref()) {
+        let read = room.lines_since(cursor, if visible && cursor.is_some() { 20 } else { 0 }, cleared_at.as_deref(), reacted_at.as_deref());
+        // a reconnect while this read was held: the newer loop owns the room now
+        if !still_live(&reader.generation, mine) {
+            return;
+        }
+        match read {
             Ok(answer) => {
                 let kept = reader.lines.lock().unwrap().clone();
                 let (mut all, fresh) = merge(&kept, &answer);
@@ -188,9 +207,9 @@ pub fn room_backlog(reader: State<RoomReader>) -> Backlog {
 
 /// The member asked to stop waiting and try the room again right now, rather than wait out
 /// whatever pause the reader is already sleeping through. A held read can only be cut short by
-/// racing it: this starts a second reader loop alongside whichever one is already running (stuck
-/// in a slow read or mid-pause), and the fresh one picks up the shared state and starts emitting
-/// again immediately. A loop that was never actually stuck just becomes a harmless extra reader.
+/// racing it: this starts a fresh reader loop that picks up the shared state and reads at once,
+/// and the loop it replaces (stuck in a slow read or mid-pause) stops when it wakes, without
+/// applying or sending what it read - so pressing it many times still leaves one reader.
 #[tauri::command]
 pub fn room_reconnect(app: AppHandle) {
     start(&app);
@@ -218,6 +237,18 @@ mod tests {
         assert_eq!(backfill_start(2), Some(0));
         assert_eq!(backfill_start(1), None, "the first line of the room has nothing before it");
         assert_eq!(backfill_start(0), None);
+    }
+
+    #[test]
+    fn a_reconnect_leaves_only_the_newest_reader_live() {
+        let generation = AtomicU64::new(0);
+        let first = generation.fetch_add(1, Ordering::SeqCst) + 1;
+        assert!(still_live(&generation, first));
+        let second = generation.fetch_add(1, Ordering::SeqCst) + 1;
+        let third = generation.fetch_add(1, Ordering::SeqCst) + 1;
+        assert!(!still_live(&generation, first), "the loop from Castle's start stops after a reconnect");
+        assert!(!still_live(&generation, second), "pressing Reconnect again retires the loop before");
+        assert!(still_live(&generation, third));
     }
 
     #[test]
