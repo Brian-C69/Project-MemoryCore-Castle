@@ -246,6 +246,8 @@ pub fn run() {
         .manage(chat::StoryChat::default())
         .manage(chat::MemberPictures::default())
         .manage(roomread::RoomReader::default())
+        .manage(market::board::Board::default())
+        .manage(market::engine::Viewing::default())
         .invoke_handler(tauri::generate_handler![
             get_settings,
             providers::providers_list,
@@ -438,6 +440,21 @@ pub fn run() {
             profile::profile_month,
             profile::profile_scan,
             db::db_setup_all,
+            market::commands::market_state,
+            market::commands::market_symbols,
+            market::commands::market_candles,
+            market::commands::market_preview,
+            market::commands::market_place,
+            market::commands::market_cancel,
+            market::commands::market_close,
+            market::commands::market_exits,
+            market::commands::market_margin,
+            market::commands::market_leverage,
+            market::commands::market_new_run,
+            market::commands::market_close_run,
+            market::commands::market_runs,
+            market::commands::market_history,
+            market::commands::market_fees,
             db::db_move_out
         ])
         .setup(|app| {
@@ -502,6 +519,7 @@ pub fn run() {
             link::start(app.handle());
             meter_watch::start(app.handle());
             page_reader::start(app.handle());
+            market::engine::start(app.handle());
             db::start_with_castle(app.handle());
             Ok(())
         })

@@ -5,6 +5,10 @@
 #![allow(dead_code)]
 
 pub mod board;
+pub mod commands;
+pub mod engine;
 pub mod feed;
 pub mod rules;
 pub mod store;
+pub mod trade;
+pub mod trade_plan;
