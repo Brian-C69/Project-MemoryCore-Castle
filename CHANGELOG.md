@@ -4,6 +4,14 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.12 - 2026-11-16
+
+- **MARKET: a paper-money market with your companion at the desk.** Turn it on in Settings > Rooms. Set your paper money and trade crypto perpetuals on real public Bybit prices (no key, nothing real is ever ordered): a candle chart, an order ticket with leverage, take profit and stop loss, positions, orders and history.
+- **Your companion trades beside you.** Ask it about the market in its panel, or ask it to place a trade. In Settings it can also trade by itself on rounds, within the limits you set (rounds a day, a daily loss limit, profit and balance targets); it turns itself off when Castle closes. The Trade log shows every turn.
+- **Your companion keeps lessons.** After every closed trade it writes one short lesson, and its newest twelve ride into every decision. Delete any in Lessons.
+- **The CPU and RAM gauges keep watch.** A small gear sets the value each one trips at (90% to start). Held there for about 15 seconds, RAM is tidied by itself and the busiest apps are shown; Close appears only on ordinary apps, and Castle, its companion, your memory database, your projects and Windows are never closable.
+- **Credit widgets for OpenAI, Seedance, Suno and ElevenLabs.** Each appears on HOME once its key is saved: Suno credits and ElevenLabs characters straight from their APIs, your OpenAI balance and Seedance's month from your own signed-in billing page, or a figure you type. Your own pictures, videos, songs and voices count it down between reads.
+- **The USAGE card has one switch.** It is turned on or off in WIDGETS, and Settings no longer has a second one.
 - **Scroll the THEME carousel with the mouse wheel.** Over the case in focus, it turns that case's own setting, the same as its own arrows; over the showroom around the cases, it turns the carousel itself, the same as the edge arrows.
 
 ## 0.2.11 - 2026-11-15
