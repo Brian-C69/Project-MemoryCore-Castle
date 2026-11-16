@@ -122,6 +122,7 @@ function saveLeverage() {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
   padding: 14px 16px;
 }
 
@@ -196,6 +197,9 @@ h3 {
 }
 
 .field input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -207,8 +211,8 @@ h3 {
 }
 
 .exits {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
