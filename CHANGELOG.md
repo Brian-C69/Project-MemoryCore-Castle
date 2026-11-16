@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.13 - 2026-11-16
+
 - **Pictures draw on your ChatGPT plan whenever Codex is signed in.** APPEARANCE and STUDIO now use a signed-in Codex first even when your companion thinks with Claude Code, so a member with both never pays per picture through the key. Without Codex, the key draws as before. Suggested by Bernard (issue #39).
 - **A stuck chat room no longer needs a restart.** When CHAT shows "The room could not be read... trying again" for longer than you want to wait, a new "Reconnect now" button next to it tries again immediately instead of making you close and reopen Castle.
 - **MARKET's chart now scrolls back past its first 300 bars.** Every timeframe used to show a fixed amount of history and nothing more - scrolling or zooming back past that edge found nothing, which looked like a zoom bug but was really just missing data. It now loads more history as you scroll back, the same way CHAT backfills older lines.
@@ -17,6 +19,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 - **A tick for each target.** Daily profit target and Balance target can each be ticked on or off; the daily loss stop stays always on as the safety rail.
 - **Lessons read their result true.** A closed trade's lesson used to measure against a size of zero and could show a percent like -100000000%; it now measures against the size the trade actually held.
 - **The Trade log as a ledger.** One line per turn - time, who started it, the outcome, its result and the start of the reply - with counters on top; click a line to open your words and the whole reply.
+- **MARKET's companion chat scrolls on a layer of its own**, a likely fix for messages drawn over each other on some Windows machines (issue #44).
 - **Lessons as a timeline.** One dot per lesson, green or rose by its result, with the line glowing for the newest twelve that ride into every decision.
 
 ## 0.2.12 - 2026-11-16
