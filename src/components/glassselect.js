@@ -26,3 +26,9 @@ export function nextEnabled(options, from, step) {
 export function edgeEnabled(options, last = false) {
   return last ? nextEnabled(options, 0, -1) : nextEnabled(options, -1, 1)
 }
+
+/** Options whose label contains `query` (case-insensitive, trimmed); every option when empty. */
+export function filterByQuery(options, query) {
+  const q = query.trim().toLowerCase()
+  return q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options
+}
