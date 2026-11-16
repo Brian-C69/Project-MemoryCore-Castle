@@ -6,4 +6,5 @@
 
 pub mod board;
 pub mod feed;
+pub mod rules;
 pub mod store;
