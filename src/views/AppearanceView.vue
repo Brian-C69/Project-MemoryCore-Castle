@@ -82,7 +82,7 @@ const shelf = computed(() => closetShelf(look.value, shelfKind.value))
 // What the (?) beside the look explains, in place of a paragraph on the page.
 const helpText = computed(
   () =>
-    `Castle writes each drawing's prompt from these words itself, so no AI tokens are spent. With Claude Code, Castle draws with your OpenAI key at the price on the button; with Codex, on your ChatGPT plan when Codex is signed in, otherwise with your key. Kept in your memory database; you can also ask ${props.companion} to change it. Uploads: PNG, JPEG or WebP up to 25 MB.`,
+    `Castle writes each drawing's prompt from these words itself, so no AI tokens are spent. When Codex is signed in with ChatGPT, Castle draws on your plan, whichever CLI your companion thinks with; otherwise with your OpenAI key at the price on the button. Kept in your memory database; you can also ask ${props.companion} to change it. Uploads: PNG, JPEG or WebP up to 25 MB.`,
 )
 watch(quality, (q) => {
   try {

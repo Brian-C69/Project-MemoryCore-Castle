@@ -567,7 +567,7 @@ pub fn start_images(app: &AppHandle) {
             }
         }
         // asked now, not when it was queued: a sign-in or a key may have changed since
-        let way = crate::env::picture_way(store.get().cli, codex_chatgpt_cached, crate::key::load("openai").is_some());
+        let way = crate::env::picture_way(codex_chatgpt_cached, crate::key::load("openai").is_some());
         // Only a Codex job waits for a safe pause in the conversation; a drawing with the key is a
         // helper script beside it. Reading the record can take a moment; no lock is held meanwhile.
         if way != "key" && !safe_boundary(&store, &app.state::<MainHost>().0) {

@@ -513,11 +513,9 @@ pub fn run() {
             screen::watch_desktop(app.handle());
             providers::start(app.handle());
             // warms the ChatGPT sign-in cache in the background, so STUDIO's or APPEARANCE's
-            // first visit is not the one waiting on it - only for a companion that thinks with
-            // Codex: with Claude Code, pictures never ask Codex at all
-            if app.state::<SettingsStore>().get().cli == settings::Cli::Codex {
-                std::thread::spawn(providers::codex_chatgpt_cached);
-            }
+            // first visit is not the one waiting on it (a signed-in Codex draws for any companion;
+            // without Codex installed the check returns at once)
+            std::thread::spawn(providers::codex_chatgpt_cached);
             providers::start_images(app.handle());
             messages::start(app.handle());
             world::restore(app.handle());

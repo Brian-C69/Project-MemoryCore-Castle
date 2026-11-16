@@ -380,7 +380,7 @@ onMounted(async () => {
           </div>
           <p v-if="tests[k.name]" :class="tests[k.name].ok === false ? 'warn' : 'good'">{{ tests[k.name].message }}</p>
         </div>
-        <p class="hint">APPEARANCE and STUDIO draw with the ChatGPT key when your companion thinks with Claude Code. With Codex they draw on your ChatGPT plan when Codex is signed in with ChatGPT, otherwise with the key. The key is never given to Codex.</p>
+        <p class="hint">APPEARANCE and STUDIO draw on your ChatGPT plan whenever Codex is signed in with ChatGPT on this computer, whichever CLI your companion thinks with; otherwise with this key. The key is never given to Codex.</p>
         <p class="hint">Room keys for the MemoryCore Foundation room are set at the CHAT room's door.</p>
       </section>
 

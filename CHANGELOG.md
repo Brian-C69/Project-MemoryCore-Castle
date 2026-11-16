@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Pictures draw on your ChatGPT plan whenever Codex is signed in.** APPEARANCE and STUDIO now use a signed-in Codex first even when your companion thinks with Claude Code, so a member with both never pays per picture through the key. Without Codex, the key draws as before. Suggested by Bernard (issue #39).
+
 ## 0.2.12 - 2026-11-16
 
 - **MARKET: a paper-money market with your companion at the desk.** Turn it on in Settings > Rooms. Set your paper money and trade crypto perpetuals on real public Bybit prices (no key, nothing real is ever ordered): a candle chart, an order ticket with leverage, take profit and stop loss, positions, orders and history.
