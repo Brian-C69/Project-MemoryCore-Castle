@@ -702,6 +702,9 @@ fn export(conn: &mut Conn, to: &Path) -> Result<String, String> {
 
 // ---------- dump and restore: one statement per line ----------
 
+/// Caches Castle fills again by itself: their table travels in the dump, their rows do not.
+pub const CACHE_TABLES: [&str; 2] = ["market_instrument", "market_feed_state"];
+
 pub fn dump(conn: &mut Conn, to: &Path) -> Result<String, String> {
     let tables: Vec<String> = conn.query("SHOW TABLES").map_err(sql("Reading the database"))?;
     let mut out = String::from("-- MemoryCore Castle memory dump: one statement per line. Restore with `castle-memory restore --from <this file>`.\nSET FOREIGN_KEY_CHECKS=0;\n");
@@ -710,6 +713,9 @@ pub fn dump(conn: &mut Conn, to: &Path) -> Result<String, String> {
         let create: Option<(String, String)> = conn.query_first(format!("SHOW CREATE TABLE `{table}`")).map_err(sql("Reading a table"))?;
         let create = create.ok_or("A table could not be read.")?.1.replace(['\r', '\n'], " ");
         out.push_str(&format!("DROP TABLE IF EXISTS `{table}`;\n{create};\n"));
+        if CACHE_TABLES.contains(&table.as_str()) {
+            continue;
+        }
         let rows: Vec<Row> = conn.query(format!("SELECT * FROM `{table}`")).map_err(sql("Reading a table"))?;
         total += rows.len();
         for row in rows {

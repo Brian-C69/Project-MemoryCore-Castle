@@ -19,7 +19,7 @@ pub const HOST: &str = "127.0.0.1";
 pub const ENV_KEYS: [&str; 5] = ["MEMORY_DB_HOST", "MEMORY_DB_PORT", "MEMORY_DB_NAME", "MEMORY_DB_USER", "MEMORY_DB_PASSWORD"];
 
 /// The migrations, in order. A released file is never edited; a change is a new entry.
-pub const MIGRATIONS: [(&str, &str); 12] = [
+pub const MIGRATIONS: [(&str, &str); 13] = [
     ("001_core", include_str!("../resources/schema/001_core.sql")),
     ("002_imported_files", include_str!("../resources/schema/002_imported_files.sql")),
     ("003_memory_skills", include_str!("../resources/schema/003_memory_skills.sql")),
@@ -32,6 +32,7 @@ pub const MIGRATIONS: [(&str, &str); 12] = [
     ("010_appearance", include_str!("../resources/schema/010_appearance.sql")),
     ("011_library", include_str!("../resources/schema/011_library.sql")),
     ("012_library_origin", include_str!("../resources/schema/012_library_origin.sql")),
+    ("013_market", include_str!("../resources/schema/013_market.sql")),
 ];
 
 /// How to reach one database.
@@ -270,6 +271,16 @@ mod tests {
         assert_eq!(core.len(), 5);
         assert!(core.iter().all(|s| s.starts_with("CREATE TABLE ") && s.contains("utf8mb4")));
         assert_eq!(statements(MIGRATIONS[3].1), vec!["ALTER TABLE skills ADD COLUMN stubbed TINYINT(1) NOT NULL DEFAULT 0"]);
+    }
+
+    #[test]
+    fn the_market_tables_split_cleanly_and_never_use_a_generated_column() {
+        let market = statements(MIGRATIONS[12].1);
+        assert_eq!(market.iter().filter(|s| s.starts_with("CREATE TABLE market_")).count(), 11);
+        assert_eq!(market.iter().filter(|s| s.starts_with("INSERT INTO market_")).count(), 2);
+        // a generated column would not restore from a dump (its value cannot be inserted)
+        assert!(!MIGRATIONS[12].1.contains("GENERATED"));
+        assert!(MIGRATIONS[12].0 == "013_market" && !MIGRATIONS[12].1.trim_start().starts_with("--"));
     }
 
     #[test]

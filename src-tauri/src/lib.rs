@@ -31,6 +31,7 @@ mod import;
 mod key;
 mod link;
 mod memdb;
+mod market;
 mod memory;
 mod meter_watch;
 mod mirror;
