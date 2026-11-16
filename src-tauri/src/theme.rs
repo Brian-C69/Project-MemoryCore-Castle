@@ -107,7 +107,11 @@ fn default_layout() -> (Value, Value) {
             "diary": { "right": "2%", "top": "calc(22% + 395px)", "width": "28%" },
             "growth": { "right": "2%", "bottom": "4%", "width": "28%" },
             "backup": { "right": "31%", "bottom": "4%", "width": "16%" },
-            "database": { "right": "48%", "bottom": "4%", "width": "16%" }
+            "database": { "right": "48%", "bottom": "4%", "width": "16%" },
+            "credit-openai": { "right": "56.2%", "bottom": "calc(4% + 330px)", "width": "8%" },
+            "credit-seedance": { "right": "47.8%", "bottom": "calc(4% + 330px)", "width": "8%" },
+            "credit-suno": { "right": "39.4%", "bottom": "calc(4% + 330px)", "width": "8%" },
+            "credit-elevenlabs": { "right": "31%", "bottom": "calc(4% + 330px)", "width": "8%" }
         }),
     )
 }

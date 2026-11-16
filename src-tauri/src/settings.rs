@@ -275,7 +275,11 @@ pub struct Settings {
 }
 
 /// HOME's widgets, by id (the theme's `widgets` keys).
-pub const WIDGETS: [&str; 9] = ["clock", "gauges", "usage", "today", "projects", "diary", "growth", "backup", "database"];
+pub const WIDGETS: [&str; 13] = [
+    "clock", "gauges", "usage", "today", "projects", "diary", "growth", "backup", "database",
+    // HOME's credit widgets, each shown once its key is saved
+    "credit-openai", "credit-seedance", "credit-suno", "credit-elevenlabs",
+];
 pub const WIDGET_SIZES: [&str; 3] = ["s", "m", "l"];
 /// The most themes whose widget places are kept.
 const WIDGET_THEMES_MAX: usize = 64;
@@ -555,6 +559,8 @@ mod tests {
         .unwrap();
         let s = odd.normalized();
         assert_eq!(s.widgets_off, ["diary"], "USAGE's switch is show_usage_card; unknown ids go");
+        let credit: Settings = serde_json::from_str(r#"{"widgetsOff":["credit-suno"]}"#).unwrap();
+        assert_eq!(credit.normalized().widgets_off, ["credit-suno"], "a credit widget switched off stays off");
         assert_eq!(s.widget_sizes.into_iter().collect::<Vec<_>>(), [("clock".to_string(), "l".to_string())]);
         assert_eq!(s.widget_places.keys().collect::<Vec<_>>(), ["constellation"]);
         assert_eq!(s.widget_places["constellation"]["clock"], WidgetPlace { left: 100.0, top: 0.0 });

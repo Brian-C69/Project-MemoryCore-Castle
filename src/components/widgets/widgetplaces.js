@@ -12,7 +12,17 @@ export const WIDGETS = [
   { id: 'growth', name: 'Growth', about: 'How your memory has grown.' },
   { id: 'backup', name: 'Backup', about: 'When your memory was last backed up.' },
   { id: 'database', name: 'Database', about: 'Your memory database and its engine.' },
+  { id: 'credit-openai', name: 'OpenAI', about: 'What is left on your OpenAI account, for pictures. Shown once its key is saved.', key: 'openai' },
+  { id: 'credit-seedance', name: 'Seedance', about: "This month's Seedance spend on BytePlus, for videos. Shown once its key is saved.", key: 'seedance' },
+  { id: 'credit-suno', name: 'Suno', about: 'Your Suno credits, for songs. Shown once its key is saved.', key: 'suno' },
+  { id: 'credit-elevenlabs', name: 'ElevenLabs', about: 'The characters left on your ElevenLabs plan, for voices. Shown once its key is saved.', key: 'elevenlabs' },
 ]
+
+// A credit widget shows only once its key is saved in Settings > Keys; `keys` lists the saved ones.
+export function hasItsKey(id, keys = []) {
+  const key = WIDGETS.find((w) => w.id === id)?.key
+  return !key || keys.includes(key)
+}
 
 export const SIZES = { s: 0.85, m: 1, l: 1.15 }
 

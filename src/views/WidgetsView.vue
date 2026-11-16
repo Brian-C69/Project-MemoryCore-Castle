@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { getSettings, saveSettings } from '../api/castle.js'
-import { isOn, resetPatch, sizeOf, sizePatch, switchPatch, WIDGETS } from '../components/widgets/widgetplaces.js'
+import { getSettings, keyStatus, saveSettings } from '../api/castle.js'
+import { hasItsKey, isOn, resetPatch, sizeOf, sizePatch, switchPatch, WIDGETS } from '../components/widgets/widgetplaces.js'
 
 // WIDGETS: HOME's widgets, each switched on or off and given a size; Arrange takes the member to
 // HOME to drag them into place (each theme keeps its own places).
@@ -14,6 +14,7 @@ const props = defineProps({
 const emit = defineEmits(['arrange', 'changed'])
 
 const settings = ref({})
+const savedKeys = ref([])
 const problem = ref('')
 const notice = ref('')
 
@@ -23,6 +24,7 @@ const hasPlaces = () => Object.keys(settings.value.widgetPlaces?.[props.themeId]
 async function load() {
   try {
     settings.value = (await getSettings()).settings
+    savedKeys.value = (await keyStatus()).filter((k) => k.set).map((k) => k.name)
   } catch {
     // outside Castle's window: every widget on, medium
   }
@@ -70,6 +72,7 @@ onMounted(load)
         <p class="dim">{{ w.about }}</p>
         <p v-if="w.id === 'usage'" class="dim small">Off also stops Castle asking Claude Code and Codex for their limits.</p>
         <p v-if="!placed(w.id)" class="dim small">This theme has no place for it.</p>
+        <p v-else-if="!hasItsKey(w.id, savedKeys)" class="dim small">Shown once its key is saved in Settings &gt; Keys.</p>
         <div class="sizes" role="group" :aria-label="`${w.name} size`">
           <button
             v-for="size in ['s', 'm', 'l']"

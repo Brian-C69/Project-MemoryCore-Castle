@@ -7,6 +7,7 @@ import GaugeWidget from './components/widgets/GaugeWidget.vue'
 import SetupView from './views/SetupView.vue'
 import HomeCards from './components/widgets/HomeCards.vue'
 import UsageWidget from './components/widgets/UsageWidget.vue'
+import CreditWidget from './components/widgets/CreditWidget.vue'
 import DatabaseOffer from './components/DatabaseOffer.vue'
 import { shouldOffer } from './components/database.js'
 import CompanionHeader from './components/CompanionHeader.vue'
@@ -32,13 +33,14 @@ import UsageReveal from './components/UsageReveal.vue'
 import WhatsNew from './components/WhatsNew.vue'
 import { sectionFor, unseenSections } from './components/changelog.js'
 import { moveTab, orderTabs } from './components/taborder.js'
-import { SIZES, WIDGETS, dragBegins, dropPlace, isOn, memberPlace, placeFor, placePatch, resetPatch, sizeOf, startsOnControl } from './components/widgets/widgetplaces.js'
+import { SIZES, WIDGETS, dragBegins, dropPlace, isOn, memberPlace, placeFor, placePatch, resetPatch, sizeOf, startsOnControl, hasItsKey } from './components/widgets/widgetplaces.js'
+import { isCreditWidget } from './components/widgets/credits.js'
 import changelog from '../CHANGELOG.md?raw'
 import { version as appVersion } from '../package.json'
 import NoticeToasts from './components/NoticeToasts.vue'
 import MeterAlert from './components/MeterAlert.vue'
 import AmbientMusic from './components/AmbientMusic.vue'
-import { avatarGet, backupNow, backupStatus, dbMemory, dbStart, dbStatus, getSettings, hideCastle, memoryHome, saveSettings, onBackupDone, onStoryOutput, userThemes, versionSeen } from './api/castle.js'
+import { avatarGet, backupNow, backupStatus, dbMemory, dbStart, dbStatus, getSettings, hideCastle, keyStatus, memoryHome, saveSettings, onBackupDone, onStoryOutput, userThemes, versionSeen } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
 
 // The rooms across the top. A room whose MemoryCore feature is not installed stays hidden
@@ -130,9 +132,14 @@ const theme = ref(null)
 const themeNotice = ref('')
 const activeLabel = computed(() => allTabs.find((t) => t.id === active.value)?.label ?? '')
 const widgets = computed(() => theme.value?.widgets ?? {})
-// The widgets HOME draws: switched on, and (for the cards and USAGE) placed by the theme.
+// The keys saved in Settings > Keys: a credit widget shows only once its key is there.
+const savedKeys = ref([])
+// The widgets HOME draws: switched on, placed by the theme (all but the clock and the gauges),
+// and for a credit widget, its key saved.
 const shownWidgets = computed(() =>
-  WIDGETS.map((w) => w.id).filter((id) => isOn(id, { ...widgetPrefs.value, showUsageCard: usageCard.value }) && (['clock', 'gauges'].includes(id) || widgets.value[id])),
+  WIDGETS.map((w) => w.id).filter(
+    (id) => isOn(id, { ...widgetPrefs.value, showUsageCard: usageCard.value }) && (['clock', 'gauges'].includes(id) || widgets.value[id]) && hasItsKey(id, savedKeys.value),
+  ),
 )
 
 function slotStyle(id) {
@@ -244,6 +251,11 @@ async function loadSettingsAndTheme() {
     usageCard.value = view.settings.showUsageCard !== false
     widgetPrefs.value = { widgetsOff: view.settings.widgetsOff ?? [], widgetSizes: view.settings.widgetSizes ?? {}, widgetPlaces: view.settings.widgetPlaces ?? {} }
     tabOrder.value = view.settings.tabOrder ?? []
+    try {
+      savedKeys.value = (await keyStatus()).filter((k) => k.set).map((k) => k.name)
+    } catch {
+      // the keys stay as they were
+    }
     if (!view.settings.setupDone) {
       setupOpen.value = true
       setupReopened.value = false
@@ -496,6 +508,7 @@ watch(settingsStamp, () => {
           <ClockWidget v-if="id === 'clock'" :size="widgets.clock?.size ?? 'm'" />
           <GaugeWidget v-else-if="id === 'gauges'" />
           <UsageWidget v-else-if="id === 'usage'" :stamp="settingsStamp" />
+          <CreditWidget v-else-if="isCreditWidget(id)" :widget="id" />
           <HomeCards v-else :kind="id" :data="home" :backup="backup" :database="database" @open="openMemoryFile" @backup="onBackupCard" @database="onDatabaseCard" />
         </div>
         <div v-if="arranging" class="arrange-bar" role="toolbar" aria-label="Arrange HOME">

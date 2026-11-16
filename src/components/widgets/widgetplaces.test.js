@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { dragBegins, dropPlace, isOn, startsOnControl, memberPlace, placeFor, placePatch, resetPatch, sizeOf, sizePatch, switchPatch, WIDGETS } from './widgetplaces.js'
+import { dragBegins, dropPlace, isOn, startsOnControl, memberPlace, placeFor, placePatch, resetPatch, sizeOf, sizePatch, switchPatch, WIDGETS, hasItsKey } from './widgetplaces.js'
 
 describe('HOME widgets as the member arranges them', () => {
   it('lists every widget the themes place', () => {
-    expect(WIDGETS.map((w) => w.id)).toEqual(['clock', 'gauges', 'usage', 'today', 'projects', 'diary', 'growth', 'backup', 'database'])
+    expect(WIDGETS.map((w) => w.id)).toEqual([
+      'clock', 'gauges', 'usage', 'today', 'projects', 'diary', 'growth', 'backup', 'database',
+      'credit-openai', 'credit-seedance', 'credit-suno', 'credit-elevenlabs',
+    ])
+  })
+
+  it('shows a credit widget only once its key is saved', () => {
+    expect(hasItsKey('credit-suno', [])).toBe(false)
+    expect(hasItsKey('credit-suno', ['suno', 'openai'])).toBe(true)
+    expect(hasItsKey('diary', [])).toBe(true)
   })
 
   it('switches widgets on and off, USAGE through its own switch', () => {
