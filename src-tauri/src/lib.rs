@@ -380,6 +380,7 @@ pub fn run() {
             roomread::room_visible,
             roomread::room_backlog,
             roomread::room_reset,
+            roomread::room_reconnect,
             roomturn::room_log,
             roomdraw::room_pictures_status,
             roomturn::room_card,

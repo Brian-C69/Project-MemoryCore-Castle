@@ -218,6 +218,7 @@ export const linkView = () => invoke('link_view')
 export const roomBacklog = () => invoke('room_backlog')
 export const roomVisible = (on) => invoke('room_visible', { on })
 export const roomReset = () => invoke('room_reset')
+export const roomReconnect = () => invoke('room_reconnect')
 // the companion's room turns and its public card
 export const roomLog = () => invoke('room_log')
 export const roomPicturesStatus = () => invoke('room_pictures_status')

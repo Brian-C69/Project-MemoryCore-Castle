@@ -186,6 +186,16 @@ pub fn room_backlog(reader: State<RoomReader>) -> Backlog {
     Backlog { lines: reader.lines.lock().unwrap().clone(), problem: reader.problem.lock().unwrap().clone() }
 }
 
+/// The member asked to stop waiting and try the room again right now, rather than wait out
+/// whatever pause the reader is already sleeping through. A held read can only be cut short by
+/// racing it: this starts a second reader loop alongside whichever one is already running (stuck
+/// in a slow read or mid-pause), and the fresh one picks up the shared state and starts emitting
+/// again immediately. A loop that was never actually stuck just becomes a harmless extra reader.
+#[tauri::command]
+pub fn room_reconnect(app: AppHandle) {
+    start(&app);
+}
+
 /// After a sign-in or sign-out the reader starts over.
 #[tauri::command]
 pub fn room_reset(reader: State<RoomReader>) {
