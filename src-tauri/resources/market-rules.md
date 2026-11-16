@@ -6,6 +6,7 @@ Each turn you get one JSON "desk": the account, the symbols you may look at with
 
 Each symbol's candles also carry `indicators` for both the 15m and 1h timeframe - `rsi14` (0-100: under 30 is oversold, over 70 is overbought), `sma20`/`sma50` (trend: price above both and 20 above 50 leans bullish, the reverse leans bearish), and `stochK`/`stochD` (0-100, the same overbought/oversold reading as RSI, `stochK` crossing above `stochD` is a bullish tell, crossing below is bearish). These are the same numbers on the member's own chart - read them like you would any other field here, not as decoration. Any of them can be `null` when there isn't yet enough history; treat that as "unknown", never as a specific reading.
 
+{{MANNER}}
 ## How you answer
 
 Answer with ONE JSON object and nothing else: no words before or after it, and no code fence.

@@ -62,6 +62,7 @@ fn prepare(app: &AppHandle, name: &str, rules: &str) -> Result<std::path::PathBu
     let settings = store.get();
     let folder = store.folder().join(name);
     std::fs::create_dir_all(&folder).map_err(|_| "The desk's folder could not be made.".to_string())?;
+    let rules = if rules.contains("{{MANNER}}") { desk::with_manner(rules, &desk_manner(&settings)) } else { rules.to_string() };
     let text = rules
         .replace("{{AI_NAME}}", &settings.companion_label())
         .replace("{{USER_NAME}}", settings.member_name.as_deref().unwrap_or("your person"))
@@ -70,6 +71,21 @@ fn prepare(app: &AppHandle, name: &str, rules: &str) -> Result<std::path::PathBu
         crate::oneshot::write_if_changed(&folder.join(file), &text);
     }
     Ok(folder)
+}
+
+/// The manner lines her active traits give the desk, or none: MARKET's own switch off, no
+/// database yet, or nothing active. The chat room's switch is not read here.
+fn desk_manner(settings: &crate::settings::Settings) -> crate::traits::Manner {
+    if !settings.emotion_market_voice {
+        return crate::traits::Manner::default();
+    }
+    let Some(mut conn) = settings.memory_folder.as_deref().and_then(|f| crate::store::source(std::path::Path::new(f))) else {
+        return crate::traits::Manner::default();
+    };
+    let traits = crate::traits::list(&mut conn, Some("active")).unwrap_or_default();
+    let member = settings.member_name.clone().unwrap_or_default();
+    let companion = settings.companion_label();
+    crate::traits::manner_block(&traits, &[member.as_str(), companion.as_str()])
 }
 
 /// What one action came to, for the trade log.

@@ -149,9 +149,48 @@ pub fn clean_lesson(text: &str) -> Option<String> {
     (!line.is_empty()).then_some(line)
 }
 
+/// Her emotion engine at the desk: how she sounds in `reply`, never what she decides. The desk is
+/// always her and her person, so both audiences' lines apply. Empty when the switch is off or no
+/// trait is active, and then the rules carry no heading at all. Pure, tested.
+pub fn manner_section(manner: &crate::traits::Manner) -> String {
+    if manner.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("## How you sound\n\nThis is how you sound in `reply` - never what you decide. These words colour your voice; the trading rules below and {{USER_NAME}}'s limits still decide every action.\n\n");
+    for line in manner.everyone.iter().chain(manner.owner.iter()) {
+        out.push_str(&format!("- {line}\n"));
+    }
+    out.push('\n');
+    out
+}
+
+/// The desk's rules with her manner in its slot: the section, or nothing. Pure, tested.
+pub fn with_manner(rules: &str, manner: &crate::traits::Manner) -> String {
+    let section = manner_section(manner);
+    rules.replace("{{MANNER}}\r\n", &section).replace("{{MANNER}}\n", &section)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::traits::Manner;
+
+    #[test]
+    fn her_traits_colour_the_desk_only_when_they_reach_it() {
+        let rules = "intro\n\n{{MANNER}}\n## How you answer\n";
+        assert_eq!(with_manner(rules, &Manner::default()), "intro\n\n## How you answer\n", "no trait, no heading left behind");
+        let manner = Manner { everyone: vec!["asks one more question, kindly".into()], owner: vec!["a little teasing, never unkind".into()] };
+        let text = with_manner(rules, &manner);
+        assert!(text.contains("## How you sound"));
+        assert!(text.contains("- asks one more question, kindly\n- a little teasing, never unkind\n"), "both audiences: the desk is always her person");
+        assert!(text.contains("never what you decide"), "a trait never overrides the rules or the limits");
+        assert!(text.ends_with("\n\n## How you answer\n"));
+    }
+
+    #[test]
+    fn the_desk_rules_carry_the_manner_slot() {
+        assert!(include_str!("../../resources/market-rules.md").lines().any(|l| l.trim_end() == "{{MANNER}}"));
+    }
 
     #[test]
     fn an_answer_is_read_even_with_a_fence_around_it() {

@@ -253,6 +253,9 @@ pub struct Settings {
     /// The companion's emotion engine colours how it talks in the chat room (only its traits'
     /// one-line manner, by audience). On by default; the switch is beside its public card.
     pub emotion_room_voice: bool,
+    /// The companion's emotion engine colours how it talks at the MARKET desk - its own switch,
+    /// apart from the room's, in MARKET > Settings. On by default.
+    pub emotion_market_voice: bool,
     /// How HOME's PROFILE tab shows the emotion engine: one of PROFILE_LOOKS.
     pub profile_look: String,
     /// The DEV tab's projects folder: new projects are cloned or made in it (or in one of its
@@ -359,6 +362,7 @@ impl Default for Settings {
             only_this_companion: false,
             diary_look: "list".into(),
             emotion_room_voice: true,
+            emotion_market_voice: true,
             profile_look: "cards".into(),
             dev_root: None,
             tab_order: Vec::new(),
@@ -546,6 +550,9 @@ mod tests {
         assert!(old.emotion_room_voice && Settings::default().emotion_room_voice);
         let off: Settings = serde_json::from_str(r#"{"emotionRoomVoice":false}"#).unwrap();
         assert!(!off.emotion_room_voice);
+        assert!(old.emotion_market_voice && Settings::default().emotion_market_voice);
+        let desk_off: Settings = serde_json::from_str(r#"{"emotionMarketVoice":false}"#).unwrap();
+        assert!(!desk_off.emotion_market_voice && desk_off.emotion_room_voice, "the desk's switch is its own");
         assert_eq!(old.profile_look, "cards");
         let odd: Settings = serde_json::from_str(r#"{"profileLook":"spiral"}"#).unwrap();
         assert_eq!(odd.normalized().profile_look, "cards");
@@ -697,6 +704,7 @@ mod tests {
             only_this_companion: true,
             diary_look: "book".into(),
             emotion_room_voice: false,
+            emotion_market_voice: false,
             profile_look: "constellation".into(),
             dev_root: Some("D:/Projects".into()),
             tab_order: vec!["dev".into(), "home".into(), "chat".into()],
