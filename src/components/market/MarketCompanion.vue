@@ -114,6 +114,11 @@ h4 {
   display: flex;
   flex-direction: column;
   max-width: 88%;
+  /* The measured layout here is always correct (checked live) - this is purely to work around a
+     WebView2/Chromium compositor bug where a bubble's old paint can visually linger after new
+     ones are added, surviving even a full remount. Promoting each line to its own GPU layer
+     forces a clean repaint instead of reusing a stale cached tile. */
+  transform: translateZ(0);
 }
 
 .line.member {
