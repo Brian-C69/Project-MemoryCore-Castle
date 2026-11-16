@@ -122,11 +122,14 @@ fn desk_for(app: &AppHandle, conn: &mut Conn, run: &store::Run, trigger: &str, m
             "maxLeverage": rules.as_ref().map(|r| r.max_leverage),
         }));
         if let Some(feed) = feed.as_ref() {
-            // 60 bars each (not the old 32/24) so RSI14/SMA20/SMA50/Stochastic all have a real
-            // window to compute from - the same formulas MarketChart.vue draws on the chart, so
-            // the companion reasons from the same numbers the member is actually looking at.
-            let short = feed.candles(s, "15", 60).unwrap_or_default();
-            let long = feed.candles(s, "60", 60).unwrap_or_default();
+            // Kept at the original 32/24, not bumped to 60/60 - that doubled the raw candle rows
+            // in every desk prompt across all 6 symbols and pushed real turns past the 180s
+            // limit ("It took too long and was stopped", confirmed 16 Nov 2026). RSI14/Stochastic
+            // and SMA20 all get a real reading from this many bars; only SMA50 needs more than
+            // 32/24 give it and comes back null, which the companion's own rules already say to
+            // read as "unknown" - a smaller loss than breaking every reply.
+            let short = feed.candles(s, "15", 32).unwrap_or_default();
+            let long = feed.candles(s, "60", 24).unwrap_or_default();
             let row = |c: &crate::market::feed::Candle| json!([c.open_ms, c.open, c.high, c.low, c.close, c.volume]);
             let ta = |rows: &[crate::market::feed::Candle]| {
                 let closes: Vec<f64> = rows.iter().map(|c| c.close).collect();
