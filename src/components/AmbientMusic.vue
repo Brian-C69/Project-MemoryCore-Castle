@@ -6,7 +6,8 @@
 // over again the moment the last one closes. "Open" means a window that really exists (world.rs makes
 // one only for a connected screen that is not Castle's own), never just a screen saved as on; the
 // lead world window keeps its player even when its world is let go after being covered a long time.
-// It is also quiet when the WORLD room is switched off (the top-bar switch still saves the choice).
+// The music has its own switch (the top bar's), so it plays whether or not the WORLD room is shown;
+// switching the room off only means no world windows, so this player keeps the music.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import MusicPlayer from '../world2d/MusicPlayer.vue'
@@ -24,7 +25,7 @@ let timer = 0
 let liveUntil = 0 // the World tab's controls just changed things: the saved copy may still be old
 
 const tracks = computed(() => tracksFor('2d', songs.value, convertFileSrc))
-const enabled = computed(() => music.value && roomOn.value && !screensOn.value && !stageOwns.value)
+const enabled = computed(() => music.value && !screensOn.value && !stageOwns.value)
 
 async function read() {
   try {

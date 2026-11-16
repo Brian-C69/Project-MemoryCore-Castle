@@ -4,6 +4,9 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **DIARY keeps your place.** Reading the book (or any page) no longer jumps back to the top every minute or so; a page is read again only when it really changed, and its text stays on screen while it is.
+- **The music has its own switch.** Switching the WORLD room off in Settings › Rooms no longer stops the music; the ♫ switch in the top bar decides.
+
 ## 0.2.13 - 2026-11-16
 
 - **Pictures draw on your ChatGPT plan whenever Codex is signed in.** APPEARANCE and STUDIO now use a signed-in Codex first even when your companion thinks with Claude Code, so a member with both never pays per picture through the key. Without Codex, the key draws as before. Suggested by Bernard (issue #39).

@@ -406,7 +406,7 @@ Your companion's crystal shines with how much of your **weekly limit** is left o
 
 ### Music
 
-The first screen showing a world plays the music: Castle's own (*Floating Isles* for 3D worlds, *Castle Theme* for 2D ones), then the songs your companion has made. Turn it on or off and set the volume with **MUSIC**, beside **Look for screens** at the top of the WORLD room.
+The first screen showing a world plays the music: Castle's own (*Floating Isles* for 3D worlds, *Castle Theme* for 2D ones), then the songs your companion has made. Turn it on or off and set the volume with **MUSIC**, beside **Look for screens** at the top of the WORLD room, or with the **♫** switch and slider in the top bar on any tab. The music has its own switch: it keeps playing even when you switch the WORLD room off in Settings › Rooms.
 
 ### Resting
 
