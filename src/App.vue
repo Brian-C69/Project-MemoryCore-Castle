@@ -19,6 +19,7 @@ import WidgetsView from './views/WidgetsView.vue'
 import MyProfileView from './views/myprofile/MyProfileView.vue'
 import MemoryRoom from './views/MemoryRoom.vue'
 import LibraryView from './views/LibraryView.vue'
+import MarketView from './views/MarketView.vue'
 import ThemeView from './views/ThemeView.vue'
 import StudioView from './views/StudioView.vue'
 import AppearanceView from './views/AppearanceView.vue'
@@ -60,6 +61,7 @@ const allTabs = [
   { id: 'world', label: 'WORLD' },
   { id: 'chat', label: 'CHAT' },
   { id: 'dev', label: 'DEV' },
+  { id: 'market', label: 'MARKET' },
 ]
 // dev only: ?tab=<room> opens a room straight away (for checking a room in a browser)
 const devTab = import.meta.env.DEV ? new URLSearchParams(location.search).get('tab') : null
@@ -82,7 +84,7 @@ const settingsSection = ref('companion')
 // the update line for Settings > About
 const updateInfo = ref(null)
 // Rooms that are built; any other room shows its name until its phase lands.
-const BUILT = new Set(['home', 'widgets', 'theme', 'apps', 'myprofile', 'diary', 'projects', 'library', 'studio', 'appearance', 'story', 'world', 'chat', 'dev'])
+const BUILT = new Set(['home', 'widgets', 'theme', 'apps', 'myprofile', 'diary', 'projects', 'library', 'studio', 'appearance', 'story', 'world', 'chat', 'dev', 'market'])
 // Tabs with something new waiting (the story speaking while the member is elsewhere).
 const marks = ref([])
 const memberName = ref('')
@@ -529,6 +531,7 @@ watch(settingsStamp, () => {
       <ThemeView v-if="active === 'theme'" :companion="companion" @changed="themeChanged" @show-chat="active = 'home'" />
       <MemoryRoom v-if="['diary', 'projects'].includes(active)" :room="active" :stamp="memoryStamp" :open-file="roomFile" />
       <LibraryView v-if="active === 'library'" :companion="companion" :stamp="memoryStamp" />
+      <MarketView v-if="active === 'market'" :companion="companion" />
       <div v-if="!BUILT.has(active)" class="room-soon">
         <p>{{ activeLabel }}</p>
       </div>

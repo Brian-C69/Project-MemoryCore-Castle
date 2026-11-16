@@ -148,6 +148,7 @@ const ROOM_SWITCHES = [
   { id: 'story', label: 'STORY' },
   { id: 'world', label: 'WORLD' },
   { id: 'chat', label: 'CHAT' },
+  { id: 'market', label: 'MARKET' },
   { id: 'dev', label: 'DEV' },
 ]
 

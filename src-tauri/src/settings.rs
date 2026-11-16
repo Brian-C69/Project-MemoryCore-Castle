@@ -46,7 +46,10 @@ pub struct QuickAction {
 
 /// The rooms the member may switch off in Settings (HOME is always on). Off = not available:
 /// the tab is gone and nothing runs for it, but nothing is removed.
-pub const ROOMS: [&str; 13] = ["widgets", "theme", "apps", "myprofile", "diary", "projects", "library", "appearance", "studio", "story", "world", "chat", "dev"];
+pub const ROOMS: [&str; 14] = ["widgets", "theme", "apps", "myprofile", "diary", "projects", "library", "appearance", "studio", "story", "world", "chat", "dev", "market"];
+/// Rooms that wait for the member's own switch in Settings > Rooms, for a new Castle and for one
+/// that never stored a choice for them.
+const ROOMS_OFF_AT_FIRST: [&str; 2] = ["library", "market"];
 
 pub const DEFAULT_WORLD: &str = "3d/floating-isles";
 pub const CAMERAS: [&str; 4] = ["director", "follow", "wide", "orbit"];
@@ -304,10 +307,10 @@ pub const DIARY_LOOKS: [&str; 3] = ["list", "calendar", "book"];
 pub const PROFILE_LOOKS: [&str; 2] = ["cards", "constellation"];
 pub const STORY_LOOKS: [&str; 5] = ["classic", "cinema", "book", "messenger", "jrpg"];
 
-/// Every room on for a new Castle, except LIBRARY: it is the member's switch to turn on
-/// (Settings > Rooms). A choice already stored is kept as it is.
+/// Every room on for a new Castle, except LIBRARY and MARKET: each is the member's switch to turn
+/// on (Settings > Rooms). A choice already stored is kept as it is.
 fn all_rooms_on() -> std::collections::BTreeMap<String, bool> {
-    ROOMS.iter().map(|r| (r.to_string(), *r != "library")).collect()
+    ROOMS.iter().map(|r| (r.to_string(), !ROOMS_OFF_AT_FIRST.contains(r))).collect()
 }
 
 impl Default for Settings {
@@ -436,8 +439,9 @@ impl Settings {
             })
             .filter(|(_, places)| !places.is_empty())
             .collect();
-        // every known room is listed (a missing one is on); unknown names go
-        self.rooms = ROOMS.iter().map(|r| (r.to_string(), self.rooms.get(*r).copied().unwrap_or(true))).collect();
+        // every known room is listed (a missing one is on, but a room that waits for the member stays
+        // off); unknown names go
+        self.rooms = ROOMS.iter().map(|r| (r.to_string(), self.rooms.get(*r).copied().unwrap_or(!ROOMS_OFF_AT_FIRST.contains(r)))).collect();
         self
     }
 
@@ -792,8 +796,9 @@ mod tests {
     #[test]
     fn every_room_starts_on_but_the_library_home_cannot_be_off_and_unknown_rooms_go() {
         let fresh = Settings::default();
-        assert!(ROOMS.iter().filter(|r| **r != "library").all(|r| fresh.room_on(r)));
+        assert!(ROOMS.iter().filter(|r| !ROOMS_OFF_AT_FIRST.contains(r)).all(|r| fresh.room_on(r)));
         assert!(!fresh.room_on("library"), "the Library waits for the member's switch");
+        assert!(!fresh.room_on("market"), "the Market waits for the member's switch");
         let mut rooms = std::collections::BTreeMap::new();
         rooms.insert("story".to_string(), false);
         rooms.insert("home".to_string(), false);
@@ -802,6 +807,7 @@ mod tests {
         assert!(!s.room_on("story"));
         assert!(s.room_on("home"));
         assert!(s.room_on("world"), "a room missing from the file is on");
+        assert!(!s.room_on("market"), "the Market stays off for a Castle that never chose it");
         assert!(!s.rooms.contains_key("spaceship") && !s.rooms.contains_key("home"));
         assert_eq!(s.rooms.len(), ROOMS.len());
     }

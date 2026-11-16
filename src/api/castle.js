@@ -323,3 +323,21 @@ export const onDevExit = (slot, handler) => listen(`dev-exit-${slot}`, (event) =
 // Which DEV tabs' chats are showing (their chat is read about once a second only then).
 const devShownSlots = new Set()
 export const devChatShown = (slot, on) => (on ? devShownSlots.add(slot) : devShownSlots.delete(slot))
+
+// The MARKET room: paper money on public prices. Nothing real is ever ordered.
+export const marketState = (symbol) => invoke('market_state', { symbol })
+export const marketSymbols = () => invoke('market_symbols')
+export const marketCandles = (symbol, interval, limit) => invoke('market_candles', { symbol, interval, limit })
+export const marketPreview = (order) => invoke('market_preview', { order })
+export const marketPlace = (order) => invoke('market_place', { order })
+export const marketCancel = (orderId) => invoke('market_cancel', { orderId })
+export const marketClose = (positionId) => invoke('market_close', { positionId })
+export const marketExits = (positionId, tp, sl) => invoke('market_exits', { positionId, tp, sl })
+export const marketMargin = (positionId, amount) => invoke('market_margin', { positionId, amount })
+export const marketLeverage = (symbol, marginMode, leverage) => invoke('market_leverage', { symbol, marginMode, leverage })
+export const marketNewRun = (startBalance) => invoke('market_new_run', { startBalance })
+export const marketCloseRun = () => invoke('market_close_run')
+export const marketRuns = () => invoke('market_runs')
+export const marketHistory = (kind, runId, page) => invoke('market_history', { kind, runId, page })
+export const marketFees = (taker, maker) => invoke('market_fees', { taker, maker })
+export const onMarketChanged = (handler) => listen('castle://market-changed', () => handler())
