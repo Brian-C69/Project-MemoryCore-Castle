@@ -173,6 +173,26 @@ fn exits_sit_on_the_right_side_and_on_the_tick() {
 }
 
 #[test]
+fn a_stop_loss_can_sit_past_entry_to_lock_in_profit() {
+    // check_exits only ever checks against the live price, never the entry - a long sitting in
+    // profit (mark above entry) can move its SL anywhere below the mark, entry included, so a
+    // reversal that hits it still closes for a gain rather than a loss.
+    let entry = 100.0;
+    let mark = 120.0;
+    let locked_in_sl = 110.0; // above entry, still below the mark
+    assert!(check_exits(Long, None, Some(locked_in_sl), mark, 0.1).is_ok());
+    assert!(rules::unrealised_pnl(Long, entry, locked_in_sl, 1.0) > 0.0, "triggering there is still a profit");
+    // the same SL would be refused as the position's own entry, before any move was in profit
+    assert!(check_exits(Long, None, Some(locked_in_sl), entry, 0.1).is_err());
+
+    // mirrored for a short sitting in profit (mark below entry)
+    let short_mark = 80.0;
+    let short_locked_in_sl = 90.0; // below entry, still above the mark
+    assert!(check_exits(Short, None, Some(short_locked_in_sl), short_mark, 0.1).is_ok());
+    assert!(rules::unrealised_pnl(Short, entry, short_locked_in_sl, 1.0) > 0.0);
+}
+
+#[test]
 fn a_limit_crosses_when_it_reaches_the_other_side() {
     assert!(crosses(Long, 101.0, 99.0, 100.0));
     assert!(crosses(Long, 100.0, 99.0, 100.0));
