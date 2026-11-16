@@ -92,6 +92,8 @@ async function shut(positionId) {
             :tick="tick"
             :now="m.now.value"
             :feed="m.feed.value"
+            :positions="m.positions.value"
+            @set-exits="m.setExits($event.positionId, $event.tp, $event.sl)"
             @update:symbol="m.symbol.value = $event"
             @update:interval="m.interval.value = $event"
           />
@@ -261,6 +263,7 @@ async function shut(positionId) {
 
 .ticket-area {
   grid-area: ticket;
+  min-width: 0;
   overflow: auto;
 }
 

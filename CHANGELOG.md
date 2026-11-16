@@ -4,6 +4,14 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **A stuck chat room no longer needs a restart.** When CHAT shows "The room could not be read... trying again" for longer than you want to wait, a new "Reconnect now" button next to it tries again immediately instead of making you close and reopen Castle.
+- **MARKET's chart now scrolls back past its first 300 bars.** Every timeframe used to show a fixed amount of history and nothing more - scrolling or zooming back past that edge found nothing, which looked like a zoom bug but was really just missing data. It now loads more history as you scroll back, the same way CHAT backfills older lines.
+- **MARKET's TP/SL no longer squeezes into a horizontal scrollbar.** They sit one above the other now instead of being forced side by side into a column too narrow for them.
+- **MARKET's symbol picker can be searched by typing**, instead of only scrolling a long list to find one.
+- **Open positions now show on MARKET's chart.** Entry, take profit and stop loss draw as lines on the chart for their own symbol. Drag an existing TP/SL line to move it, or drag the entry line itself to set one for the first time - the direction you drag decides which (toward profit is TP, toward loss is SL).
+- **RSI, SMA and Stochastic on MARKET's chart.** Toggle them on under the chart; RSI and Stochastic each get their own row, SMA overlays the candles directly.
+- **The MARKET companion now reads real RSI/SMA/Stochastic**, not just raw candles, when it answers you or decides on a trade.
+
 ## 0.2.12 - 2026-11-16
 
 - **MARKET: a paper-money market with your companion at the desk.** Turn it on in Settings > Rooms. Set your paper money and trade crypto perpetuals on real public Bybit prices (no key, nothing real is ever ordered): a candle chart, an order ticket with leverage, take profit and stop loss, positions, orders and history.

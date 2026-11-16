@@ -329,6 +329,7 @@ export const devChatShown = (slot, on) => (on ? devShownSlots.add(slot) : devSho
 export const marketState = (symbol) => invoke('market_state', { symbol })
 export const marketSymbols = () => invoke('market_symbols')
 export const marketCandles = (symbol, interval, limit) => invoke('market_candles', { symbol, interval, limit })
+export const marketCandlesBefore = (symbol, interval, limit, beforeMs) => invoke('market_candles_before', { symbol, interval, limit, beforeMs })
 export const marketPreview = (order) => invoke('market_preview', { order })
 export const marketPlace = (order) => invoke('market_place', { order })
 export const marketCancel = (orderId) => invoke('market_cancel', { orderId })

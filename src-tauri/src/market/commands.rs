@@ -306,6 +306,17 @@ pub async fn market_candles(symbol: String, interval: String, limit: u32) -> Res
     .await
 }
 
+/// Older candles for the chart, the page right before `before_ms`, oldest first - scrolling the
+/// chart back past what it already has asks for more this way (public prices, no database needed).
+#[tauri::command]
+pub async fn market_candles_before(symbol: String, interval: String, limit: u32, before_ms: i64) -> Result<Vec<feed::Candle>, String> {
+    off_thread(move || {
+        let name = feed::interval_name(&interval).ok_or("Choose 1m, 5m, 15m, 1H, 4H or 1D.")?;
+        BybitFeed::new()?.candles_before(&symbol_or_default(&symbol), name, limit.clamp(1, 1000), before_ms)
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn market_preview(app: AppHandle, order: OrderInput) -> Result<Preview, String> {
     with_db(app, false, move |conn, board| trade::preview(conn, board, &order)).await

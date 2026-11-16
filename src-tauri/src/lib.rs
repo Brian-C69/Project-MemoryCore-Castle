@@ -444,6 +444,7 @@ pub fn run() {
             market::commands::market_state,
             market::commands::market_symbols,
             market::commands::market_candles,
+            market::commands::market_candles_before,
             market::commands::market_preview,
             market::commands::market_place,
             market::commands::market_cancel,
