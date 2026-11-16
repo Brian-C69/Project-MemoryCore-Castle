@@ -270,6 +270,9 @@ pub struct Settings {
     /// Where the member put HOME's widgets, per theme id: the widget's top-left corner as
     /// percentages of HOME. A widget not listed keeps the theme's own place.
     pub widget_places: std::collections::BTreeMap<String, std::collections::BTreeMap<String, WidgetPlace>>,
+    /// The gauges' gear: watch CPU and RAM, and the value each trips at. Changed only by its own
+    /// command (meter_watch_save), never by the Settings page.
+    pub meter_watch: crate::meter_watch::MeterWatch,
 }
 
 /// HOME's widgets, by id (the theme's `widgets` keys).
@@ -358,6 +361,7 @@ impl Default for Settings {
             widgets_off: Vec::new(),
             widget_sizes: std::collections::BTreeMap::new(),
             widget_places: std::collections::BTreeMap::new(),
+            meter_watch: crate::meter_watch::MeterWatch::default(),
         }
     }
 }
@@ -523,6 +527,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn an_older_settings_file_keeps_watch_at_ninety() {
+        let old: Settings = serde_json::from_str(r#"{"setupDone":true}"#).unwrap();
+        assert_eq!(old.meter_watch, crate::meter_watch::MeterWatch { on: true, cpu: 90, memory: 90 });
+        let off: Settings = serde_json::from_str(r#"{"meterWatch":{"on":false,"cpu":70}}"#).unwrap();
+        assert_eq!((off.meter_watch.on, off.meter_watch.cpu, off.meter_watch.memory), (false, 70, 90));
+    }
+
+    #[test]
     fn the_emotion_engine_colours_the_room_by_default() {
         let old: Settings = serde_json::from_str(r#"{"setupDone":true}"#).unwrap();
         assert!(old.emotion_room_voice && Settings::default().emotion_room_voice);
@@ -685,6 +697,7 @@ mod tests {
             widgets_off: vec!["growth".into()],
             widget_sizes: [("clock".to_string(), "l".to_string())].into_iter().collect(),
             widget_places: [("seed".to_string(), [("today".to_string(), WidgetPlace { left: 12.5, top: 40.0 })].into_iter().collect())].into_iter().collect(),
+            meter_watch: crate::meter_watch::MeterWatch { on: false, cpu: 75, memory: 85 },
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path), (settings, None));

@@ -31,6 +31,7 @@ mod key;
 mod link;
 mod memdb;
 mod memory;
+mod meter_watch;
 mod mirror;
 mod plans;
 mod profile;
@@ -146,6 +147,8 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
         // the DEV tabs and the recent list are kept by the DEV room's own commands, never by the Settings page
         settings.dev_tabs = current.dev_tabs.clone();
         settings.dev_projects = current.dev_projects.clone();
+        // the gauges' gear is saved only by its own command (meter_watch_save)
+        settings.meter_watch = current.meter_watch;
     }
     settings::save(&store.path, &settings).map_err(|_| "The settings could not be saved.".to_string())?;
     *store.startup_note.lock().unwrap() = startup::sync(&app, settings.start_with_windows);
@@ -231,6 +234,7 @@ pub fn run() {
         .manage(dev::DevHosts::default())
         .manage(dev::DevChats::default())
         .manage(system::SystemMeters::default())
+        .manage(meter_watch::Watch::default())
         .manage(chat::MainChat::default())
         .manage(chat::StoryChat::default())
         .manage(chat::MemberPictures::default())
@@ -297,6 +301,11 @@ pub fn run() {
             session::terminal_resize,
             session::story_close,
             commands::system_meters,
+            meter_watch::meter_watch_get,
+            meter_watch::meter_watch_save,
+            meter_watch::meter_trim_now,
+            meter_watch::meter_trips,
+            meter_watch::meter_close,
             commands::apps_list,
             commands::apps_draw_icons,
             commands::app_open,
@@ -478,6 +487,7 @@ pub fn run() {
             world::watch_covered(app.handle());
             roomread::start(app.handle());
             link::start(app.handle());
+            meter_watch::start(app.handle());
             db::start_with_castle(app.handle());
             Ok(())
         })

@@ -45,7 +45,7 @@ pub fn busy_percent(before: CpuTimes, after: CpuTimes) -> Option<u8> {
 /// not use Windows performance counters, which are missing or damaged on some computers. There
 /// sysinfo quietly reports 0% while Task Manager still works.
 #[cfg(windows)]
-fn cpu_times() -> Option<CpuTimes> {
+pub(crate) fn cpu_times() -> Option<CpuTimes> {
     use windows_sys::Win32::Foundation::FILETIME;
     use windows_sys::Win32::System::Threading::GetSystemTimes;
     let ticks = |t: FILETIME| (u64::from(t.dwHighDateTime) << 32) | u64::from(t.dwLowDateTime);
@@ -57,7 +57,7 @@ fn cpu_times() -> Option<CpuTimes> {
 }
 
 #[cfg(not(windows))]
-fn cpu_times() -> Option<CpuTimes> {
+pub(crate) fn cpu_times() -> Option<CpuTimes> {
     None
 }
 
