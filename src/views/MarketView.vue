@@ -126,20 +126,23 @@ async function shut(positionId) {
     </template>
 
     <section v-else-if="sub === 'settings'" class="settings">
-      <MarketAuto :companion="companionName" />
-      <article class="panel">
-        <h3>TRADING RULES</h3>
-        <label>Taker fee <span><input v-model="taker" inputmode="decimal" />%</span></label>
-        <label>Maker fee <span><input v-model="maker" inputmode="decimal" />%</span></label>
-        <label>Prices from <span class="dim">Bybit public</span></label>
-        <button class="primary" :disabled="!!m.busy.value" @click="saveFees">Save fees</button>
-        <div v-if="m.run.value" class="danger-zone">
-          <button v-if="!confirmClose" class="danger" @click="confirmClose = true">Close account</button>
-          <p v-else>Sell everything at market, cancel every order and end this account? It stays readable in History.
-            <button class="danger" @click="closeAccount">Close it</button> <button @click="confirmClose = false">Keep it</button>
-          </p>
-        </div>
-      </article>
+      <MarketAuto :companion="companionName">
+        <template #rules>
+          <article class="panel">
+            <h3>TRADING RULES</h3>
+            <label>Taker fee <span><input v-model="taker" inputmode="decimal" />%</span></label>
+            <label>Maker fee <span><input v-model="maker" inputmode="decimal" />%</span></label>
+            <label>Prices from <span class="dim">Bybit public</span></label>
+            <button class="primary" :disabled="!!m.busy.value" @click="saveFees">Save fees</button>
+          </article>
+        </template>
+      </MarketAuto>
+      <div v-if="m.run.value" class="panel danger-zone">
+        <button v-if="!confirmClose" class="danger" @click="confirmClose = true">Close account</button>
+        <p v-else>Sell everything at market, cancel every order and end this account? It stays readable in History.
+          <button class="danger" @click="closeAccount">Close it</button> <button @click="confirmClose = false">Keep it</button>
+        </p>
+      </div>
     </section>
 
     <MarketLog v-else :view="sub" :companion="companionName" :runs="m.runs" />
@@ -300,17 +303,9 @@ async function shut(positionId) {
 }
 
 .settings {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 14px;
-  align-items: start;
-}
-
-.settings article {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 18px 20px;
+  gap: 14px;
 }
 
 .settings label {
@@ -349,8 +344,17 @@ async function shut(positionId) {
 }
 
 .danger-zone {
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 12px 20px;
+  border-color: color-mix(in srgb, var(--bad) 55%, transparent);
+}
+
+.danger-zone p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
 }
 
 .settings button.danger {
