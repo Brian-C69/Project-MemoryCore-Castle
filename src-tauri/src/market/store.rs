@@ -814,6 +814,13 @@ pub fn lessons<Q: Queryable>(q: &mut Q, limit: u32) -> Result<Vec<Lesson>, Strin
         .collect())
 }
 
+/// How much a position held at its fullest: the sum of its opening fills (the fills on its own
+/// side). A closed position's `qty` is 0, so a lesson reads its size here instead.
+pub fn opened_qty<Q: Queryable>(q: &mut Q, position_id: u64, side: &str) -> Result<f64, String> {
+    let rows: Vec<Row> = q.exec("SELECT qty FROM market_fill WHERE position_id = ? AND side = ?", (position_id, side)).map_err(sql("Reading the fills"))?;
+    Ok(rows.iter().map(|r| num(r, 0)).sum())
+}
+
 pub fn has_lesson<Q: Queryable>(q: &mut Q, position_id: u64) -> Result<bool, String> {
     let n: Option<u32> = q.exec_first("SELECT COUNT(*) FROM market_lesson WHERE position_id = ?", (position_id,)).map_err(sql("Reading the lessons"))?;
     Ok(n.unwrap_or(0) > 0)

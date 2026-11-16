@@ -348,6 +348,17 @@ fn round_due(app: &AppHandle, last_round: &mut Option<Instant>) -> Result<(), St
 
 // ---------- lessons ----------
 
+/// A closed trade's net result as a percent of the margin it used: the size it held at its
+/// fullest (never the closed position's `qty`, which is 0), at its entry, over its leverage.
+/// None when there is no size or price to measure against. Pure, tested.
+pub fn result_on_margin(entry: f64, opened_qty: f64, leverage: Option<f64>, net: f64) -> Option<f64> {
+    if !(entry.is_finite() && entry > 0.0 && opened_qty.is_finite() && opened_qty > 0.0 && net.is_finite()) {
+        return None;
+    }
+    let margin = entry * opened_qty / leverage.filter(|l| l.is_finite()).unwrap_or(1.0).max(1.0);
+    Some(net / margin * 100.0)
+}
+
 fn lesson_due(app: &AppHandle) -> Result<(), String> {
     let mut conn = open(app)?;
     let Some(run) = store::runs(&mut conn, CRYPTO)?.into_iter().next() else { return Ok(()) };
@@ -356,9 +367,10 @@ fn lesson_due(app: &AppHandle) -> Result<(), String> {
     let Some(p) = closed.into_iter().rev().find(|p| p.closed_at.is_some_and(|c| now - c < LESSON_WINDOW_MS) && !store::has_lesson(&mut conn, p.id).unwrap_or(true)) else {
         return Ok(());
     };
-    let margin = (p.entry_price * p.qty.abs().max(1e-12)) / p.leverage.unwrap_or(1.0).max(1.0);
     let net = p.realised_pnl - p.fees_paid - p.funding_paid;
-    let result_pct = if margin > 0.0 { (net / margin) * 100.0 } else { 0.0 };
+    let opened = store::opened_qty(&mut conn, p.id, &p.side)?;
+    // no size to measure against: no lesson rather than a made-up percent
+    let Some(result_pct) = result_on_margin(p.entry_price, opened, p.leverage, net) else { return Ok(()) };
     let traded_by = if p.opened_by.starts_with("COMPANION") { "COMPANION" } else { "MEMBER" };
     let cycle = json!({
         "symbol": p.symbol, "side": p.side, "entry": p.entry_price, "leverage": p.leverage,
@@ -523,6 +535,19 @@ mod tests {
         assert!(stop_reason(&setting(), 1, -500.0, 10_000.0).unwrap().contains("loss limit"));
         assert!(stop_reason(&setting(), 1, 300.0, 10_000.0).unwrap().contains("profit target"));
         assert!(stop_reason(&setting(), 1, 0.0, 12_000.0).unwrap().contains("balance target"));
+    }
+
+    #[test]
+    fn a_lesson_measures_against_the_size_the_trade_held() {
+        // 0.01 BTC at 60,000 with 10x uses 60 of margin; a net -0.30 is -0.5%
+        let pct = result_on_margin(60_000.0, 0.01, Some(10.0), -0.30).unwrap();
+        assert!((pct + 0.5).abs() < 1e-9, "{pct}");
+        // the bug: a closed position's qty is 0, which once made fees alone read as about -1e9 %
+        assert_eq!(result_on_margin(60_000.0, 0.0, Some(10.0), -0.30), None);
+        assert_eq!(result_on_margin(0.0, 0.01, Some(10.0), -0.30), None);
+        // no leverage reads as 1x
+        let spot = result_on_margin(100.0, 2.0, None, 4.0).unwrap();
+        assert!((spot - 2.0).abs() < 1e-9);
     }
 
     #[test]
