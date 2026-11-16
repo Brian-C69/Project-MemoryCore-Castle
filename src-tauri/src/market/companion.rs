@@ -8,6 +8,7 @@ use crate::market::board::Board;
 use crate::market::commands::{close_as, place_as};
 use crate::market::desk::{self, Action, Answer, DESK_LESSONS, DESK_TURNS};
 use crate::market::feed::BybitFeed;
+use crate::market::indicators;
 use crate::market::store::{self, CRYPTO};
 use crate::market::trade::{OrderInput, Source};
 use crate::settings::SettingsStore;
@@ -121,10 +122,33 @@ fn desk_for(app: &AppHandle, conn: &mut Conn, run: &store::Run, trigger: &str, m
             "maxLeverage": rules.as_ref().map(|r| r.max_leverage),
         }));
         if let Some(feed) = feed.as_ref() {
-            let short = feed.candles(s, "15", 32).unwrap_or_default();
-            let long = feed.candles(s, "60", 24).unwrap_or_default();
+            // 60 bars each (not the old 32/24) so RSI14/SMA20/SMA50/Stochastic all have a real
+            // window to compute from - the same formulas MarketChart.vue draws on the chart, so
+            // the companion reasons from the same numbers the member is actually looking at.
+            let short = feed.candles(s, "15", 60).unwrap_or_default();
+            let long = feed.candles(s, "60", 60).unwrap_or_default();
             let row = |c: &crate::market::feed::Candle| json!([c.open_ms, c.open, c.high, c.low, c.close, c.volume]);
-            candles.insert(s.clone(), json!({ "15m": short.iter().map(row).collect::<Vec<_>>(), "1h": long.iter().map(row).collect::<Vec<_>>() }));
+            let ta = |rows: &[crate::market::feed::Candle]| {
+                let closes: Vec<f64> = rows.iter().map(|c| c.close).collect();
+                let highs: Vec<f64> = rows.iter().map(|c| c.high).collect();
+                let lows: Vec<f64> = rows.iter().map(|c| c.low).collect();
+                let (stoch_k, stoch_d) = indicators::latest_stochastic(&highs, &lows, &closes, 14, 3);
+                json!({
+                    "rsi14": indicators::latest_rsi(&closes, 14),
+                    "sma20": indicators::latest_sma(&closes, 20),
+                    "sma50": indicators::latest_sma(&closes, 50),
+                    "stochK": stoch_k,
+                    "stochD": stoch_d,
+                })
+            };
+            candles.insert(
+                s.clone(),
+                json!({
+                    "15m": short.iter().map(row).collect::<Vec<_>>(),
+                    "1h": long.iter().map(row).collect::<Vec<_>>(),
+                    "indicators": { "15m": ta(&short), "1h": ta(&long) },
+                }),
+            );
         }
     }
 
