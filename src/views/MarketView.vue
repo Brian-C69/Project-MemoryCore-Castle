@@ -265,6 +265,8 @@ async function shut(positionId) {
   grid-area: ticket;
   min-width: 0;
   overflow: auto;
+  scrollbar-color: var(--line) transparent;
+  scrollbar-width: thin;
 }
 
 .tables-area {
@@ -273,6 +275,7 @@ async function shut(positionId) {
 
 .companion-area {
   grid-area: companion;
+  min-height: 0;
 }
 
 .companion-area h3,

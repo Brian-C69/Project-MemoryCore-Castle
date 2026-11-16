@@ -106,6 +106,8 @@ h4 {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  scrollbar-color: var(--line) transparent;
+  scrollbar-width: thin;
 }
 
 .line {
