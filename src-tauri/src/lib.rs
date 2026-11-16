@@ -11,6 +11,7 @@ mod chat;
 mod chatroom;
 mod clipboard;
 mod commands;
+mod credits;
 mod db;
 mod dev;
 mod dev_files;
@@ -149,6 +150,8 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
         settings.dev_projects = current.dev_projects.clone();
         // the gauges' gear is saved only by its own command (meter_watch_save)
         settings.meter_watch = current.meter_watch;
+        // the credit widgets' figures, states and budget are kept by their own commands
+        settings.credits = current.credits.clone();
     }
     settings::save(&store.path, &settings).map_err(|_| "The settings could not be saved.".to_string())?;
     *store.startup_note.lock().unwrap() = startup::sync(&app, settings.start_with_windows);
@@ -183,12 +186,14 @@ fn key_status() -> Vec<key::KeyStatus> {
 #[tauri::command]
 fn key_save(name: String, value: String) -> Result<Vec<key::KeyStatus>, String> {
     key::save(&name, &value)?;
+    credits::forget_cache();
     Ok(key::statuses())
 }
 
 #[tauri::command]
 fn key_forget(name: String) -> Result<Vec<key::KeyStatus>, String> {
     key::forget(&name)?;
+    credits::forget_cache();
     Ok(key::statuses())
 }
 
@@ -301,6 +306,9 @@ pub fn run() {
             session::terminal_resize,
             session::story_close,
             commands::system_meters,
+            credits::credits_read,
+            credits::credits_set,
+            credits::credits_budget,
             meter_watch::meter_watch_get,
             meter_watch::meter_watch_save,
             meter_watch::meter_trim_now,
