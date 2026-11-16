@@ -12,6 +12,11 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 - **Open positions now show on MARKET's chart.** Entry, take profit and stop loss draw as lines on the chart for their own symbol. Drag an existing TP/SL line to move it, or drag the entry line itself to set one for the first time - the direction you drag decides which (toward profit is TP, toward loss is SL).
 - **RSI, SMA and Stochastic on MARKET's chart.** Toggle them on under the chart; RSI and Stochastic each get their own row, SMA overlays the candles directly.
 - **The MARKET companion now reads real RSI/SMA/Stochastic**, not just raw candles, when it answers you or decides on a trade.
+- **MARKET's Settings, rearranged.** A strip across the top turns trading by itself on or off and shows today's rounds and result; under it RHYTHM, LIMITS and TRADING RULES sit side by side, and Close account has a strip of its own at the bottom.
+- **Your companion's heart reaches the desk.** A new tick in MARKET's Settings lets its emotion engine colour how it talks there - never what it decides. It is MARKET's own switch, apart from the chat room's.
+- **A tick for each target.** Daily profit target and Balance target can each be ticked on or off; the daily loss stop stays always on as the safety rail.
+- **Lessons read their result true.** A closed trade's lesson used to measure against a size of zero and could show a percent like -100000000%; it now measures against the size the trade actually held.
+- **Lessons as a timeline.** One dot per lesson, green or rose by its result, with the line glowing for the newest twelve that ride into every decision.
 
 ## 0.2.12 - 2026-11-16
 
