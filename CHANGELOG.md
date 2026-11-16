@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.14 - 2026-11-16
+
 - **DIARY keeps your place.** Reading the book (or any page) no longer jumps back to the top every minute or so; a page is read again only when it really changed, and its text stays on screen while it is.
 - **The music has its own switch.** Switching the WORLD room off in Settings › Rooms no longer stops the music; the ♫ switch in the top bar decides.
 
