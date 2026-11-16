@@ -22,6 +22,7 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 14. [Widgets](#14-widgets)
 15. [My profile](#15-my-profile)
 16. [Dev](#16-dev)
+17. [Market](#17-market)
 
 ---
 
@@ -515,3 +516,29 @@ Each theme keeps its own places: change theme and the cards sit where that theme
 ### Live servers
 
 **SERVERS: N live** in the tab strip lists every developer server listening on this computer: its port, the program, the project it belongs to, and whether your companion started it in a tab or it runs in a project's folder. **open ↗** opens it in your browser. Each tab also shows a **LIVE** line with its own servers. Castle only shows them: it never stops a server, so a port another project uses is always left alone.
+
+---
+
+## 17. Market
+
+**MARKET** is a practice desk: paper money on real public Bybit prices, with your companion beside you. Nothing real is ever ordered. Turn it on in **Settings › Rooms** and set your paper money to start.
+
+### Desk
+
+A candle chart, an order ticket with leverage, take profit and stop loss, and your positions, orders and history. Ask your companion about the market in its panel, or ask it to place a trade.
+
+### Settings
+
+- **The strip at the top** turns trading by itself on or off, shows today's rounds and result (with **Stop** while it runs), and holds the heart tick: **Let your companion's emotion engine colour the desk**. With it ticked, your companion's active traits colour how it talks at the desk - never what it decides. It is MARKET's own switch, apart from the chat room's.
+- **RHYTHM** - how often a round runs and how many rounds a day. Each round uses one turn of your own Claude Code or Codex, and trading by itself turns off when Castle closes.
+- **LIMITS** - the **daily loss stop** is always on: it is the safety rail for trading by itself. **Daily profit target** and **Balance target** each have their own tick; untick one to trade without it.
+- **TRADING RULES** - the taker and maker fees used for paper fills. Prices come from Bybit's public feed.
+- **Close account** sits alone at the bottom: it sells everything at market, cancels every order and ends the account, which stays readable in History.
+
+### Trade log
+
+Every turn your companion took, newest first: whether you asked or it ran on its own, what it said, and what it did (or **No trade**). Pick an earlier account from the list to read its turns.
+
+### Lessons
+
+After every closed trade your companion writes one short lesson, with the trade's result as a percent of the margin it used. The newest twelve ride into every decision it makes. Delete any lesson you don't want it to keep.
