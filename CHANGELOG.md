@@ -16,6 +16,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 - **Your companion's heart reaches the desk.** A new tick in MARKET's Settings lets its emotion engine colour how it talks there - never what it decides. It is MARKET's own switch, apart from the chat room's.
 - **A tick for each target.** Daily profit target and Balance target can each be ticked on or off; the daily loss stop stays always on as the safety rail.
 - **Lessons read their result true.** A closed trade's lesson used to measure against a size of zero and could show a percent like -100000000%; it now measures against the size the trade actually held.
+- **The Trade log as a ledger.** One line per turn - time, who started it, the outcome, its result and the start of the reply - with counters on top; click a line to open your words and the whole reply.
 - **Lessons as a timeline.** One dot per lesson, green or rose by its result, with the line glowing for the newest twelve that ride into every decision.
 
 ## 0.2.12 - 2026-11-16

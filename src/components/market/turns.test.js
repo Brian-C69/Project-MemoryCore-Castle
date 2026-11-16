@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { actionsOf, chatLines, chipKind, chipOf, lastTrade, percent, tagOf } from './turns.js'
+import { actionsOf, chatLines, chipKind, chipOf, lastTrade, percent, tagOf, turnCounts, unfinishedOf } from './turns.js'
 
 const buy = { action: { type: 'place_order', symbol: 'ETHUSDT', side: 'LONG', orderType: 'MARKET', qty: 0.05 }, result: 'Filled', ok: true }
 const limitSell = { action: { type: 'place_order', symbol: 'BTCUSDT', side: 'SHORT', orderType: 'LIMIT', qty: 0.01, price: 68000 }, result: 'Resting', ok: true }
@@ -30,5 +30,24 @@ describe('the companion at the desk', () => {
   it('shows a lesson result as a percent', () => {
     expect(percent(1.8)).toBe('+1.80%')
     expect(percent(-0.9)).toBe('-0.90%')
+  })
+})
+
+describe('the Trade log', () => {
+  it('counts what the shown turns did', () => {
+    const turns = [
+      { status: 'DONE', actionsJson: '[]' },
+      { status: 'DONE', actionsJson: JSON.stringify([buy, close]) },
+      { status: 'FAILED', actionsJson: null },
+    ]
+    expect(turnCounts(turns)).toEqual({ turns: 3, done: 1, refused: 1, noTrade: 1 })
+    expect(turnCounts([])).toEqual({ turns: 0, done: 0, refused: 0, noTrade: 0 })
+  })
+
+  it('says why a turn did not finish', () => {
+    expect(unfinishedOf({ status: 'DONE' })).toBeNull()
+    expect(unfinishedOf({ status: 'RUNNING' })).toBe('Thinking…')
+    expect(unfinishedOf({ status: 'STOPPED' })).toBe('Stopped')
+    expect(unfinishedOf({ status: 'FAILED' })).toBe('Did not finish')
   })
 })

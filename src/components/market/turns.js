@@ -53,3 +53,23 @@ export function percent(n) {
   const v = Number(n) || 0
   return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`
 }
+
+/** A turn's state in words when it did not finish: null for a finished turn. */
+export function unfinishedOf(turn) {
+  if (turn?.status === 'DONE') return null
+  if (turn?.status === 'RUNNING') return 'Thinking…'
+  if (turn?.status === 'STOPPED') return 'Stopped'
+  return 'Did not finish'
+}
+
+/** The Trade log's counters for the turns shown: turns, actions that went through, actions refused, and turns with no trade. */
+export function turnCounts(turns) {
+  const counts = { turns: 0, done: 0, refused: 0, noTrade: 0 }
+  for (const t of turns ?? []) {
+    counts.turns++
+    const actions = actionsOf(t)
+    if (!actions.length && t.status === 'DONE') counts.noTrade++
+    for (const a of actions) a.ok ? counts.done++ : counts.refused++
+  }
+  return counts
+}

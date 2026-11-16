@@ -1,9 +1,9 @@
 <script setup>
 // The Trade log (page 4) and the Lessons (page 5): one card per companion turn, and one row per
 // lesson it kept from a closed trade, newest first, each with Delete.
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { marketLessonDelete, marketLessons, marketTurns, onMarketChanged } from '../../api/castle.js'
-import { actionsOf, chipKind, chipOf, percent, tagOf } from './turns.js'
+import { actionsOf, chipKind, chipOf, percent, tagOf, turnCounts, unfinishedOf } from './turns.js'
 
 const props = defineProps({
   view: { type: String, required: true },
@@ -17,6 +17,10 @@ const accounts = ref([])
 const runId = ref(null)
 const page = ref(0)
 const problem = ref('')
+// one turn opened in the ledger at a time
+const openId = ref(null)
+const counts = computed(() => turnCounts(turns.value))
+const toggle = (id) => (openId.value = openId.value === id ? null : id)
 let stop
 
 async function load() {
@@ -63,26 +67,62 @@ const day = (ms) => new Date(ms).toLocaleDateString('en-US', { month: 'short', d
     <p v-if="problem" class="problem">{{ problem }}</p>
 
     <template v-if="view === 'log'">
-      <div class="top">
+      <div class="panel top">
         <select v-model="runId" aria-label="Account">
           <option :value="null">This account</option>
           <option v-for="a in accounts" :key="a.id" :value="a.id">Account {{ a.runNo }}</option>
         </select>
-        <button :disabled="page === 0" @click="page--">‹</button>
-        <button :disabled="turns.length < 20" @click="page++">›</button>
+        <span class="pages">
+          <button :disabled="page === 0" aria-label="Newer turns" @click="page--">‹</button>
+          <button :disabled="turns.length < 20" aria-label="Older turns" @click="page++">›</button>
+        </span>
       </div>
-      <article v-for="t in turns" :key="t.id" class="panel card">
-        <header><time>{{ when(t.createdAt) }}</time><span class="tag" :class="{ auto: t.triggerKind === 'AUTO' }">{{ tagOf(t) }}</span><span v-if="t.status !== 'DONE'" class="dim">{{ t.status === 'RUNNING' ? 'Thinking…' : t.status === 'STOPPED' ? 'Stopped' : 'Did not finish' }}</span></header>
-        <p v-if="t.message" class="said">“{{ t.message }}”</p>
-        <p v-if="t.reply" class="reply">{{ t.reply }}</p>
-        <div class="actions">
-          <template v-if="actionsOf(t).length">
-            <span v-for="(a, i) in actionsOf(t)" :key="i" class="act"><span class="chip" :class="chipKind(a)">{{ chipOf(a) }}</span><span :class="a.ok ? 'ok' : 'no'">● {{ a.result }}</span></span>
-          </template>
-          <span v-else-if="t.status === 'DONE'" class="chip none">No trade</span>
+
+      <div v-if="turns.length" class="counters">
+        <div class="panel counter"><h4>{{ page > 0 ? 'TURNS ON THIS PAGE' : 'TURNS' }}</h4><b>{{ counts.turns }}</b></div>
+        <div class="panel counter"><h4>WENT THROUGH / REFUSED</h4><b><span class="ok">{{ counts.done }}</span> <i>/</i> <span class="no">{{ counts.refused }}</span></b></div>
+        <div class="panel counter"><h4>NO TRADE</h4><b>{{ counts.noTrade }}</b></div>
+      </div>
+
+      <div v-if="turns.length" class="panel ledger">
+        <div class="ledger-row head" aria-hidden="true">
+          <span>TIME</span><span>WHO STARTED IT</span><span>OUTCOME</span><span>RESULT</span><span>REPLY</span><span></span>
         </div>
-      </article>
-      <p v-if="!turns.length" class="dim empty">{{ companion }}'s turns appear here.</p>
+        <div v-for="t in turns" :key="t.id" class="entry" :class="{ open: openId === t.id }">
+          <button class="ledger-row" :aria-expanded="openId === t.id" @click="toggle(t.id)">
+            <time>{{ when(t.createdAt) }}</time>
+            <span><span class="tag" :class="{ auto: t.triggerKind === 'AUTO' }">{{ tagOf(t) }}</span></span>
+            <span class="outcome">
+              <template v-if="actionsOf(t).length">
+                <span class="chip" :class="chipKind(actionsOf(t)[0])">{{ chipOf(actionsOf(t)[0]) }}</span>
+                <span v-if="actionsOf(t).length > 1" class="more">+{{ actionsOf(t).length - 1 }}</span>
+              </template>
+              <span v-else-if="unfinishedOf(t)" class="chip none">{{ unfinishedOf(t) }}</span>
+              <span v-else class="chip none">No trade</span>
+            </span>
+            <span class="result">
+              <span v-if="actionsOf(t).length" class="pill" :class="actionsOf(t)[0].ok ? 'ok' : 'no'" :title="actionsOf(t)[0].result">{{ actionsOf(t)[0].result }}</span>
+              <span v-else class="dim">—</span>
+            </span>
+            <span class="reply">{{ t.reply || (t.message ? `“${t.message}”` : '') }}</span>
+            <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+          </button>
+          <div v-if="openId === t.id" class="detail">
+            <div v-if="t.message" class="part">
+              <h4>YOUR WORDS</h4>
+              <p>“{{ t.message }}”</p>
+            </div>
+            <div class="part">
+              <h4>{{ companion.toUpperCase() }}’S REPLY</h4>
+              <p>{{ t.reply || unfinishedOf(t) || '—' }}</p>
+              <ul v-if="actionsOf(t).length" class="acts">
+                <li v-for="(a, i) in actionsOf(t)" :key="i"><span class="chip" :class="chipKind(a)">{{ chipOf(a) }}</span><span :class="a.ok ? 'ok' : 'no'">● {{ a.result }}</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p v-else class="dim empty">{{ companion }}'s turns appear here.</p>
     </template>
 
     <section v-else class="panel lessons" aria-label="Lessons">
@@ -125,15 +165,23 @@ const day = (ms) => new Date(ms).toLocaleDateString('en-US', { month: 'short', d
   scrollbar-width: thin;
 }
 
+/* ---------- the Trade log: toolbar, counters, ledger ---------- */
 .top {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.pages {
+  display: flex;
   gap: 6px;
 }
 
 .top select,
 .top button {
-  padding: 6px 10px;
+  padding: 6px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-background);
@@ -141,17 +189,207 @@ const day = (ms) => new Date(ms).toLocaleDateString('en-US', { month: 'short', d
   font: inherit;
 }
 
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.counters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.counter {
   padding: 14px 18px;
 }
 
-.card header {
+h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+
+.counter b {
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.counter i {
+  font-style: normal;
+  color: var(--text-dim);
+}
+
+.ledger {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.ledger-row {
+  display: grid;
+  grid-template-columns: 90px 140px minmax(150px, 220px) minmax(90px, 170px) minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 20px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ledger-row.head {
+  border-top: 0;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.ledger-row time {
+  color: var(--text);
+}
+
+.ledger-row:not(.head):hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.ledger-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.entry.open {
+  margin: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.entry.open .ledger-row {
+  border-top-color: transparent;
+}
+
+.entry.open + .entry .ledger-row {
+  border-top-color: transparent;
+}
+
+.outcome {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.outcome .chip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.result {
+  min-width: 0;
+}
+
+.pill {
+  display: inline-block;
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.pill.ok {
+  background: color-mix(in srgb, var(--good) 22%, transparent);
+}
+
+.pill.no {
+  background: color-mix(in srgb, var(--bad) 22%, transparent);
+}
+
+.ledger-row .reply {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+
+.chev {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 2;
+  transition: transform 0.15s;
+}
+
+.entry.open .chev {
+  transform: rotate(180deg);
+}
+
+.detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  margin: 0 14px 14px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.detail .part + .part {
+  border-left: 1px solid var(--line);
+  padding-left: 18px;
+}
+
+.detail p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.acts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acts li {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .counters {
+    grid-template-columns: 1fr;
+  }
+
+  .ledger-row {
+    grid-template-columns: 70px minmax(0, 1fr) minmax(0, 1fr) 20px;
+  }
+
+  .ledger-row > :nth-child(2),
+  .ledger-row > :nth-child(5) {
+    display: none;
+  }
+
+  .detail .part + .part {
+    border-left: 0;
+    padding-left: 0;
+  }
 }
 
 time,
@@ -169,31 +407,6 @@ time,
 .tag.auto {
   background: color-mix(in srgb, var(--accent-2, var(--accent)) 18%, transparent);
   border: 1px solid var(--line);
-}
-
-.said {
-  margin: 0;
-  font-size: 15px;
-}
-
-.reply {
-  margin: 0;
-  color: var(--text-dim);
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-
-.act {
-  display: flex;
-  align-items: center;
-  gap: 10px;
 }
 
 .chip {

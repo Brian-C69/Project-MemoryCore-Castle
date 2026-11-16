@@ -537,7 +537,7 @@ A candle chart, an order ticket with leverage, take profit and stop loss, and yo
 
 ### Trade log
 
-Every turn your companion took, newest first: whether you asked or it ran on its own, what it said, and what it did (or **No trade**). Pick an earlier account from the list to read its turns.
+Every turn your companion took, newest first, one line each: when, whether you asked or it ran on its own, what it did (or **No trade**), how that went, and the start of its reply. Click a line to open your words and its whole reply. Three counters on top add up the turns shown: how many, the actions that went through or were refused, and the turns with no trade. Pick an earlier account from the list to read its turns.
 
 ### Lessons
 
