@@ -3,7 +3,10 @@
 // composable (useMarket); this view holds the room's frame, its sub-tabs and the Desk layout.
 // Nothing real is ever ordered.
 import { computed, ref } from 'vue'
+import MarketAuto from '../components/market/MarketAuto.vue'
 import MarketChart from '../components/market/MarketChart.vue'
+import MarketCompanion from '../components/market/MarketCompanion.vue'
+import MarketLog from '../components/market/MarketLog.vue'
 import MarketPositionSheet from '../components/market/MarketPositionSheet.vue'
 import MarketStart from '../components/market/MarketStart.vue'
 import MarketTables from '../components/market/MarketTables.vue'
@@ -114,16 +117,14 @@ async function shut(positionId) {
             @open="sheetId = $event.id"
             @cancel="m.cancel"
           />
-          <aside class="panel companion-area" aria-label="Companion">
-            <h3>{{ companionName.toUpperCase() }}</h3>
-            <p class="dim">{{ companionName }} joins the desk here.</p>
-          </aside>
+          <MarketCompanion class="companion-area" :companion="companionName" />
         </div>
       </template>
       <p v-else class="loading">Opening the market…</p>
     </template>
 
     <section v-else-if="sub === 'settings'" class="settings">
+      <MarketAuto :companion="companionName" />
       <article class="panel">
         <h3>TRADING RULES</h3>
         <label>Taker fee <span><input v-model="taker" inputmode="decimal" />%</span></label>
@@ -139,9 +140,7 @@ async function shut(positionId) {
       </article>
     </section>
 
-    <section v-else class="panel soon">
-      <p class="dim">{{ sub === 'log' ? 'The trade log' : 'The lessons' }} fill in as {{ companionName }} trades.</p>
-    </section>
+    <MarketLog v-else :view="sub" :companion="companionName" :runs="m.runs" />
 
     <MarketPositionSheet
       v-if="sheet"
@@ -271,10 +270,6 @@ async function shut(positionId) {
 
 .companion-area {
   grid-area: companion;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: 14px 16px;
 }
 
 .companion-area h3,
@@ -357,7 +352,4 @@ async function shut(positionId) {
   color: var(--bad);
 }
 
-.soon {
-  padding: 30px;
-}
 </style>

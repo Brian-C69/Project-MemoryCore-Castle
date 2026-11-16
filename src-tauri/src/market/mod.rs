@@ -6,6 +6,8 @@
 
 pub mod board;
 pub mod commands;
+pub mod companion;
+pub mod desk;
 pub mod engine;
 pub mod feed;
 pub mod rules;

@@ -455,6 +455,13 @@ pub fn run() {
             market::commands::market_runs,
             market::commands::market_history,
             market::commands::market_fees,
+            market::companion::market_turn,
+            market::companion::market_auto_get,
+            market::companion::market_auto_save,
+            market::companion::market_stop,
+            market::companion::market_turns,
+            market::companion::market_lessons,
+            market::companion::market_lesson_delete,
             db::db_move_out
         ])
         .setup(|app| {
@@ -520,6 +527,7 @@ pub fn run() {
             meter_watch::start(app.handle());
             page_reader::start(app.handle());
             market::engine::start(app.handle());
+            market::companion::start(app.handle());
             db::start_with_castle(app.handle());
             Ok(())
         })
