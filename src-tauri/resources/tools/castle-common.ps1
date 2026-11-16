@@ -220,13 +220,43 @@ function Write-CastleResult {
         [Parameter(Mandatory = $true)][string[]]$SavedPath,
         [double]$CostEstimateUsd,
         [double]$ElapsedSeconds,
-        [string]$Model
+        [string]$Model,
+        [ValidateSet('', 'image', 'video', 'song', 'voice')][string]$Kind = ''
     )
     Write-CastleLine 'result:'
     foreach ($p in $SavedPath) { Write-CastleLine "  saved_path: $p" }
     Write-CastleLine ("  cost_estimate_usd: " + ([Math]::Round($CostEstimateUsd, 4)).ToString([System.Globalization.CultureInfo]::InvariantCulture))
     Write-CastleLine ("  elapsed_seconds: " + ([Math]::Round($ElapsedSeconds, 1)).ToString([System.Globalization.CultureInfo]::InvariantCulture))
     Write-CastleLine "  model: $Model"
+    if ($Kind) { Write-CastleSpend -Kind $Kind -CostEstimateUsd $CostEstimateUsd }
+}
+
+function Get-CastleSpendFolder {
+    # Where the spend lines live; CASTLE_SPEND_DIR moves it (tests only).
+    if (-not [string]::IsNullOrWhiteSpace($env:CASTLE_SPEND_DIR)) { return $env:CASTLE_SPEND_DIR }
+    $appData = $env:APPDATA
+    if ([string]::IsNullOrWhiteSpace($appData)) { $appData = [Environment]::GetFolderPath('ApplicationData') }
+    return (Join-Path (Join-Path $appData 'MemoryCore Castle') 'spend')
+}
+
+function Write-CastleSpend {
+    # One line per real render, so HOME's credit widgets can count a balance down between reads.
+    # Only Write-CastleResult calls it: an estimate (-WhatIfCost) or a blocked request never does.
+    # A spend line that cannot be written never fails the render.
+    param(
+        [Parameter(Mandatory = $true)][ValidateSet('image', 'video', 'song', 'voice')][string]$Kind,
+        [double]$CostEstimateUsd
+    )
+    try {
+        $provider = @{ image = 'openai'; video = 'seedance'; song = 'suno'; voice = 'elevenlabs' }[$Kind]
+        $dir = Get-CastleSpendFolder
+        if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        $entry = [ordered]@{ at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'); usd = [Math]::Round($CostEstimateUsd, 4); kind = $Kind }
+        $line = ($entry | ConvertTo-Json -Compress) + "`n"
+        [System.IO.File]::AppendAllText((Join-Path $dir ($provider + '-spend.jsonl')), $line, $script:CastleUtf8)
+    } catch {
+        # the render itself succeeded; the widget simply counts one call fewer
+    }
 }
 
 function Write-CastleEstimate {

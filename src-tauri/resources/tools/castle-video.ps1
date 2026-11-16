@@ -107,5 +107,5 @@ try {
     Stop-CastleFailure -What 'downloading the video' -ErrorRecord $_
 }
 
-Write-CastleResult -SavedPath $fullOut -CostEstimateUsd $cost -ElapsedSeconds ((Get-Date) - $start).TotalSeconds -Model $Model
+Write-CastleResult -SavedPath $fullOut -CostEstimateUsd $cost -ElapsedSeconds ((Get-Date) - $start).TotalSeconds -Model $Model -Kind 'video'
 exit 0

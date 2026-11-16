@@ -146,5 +146,5 @@ foreach ($t in $tracks) {
 }
 if ($saved.Count -lt 1) { Stop-CastleFailure -What 'the song task' -Message "no take had audio to download (task $taskId)" }
 
-Write-CastleResult -SavedPath $saved -CostEstimateUsd $cost -ElapsedSeconds ((Get-Date) - $start).TotalSeconds -Model $Model
+Write-CastleResult -SavedPath $saved -CostEstimateUsd $cost -ElapsedSeconds ((Get-Date) - $start).TotalSeconds -Model $Model -Kind 'song'
 exit 0

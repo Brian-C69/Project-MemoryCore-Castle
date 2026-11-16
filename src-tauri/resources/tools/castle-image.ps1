@@ -147,5 +147,5 @@ try {
     Stop-CastleFailure -What 'saving the picture' -ErrorRecord $_
 }
 
-Write-CastleResult -SavedPath $fullOut -CostEstimateUsd $cost -ElapsedSeconds ((Get-Date) - $start).TotalSeconds -Model $Model
+Write-CastleResult -SavedPath $fullOut -CostEstimateUsd $cost -ElapsedSeconds ((Get-Date) - $start).TotalSeconds -Model $Model -Kind 'image'
 exit 0

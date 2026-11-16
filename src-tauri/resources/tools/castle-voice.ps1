@@ -60,5 +60,5 @@ try {
     Stop-CastleFailure -What 'the voice request' -ErrorRecord $_
 }
 
-Write-CastleResult -SavedPath $fullOut -CostEstimateUsd $cost -ElapsedSeconds ((Get-Date) - $start).TotalSeconds -Model $Model
+Write-CastleResult -SavedPath $fullOut -CostEstimateUsd $cost -ElapsedSeconds ((Get-Date) - $start).TotalSeconds -Model $Model -Kind 'voice'
 exit 0

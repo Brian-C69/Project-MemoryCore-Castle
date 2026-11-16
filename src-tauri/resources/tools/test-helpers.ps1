@@ -140,6 +140,9 @@ foreach ($c in $cases) {
     Report ($r.Code -eq 9 -and $r.Out -match 'CASTLE_NO_NETWORK: blocked' -and $r.Out -notmatch 'castle-test-fake') "$($c.Kind): with a key the request path is guarded (exit 9)" "exit $($r.Code): $($r.Out)"
 }
 
+# 4b) No estimate and no blocked request ever writes a spend line for HOME's credit widgets.
+Report (-not (Test-Path -LiteralPath (Join-Path $appData 'MemoryCore Castle\spend'))) 'common: estimates and blocked requests write no spend line'
+
 # 5) Image edit path with a missing reference -> exit 2 (bad input), no request.
 $r = Invoke-Helper -Script 'castle-image.ps1' -Arguments @('-Prompt', 'restyle', '-OutFile', (Join-Path $out 'ref.png'), '-Reference', (Join-Path $out 'missing.png')) -SetEnv @{ CASTLE_IMAGE = 'openai'; OPENAI_API_KEY = $fakeKey }
 Report ($r.Code -eq 2) 'image: missing -Reference file exits 2' "exit $($r.Code): $($r.Out)"
@@ -259,6 +262,16 @@ foreach ($v in @('', '   ', 'your-key-here', '<paste key>', 'sk-...', 'changeme'
 if ((Get-CastleKey 'CASTLE_TEST_KEY') -ne $fakeKey) { $okKey = $false; Write-Host '      a real-looking key was refused' }
 [Environment]::SetEnvironmentVariable('CASTLE_TEST_KEY', $saved, 'Process')
 Report $okKey 'common: Get-CastleKey treats empty and placeholder values as missing'
+
+# A real render's result block writes one spend line for its provider, and stdout stays the same.
+$spendDir = Join-Path $root 'spend'
+[Environment]::SetEnvironmentVariable('CASTLE_SPEND_DIR', $spendDir, 'Process')
+$printed = (Write-CastleResult -SavedPath 'x.mp3' -CostEstimateUsd 0.06 -ElapsedSeconds 1 -Model 'm' -Kind 'song' 6>&1 | Out-String)
+[Environment]::SetEnvironmentVariable('CASTLE_SPEND_DIR', $null, 'Process')
+$spendFile = Join-Path $spendDir 'suno-spend.jsonl'
+$spendOk = (Test-Path -LiteralPath $spendFile) -and (@([System.IO.File]::ReadAllLines($spendFile) | Where-Object { $_.Trim() }).Count -eq 1)
+if ($spendOk) { $entry = ([System.IO.File]::ReadAllLines($spendFile)[0] | ConvertFrom-Json); $spendOk = ($entry.usd -eq 0.06 -and $entry.kind -eq 'song') }
+Report $spendOk 'common: a real result writes one spend line for its provider'
 
 Write-Host ''
 try { Remove-Item -LiteralPath $root -Recurse -Force } catch {}
