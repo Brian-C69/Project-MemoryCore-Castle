@@ -39,6 +39,7 @@ mod profile;
 mod pty;
 mod providers;
 mod messages;
+mod page_reader;
 mod oneshot;
 mod quota;
 mod roomalert;
@@ -309,6 +310,9 @@ pub fn run() {
             credits::credits_read,
             credits::credits_set,
             credits::credits_budget,
+            page_reader::credits_sign_in,
+            page_reader::credits_read_now,
+            page_reader::credits_stop_reading,
             meter_watch::meter_watch_get,
             meter_watch::meter_watch_save,
             meter_watch::meter_trim_now,
@@ -496,6 +500,7 @@ pub fn run() {
             roomread::start(app.handle());
             link::start(app.handle());
             meter_watch::start(app.handle());
+            page_reader::start(app.handle());
             db::start_with_castle(app.handle());
             Ok(())
         })
