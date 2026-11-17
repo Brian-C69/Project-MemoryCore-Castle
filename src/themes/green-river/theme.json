@@ -1,0 +1,103 @@
+{
+  "id": "green-river",
+  "name": "The Emerald River",
+  "description": "An emerald river under a tunnel of trees, an empty little roofed boat drifting with its lantern lit, sun shafts, ripples and fireflies.",
+  "wallpaper": "wallpaper.jpg",
+  "wallpaperPosition": "center",
+  "widgetStyle": "glass",
+  "portrait": "panel",
+  "colors": {
+    "--background": "#0c1a0c",
+    "--bar-background": "rgba(10, 30, 14, 0.60)",
+    "--panel-background": "rgba(20, 50, 26, 0.48)",
+    "--widget-background": "rgba(24, 58, 30, 0.42)",
+    "--line": "rgba(200, 240, 170, 0.32)",
+    "--text": "#f3fbea",
+    "--text-dim": "#c8dcb4",
+    "--accent": "#b8e86a",
+    "--hover": "rgba(184, 232, 106, 0.15)",
+    "--glass-blur": "14px"
+  },
+  "panel": {
+    "left": "1.6%",
+    "top": "3%",
+    "bottom": "3%",
+    "width": "31%"
+  },
+  "sweep": {
+    "look": "bar"
+  },
+  "loader": {
+    "accent": "#f5d76e"
+  },
+  "widgets": {
+    "sweep": {
+      "right": "31%",
+      "top": "22%"
+    },
+    "clock": {
+      "right": "21%",
+      "top": "4%",
+      "size": "l"
+    },
+    "gauges": {
+      "right": "2%",
+      "top": "4%"
+    },
+    "usage": {
+      "right": "31%",
+      "bottom": "calc(4% + 150px)",
+      "width": "33%"
+    },
+    "today": {
+      "right": "2%",
+      "top": "22%",
+      "width": "28%"
+    },
+    "projects": {
+      "right": "2%",
+      "top": "calc(22% + 190px)",
+      "width": "28%"
+    },
+    "diary": {
+      "right": "2%",
+      "top": "calc(22% + 395px)",
+      "width": "28%"
+    },
+    "growth": {
+      "right": "2%",
+      "bottom": "4%",
+      "width": "28%"
+    },
+    "backup": {
+      "right": "31%",
+      "bottom": "4%",
+      "width": "16%"
+    },
+    "database": {
+      "right": "48%",
+      "bottom": "4%",
+      "width": "16%"
+    },
+    "credit-openai": {
+      "right": "56.2%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-seedance": {
+      "right": "47.8%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-suno": {
+      "right": "39.4%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-elevenlabs": {
+      "right": "31%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    }
+  }
+}

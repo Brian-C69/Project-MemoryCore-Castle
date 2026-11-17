@@ -1,0 +1,104 @@
+{
+  "id": "sunset-shore",
+  "name": "The Sunset Shore",
+  "description": "An empty beach at sunset: a low sun pours a gold path across the sea, the wet sand mirrors rose and violet clouds, and a straw hat waits on the sand.",
+  "wallpaper": "wallpaper.jpg",
+  "wallpaperPosition": "center",
+  "widgetStyle": "glass",
+  "portrait": "panel",
+  "colors": {
+    "--background": "#2a1420",
+    "--bar-background": "rgba(48, 22, 30, 0.58)",
+    "--panel-background": "rgba(70, 32, 40, 0.48)",
+    "--widget-background": "rgba(80, 38, 44, 0.42)",
+    "--line": "rgba(255, 214, 180, 0.36)",
+    "--text": "#fff6ee",
+    "--text-dim": "#f2cdb8",
+    "--accent": "#ffb36b",
+    "--hover": "rgba(255, 180, 120, 0.16)",
+    "--glass-blur": "14px"
+  },
+  "panel": {
+    "left": "auto",
+    "right": "1.6%",
+    "top": "3%",
+    "bottom": "3%",
+    "width": "31%"
+  },
+  "sweep": {
+    "look": "broom"
+  },
+  "loader": {
+    "accent": "#ffb36b"
+  },
+  "widgets": {
+    "sweep": {
+      "left": "31%",
+      "top": "22%"
+    },
+    "clock": {
+      "left": "21%",
+      "top": "4%",
+      "size": "l"
+    },
+    "gauges": {
+      "left": "2%",
+      "top": "4%"
+    },
+    "usage": {
+      "left": "31%",
+      "bottom": "calc(4% + 150px)",
+      "width": "33%"
+    },
+    "today": {
+      "left": "2%",
+      "top": "22%",
+      "width": "28%"
+    },
+    "projects": {
+      "left": "2%",
+      "top": "calc(22% + 190px)",
+      "width": "28%"
+    },
+    "diary": {
+      "left": "2%",
+      "top": "calc(22% + 395px)",
+      "width": "28%"
+    },
+    "growth": {
+      "left": "2%",
+      "bottom": "4%",
+      "width": "28%"
+    },
+    "backup": {
+      "left": "31%",
+      "bottom": "4%",
+      "width": "16%"
+    },
+    "database": {
+      "left": "48%",
+      "bottom": "4%",
+      "width": "16%"
+    },
+    "credit-openai": {
+      "left": "56.2%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-seedance": {
+      "left": "47.8%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-suno": {
+      "left": "39.4%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-elevenlabs": {
+      "left": "31%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    }
+  }
+}
