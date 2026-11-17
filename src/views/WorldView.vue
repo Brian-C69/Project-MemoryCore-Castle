@@ -6,14 +6,14 @@ import GlassSelect from '../components/GlassSelect.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WorldStage from '../worlds/WorldStage.vue'
 import { allWorlds, DEFAULT_WORLD, findWorld } from '../worlds/registry.js'
-import { readinessOf, statusLine } from '../worlds/readiness.js'
+import { statusLine } from '../worlds/readiness.js'
+import { checkWorldStates, readWorldBasics, readWorldQuota, worldMine, worldQuota, worldScreensNow, worldSettings, worldStates } from '../composables/useWorld.js'
 import { CAMERAS } from '../world3d/director.js'
-import { loadMine } from '../worlds/mine.js'
 import { askCompanion } from '../api/ask.js'
 import { listen } from '@tauri-apps/api/event'
 import { quotaWords } from '../world3d/energy.js'
 import { sendLatest } from '../components/sendlatest.js'
-import { castleMoveToScreen, chatMediaOpen, choosePicture, cliQuota, getSettings, saveSettings, worldApply, worldDelete, worldIdentify, worldNew, worldPrepare, worldScreens } from '../api/castle.js'
+import { castleMoveToScreen, chatMediaOpen, choosePicture, saveSettings, worldApply, worldDelete, worldIdentify, worldNew, worldPrepare, worldScreens } from '../api/castle.js'
 
 const props = defineProps({
   active: { type: Boolean, default: true },
@@ -31,11 +31,12 @@ const VIEWS = [
 const DEFAULTS = { world: DEFAULT_WORLD, camera: 'director', on: false, holdMin: 8, holdMax: 20, glide: 'mix', shots: VIEWS.map((v) => v.id), seconds: 15, shuffle: true }
 const REFRESH_MS = 10_000
 
-const settings = ref(null)
-const screens = ref([])
+// read at start-up (composables/useWorld.js), so the room opens with its cards and screens there
+const settings = worldSettings
+const screens = worldScreensNow
 const rows = ref([]) // { screen (ScreenInfo), entry (WorldScreen) }
-const mine = ref([])
-const states = ref({}) // world id -> { have, total, ready }
+const mine = worldMine
+const states = worldStates // world id -> { have, total, ready }
 const selected = ref(-1) // the row the cards pick for
 const previewId = ref('')
 const previewOpen = ref(false)
@@ -47,7 +48,7 @@ const told = ref('') // what happened after Create / Ask
 const progress = ref({}) // slug -> the prepare helper's last line
 const preparing = ref({}) // slug -> true while it runs
 const confirmDelete = ref('') // slug waiting for a second press
-const quota = ref(undefined) // undefined = not asked yet, null = unknown
+const quota = worldQuota // undefined = not asked yet, null = unknown
 const cliName = computed(() => (settings.value?.cli === 'codex' ? 'Codex' : 'Claude Code'))
 const quotaLine = computed(() => {
   if (quota.value === undefined) return ''
@@ -91,23 +92,15 @@ function buildRows(keepEdits = true) {
   })
 }
 
-async function checkWorlds(fresh = false) {
-  const next = { ...states.value }
-  await Promise.all(worlds.value.filter((w) => w.engine === 'glb').map(async (w) => (next[w.id] = await readinessOf(w, { fresh }))))
-  states.value = next
-}
-
 async function refresh({ fresh = false } = {}) {
   try {
-    settings.value = (await getSettings()).settings
-    screens.value = await worldScreens()
-    mine.value = await loadMine()
+    await readWorldBasics()
   } catch {
     return // outside Castle's window
   }
   buildRows(!fresh)
-  await checkWorlds(fresh)
-  quota.value = await cliQuota().catch(() => null)
+  await checkWorldStates(fresh)
+  await readWorldQuota()
 }
 
 // Every change goes out whole: the rows for the screens here, plus the saved ones for screens

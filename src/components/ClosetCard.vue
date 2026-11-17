@@ -12,11 +12,13 @@ const props = defineProps({
   drawLabel: { type: String, default: 'Draw turnaround' },
   price: { type: String, default: '' },
   stamp: { type: [String, Number], default: '' },
+  // the picture's small copy (made once by Castle); shown instead of the big picture while it is there
+  thumb: { type: String, default: '' },
 })
 const emit = defineEmits(['wear', 'upload', 'draw', 'save', 'view'])
 
 const picture = () => props.item.sheet || props.item.reference
-const src = (path) => convertFileSrc(path) + (props.stamp !== '' ? `?v=${props.stamp}` : '')
+const src = (path) => props.thumb || convertFileSrc(path) + (props.stamp !== '' ? `?v=${props.stamp}` : '')
 
 const editing = ref(null) // { name, words } while the words are open
 function edit() {

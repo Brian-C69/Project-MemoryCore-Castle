@@ -8,7 +8,8 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
 import ThemedAudio from '../components/ThemedAudio.vue'
-import { chatMediaOpen, imageRequest, studioDelete, studioLibrary, studioPowers, voiceStudioSpeak, voiceStudioStatus } from '../api/castle.js'
+import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak } from '../api/castle.js'
+import { refreshStudio, studioLib, studioPowersLoaded, studioPowersNow, studioThumbUrls, studioVoiceUp } from '../composables/useStudio.js'
 import { askCompanion } from '../api/ask.js'
 import { POWERS, companionLines, makeAction, powerPill } from '../components/studiomake.js'
 
@@ -18,16 +19,14 @@ const props = defineProps({
 })
 const emit = defineEmits(['keys'])
 
-const powers = ref({})
-const voiceUp = ref(false)
-const lib = ref({ images: [], videos: [], songs: [], voices: [], saved: [], backups: [] })
+// kept for the whole run and read at the start (composables/useStudio.js), so the room opens full
+const powers = studioPowersNow
+const voiceUp = studioVoiceUp
+const lib = studioLib
 
 // ---------- the Make bar ----------
 const power = ref('image')
-// true once the Picture power's real state (it asks Codex itself, which can take a moment) has
-// been read at least once this mount - until then its pill and button read "Checking..." rather
-// than defaulting to "missing"
-const powersLoaded = ref(false)
+const powersLoaded = studioPowersLoaded
 const brief = ref('')
 const making = ref(false)
 const makeProblem = ref('')
@@ -98,16 +97,8 @@ function when(at) {
   return at ? new Date(at * 1000).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : ''
 }
 
-async function load() {
-  try {
-    voiceUp.value = await voiceStudioStatus().catch(() => false)
-    powers.value = await studioPowers()
-    powersLoaded.value = true
-    lib.value = await studioLibrary()
-  } catch {
-    // outside Castle's window
-  }
-}
+// what is already read shows at once; this reads again quietly and swaps in anything new
+const load = refreshStudio
 
 onMounted(load)
 watch(() => props.stamp, load)
@@ -155,7 +146,7 @@ watch(() => props.stamp, load)
         <div v-if="tab === 'images' || tab === 'backups'" class="masonry">
           <div v-for="(m, i) in shelfPictures" :key="m.path" class="tile">
             <button class="thumb" :title="m.name" @click="viewerStart = i">
-              <img :src="src(m.path)" :alt="m.name" loading="lazy" />
+              <img :src="studioThumbUrls[m.path] ?? src(m.path)" :alt="m.name" loading="lazy" />
             </button>
             <div v-if="asking === m.path" class="confirm" role="group" aria-label="Delete this picture">
               <span>Delete?</span>

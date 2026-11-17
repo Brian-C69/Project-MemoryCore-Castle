@@ -9,6 +9,8 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
 import ClosetCard from '../components/ClosetCard.vue'
+import { appearanceImage, appearanceNow, closetPictures } from '../composables/useAppearance.js'
+import { ensureThumbs, thumbUrls } from '../composables/useThumbs.js'
 import HelpTip from '../components/HelpTip.vue'
 import { appearanceImport, appearanceLook, appearanceNew, appearanceSaveItem, appearanceSaveLook, appearanceWear, choosePicture, imageRequest, studioPowers } from '../api/castle.js'
 import { closetShelf, lookSpec, pictureCost, QUALITIES } from '../components/appearance.js'
@@ -19,8 +21,9 @@ const props = defineProps({
 })
 const emit = defineEmits(['keys'])
 
-const look = ref(null)
-const image = ref('')
+// read at start-up (composables/useAppearance.js), so the room opens full
+const look = appearanceNow
+const image = appearanceImage
 const busy = ref('')
 const problem = ref('')
 const done = ref('')
@@ -143,6 +146,7 @@ async function load() {
     look.value = await appearanceLook()
     revision.value++
     image.value = (await studioPowers()).image
+    ensureThumbs(closetPictures(look.value)) // a redrawn sheet gets a new small copy
   } catch (reason) {
     problem.value = String(reason)
   }
@@ -392,6 +396,7 @@ watch(() => props.stamp, load)
             :busy="!!busy"
             :draw-label="priced(item.reference || item.sheet ? 'Improve / draw turnaround' : 'Draw turnaround', shelf.kind)"
             :price="priceTag(shelf.kind)"
+            :thumb="thumbUrls[item.sheet || item.reference] ?? ''"
             :stamp="`${stamp}-${revision}`"
             @wear="wear(shelf.kind, item.id)"
             @upload="upload(shelf.kind, item.id)"

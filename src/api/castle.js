@@ -297,6 +297,8 @@ export const onDbInstall = on('castle://db-install')
 
 // STUDIO: what the companion made, and each power's state (ready | builtin | prompt).
 export const studioLibrary = () => invoke('studio_library')
+// small copies of pictures (made once, kept by Castle): -> { thumbs: [{ path, thumb }], pending }
+export const studioThumbs = (paths) => invoke('studio_thumbs', { paths })
 export const studioPowers = () => invoke('studio_powers')
 // sends one made thing to the Recycle Bin (only inside the memory's shelves, never the standard look)
 export const studioDelete = (path) => invoke('studio_delete', { path })

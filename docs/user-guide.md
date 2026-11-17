@@ -36,7 +36,7 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 
 ### The start-up screen
 
-When Castle opens it shows a start-up screen: a picture, a funny line, a progress bar, what it is loading (your settings, your theme, your memory, the backup, the memory database) and the version of Castle. It is on screen before anything else loads, stays long enough to read, and gives up waiting after a while so a slow piece can never keep you out. A theme can dress it with its own picture, title, funny lines and colour (see Themes below).
+When Castle opens it shows a start-up screen: a picture, a funny line, a progress bar, what it is loading (your settings, your theme, your memory, the backup, the memory database, STUDIO's gallery, APPEARANCE's wardrobe, WORLD's screens and LIBRARY's shelves) and the version of Castle. Castle does its loading here, so that every room is already full when you open it instead of loading when you arrive. The first start after an update may take a little longer while Castle makes small copies of your STUDIO pictures; later starts are quick. If something is slow, Castle opens anyway after a while and finishes in the background. A theme can dress the screen with its own picture and words (see Themes below).
 
 ### Opening and hiding Castle
 
@@ -287,7 +287,7 @@ The idea is saved next to where the file would have gone (a `.prompt.md`, `.lyri
 
 Below the Make bar, everything your companion made fills the room.
 
-- **Pictures** - large tiles at their own shape; click one to see it large and use the arrow keys to move between them.
+- **Pictures** - large tiles at their own shape (shown from small copies Castle makes once, at start-up, and keeps in its own settings folder - never in your memory folder); click one to see it large and use the arrow keys to move between them.
 - **Videos**, **Songs** and **Voice** - play them right in Castle. Songs are grouped by album.
 - **Saved prompts** - the ideas saved while a key was missing, with **Show file**.
 - **Backups** - the pictures Castle kept before replacing one (when it draws a new standard look or turnaround, or you upload a new picture).

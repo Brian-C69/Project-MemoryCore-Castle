@@ -6,6 +6,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import MarkdownText from '../components/MarkdownText.vue'
 import { libraryBooks, libraryDelete, libraryRead, memberSignIn, spiralKeep, spiralKept, spiralRead, spiralRoom } from '../api/castle.js'
+import { libraryKept, libraryMine, librarySpiral, librarySpiralLoaded } from '../composables/useLibrary.js'
 import { filterBooks, keepState, previewLine, priceOf, shelvesOf } from '../components/library.js'
 
 const props = defineProps({
@@ -32,8 +33,9 @@ watch(side, (s) => {
   open.value = null
 })
 
-const mine = ref([])
-const spiral = ref({ shelves: [], books: [], signedIn: false })
+// both shelves are read at start-up (composables/useLibrary.js), so the room opens full
+const mine = libraryMine
+const spiral = librarySpiral
 const problem = ref('')
 const loading = ref(false)
 const shelf = ref('')
@@ -41,7 +43,7 @@ const query = ref('')
 const open = ref(null) // { title, body, preview, book }
 const reading = ref(false)
 const asking = ref(null)
-const kept = ref({}) // Spiral ref -> the edition in My books
+const kept = libraryKept // Spiral ref -> the edition in My books
 const keeping = ref(false)
 const KEEP_WORDS = { keep: 'Add to My books', kept: 'In My books', update: 'Update in My books' }
 
@@ -79,11 +81,13 @@ async function keepBook() {
 
 async function load() {
   problem.value = ''
-  loading.value = true
+  // what start-up already read shows at once; only an empty shelf says it is loading
+  loading.value = side.value === 'mine' ? !mine.value.length : !librarySpiralLoaded.value
   try {
     if (side.value === 'mine') mine.value = await libraryBooks()
     else {
       spiral.value = await spiralRoom()
+      librarySpiralLoaded.value = true
       loadKept()
     }
   } catch (e) {

@@ -67,9 +67,11 @@ pub fn clipboard_copy(text: String) -> Result<(), String> {
 }
 
 /// The themes the member dropped into Castle's settings folder, each with its picture or its reason.
+/// Reading and encoding every wallpaper takes a moment, so it runs off the page's thread.
 #[tauri::command]
-pub fn user_themes(store: State<SettingsStore>) -> Vec<themes::UserTheme> {
-    themes::list(&store.folder())
+pub async fn user_themes(store: State<'_, SettingsStore>) -> Result<Vec<themes::UserTheme>, String> {
+    let folder = store.folder();
+    tauri::async_runtime::spawn_blocking(move || themes::list(&folder)).await.map_err(|_| "The themes could not be read.".to_string())
 }
 
 /// The top bar's minus button: hides Castle to the tray, or minimises it to the taskbar when the

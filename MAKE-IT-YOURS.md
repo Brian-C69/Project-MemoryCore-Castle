@@ -109,6 +109,38 @@ The steps it names come from `App.vue` (`loaderBegin` / `loaderEnd`); a room tha
 3. If it needs the computer (files, programs), add a Rust command in `src-tauri/src/` (see `memory.rs` for reading the memory folder safely with `files::fenced`), register it in `src-tauri/src/lib.rs` (`generate_handler!`), and call it from `src/api/castle.js`.
 4. A room that needs a MemoryCore feature can hide until it is installed: give its tab `needs: '<feature>'` and add the check to `src-tauri/src/memory.rs` (`features`).
 
+### Load at start-up, not on arrival
+
+The start-up screen exists so that **a room is already full when the member opens it**. A room that
+loads its data or pictures when it is opened makes them wait, so move that work to start-up. The
+pattern (STUDIO is the working example: `src/composables/useStudio.js`, `src-tauri/src/thumbs.rs`):
+
+1. **Keep the room's data outside the room.** Put it in a small module (`src/composables/useMyRoom.js`)
+   as shared `ref`s, so it lives for the whole run instead of being thrown away each time the room
+   closes (rooms are mounted and unmounted as the member moves between tabs).
+2. **Give the module a `prepareMyRoom(progress)`** that reads everything the room needs, and calls
+   `progress(done, total)` as it goes. Read quietly again from the room's `onMounted`, so what is
+   already loaded shows first and anything new swaps in.
+3. **Report it to the start-up screen** in `src/App.vue`, in the list of start-up pieces:
+
+   ```js
+   piece('myroom', 'Preparing my room', 'my-folder/', () =>
+     prepareMyRoom((done, total) => loaderBegin('myroom', 'Reading my pictures', `${done} / ${total}`)))
+   ```
+
+   Raise `loaderExpect(n)` by one for the new piece. The status line shows the label and the file or
+   place being read; calling `loaderBegin` again with the same id just updates it.
+4. **Do the heavy part in the core, in turns.** A Rust command that reads or converts many things
+   should be `async` with `spawn_blocking`, do a few at a time and return how many are left, so the
+   page can ask again until none are (see `studio_thumbs`).
+5. **Never wait forever.** Start-up waits for each piece only up to a limit (`App.vue`), and the screen
+   itself leaves after `MAX_MS` (`src/loader/loader.js`). A slow or failing piece lets Castle open and
+   keeps going in the background.
+6. **Big pictures get small copies.** A list or gallery shows small JPEGs made once and kept in the
+   settings folder; the real picture opens only when the member asks for it.
+
+A room that follows this opens at once, shows what it has, and checks for news quietly.
+
 ## 2b. A world of your own
 
 Members can create worlds from the WORLD room (see the user guide). To ship a 3D world **inside** your build:

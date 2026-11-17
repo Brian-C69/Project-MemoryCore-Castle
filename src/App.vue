@@ -12,6 +12,11 @@ import DatabaseOffer from './components/DatabaseOffer.vue'
 import { shouldOffer } from './components/database.js'
 import CompanionHeader from './components/CompanionHeader.vue'
 import { alertActiveRoom, onOpenChat, onOpenRoom, onProviderChanged } from './api/castle.js'
+import { prepareStudio } from './composables/useStudio.js'
+import { prepareLibrary } from './composables/useLibrary.js'
+import { loadUserThemes } from './composables/useThemes.js'
+import { prepareAppearance } from './composables/useAppearance.js'
+import { prepareWorld } from './composables/useWorld.js'
 import { loaderBegin, loaderDone, loaderEnd, loaderExpect, loaderRemember } from './loader/loader.js'
 import ModalSheet from './components/ModalSheet.vue'
 import BackupPanel from './components/BackupPanel.vue'
@@ -42,7 +47,7 @@ import { version as appVersion } from '../package.json'
 import NoticeToasts from './components/NoticeToasts.vue'
 import MeterAlert from './components/MeterAlert.vue'
 import AmbientMusic from './components/AmbientMusic.vue'
-import { avatarGet, backupNow, backupStatus, dbMemory, dbStart, dbStatus, getSettings, hideCastle, keyStatus, memoryHome, saveSettings, onBackupDone, onStoryOutput, userThemes, versionSeen } from './api/castle.js'
+import { avatarGet, backupNow, backupStatus, dbMemory, dbStart, dbStatus, getSettings, hideCastle, keyStatus, memoryHome, saveSettings, onBackupDone, onStoryOutput, versionSeen } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
 
 // The rooms across the top. A room whose MemoryCore feature is not installed stays hidden
@@ -273,7 +278,7 @@ async function loadSettingsAndTheme() {
   loaderBegin('themes', 'Choosing your theme', `themes/${wanted}`)
   let folders = []
   try {
-    folders = await userThemes()
+    folders = await loadUserThemes()
   } catch {
     // Built-in themes only.
   }
@@ -455,19 +460,29 @@ onMounted(async () => {
   }).catch(() => null)
   alertActiveRoom(active.value).catch(() => {})
   // the start-up screen reports what is loading, then goes when it is all in (or after a wait too long)
-  loaderExpect(5)
+  // a room switched off is not prepared; settings and the theme are two pieces, then one per room
   await loadSettingsAndTheme()
-  const piece = (id, label, file, work) => {
+  const roomOn = (id) => rooms.value[id] !== false
+  const rooms_ = ['studio', 'library', 'appearance', 'world'].filter(roomOn)
+  loaderExpect(2 + 3 + rooms_.length)
+  // each piece has its own limit, so one slow piece (the internet, a first run) never holds the rest
+  const piece = (id, label, file, work, limit = 25000) => {
     loaderBegin(id, label, file)
-    return Promise.resolve(work()).catch(() => {}).finally(() => loaderEnd(id))
+    const work_ = Promise.resolve().then(work).catch(() => {})
+    return Promise.race([work_, new Promise((resolve) => setTimeout(resolve, limit))]).finally(() => loaderEnd(id))
   }
   const folder = memoryFolder.value.split(String.fromCharCode(92)).join('/').split('/').filter(Boolean).pop() ?? ''
   const loading = Promise.allSettled([
     piece('memory', 'Reading your memory', folder, loadHome),
     piece('backup', 'Checking the backup', 'backup status', loadBackup),
     piece('database', 'Waking the memory database', 'memory database', loadDatabase),
-  ])
-  await Promise.race([loading, new Promise((resolve) => setTimeout(resolve, 8000))])
+    roomOn('studio') && piece('studio', "Preparing STUDIO's gallery", 'media-generation/', () => prepareStudio((done, total) => loaderBegin('studio', 'Making small copies of your pictures', `${done} / ${total}`))),
+    roomOn('appearance') && piece('appearance', 'Hanging up the wardrobe', 'appearance/', () => prepareAppearance((done, total) => loaderBegin('appearance', 'Making small copies of the wardrobe', `${done} / ${total}`))),
+    roomOn('world') && piece('world', 'Counting the screens and worlds', 'screens and worlds', prepareWorld, 8000),
+    roomOn('library') && piece('library', "Opening LIBRARY's shelves", 'my books and the Spiral Library', prepareLibrary, 8000),
+  ].filter(Boolean))
+  // long enough for a first start to make a large gallery's small copies; after that it is quick
+  await Promise.race([loading, new Promise((resolve) => setTimeout(resolve, 25000))])
   loaderDone()
   // the memory changes as the companion writes: read it again every minute
   refresh = setInterval(loadHome, 60000)

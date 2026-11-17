@@ -14,8 +14,8 @@ import {
   themeCreate,
   themeDelete,
   themeFolder,
-  userThemes,
 } from '../api/castle.js'
+import { loadUserThemes, userThemeFolders } from '../composables/useThemes.js'
 import DiaryPage from '../components/DiaryPage.vue'
 import { lookOf } from '../components/diaryviews.js'
 import { typeLine } from '../components/typeline.js'
@@ -140,7 +140,9 @@ const diary = computed(() => DIARY_THEMES[diaryAt.value])
 const story = computed(() => STORY_THEMES[storyAt.value])
 const wearing = computed(() => wearingLine(worn.value?.name, diaryLook.value, storyLook.value, profile.value.label))
 
-async function load() {
+// `fresh` reads the themes' folder again (Reload themes, after a change); otherwise the themes read at
+// start-up are used, so the room opens at once
+async function load(fresh = true) {
   try {
     const view = await getSettings()
     settings = view.settings
@@ -148,7 +150,7 @@ async function load() {
     diaryLook.value = lookOf(view.settings.diaryLook)
     storyLook.value = view.settings.storyLook ?? 'classic'
     profileLook.value = profileLookOf(view.settings.profileLook)
-    const yours = fromUserFolders(await userThemes())
+    const yours = fromUserFolders(fresh === false && userThemeFolders.value ? userThemeFolders.value : await loadUserThemes())
     themes.value = [...builtInThemes(), ...yours.themes]
     broken.value = yours.broken
   } catch {
@@ -268,7 +270,7 @@ async function askCompanion(theme, paint) {
   emit('show-chat')
 }
 
-onMounted(load)
+onMounted(() => load(false))
 </script>
 
 <template>
