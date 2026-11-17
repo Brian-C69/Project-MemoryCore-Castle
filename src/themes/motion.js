@@ -4,11 +4,15 @@
 //   { "kind": "surf", "crests": [[[x, y], ...], ...], "color": "#5fd8ff", "count": 160 }
 //     glowing points ride each breaking wave and a brighter wash runs along it now and then
 //   { "kind": "river", "water": [[x, y], ...], "flow": [dx, dy], "ripples": [[x, y], ...], "color": "#e8f7c8", "count": 70 }
-//     light streaks drift down the water and rings spread from the given points and now and then elsewhere
+//     light streaks drift down the water, sun patches swell and fade on it, and rings spread from the given points
+//   { "kind": "shore", "line": [[x, y], ...], "toward": [dx, dy], "reach": 0.03, "color": "#fff6e8" }
+//     the foam at the waterline washes up the sand along `toward` and draws back on a slow sea rhythm
+//   { "kind": "twinkle", "area": [[x, y], ...], "count": 36, "color": "#ffffff" }
+//     the brightest stars inside `area`, found in the picture itself, flare and fade in turn
 // Everything here is plain math, apart from the page, so it can be tested.
 
-const MAX_COUNT = { surf: 240, river: 120 }
-const DEFAULT_COUNT = { surf: 160, river: 70 }
+const MAX_COUNT = { surf: 240, river: 160, twinkle: 80 }
+const DEFAULT_COUNT = { surf: 160, river: 90, twinkle: 36 }
 
 const isFraction = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1
 const point = (p) => (Array.isArray(p) && p.length === 2 && isFraction(p[0]) && isFraction(p[1]) ? { x: p[0], y: p[1] } : null)
@@ -38,7 +42,21 @@ export function readMotion(motion) {
     const length = Math.hypot(dx, dy)
     const flow = Number.isFinite(length) && length > 0 ? { x: dx / length, y: dy / length } : { x: 0, y: 1 }
     const ripples = (Array.isArray(motion.ripples) ? motion.ripples.map(point) : []).filter(Boolean)
-    return { kind: 'river', water, flow, ripples, color: colour(motion.color, '#e8f7c8'), count: count(motion.count, 'river') }
+    return { kind: 'river', water, flow, ripples, color: colour(motion.color, '#e8f7c8'), count: count(motion.count, 'river'), patches: 10 }
+  }
+  if (motion.kind === 'shore') {
+    const line = points(motion.line)
+    if (!line || line.length < 2) return null
+    const [dx, dy] = Array.isArray(motion.toward) ? motion.toward.map(Number) : [0, -1]
+    const length = Math.hypot(dx, dy)
+    const toward = Number.isFinite(length) && length > 0 ? { x: dx / length, y: dy / length } : { x: 0, y: -1 }
+    const reach = Number(motion.reach)
+    return { kind: 'shore', line, toward, reach: Number.isFinite(reach) && reach > 0 ? Math.min(reach, 0.1) : 0.03, color: colour(motion.color, '#fff6e8') }
+  }
+  if (motion.kind === 'twinkle') {
+    const area = points(motion.area)
+    if (!area || area.length < 3) return null
+    return { kind: 'twinkle', area, count: count(motion.count, 'twinkle'), color: colour(motion.color, '#ffffff') }
   }
   return null
 }
@@ -114,11 +132,24 @@ export function stepSurf(particles, dt) {
 }
 
 // How bright a point is: its own shimmer plus the wash that runs along its crest every few seconds.
+// Where the rolling band of light is on a crest (t, from just before the crest to past its end).
+export function washAt(crest, seconds) {
+  return ((seconds / 6 + crest * 0.37) % 1.4) - 0.2
+}
+
+// The part of a crest the band lights now: { from, to } in t, or null while it is off the crest.
+export function bandSpan(crest, seconds, width = 0.16) {
+  const at = washAt(crest, seconds)
+  const from = Math.max(0, at - width / 2)
+  const to = Math.min(1, at + width / 2)
+  return to > from ? { from, to, at } : null
+}
+
+// How bright a point is: a faint shimmer between bands, bright while the band passes it.
 export function surfBrightness(p, seconds) {
-  const shimmer = 0.45 + 0.35 * Math.sin(seconds * 2.2 + p.phase)
-  const washAt = ((seconds / 7 + p.crest * 0.37) % 1.4) - 0.2 // runs from just before the crest to past it
-  const wash = Math.exp(-((p.t - washAt) ** 2) / 0.006)
-  return Math.min(1, shimmer + 0.65 * wash)
+  const shimmer = 0.18 + 0.17 * Math.sin(seconds * 2.2 + p.phase)
+  const wash = Math.exp(-((p.t - washAt(p.crest, seconds)) ** 2) / 0.004)
+  return Math.min(1, shimmer + 0.85 * wash)
 }
 
 // ---------- river ----------
@@ -177,4 +208,83 @@ export function stepRipples(ripples, dt) {
 export function rippleState(r) {
   const f = Math.min(1, r.age / r.life)
   return { radius: r.reach * (0.15 + 0.85 * Math.sqrt(f)), alpha: (1 - f) * 0.7 }
+}
+
+// A sun patch: a soft light that drifts with the current, swells and fades.
+export function newPatch(motion, random = Math.random) {
+  const at = pointOnWater(motion.water, random)
+  return at ? { ...at, age: 0, life: 4 + random() * 4, size: 0.02 + random() * 0.03 } : null
+}
+
+export function stepPatches(patches, motion, dt, random = Math.random) {
+  for (let i = 0; i < patches.length; i++) {
+    const p = patches[i]
+    const near = 0.35 + p.y
+    p.x += motion.flow.x * 0.006 * near * dt
+    p.y += motion.flow.y * 0.006 * near * dt
+    p.age += dt
+    if (p.age > p.life || !inside(p, motion.water)) patches[i] = newPatch(motion, random) ?? p
+  }
+}
+
+// A patch's glow over its life: up and down like a breath.
+export function patchAlpha(p) {
+  return Math.max(0, Math.sin(Math.PI * Math.min(1, p.age / p.life)))
+}
+
+// ---------- shore ----------
+
+// How far the foam has washed up the sand, 0 (the waterline) to 1 (its reach): in quickly, back slowly.
+export function shoreSwing(seconds, period = 8) {
+  const f = (seconds % period) / period
+  return f < 0.35 ? Math.sin((f / 0.35) * (Math.PI / 2)) : Math.cos(((f - 0.35) / 0.65) * (Math.PI / 2))
+}
+
+// The foam's specks along the waterline, each with its own sparkle.
+export function foamSpecks(motion, random = Math.random, number = 70) {
+  return Array.from({ length: number }, () => ({ t: random(), phase: random() * Math.PI * 2, lag: random() * 0.25, size: 0.5 + random() }))
+}
+
+// ---------- twinkle ----------
+
+// The brightest stars in a grey-level grid (values 0..1, `width` x `height`, row by row): points
+// brighter than all eight neighbours, inside `area` (picture fractions), strongest first, never
+// closer than `gap` (a fraction of the width) to a brighter one.
+export function brightestPoints(grid, width, height, area, number, gap = 0.02) {
+  const found = []
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const v = grid[y * width + x]
+      if (v < 0.55) continue
+      let peak = true
+      for (let dy = -1; dy <= 1 && peak; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if ((dx || dy) && grid[(y + dy) * width + x + dx] > v) {
+            peak = false
+            break
+          }
+        }
+      }
+      const at = { x: (x + 0.5) / width, y: (y + 0.5) / height }
+      if (peak && inside(at, area)) found.push({ ...at, b: v })
+    }
+  }
+  found.sort((a, b) => b.b - a.b)
+  const kept = []
+  for (const p of found) {
+    if (kept.length >= number) break
+    if (kept.every((k) => Math.hypot(k.x - p.x, (k.y - p.y) * (height / width)) >= gap)) kept.push(p)
+  }
+  return kept
+}
+
+// Each star's own rhythm, so they flare in turn.
+export function twinkleStars(points, random = Math.random) {
+  return points.map((p) => ({ ...p, phase: random() * Math.PI * 2, period: 2.5 + random() * 3.5 }))
+}
+
+// How bright a star's flare is now (0..1): mostly resting, a short bright flare once a period.
+export function twinkleState(star, seconds) {
+  const wave = 0.5 + 0.5 * Math.sin((seconds / star.period) * Math.PI * 2 + star.phase)
+  return wave ** 6
 }
