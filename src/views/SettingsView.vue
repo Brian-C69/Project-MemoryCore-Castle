@@ -2,6 +2,7 @@
 // Settings: everything setup asked, changeable any time - the memory folder and companion, the
 // keys (masked, Show, Test, Remove), quick actions, the room, backup, startup and updates.
 import GlassSelect from '../components/GlassSelect.vue'
+import AlertsPane from './AlertsPane.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import ModalSheet from '../components/ModalSheet.vue'
 import BackupPanel from '../components/BackupPanel.vue'
@@ -43,7 +44,7 @@ const props = defineProps({
   version: { type: String, default: '' },
   updateLine: { type: String, default: '' },
 })
-const emit = defineEmits(['close', 'saved', 'setup', 'whatsnew'])
+const emit = defineEmits(['close', 'saved', 'setup', 'whatsnew', 'open-room'])
 
 const SECTIONS = [
   { id: 'companion', label: 'Companion' },
@@ -51,6 +52,7 @@ const SECTIONS = [
   { id: 'quick', label: 'Quick actions' },
   { id: 'rooms', label: 'Rooms' },
   { id: 'chat', label: 'Chat' },
+  { id: 'alerts', label: 'Alerts' },
   { id: 'database', label: 'Database' },
   { id: 'backup', label: 'Backup' },
   { id: 'startup', label: 'Start-up' },
@@ -405,26 +407,16 @@ onMounted(async () => {
         <BackupPanel :companion="settings.companionName ?? 'your companion'" />
       </section>
 
+      <section v-else-if="tab === 'alerts'" class="pane">
+        <AlertsPane :settings="settings" :busy="busy" :companion-label="companionLabel" :named-tip="namedTip" @save="(patch) => save(patch)" @open-room="(room) => emit('open-room', room)" />
+      </section>
+
       <section v-else-if="tab === 'chat'" class="pane">
         <p v-if="settings.rooms?.chat === false" class="hint">The CHAT room is switched off in Rooms. These wait for it.</p>
-        <h3 class="with-tip">Alerts <HelpTip :text="`Your own messages, and ${companionLabel}'s, never alert. Switch both off to keep only the glow on the CHAT tab.`" /></h3>
+        <h3 class="with-tip">Alerts <HelpTip text="Notifications and sounds for new messages, and for everything else Castle can tell you about, are set on their own page." /></h3>
         <div class="setting-row">
-          <label class="toggle"><input type="checkbox" :checked="settings.alertNotify !== false" :disabled="!!busy" @change="save({ alertNotify: $event.target.checked })" /> Show a desktop notification when a new message arrives</label>
-          <HelpTip text="Only while you're not looking at CHAT. It shows who wrote and the start of the line (careful when screen sharing). Windows' Do Not Disturb and quiet hours apply. While Castle is in the tray it can come up to 30 seconds late." />
+          <button @click="tab = 'alerts'">Open Alerts settings</button>
         </div>
-        <div class="setting-row">
-          <label class="toggle"><input type="checkbox" :checked="!!settings.alertSound" :disabled="!!busy" @change="save({ alertSound: $event.target.checked })" /> Also play a sound</label>
-          <HelpTip text="Windows' own notification sound. It starts off because it plays even during quiet hours." />
-        </div>
-        <fieldset class="alert-when" :disabled="!!busy || (settings.alertNotify === false && !settings.alertSound)">
-          <legend>Alert me for</legend>
-          <label class="toggle"><input type="radio" name="alert-when" value="all" :checked="settings.alertWhen !== 'named'" @change="save({ alertWhen: 'all' })" /> Every new message</label>
-          <div class="setting-row">
-            <label class="toggle"><input type="radio" name="alert-when" value="named" :checked="settings.alertWhen === 'named'" @change="save({ alertWhen: 'named' })" /> Only when someone names me or {{ companionLabel }}</label>
-            <HelpTip :text="namedTip" />
-          </div>
-        </fieldset>
-        <label class="toggle"><input type="checkbox" :checked="!!settings.alertReactions" :disabled="!!busy || (settings.alertNotify === false && !settings.alertSound)" @change="save({ alertReactions: $event.target.checked })" /> Also when someone reacts to my message</label>
 
         <h3>{{ companionLabel }} in the room</h3>
         <p v-if="!companionInRoom" class="hint">Let {{ companionLabel }} in from the CHAT room's side panel to set these.</p>

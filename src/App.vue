@@ -11,7 +11,7 @@ import CreditWidget from './components/widgets/CreditWidget.vue'
 import DatabaseOffer from './components/DatabaseOffer.vue'
 import { shouldOffer } from './components/database.js'
 import CompanionHeader from './components/CompanionHeader.vue'
-import { onOpenChat, onProviderChanged } from './api/castle.js'
+import { alertActiveRoom, onOpenChat, onOpenRoom, onProviderChanged } from './api/castle.js'
 import ModalSheet from './components/ModalSheet.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import AppsView from './views/AppsView.vue'
@@ -93,6 +93,7 @@ const chatOpened = ref(active.value === 'chat')
 // DEV stays mounted once opened, so its project sessions keep going behind the other rooms
 const devOpened = ref(active.value === 'dev')
 watch(active, (room) => {
+  alertActiveRoom(room).catch(() => {})
   if (room !== 'home') arranging.value = false
   if (room === 'story') storyOpened.value = true
   if (room === 'chat') chatOpened.value = true
@@ -431,6 +432,7 @@ let stopBackupEvents
 let stopStoryEvents
 let stopProviderEvents
 let stopOpenChat
+let stopOpenRoom
 onMounted(async () => {
   window.addEventListener('keydown', onArrangeKey)
   stopProviderEvents = await onProviderChanged(async () => { await settingsSaved(); window.dispatchEvent(new Event('castle-provider-changed')) }).catch(() => null)
@@ -438,6 +440,14 @@ onMounted(async () => {
     active.value = 'chat'
     marks.value = marks.value.filter((m) => m !== 'chat')
   }).catch(() => null)
+  // a notification clicked: its room, if that room is on offer
+  stopOpenRoom = await onOpenRoom((room) => {
+    if (typeof room === 'string' && tabs.value.some((t) => t.id === room)) {
+      active.value = room
+      marks.value = marks.value.filter((m) => m !== room)
+    }
+  }).catch(() => null)
+  alertActiveRoom(active.value).catch(() => {})
   await loadSettingsAndTheme()
   loadHome()
   loadBackup()
@@ -457,6 +467,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onArrangeKey)
   stopProviderEvents?.()
   stopOpenChat?.()
+  stopOpenRoom?.()
   clearInterval(refresh)
   stopBackupEvents?.()
   stopStoryEvents?.()
@@ -545,6 +556,7 @@ watch(settingsStamp, () => {
         @saved="settingsSaved"
         @setup="settingsOpen = false; openSetup()"
         @whatsnew="showWhatsNew"
+        @open-room="(room) => { settingsOpen = false; if (tabs.some((t) => t.id === room)) active = room }"
       />
       <WhatsNew v-if="whatsNew" :version="whatsNew.version" :sections="whatsNew.sections" @close="whatsNew = null; loadDatabase()" />
       <DatabaseOffer v-if="databaseOffer" :companion="companion" :download-bytes="databaseBytes" @close="closeDatabaseOffer" @changed="loadHome" />

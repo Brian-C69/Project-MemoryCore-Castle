@@ -601,15 +601,25 @@ pub fn start_images(app: &AppHandle) {
                 .any(|j| j.id == id && j.stop_asked)
         };
         let result = run_image(&job, way, styles.as_deref(), &tools, &stop_asked);
+        let drew = result.is_ok();
+        let mut stopped = false;
         let mut jobs = images.0.lock().unwrap();
         if let Some(entry) = jobs.iter_mut().find(|j| j.id == id) {
             entry.phase = if result.is_ok() { "completed" } else { "prompt-saved" }.into();
+            stopped = entry.stop_asked;
             entry.stop_asked = false;
             entry.message = result
                 .err()
                 .unwrap_or_else(|| "Image saved. Refresh the room to view it.".into());
         }
         let _ = persist_jobs(&store, &jobs);
+        drop(jobs);
+        // a stopped drawing is the member's own doing, not news
+        if drew || !stopped {
+            let what = if job.label.is_empty() { "Your picture".to_string() } else { job.label.clone() };
+            let (title, body) = if drew { ("Picture ready", format!("{what} is drawn.")) } else { ("Picture not drawn", format!("{what} could not be drawn; the prompt is saved.")) };
+            crate::alerts::fire(&app, "picture_ready", title, &body);
+        }
     });
 }
 

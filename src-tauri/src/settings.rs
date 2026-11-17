@@ -2,6 +2,7 @@
 //! Keys never live here; they are kept by Windows Credential Manager (key.rs).
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -157,6 +158,16 @@ impl Default for WorldSettings {
     }
 }
 
+/// One alert source's choices, set on Settings > Alerts. A field left out (None) keeps the source's
+/// own default, so a source added later by a theme or a new feature works before it is ever set.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AlertRule {
+    pub notify: Option<bool>,
+    pub sound: Option<bool>,
+    pub sound_name: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -178,6 +189,8 @@ pub struct Settings {
     /// member is not looking at CHAT. The notification is on by default; the sound is off by default
     /// (it plays through Windows' quiet hours); each has its own switch in Settings > Rooms.
     pub alert_sound: bool,
+    /// which sound: "windows" (Windows' own notification sound) or one of Castle's own (see roomalert::SOUNDS)
+    pub alert_sound_name: String,
     pub alert_notify: bool,
     /// "all" (every new line, the default) or "named" (only a line that names the member or
     /// their companion, as a whole word): which lines the chat alerts tell about.
@@ -185,6 +198,9 @@ pub struct Settings {
     /// Also tell the member when someone reacts to one of their lines (off by default; needs a
     /// room that offers reactions).
     pub alert_reactions: bool,
+    /// Every other alert source's rule, by the source's id (see alerts.rs). "chat" keeps the four
+    /// fields above, so an older settings file reads exactly as it did.
+    pub alerts: BTreeMap<String, AlertRule>,
     /// The companion may draw a picture in the chat room when someone asks (off by default), at
     /// most this many a day (0..5, under the room's own cap), at this quality when the drawing
     /// spends the member's ChatGPT key ("low" or "medium"; Codex uses the subscription).
@@ -329,9 +345,11 @@ impl Default for Settings {
             start_session_on_launch: true,
             minimize_to_taskbar: false,
             alert_sound: false,
+            alert_sound_name: "glass".into(),
             alert_notify: true,
             alert_when: "all".into(),
             alert_reactions: false,
+            alerts: BTreeMap::new(),
             room_pictures_on: false,
             room_pictures_per_day: 1,
             room_picture_quality: "low".into(),
@@ -380,6 +398,17 @@ impl Settings {
     pub fn normalized(mut self) -> Self {
         if !["12h", "24h"].contains(&self.clock_format.as_str()) { self.clock_format = "24h".into(); }
         if !["all", "named"].contains(&self.alert_when.as_str()) { self.alert_when = "all".into(); }
+        // any id is kept (a member's own sound file is chosen by name); only an empty or absurd one resets
+        self.alerts.retain(|id, _| !id.is_empty() && id.len() <= 40);
+        while self.alerts.len() > 40 {
+            let Some(last) = self.alerts.keys().next_back().cloned() else { break };
+            self.alerts.remove(&last);
+        }
+        for rule in self.alerts.values_mut() {
+            rule.sound_name = rule.sound_name.take().map(|n| n.trim().to_string()).filter(|n| !n.is_empty() && n.len() <= 110);
+        }
+        self.alert_sound_name = self.alert_sound_name.trim().to_string();
+        if self.alert_sound_name.is_empty() || self.alert_sound_name.len() > 110 { self.alert_sound_name = crate::roomalert::DEFAULT_SOUND.into(); }
         self.room_pictures_per_day = self.room_pictures_per_day.min(5);
         if !["low", "medium"].contains(&self.room_picture_quality.as_str()) { self.room_picture_quality = "low".into(); }
         fn clean(value: Option<String>) -> Option<String> {
@@ -666,9 +695,11 @@ mod tests {
             start_session_on_launch: false,
             minimize_to_taskbar: true,
             alert_sound: true,
+            alert_sound_name: "koto".into(),
             alert_notify: false,
             alert_when: "named".into(),
             alert_reactions: false,
+            alerts: BTreeMap::new(),
             room_pictures_on: true,
             room_pictures_per_day: 3,
             room_picture_quality: "medium".into(),

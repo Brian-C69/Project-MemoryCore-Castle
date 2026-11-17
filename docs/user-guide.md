@@ -454,6 +454,7 @@ Your keys are kept encrypted by Windows and only used to talk to the room. If yo
 - If the room asks you to set your **Foundation display name**, do that on the Portfolio - you can read meanwhile. If you are muted, you can still read.
 - When something new arrives while you are in another room, the **CHAT** tab glows.
 - **Alerts.** While you are not looking at CHAT, a new message shows a desktop notification with who wrote and the start of the line, even when Castle is hidden in the tray (it checks the room every 30 seconds then, so an alert can come up to 30 seconds late). Windows' Do Not Disturb and quiet hours apply to it. Your own messages, and your own companion's, never alert. In **Settings > Chat** (or the **Chat settings** button in the room's side panel) you can switch the notification off, and switch on Windows' own notification sound (off to begin with, because it plays even in quiet hours). Under **Alert me for** you can choose **Only when someone names me or** your companion: then only a line that says your name (in Settings or in the room) or your companion's name, as a whole word, alerts you. The CHAT tab still glows for every message. A reply to one of your own messages counts as naming you. **Also when someone reacts to my message** (off to begin with) tells you when someone else reacts to one of yours.
+- Notifications and sounds, for chat and for everything else, are set on **Settings > Alerts** (see Alerts below).
 - **Reactions and replies.** Once the room offers them, pointing at a message shows a small bar with six reactions (👍 ❤️ 👏 😂 😮 😢) and **Reply**. A reaction shows as a chip under the message with its count; yours is highlighted, and pressing it again takes it back. **Reply** puts *Replying to Name: ...* above the message box (✕ cancels); the reply shows the quoted line above its words, and pressing the quote jumps to the original (only the start shows when the original is no longer loaded or was removed). Your companion sees which line a reply answers. Until the room offers them, nothing changes in CHAT.
 
 ### Your companion in the room
@@ -542,3 +543,16 @@ Every turn your companion took, newest first, one line each: when, whether you a
 ### Lessons
 
 After every closed trade your companion writes one short lesson, with the trade's result as a percent of the margin it used. The newest twelve ride into every decision it makes. Delete any lesson you don't want it to keep.
+
+## Alerts
+
+**Settings > Alerts** lists everything Castle can tell you about. Each has its own card with a **desktop notification** switch, a **Play a sound** switch and a **sound** to choose, with a **Play** button to hear it:
+
+- **Chat room messages** - a new line in the Foundation room (with the choice of every line or only lines that name you or your companion, and whether reactions count).
+- **Your companion finished replying** - in HOME, when the reply or the task is complete.
+- **A MARKET round finished** - when the companion's automatic round ends. Off to begin with, as rounds can be frequent.
+- **A picture is ready** - an APPEARANCE or STUDIO drawing finished, or could not be drawn.
+
+An alert is quiet while you are already looking at the room it is about, in a visible, focused Castle. Clicking a notification brings Castle forward on that room - also from the Action Center after the pop-up has gone, once this version of Castle has run. Each kind has a different sound to begin with so they can be told apart by ear; sounds are off to begin with (they play through Windows' quiet hours). Windows' Do Not Disturb applies to notifications.
+
+**Your own sounds.** **Open the sounds folder** opens a folder in Castle's data folder; any `.wav` file you put there joins the list for every alert (press **Refresh sounds**). Only `.wav` files are offered.
