@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Graphics-card gauges.** HOME's Gauges card now shows one gauge for each NVIDIA graphics card (up to four) beside CPU and RAM, read with `nvidia-smi` from the NVIDIA driver; hover a gauge for the card's name, memory and temperature. The gear on the card is now **Gauge settings** and has a **Show graphics cards** switch (on to begin with). A computer without an NVIDIA driver shows no graphics gauges and Castle stops looking for one for five minutes at a time.
+
 ## 0.2.14 - 2026-11-16
 
 - **DIARY keeps your place.** Reading the book (or any page) no longer jumps back to the top every minute or so; a page is read again only when it really changed, and its text stays on screen while it is.

@@ -179,7 +179,7 @@ At the top: your companion's picture (or the glowing crystal), their name, and t
 | Card | What it shows | Where it comes from |
 |------|---------------|---------------------|
 | **Clock** | The time and date | Your computer |
-| **CPU / RAM** | How busy your computer is | Your computer |
+| **CPU / RAM / graphics cards** | How busy your computer is: the processor, the memory and, with an NVIDIA card, one gauge for each graphics card (up to four). Hover a card's gauge for its full name, memory and temperature. The small gear opens **Gauge settings**: **Show graphics cards** switches them off, and the CPU and RAM watch lives there too | Your computer (the cards are read with `nvidia-smi`, which comes with the NVIDIA driver; without one no graphics gauges show) |
 | **USAGE** | How much of Claude Code's and Codex's **five-hour** and **weekly** limits you have used, and when each starts over. A bar turns warm at 80% and red at 100%. Codex only reports its limits while you use it, so its numbers can say "as of" an earlier time | Claude Code's `/usage` (with the login it already keeps) and Codex's own session files, read every five minutes |
 | **TODAY** | Your open reminders, with their due dates | `main/reminders.md` (MemoryCore's Reminders) |
 | **PROJECTS** | Your active projects, most recent first. Click one to open its file | `projects/project-list.md` (MemoryCore's Projects) |
