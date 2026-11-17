@@ -38,6 +38,7 @@ import SettingsView from './views/SettingsView.vue'
 import UpdateChip from './components/UpdateChip.vue'
 import QuotaGlow from './components/QuotaGlow.vue'
 import UsageReveal from './components/UsageReveal.vue'
+import ThemeMotion from './components/ThemeMotion.vue'
 import WhatsNew from './components/WhatsNew.vue'
 import { sectionFor, unseenSections } from './components/changelog.js'
 import { moveTab, orderTabs } from './components/taborder.js'
@@ -140,6 +141,8 @@ const settingsStamp = ref(0)
 const setupOpen = ref(false)
 const setupReopened = ref(false)
 const theme = ref(null)
+// Settings > Rooms > Moving wallpapers: a theme's living water (ThemeMotion), on unless turned off
+const wallpaperMotion = ref(true)
 const themeNotice = ref('')
 const activeLabel = computed(() => allTabs.find((t) => t.id === active.value)?.label ?? '')
 const widgets = computed(() => theme.value?.widgets ?? {})
@@ -549,6 +552,7 @@ watch(settingsStamp, () => {
     <main class="screen">
       <div v-show="active === 'home'" ref="homeEl" class="home" :class="[theme?.widgetStyle ?? 'glass', { arranging }]">
         <UsageReveal v-if="theme?.usageReveal" :theme="theme" :visible="active === 'home'" />
+        <ThemeMotion v-if="theme?.motion" :theme="theme" :visible="active === 'home'" :enabled="wallpaperMotion" />
         <QuotaGlow v-if="theme?.quotaGlow" :theme="theme" :visible="active === 'home'" />
         <TerminalPanel
           :settings-stamp="settingsStamp"
