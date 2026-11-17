@@ -29,11 +29,17 @@ A full-screen Windows desktop for your **MemoryCore** companion. Castle opens yo
 
 ## Requirements
 
-- Windows 10 or 11
+- Windows 10 or 11, or macOS 12 or later
+- [Node.js](https://nodejs.org/) 20+ for the media helpers (pictures, video, songs, voice, worlds)
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) or [Codex CLI](https://github.com/openai/codex), installed and signed in
 - A MemoryCore folder ([AI MemoryCore](https://github.com/Kiyoraka/Poject-AI-Memory-Architecture)) - Castle can create one for you on first run
 
-To build from source you also need [Node.js](https://nodejs.org/) 20+, [Rust](https://www.rust-lang.org/tools/install) (stable, MSVC) and Microsoft Edge WebView2 (already on Windows 11).
+To build from source you also need [Node.js](https://nodejs.org/) 20+ and [Rust](https://www.rust-lang.org/tools/install) (stable): on Windows the MSVC toolchain and Microsoft Edge WebView2 (already on Windows 11), on macOS the Xcode command line tools (`xcode-select --install`).
+
+### On a Mac
+
+- The database installs with [Homebrew](https://brew.sh) (`mariadb@11.4`, the same MariaDB as on Windows); no admin prompt.
+- A build downloaded from GitHub is not signed by Apple yet. The first time, macOS says it cannot check the developer: open **System Settings → Privacy & Security** and press **Open Anyway** once (or run `xattr -dr com.apple.quarantine "/Applications/MemoryCore Castle.app"`). A build you make yourself opens straight away.
 
 ## Build and run
 
@@ -45,7 +51,7 @@ cd src-tauri && cargo test   # the core's tests
 npm run tauri build  # the installer, in src-tauri/target/release/bundle/nsis/
 ```
 
-The media helpers have an offline test too: `powershell -File src-tauri/resources/tools/test-helpers.ps1` (it never calls a paid API).
+The media helpers have an offline test too: `node src-tauri/resources/tools/test-helpers.mjs` (it never calls a paid API).
 
 ## Make it yours
 

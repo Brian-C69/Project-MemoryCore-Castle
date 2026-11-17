@@ -1,4 +1,5 @@
 // The gauges keep watch: the small decisions of the gear and the trip card, kept pure for the tests.
+import { isMac } from '../platform.js'
 
 export const MIN_LIMIT = 50
 export const MAX_LIMIT = 99
@@ -27,8 +28,9 @@ const OWNERS = {
   system: 'Windows',
 }
 
-/** The tag shown beside a protected program, or '' for an ordinary app. */
-export function ownerTag(owner) {
+/** The tag shown beside a protected program, or '' for an ordinary app. The system's own is 'macOS' on a Mac. */
+export function ownerTag(owner, mac = isMac) {
+  if (owner === 'system' && mac) return 'macOS'
   return OWNERS[owner] ?? ''
 }
 

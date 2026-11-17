@@ -11,7 +11,7 @@ import RoomComposer from '../components/room/RoomComposer.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../components/roomsteps.js'
 import { listen } from '@tauri-apps/api/event'
-import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCompanionIn, roomFaceSet, roomFile, roomLog, roomMe, roomMine, roomPost, roomPresence, roomReact, roomReset, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
+import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignInCancel, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCompanionIn, roomFaceSet, roomFile, roomLog, roomMe, roomMine, roomPost, roomPresence, roomReact, roomReset, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
 import { avatarLoader, currentAvatar, datedLines, initial, isMine, replyingLine, roomFeatures, roomMembers, roomPresenceState, speakerPresentation, ticks, toggleReaction } from '../components/roomchat.js'
 import { roomCompanionRefresh, roomNameSet, setupApply } from '../api/castle.js'
 import { avatarGet } from '../api/castle.js'
@@ -246,15 +246,24 @@ async function checkDoor() {
 async function signIn() {
   doorProblem.value = ''
   signing.value = true
+  cancelling = false
   try {
     member.value = await memberSignIn()
     refused.value = null
     await roomReset().catch(() => {})
   } catch (reason) {
-    doorProblem.value = String(reason?.message ?? reason)
+    // a Cancel the member pressed is not a problem to show
+    if (!cancelling) doorProblem.value = String(reason?.message ?? reason)
   } finally {
     signing.value = false
   }
+}
+
+// Cancel while Castle waits for the browser: the wait ends and Sign in works again at once.
+let cancelling = false
+async function cancelSignIn() {
+  cancelling = true
+  await memberSignInCancel().catch(() => {})
 }
 
 async function signOut() {
@@ -460,11 +469,13 @@ watch(() => props.visible, (on) => {
           <div v-if="st.n === 1 && !member?.signedIn" class="sign-buttons">
             <template v-if="libraryOpened || member?.expired">
               <button class="primary" :disabled="signing" @click="signIn">{{ signing ? 'Waiting for your browser…' : 'Connect Castle' }}</button>
-              <button class="link" :disabled="signing" @click="signInOnLibrary">Open the Library again</button>
+              <button v-if="signing" class="link" @click="cancelSignIn">Cancel</button>
+              <button v-else class="link" @click="signInOnLibrary">Open the Library again</button>
             </template>
             <template v-else>
               <button class="primary" @click="signInOnLibrary">Sign in</button>
               <button class="link" :disabled="signing" @click="signIn">{{ signing ? 'Waiting for your browser…' : 'Already signed in on the Library? Connect Castle' }}</button>
+              <button v-if="signing" class="link" @click="cancelSignIn">Cancel</button>
             </template>
           </div>
           <button v-if="st.n === 2 && member?.signedIn" @click="openLibrary">Open the Library</button>
@@ -627,7 +638,7 @@ watch(() => props.visible, (on) => {
 .profile-person button.pic-edit { position: absolute; top: -6px; right: -8px; display: grid; place-items: center; width: 24px; min-height: 24px; height: 24px; padding: 0; border-radius: 50%; background: var(--panel-background); }
 .pic-edit svg { display: block; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .profile-person button.pic-edit:disabled { opacity: .45; }
-.pic-menu { position: absolute; z-index: 3; top: 62px; left: 6px; right: 6px; display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-background); backdrop-filter: blur(var(--glass-blur)); box-shadow: 0 10px 24px -10px rgba(0, 0, 0, .7); }
+.pic-menu { position: absolute; z-index: 3; top: 62px; left: 6px; right: 6px; display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-background); -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur)); box-shadow: 0 10px 24px -10px rgba(0, 0, 0, .7); }
 .profile-person .pic-menu button { min-height: 32px; }
 .profile-person button.subtle { border-color: transparent; color: var(--text-dim); }
 .profile-footer { padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--line); }
@@ -729,7 +740,7 @@ watch(() => props.visible, (on) => {
   background: var(--panel-background);
   border: 1px solid var(--line);
   border-radius: 14px;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 .door {
   display: flex;

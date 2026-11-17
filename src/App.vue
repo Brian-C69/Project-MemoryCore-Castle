@@ -80,6 +80,7 @@ const database = ref(null)
 // the one-time offer after an update (memory still in files, no database yet)
 const databaseOffer = ref(false)
 const databaseBytes = ref(0)
+const databaseSource = ref('download')
 const offerFacts = ref({ offerSeen: true, hadCastleBefore: false, hasFolder: false })
 const avatar = ref(null)
 const memoryFolder = ref('')
@@ -375,6 +376,7 @@ async function loadDatabase() {
   try {
     const status = await dbStatus()
     databaseBytes.value = status.downloadBytes
+    databaseSource.value = status.source ?? 'download'
     database.value = { engine: status.engine, memory: await dbMemory() }
   } catch {
     database.value = null
@@ -550,7 +552,7 @@ watch(settingsStamp, () => {
           @pointerup="endDrag"
           @pointercancel="endDrag"
         >
-          <ClockWidget v-if="id === 'clock'" :size="widgets.clock?.size ?? 'm'" />
+          <ClockWidget v-if="id === 'clock'" :size="widgets.clock?.size ?? 'm'" :format="barClock.format" />
           <GaugeWidget v-else-if="id === 'gauges'" />
           <UsageWidget v-else-if="id === 'usage'" :stamp="settingsStamp" />
           <CreditWidget v-else-if="isCreditWidget(id)" :widget="id" />
@@ -591,7 +593,7 @@ watch(settingsStamp, () => {
         @open-room="(room) => { settingsOpen = false; if (tabs.some((t) => t.id === room)) active = room }"
       />
       <WhatsNew v-if="whatsNew" :version="whatsNew.version" :sections="whatsNew.sections" @close="whatsNew = null; loadDatabase()" />
-      <DatabaseOffer v-if="databaseOffer" :companion="companion" :download-bytes="databaseBytes" @close="closeDatabaseOffer" @changed="loadHome" />
+      <DatabaseOffer v-if="databaseOffer" :companion="companion" :download-bytes="databaseBytes" :source="databaseSource" @close="closeDatabaseOffer" @changed="loadHome" />
       <ModalSheet v-if="backupOpen" tag="BACKUP" title="Keep the memory safe" @close="backupOpen = false; loadBackup()">
         <BackupPanel :companion="companion" />
       </ModalSheet>
@@ -653,7 +655,7 @@ body,
 body {
   background: var(--background);
   color: var(--text);
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
 }
 
 .castle {
@@ -716,7 +718,7 @@ body {
   background: var(--panel-background);
   border: 1px solid var(--line);
   border-radius: 12px;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
   color: var(--text);
   font-size: 0.9rem;
 }
@@ -742,7 +744,7 @@ body {
   background: var(--widget-background);
   border: 1px solid var(--line);
   border-radius: 14px;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 
 .home.bare .widget {

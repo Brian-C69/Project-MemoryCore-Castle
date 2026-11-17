@@ -167,7 +167,7 @@ Members can create worlds from the WORLD room (see the user guide). To ship a 3D
 - The STORY rules: `src-tauri/resources/story-rules.md`. The chat room rules: `src-tauri/resources/room-rules.md`.
   Its `{{MANNER}}` line is where the companion's emotion engine goes (only its active traits' one-line manner, by audience, written by `roomturn::manner_section`); the proposals' rules are `src-tauri/resources/emotion-rules.md`.
 - The drawing styles: `src-tauri/resources/styles/*.md`.
-- The media helpers: `src-tauri/resources/tools/castle-*.ps1` (run `test-helpers.ps1` after a change).
+- The media helpers: `src-tauri/resources/tools/castle-*.mjs` (run `node src-tauri/resources/tools/test-helpers.mjs` after a change).
 
 ## 4. Rename it
 
@@ -196,7 +196,7 @@ git pull upstream main
 ```bash
 npm test                      # web tests (vitest)
 cd src-tauri && cargo test    # core tests (uses the fixture memories in src-tauri/tests/fixtures)
-powershell -File src-tauri/resources/tools/test-helpers.ps1   # media helpers, offline
+node src-tauri/resources/tools/test-helpers.mjs   # media helpers, offline
 ```
 
 Two fixture memories keep Castle honest: `memory-fresh` (a new MemoryCore) and `memory-existing` (a member who already set things up). Check new features against both.

@@ -17,6 +17,7 @@ export const alertActiveRoom = (room) => invoke('alert_active_room', { room })
 export const alertSounds = () => invoke('alert_sounds')
 export const alertSoundPreview = (name) => invoke('alert_sound_preview', { name })
 export const alertSoundsFolder = () => invoke('alert_sounds_folder')
+export const castleWindowLayout = (layout) => invoke('castle_window_layout', { layout })
 export const saveSettings = (settings) => invoke('save_settings', { settings })
 export const chooseFolder = (title) => invoke('choose_folder', { title })
 
@@ -63,7 +64,7 @@ export const imageRetry = (id) => invoke('image_retry', { id })
 export const imageDismiss = (id = null) => invoke('image_dismiss', { id })
 export const imageCancel = (id) => invoke('image_cancel', { id })
 // `label`: what the picture is for, shown in the Image requests list ("Try-on: Winter coat + Twin tails").
-// `look` names an APPEARANCE drawing by its parts (kind, outfit, hair, changes, quality); castle-look.ps1 writes its prompt
+// `look` names an APPEARANCE drawing by its parts (kind, outfit, hair, changes, quality); castle-look.mjs writes its prompt
 export const imageRequest = (brief, output = null, references = [], room = 'studio', label = null, look = null) => invoke('image_request', { brief, output, references, room, label, look })
 export const providerSwitch = (target) => invoke('provider_switch', { target })
 export const providerSwitchStatus = () => invoke('provider_switch_status')
@@ -203,6 +204,7 @@ export const worldPrepare = (slug) => invoke('world_prepare', { slug })
 
 // Signing in to the MemoryCore Foundation through the browser (the token stays in the core).
 export const memberSignIn = () => invoke('member_sign_in')
+export const memberSignInCancel = () => invoke('member_sign_in_cancel')
 export const memberStatus = () => invoke('member_status')
 export const memberSignOut = () => invoke('member_sign_out')
 export const roomCompanionIn = (on) => invoke('room_companion_in', { on })

@@ -47,7 +47,7 @@ pub fn look_show(conn: &mut Conn, memory: &Path) -> Result<String, String> {
     Ok(out.join("\n"))
 }
 
-/// castle-look.ps1's words file for what is worn (or `--outfit` / `--hair`), as JSON.
+/// castle-look.mjs's words file for what is worn (or `--outfit` / `--hair`), as JSON.
 pub fn look_json(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> {
     ready(conn, memory)?;
     let look = appearance_db::read(conn)?.unwrap_or_default();

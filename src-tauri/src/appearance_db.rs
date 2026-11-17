@@ -206,7 +206,7 @@ pub fn set_item(conn: &mut impl Queryable, kind: &str, slug: &str, name: &str, w
     item(conn, kind, slug)?.ok_or_else(|| "The item could not be read back.".to_string())
 }
 
-/// castle-look.ps1's words file: the look, its art style, and the outfit and hairstyle named. Pure.
+/// castle-look.mjs's words file: the look, its art style, and the outfit and hairstyle named. Pure.
 pub fn words_value(look: &LookRow, outfit: Option<&ItemRow>, hair: Option<&ItemRow>) -> serde_json::Value {
     let part = |i: Option<&ItemRow>| i.map(|i| serde_json::json!({ "name": i.name, "words": i.words }));
     serde_json::json!({ "words": look.words, "artStyle": look.art_style, "outfit": part(outfit), "hair": part(hair) })

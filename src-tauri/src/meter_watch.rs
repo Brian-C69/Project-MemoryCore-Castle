@@ -123,6 +123,8 @@ pub struct Watch(Mutex<VecDeque<TripReport>>);
 const DATABASES: &[&str] = &["mariadbd", "mysqld"];
 /// The member's editor.
 const EDITORS: &[&str] = &["code", "code - insiders", "cursor"];
+/// macOS: an editor runs as many helper programs ("Code Helper (Renderer)", "Cursor Helper (GPU)").
+const EDITOR_HELPERS: &[&str] = &["code helper", "code - insiders helper", "cursor helper", "electron"];
 /// The companion's programs, also when the member runs one outside Castle.
 const COMPANIONS: &[&str] = &["claude", "codex"];
 /// Programs that are part of Windows or of Castle and are never closed from the card.
@@ -137,6 +139,23 @@ fn key(name: &str) -> String {
     lower.strip_suffix(".exe").unwrap_or(&lower).to_string()
 }
 
+/// macOS: a program that is part of the system (or WebKit, which draws Castle's own window), which
+/// Close must never offer: closing WindowServer logs the member out.
+#[cfg_attr(windows, allow(dead_code))]
+fn in_macos(exe: Option<&Path>, pid: u32) -> bool {
+    if pid == 1 {
+        return true;
+    }
+    exe.map(|p| {
+        let text = p.to_string_lossy();
+        ["/System/", "/usr/", "/bin/", "/sbin/", "/Library/Apple/"].iter().any(|root| text.starts_with(root))
+            || text.contains("com.apple.WebKit")
+            || text.contains("MemoryCore Castle.app/")
+    })
+    .unwrap_or(false)
+}
+
+// platform: windows-only - the Windows folder; macOS has in_macos
 /// True when the program lives in the Windows folder.
 fn in_windows(exe: Option<&Path>) -> bool {
     let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into()).to_lowercase();
@@ -175,7 +194,7 @@ pub fn judge(pid: u32, name: &str, exe: Option<&Path>, owner: Owner, castle: u32
     if COMPANIONS.contains(&k.as_str()) {
         return tag("companion");
     }
-    if EDITORS.contains(&k.as_str()) {
+    if EDITORS.contains(&k.as_str()) || EDITOR_HELPERS.iter().any(|h| k.starts_with(h)) {
         return tag("editor");
     }
     if is_castle(pid, castle, procs) {
@@ -186,7 +205,7 @@ pub fn judge(pid: u32, name: &str, exe: Option<&Path>, owner: Owner, castle: u32
         Owner::Other => return tag("server"),
         Owner::Hidden => {}
     }
-    if in_windows(exe) || PROTECTED.contains(&k.as_str()) {
+    if in_windows(exe) || (!cfg!(windows) && in_macos(exe, pid)) || PROTECTED.contains(&k.as_str()) {
         return tag("system");
     }
     (String::new(), true)
@@ -422,7 +441,7 @@ pub async fn meter_close(app: AppHandle, pid: u32, name: String) -> Result<(), S
         system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[sysinfo::Pid::from_u32(pid)]), true);
         match system.process(sysinfo::Pid::from_u32(pid)) {
             Some(process) if process.kill() => Ok(()),
-            Some(_) => Err(format!("Windows would not close {}.", eater.name)),
+            Some(_) => Err(format!("{} would not close {}.", if cfg!(windows) { "Windows" } else { "macOS" }, eater.name)),
             None => Err("It has already closed.".to_string()),
         }
     })
@@ -433,6 +452,15 @@ pub async fn meter_close(app: AppHandle, pid: u32, name: String) -> Result<(), S
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn macos_system_programs_and_webkit_are_never_offered_close() {
+        assert!(in_macos(Some(Path::new("/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer")), 412));
+        assert!(in_macos(Some(Path::new("/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent")), 900));
+        assert!(in_macos(None, 1), "launchd");
+        assert!(!in_macos(Some(Path::new("/Applications/Spotify.app/Contents/MacOS/Spotify")), 901));
+        assert!(!in_macos(None, 902));
+    }
 
     fn eater(pid: u32, cpu: f32, mem_mb: u64) -> Eater {
         Eater { pid, name: format!("p{pid}"), cpu, mem_mb, owner: String::new(), closable: true }

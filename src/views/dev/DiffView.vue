@@ -24,7 +24,7 @@ const lines = computed(() => diffLines(props.text))
 <style scoped>
 .diff {
   margin: 0;
-  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
   font-size: 12.5px;
   line-height: 1.45;
   white-space: pre-wrap;

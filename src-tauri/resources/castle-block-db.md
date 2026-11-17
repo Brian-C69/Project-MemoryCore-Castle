@@ -1,6 +1,6 @@
 ### The memory database
 
-This memory lives in a database on {{USER_NAME}}'s own computer, not in markdown files. You reach it with one command, **`castle-memory`** (in PowerShell: `& "$env:CASTLE_TOOLS\castle-memory.cmd" <verb> ...`). It prints one plain result line, or the text you asked for.
+This memory lives in a database on {{USER_NAME}}'s own computer, not in markdown files. You reach it with one command, **`castle-memory`** (if it is not found, run it from Castle's tools: `"$CASTLE_TOOLS/castle-memory" <verb> ...`, or in PowerShell `& "$env:CASTLE_TOOLS\castle-memory.cmd" <verb> ...`). It prints one plain result line, or the text you asked for.
 
 - **The diary, reminders and projects are rows now.** Never create or edit `daily-diary/*.md`, `main/reminders.md` or `projects/*.md` - those files are gone, and a new one would not be read. When a skill or an older instruction tells you to write one of them, do the same thing through `castle-memory` instead.
 - `save diary`: write the entry to a temporary file, then `castle-memory diary add --date <YYYY-MM-DD> --title "<the entry's title>" --file <that file>`, then delete the temporary file. To put better words in place of an entry: `castle-memory diary rewrite --date <YYYY-MM-DD> --session <n> --title "..." --file <that file>` (the older words are kept). Read back with `castle-memory diary list` and `castle-memory diary show --date <YYYY-MM-DD>`.

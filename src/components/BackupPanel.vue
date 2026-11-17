@@ -4,6 +4,7 @@
 // repository is always private, and MemoryCore's public template is never pushed to.
 import { computed, onMounted, ref } from 'vue'
 import { backupCreate, backupNow, backupSignIn, backupStatus, getSettings, openUrl, saveSettings } from '../api/castle.js'
+import { isMac } from '../platform.js'
 
 const props = defineProps({
   companion: { type: String, default: 'your companion' },
@@ -101,7 +102,7 @@ onMounted(async () => {
     <p v-if="status" class="next" :class="{ warn: status.remoteIsTemplate || status.visibility === 'PUBLIC' }">{{ status.nextStep }}</p>
 
     <div v-if="firstOpen === 'git'" class="row">
-      <button class="primary" @click="openUrl('https://git-scm.com/download/win')">Get Git</button>
+      <button class="primary" @click="openUrl(isMac ? 'https://git-scm.com/download/mac' : 'https://git-scm.com/download/win')">Get Git</button>
     </div>
     <div v-else-if="firstOpen === 'gh'" class="row">
       <button class="primary" @click="openUrl('https://cli.github.com/')">Get the GitHub CLI</button>

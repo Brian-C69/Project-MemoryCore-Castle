@@ -80,9 +80,30 @@ fn raw_listeners() -> Vec<(u16, u32)> {
     out
 }
 
+/// macOS and Linux: the listening TCP ports and their programs, from `lsof` (`-F pn`: a `p<pid>`
+/// line, then an `n<address>:<port>` line per socket).
 #[cfg(not(windows))]
 fn raw_listeners() -> Vec<(u16, u32)> {
-    Vec::new()
+    let Ok(out) = std::process::Command::new("lsof").args(["-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pn"]).stderr(std::process::Stdio::null()).output() else {
+        return Vec::new();
+    };
+    lsof_listeners(&String::from_utf8_lossy(&out.stdout))
+}
+
+#[cfg_attr(windows, allow(dead_code))]
+fn lsof_listeners(text: &str) -> Vec<(u16, u32)> {
+    let mut out = Vec::new();
+    let mut pid = 0;
+    for line in text.lines() {
+        if let Some(p) = line.strip_prefix('p') {
+            pid = p.parse().unwrap_or(0);
+        } else if let Some(name) = line.strip_prefix('n') {
+            if let Some(port) = name.rsplit(':').next().and_then(|p| p.parse().ok()) {
+                out.push((port, pid));
+            }
+        }
+    }
+    out
 }
 
 /// The table keeps the port in network byte order in the low 16 bits.
@@ -255,6 +276,12 @@ pub fn servers(sessions: &[(u8, u32)], projects: &[(u8, PathBuf)], companion: &s
 mod tests {
     use super::*;
 
+    #[test]
+    fn lsof_lines_give_each_port_and_its_program() {
+        let text = "p812\nf23\nn127.0.0.1:5173\nf24\nn[::1]:5173\np90\nf5\nn*:3306\n";
+        assert_eq!(lsof_listeners(text), [(5173, 812), (5173, 812), (3306, 90)]);
+    }
+
     fn proc(pid: u32, parent: Option<u32>, name: &str, folder: Option<&str>) -> (u32, Proc) {
         (pid, Proc { pid, parent, name: name.to_string(), folder: folder.map(PathBuf::from) })
     }
@@ -274,6 +301,8 @@ mod tests {
         assert_eq!(owner_of(300, &procs, &[(3, 100)], &projects), Owner::Tab(3));
     }
 
+    // Windows folders compare without case; macOS and Linux keep case, so this holds only on Windows
+    #[cfg(windows)]
     #[test]
     fn folder_inside_a_project_is_its_folder() {
         let procs = table(vec![proc(10, None, "node.exe", Some(r"d:\Work\Shop\frontend"))]);

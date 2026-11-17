@@ -1,5 +1,5 @@
 # The release: push a tag vX.Y.Z (after `npm run bump X.Y.Z` and a commit) and this builds the
-# official, signed Windows installer, publishes the GitHub release every installed Castle reads,
+# official, signed Windows installer (and, in a second job, the Mac .dmg), publishes the GitHub release every installed Castle reads,
 # and tells the MemoryCore Foundation's site about it.
 #
 # The job runs in the `release` environment (repository settings > Environments): only a v*.*.*
@@ -91,3 +91,36 @@ jobs:
         env:
           PORTFOLIO_RELEASE_URL: ${{ vars.PORTFOLIO_RELEASE_URL }}
         run: node scripts/tell-portfolio.mjs
+
+  # The Mac build, added to the same release once the Windows job has published it. Not signed by
+  # Apple yet (macOS asks once: System Settings > Privacy & Security > Open Anyway) and without the
+  # self-updater: Mac members update by downloading the new .dmg.
+  macos:
+    needs: release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: npm test
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: node src-tauri/resources/tools/test-helpers.mjs
+      - name: Mac build (Apple silicon and Intel in one app)
+        run: npx tauri build --target universal-apple-darwin
+      - name: Add it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          dmg=$(ls src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg | head -1)
+          cp "$dmg" "MemoryCore-Castle-${version}-macos.dmg"
+          gh release upload "$GITHUB_REF_NAME" "MemoryCore-Castle-${version}-macos.dmg"

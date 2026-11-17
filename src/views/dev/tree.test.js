@@ -47,6 +47,8 @@ describe('the FILES helpers', () => {
 
   it('builds the whole path for the chat', () => {
     expect(absPath('D:\\Work\\Baek\\', 'resources/js/app.js')).toBe('D:\\Work\\Baek\\resources\\js\\app.js')
+    expect(absPath('/Users/rin/Work/', 'resources\\js/app.js')).toBe('/Users/rin/Work/resources/js/app.js')
+    expect(absPath('/Users/rin/Work', '')).toBe('/Users/rin/Work')
     expect(absPath('D:/Work/Baek', 'a.txt')).toBe('D:/Work/Baek\\a.txt')
   })
 

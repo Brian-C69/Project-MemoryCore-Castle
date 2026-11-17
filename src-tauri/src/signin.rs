@@ -19,6 +19,9 @@ use std::time::{Duration, Instant};
 pub const PORTFOLIO: &str = "https://www.afifmaahi-portfolio.com";
 const USER_AGENT: &str = concat!("MemoryCoreCastle/", env!("CARGO_PKG_VERSION"));
 const WAIT_FOR_BROWSER: Duration = Duration::from_secs(5 * 60);
+/// Set by Cancel while Castle waits for the browser; the wait ends at its next look.
+static CANCEL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub const CANCELLED: &str = "The sign-in was cancelled.";
 
 pub fn portfolio() -> String {
     if cfg!(debug_assertions) {
@@ -113,6 +116,9 @@ fn wait_for_code(listener: &TcpListener, state: &str) -> Result<String, String> 
     listener.set_nonblocking(true).map_err(|_| "Castle could not listen for the sign-in.".to_string())?;
     let until = Instant::now() + WAIT_FOR_BROWSER;
     while Instant::now() < until {
+        if CANCEL.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            return Err(CANCELLED.into());
+        }
         match listener.accept() {
             Ok((mut stream, _)) => {
                 let _ = stream.set_nonblocking(false);
@@ -171,6 +177,7 @@ pub fn exchange(base: &str, code: &str, verifier: &str) -> Result<String, String
 /// The whole browser sign-in; the token is kept in Credential Manager.
 pub fn sign_in() -> Result<(), String> {
     let base = portfolio();
+    CANCEL.store(false, std::sync::atomic::Ordering::SeqCst);
     let verifier = b64url(&random(32)?);
     let state = b64url(&random(16)?);
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|_| "Castle could not listen for the sign-in.".to_string())?;
@@ -254,6 +261,12 @@ pub async fn member_sign_in() -> Result<MemberStatus, String> {
     .map_err(|_| "The sign-in stopped.".to_string())?
 }
 
+/// Cancel on the room's door: stops waiting for the browser, so Sign in can start again at once.
+#[tauri::command]
+pub fn member_sign_in_cancel() {
+    CANCEL.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 #[tauri::command]
 pub async fn member_status() -> MemberStatus {
     tauri::async_runtime::spawn_blocking(member_status_now).await.unwrap_or_default()
@@ -276,6 +289,15 @@ mod tests {
         let verifier = b64url(&random(32).unwrap());
         assert_eq!(verifier.len(), 43);
         assert_eq!(challenge_of(&verifier).len(), 43);
+    }
+
+    #[test]
+    fn cancel_ends_the_wait_for_the_browser_at_once() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        member_sign_in_cancel();
+        let started = Instant::now();
+        assert_eq!(wait_for_code(&listener, "s").unwrap_err(), CANCELLED);
+        assert!(started.elapsed() < Duration::from_secs(2));
     }
 
     #[test]

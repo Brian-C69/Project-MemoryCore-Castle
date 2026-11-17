@@ -192,7 +192,7 @@ onBeforeUnmount(() => {
   font-size: 1.4rem;
   line-height: 1;
   cursor: pointer;
-  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 .controls button.pause {
   font-size: 0.85rem;

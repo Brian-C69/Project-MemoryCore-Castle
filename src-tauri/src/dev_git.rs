@@ -78,7 +78,10 @@ pub fn dev_open_link(url: String) -> Result<(), String> {
     if !git::is_openable_link(&url) {
         return Err("Only a GitHub page or a server on this computer opens from here.".into());
     }
+    #[cfg(not(windows))]
+    return crate::os::open_link(&url);
     // The same way open_url hands a link to the browser (explorer.exe drops links with "&").
+    #[cfg(windows)]
     std::process::Command::new("rundll32.exe")
         .arg("url.dll,FileProtocolHandler")
         .arg(&url)

@@ -62,7 +62,7 @@ onBeforeUnmount(() => stop?.())
   border: 1px solid var(--warn);
   border-radius: 12px;
   background: var(--panel-background);
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
   font-size: 13px;
 }
 button {

@@ -24,14 +24,14 @@ pub fn should_auto_wake(at_sign_in: bool, start_session_on_launch: bool) -> bool
 pub fn sync(app: &AppHandle, wanted: bool) -> Option<String> {
     // A test build lives in target\debug; pointing Windows at it would leave a broken entry behind.
     if cfg!(debug_assertions) {
-        return Some("Start with Windows takes effect in the installed Castle, not in this test build.".into());
+        return Some(if cfg!(windows) { "Start with Windows takes effect in the installed Castle, not in this test build." } else { "Open at login takes effect in the installed Castle, not in this test build." }.into());
     }
     let launcher = app.autolaunch();
     if launcher.is_enabled().ok() == Some(wanted) {
         return None;
     }
     let result = if wanted { launcher.enable() } else { launcher.disable() };
-    result.err().map(|_| "Windows did not accept the change to start-up.".into())
+    result.err().map(|_| if cfg!(windows) { "Windows did not accept the change to start-up." } else { "macOS did not accept the change to the login items." }.into())
 }
 
 #[cfg(test)]

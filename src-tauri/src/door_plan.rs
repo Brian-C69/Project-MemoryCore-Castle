@@ -31,7 +31,7 @@ pub fn newest_md(folder: &Path) -> Option<PathBuf> {
 
 /// The plan the CLI approved last: the newest `*.md` in `%USERPROFILE%\.claude\plans`.
 pub(crate) fn newest_plan() -> Result<PathBuf, String> {
-    let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")).ok_or("Your home folder could not be found. Name the plan with --plan <file>.")?;
+    let home = crate::env::home_dir().ok_or("Your home folder could not be found. Name the plan with --plan <file>.")?;
     newest_md(&PathBuf::from(home).join(".claude").join("plans")).ok_or_else(|| "No plan was found in ~/.claude/plans. Name one with --plan <file>.".to_string())
 }
 

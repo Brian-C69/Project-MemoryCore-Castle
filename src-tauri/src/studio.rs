@@ -206,9 +206,9 @@ pub fn allow_memory_folder(app: &AppHandle) {
     }
 }
 
-/// Where the helpers leave their notices (castle-common.ps1 writes here).
+/// Where the helpers leave their notices (castle-common.mjs writes here).
 pub fn notices_file() -> Option<PathBuf> {
-    std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("MemoryCore Castle").join("notices.jsonl"))
+    crate::env::app_data().map(|a| a.join("MemoryCore Castle").join("notices.jsonl"))
 }
 
 /// The room a notice belongs to: a world prepare is WORLD's, a drawing for the companion's look

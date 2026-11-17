@@ -33,7 +33,7 @@ describe('the chosen quality', () => {
     expect(qualityLine('style')).toBe('')
     expect(qualityLine(undefined)).toBe('')
     expect(qualityLine('ultra')).toBe('')
-    for (const q of ['low', 'medium', 'high']) expect(qualityLine(q)).toContain(`-Quality ${q}`)
+    for (const q of ['low', 'medium', 'high']) expect(qualityLine(q)).toContain(`--quality ${q}`)
   })
   it('prices every quality but the style default', () => {
     expect(QUALITIES.map((q) => q.id)).toEqual(['style', 'low', 'medium', 'high'])
@@ -46,7 +46,7 @@ describe('appearance image edit requests', () => {
     const file = 'C:\\My Pictures\\Mira "night".png'
     const request = referenceLine(file)
     expect(request).toContain(JSON.stringify(file))
-    expect(request).toContain('-Reference')
+    expect(request).toContain("--reference")
     expect(request).toContain('Preserve its face and body proportions')
     expect(referenceLine(null)).toBe('')
   })
@@ -59,7 +59,7 @@ describe('appearance image edit requests', () => {
     const outfit = itemReferenceLine('outfit', file)
     expect(outfit).toContain(JSON.stringify(file))
     expect(outfit).toContain('outfit reference image as the source for the clothes only')
-    expect(outfit).toContain('Do not pass it as the -Reference')
+    expect(outfit).toContain('Do not pass it as the --reference')
     expect(outfit).toContain('face, body or identity')
     expect(itemReferenceLine('hair', file)).toContain('hairstyle reference image as the source for the hair only')
     expect(itemReferenceLine('outfit', null)).toBe('')

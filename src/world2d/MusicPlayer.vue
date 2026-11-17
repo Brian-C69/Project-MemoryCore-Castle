@@ -164,7 +164,7 @@ onBeforeUnmount(() => {
   border-radius: 14px;
   border: 1px solid var(--line, rgba(255, 255, 255, 0.14));
   background: rgba(10, 10, 24, 0.55);
-  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   color: var(--text, #f2efff);
   font-size: 0.85rem;
   min-width: 0;

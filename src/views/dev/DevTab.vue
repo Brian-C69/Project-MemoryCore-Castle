@@ -235,7 +235,7 @@ async function closeNow() {
   background: var(--panel-background);
   border: 1px solid var(--line);
   border-radius: 14px;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 
 .dot {
@@ -378,7 +378,7 @@ button:focus-visible {
   padding: 16px;
   border-radius: 14px;
   background: rgba(6, 4, 20, 0.42);
-  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
 }
 
 .close-card {
@@ -387,7 +387,7 @@ button:focus-visible {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--panel-background);
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
   box-sizing: border-box;
 }

@@ -3,6 +3,11 @@ import { onBeforeUnmount, ref } from 'vue'
 import TopMusic from './TopMusic.vue'
 import TopClock from './TopClock.vue'
 import { neighbourOf } from './taborder.js'
+import { castleWindowLayout, getSettings } from '../api/castle.js'
+import { isMac } from '../platform.js'
+
+const moveHint = isMac ? 'Drag to move this tab, or ⌥← / ⌥→' : 'Drag to move this tab, or Alt+← / Alt+→'
+const hideLabel = isMac ? 'Hide to menu bar' : 'Hide to tray'
 
 const props = defineProps({
   tabs: { type: Array, required: true },
@@ -17,6 +22,37 @@ const props = defineProps({
   markTitles: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(['select', 'settings', 'hide', 'reorder'])
+
+// How much of the screen Castle takes: the whole screen, half of it, or a size the member drags.
+const LAYOUTS = [
+  { id: 'full', label: 'Full screen' },
+  { id: 'left', label: 'Left half' },
+  { id: 'right', label: 'Right half' },
+  { id: 'free', label: 'Free: drag the edges' },
+]
+const layoutOpen = ref(false)
+const layout = ref('full')
+async function toggleLayout() {
+  layoutOpen.value = !layoutOpen.value
+  if (!layoutOpen.value) return
+  try {
+    layout.value = (await getSettings()).settings?.windowLayout || 'full'
+  } catch {
+    // outside Castle's window
+  }
+}
+async function chooseLayout(id) {
+  layoutOpen.value = false
+  try {
+    await castleWindowLayout(id)
+    layout.value = id
+  } catch {
+    // the window stays as it was
+  }
+}
+function layoutOut(event) {
+  if (!event.currentTarget.contains(event.relatedTarget)) layoutOpen.value = false
+}
 
 // The member arranges the tabs: press a tab and drag it onto another (pointer events, so it works
 // whatever the window does with dropped files), or Alt+Left / Alt+Right on the focused tab.
@@ -78,8 +114,9 @@ onBeforeUnmount(stopListening)
 </script>
 
 <template>
-  <header class="top-bar">
-    <span class="title"><span class="gem">◆</span> MEMORYCORE<span v-if="version" class="version" :title="`MemoryCore Castle ${version}`">v{{ version }}</span></span>
+  <!-- the bar's empty space moves the window (the free layout); tabs and buttons keep their clicks -->
+  <header class="top-bar" data-tauri-drag-region>
+    <span class="title" data-tauri-drag-region><span class="gem">◆</span> MEMORYCORE<span v-if="version" class="version" :title="`MemoryCore Castle ${version}`">v{{ version }}</span></span>
     <nav class="tabs" :class="{ sorting: dragging }">
       <button
         v-for="tab in tabs"
@@ -87,7 +124,7 @@ onBeforeUnmount(stopListening)
         class="tab"
         :data-tab="tab.id"
         :class="{ active: tab.id === active, fresh: marks.includes(tab.id), dragging: tab.id === dragging, 'drop-target': dragging && tab.id === over && tab.id !== dragging }"
-        :title="marks.includes(tab.id) ? markTitles[tab.id] || 'Something new is waiting' : undefined"
+        :title="marks.includes(tab.id) ? markTitles[tab.id] || 'Something new is waiting' : moveHint"
         @pointerdown="onDown($event, tab.id)"
         @click="onClick(tab.id)"
         @keydown="onKey($event, tab.id)"
@@ -98,8 +135,18 @@ onBeforeUnmount(stopListening)
     <div class="actions">
       <TopClock v-if="displayClock" :format="clockFormat" />
       <TopMusic />
+      <div class="layout" @focusout="layoutOut" @keydown.esc="layoutOpen = false">
+        <button class="action" title="Window size" aria-label="Window size" :aria-expanded="layoutOpen" @click="toggleLayout">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M8 2.5v11" /></svg>
+        </button>
+        <div v-if="layoutOpen" class="layout-menu" role="menu">
+          <button v-for="l in LAYOUTS" :key="l.id" role="menuitemradio" :aria-checked="l.id === layout" :class="{ on: l.id === layout }" @click="chooseLayout(l.id)">
+            <span class="check" aria-hidden="true">{{ l.id === layout ? '✓' : '' }}</span>{{ l.label }}
+          </button>
+        </div>
+      </div>
       <button class="action" title="Settings" aria-label="Settings" @click="$emit('settings')">&#9881;</button>
-      <button class="action" title="Hide to tray" aria-label="Hide to tray" @click="$emit('hide')">&#8211;</button>
+      <button class="action" :title="hideLabel" :aria-label="hideLabel" @click="$emit('hide')">&#8211;</button>
     </div>
   </header>
 </template>
@@ -164,6 +211,10 @@ onBeforeUnmount(stopListening)
   gap: 8px;
 }
 
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
 button {
   border: 0;
   background: none;
@@ -225,6 +276,47 @@ button {
 .action:hover {
   color: var(--text);
   background: var(--hover);
+}
+.layout {
+  position: relative;
+}
+.layout .action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.layout-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-background);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 12px)); backdrop-filter: blur(var(--glass-blur, 12px));
+}
+.layout-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 6px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text);
+}
+.layout-menu button:hover,
+.layout-menu button:focus-visible {
+  background: var(--hover);
+}
+.layout-menu .check {
+  width: 14px;
+  color: var(--accent);
 }
 
 button:focus-visible {

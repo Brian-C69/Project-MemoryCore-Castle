@@ -131,6 +131,12 @@ pub fn front_matter(skill_md: &str) -> Option<&str> {
 /// and the rules that hold even when they cannot be loaded.
 pub fn stub_of(plugin: &str, name: &str, master: &str) -> String {
     let front = front_matter(master).map(str::to_string).unwrap_or_else(|| format!("---\nname: {name}\n---"));
+    // Windows: how to run the same command from PowerShell (on macOS castle-memory is on PATH)
+    let powershell = if cfg!(windows) {
+        format!("(in PowerShell: `& \"$env:CASTLE_TOOLS\\castle-memory.cmd\" skill show --plugin \"{plugin}\" --name \"{name}\"`)\n\n")
+    } else {
+        String::new()
+    };
     format!(
         "{front}\n\
          {STUB_MARK} - written by MemoryCore Castle. This skill's instructions live in the memory database; change them there, never here. -->\n\
@@ -145,8 +151,7 @@ pub fn stub_of(plugin: &str, name: &str, master: &str) -> String {
          castle-memory skill show --plugin \"{plugin}\" --name \"{name}\"\n\
          ```\n\
          \n\
-         (in PowerShell: `& \"$env:CASTLE_TOOLS\\castle-memory.cmd\" skill show --plugin \"{plugin}\" --name \"{name}\"`)\n\
-         \n\
+         {powershell}\
          Then follow what it prints exactly as if it were written here. A long skill prints its opening and a list of its sections: load a section with `--section <key>` when you reach it, or everything with `--all`.\n\
          \n\
          Rules that hold even when the instructions cannot be loaded:\n\
@@ -680,7 +685,7 @@ mod tests {
         let stub = stub_of("lyra-skills", "image-generation", master);
         assert!(stub.starts_with("---\nname: image-generation\ndescription: MUST use when the user wants an image. Triggers on \"render this\".\n---\n<!-- castle:skill-stub"));
         assert!(stub.contains("castle-memory skill show --plugin \"lyra-skills\" --name \"image-generation\""));
-        assert!(stub.contains("$env:CASTLE_TOOLS\\castle-memory.cmd"));
+        assert_eq!(stub.contains("$env:CASTLE_TOOLS\\castle-memory.cmd"), cfg!(windows));
         assert!(stub.contains("Do not guess the instructions"));
         assert!(!stub.contains("Renders."));
         assert!(is_stub(&stub) && !is_stub(master));

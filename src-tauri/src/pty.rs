@@ -27,6 +27,7 @@ pub fn launch_command(program: &Path, folder: &Path, vars: &[(String, String)], 
         .extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
+    // platform: windows-only - a .cmd / .bat launcher exists only on Windows
     let mut command = if is_script {
         let mut command = CommandBuilder::new("cmd.exe");
         command.arg("/c");
@@ -43,6 +44,12 @@ pub fn launch_command(program: &Path, folder: &Path, vars: &[(String, String)], 
         command.env_remove(name);
     }
     command.env("TERM", "xterm-256color");
+    // macOS: an app opened from the Finder has no locale, and the CLI's shells would mangle
+    // anything that is not plain English text
+    #[cfg(not(windows))]
+    if std::env::var_os("LANG").is_none() && std::env::var_os("LC_ALL").is_none() {
+        command.env("LANG", "en_US.UTF-8");
+    }
     command.env("COLORTERM", "truecolor");
     for (name, value) in vars {
         command.env(name, value);
@@ -333,8 +340,18 @@ mod tests {
     #[test]
     fn a_real_console_carries_text_out_and_reports_the_end() {
         let host = PtyHost::default();
-        let mut command = CommandBuilder::new("cmd.exe");
-        command.args(["/c", "echo castle-console-test-\u{65E5}\u{672C}"]);
+        #[cfg(windows)]
+        let mut command = {
+            let mut c = CommandBuilder::new("cmd.exe");
+            c.args(["/c", "echo castle-console-test-\u{65E5}\u{672C}"]);
+            c
+        };
+        #[cfg(not(windows))]
+        let mut command = {
+            let mut c = CommandBuilder::new("/bin/sh");
+            c.args(["-c", "echo castle-console-test-\u{65E5}\u{672C}"]);
+            c
+        };
         command.cwd(std::env::temp_dir());
 
         let (text_tx, text_rx) = mpsc::channel::<String>();

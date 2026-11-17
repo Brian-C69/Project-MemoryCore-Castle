@@ -148,7 +148,7 @@ pub fn effective_root(settings: &Settings, user_folder: Option<&Path>) -> Option
 }
 
 fn user_folder() -> Option<PathBuf> {
-    std::env::var_os("USERPROFILE").map(PathBuf::from).filter(|p| p.is_dir())
+    crate::env::home_dir().filter(|p| p.is_dir())
 }
 
 /// The projects folder as the New project sheet shows it.
@@ -182,6 +182,10 @@ fn git_program() -> Result<PathBuf, String> {
 pub fn gh_program() -> Option<PathBuf> {
     env::find_on_path("gh").or_else(|| {
         let mut places = vec![PathBuf::from(r"C:\Program Files\GitHub CLI\gh.exe")];
+        // macOS: Homebrew's places (Apple silicon, then Intel)
+        if !cfg!(windows) {
+            places = vec![PathBuf::from("/opt/homebrew/bin/gh"), PathBuf::from("/usr/local/bin/gh")];
+        }
         if let Some(local) = std::env::var_os("LOCALAPPDATA") {
             places.push(PathBuf::from(local).join("Programs").join("GitHub CLI").join("gh.exe"));
         }
@@ -578,7 +582,7 @@ mod tests {
     #[test]
     fn before_a_choice_the_user_folder_suggests_projects() {
         let home = PathBuf::from(r"C:\Users\Lyra");
-        assert_eq!(effective_root(&Settings::default(), Some(&home)), Some((PathBuf::from(r"C:\Users\Lyra\Projects"), true)));
+        assert_eq!(effective_root(&Settings::default(), Some(&home)), Some((home.join("Projects"), true)));
         let set = Settings { dev_root: Some(r"E:\Work".into()), ..Settings::default() };
         assert_eq!(effective_root(&set, Some(&home)), Some((PathBuf::from(r"E:\Work"), false)), "the member's choice always wins");
         assert_eq!(effective_root(&Settings::default(), None), None, "no user folder, no suggestion: the sheet asks for a folder");

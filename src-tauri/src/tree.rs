@@ -174,7 +174,7 @@ pub fn read(folder: &Path, rel: &str) -> Result<Shown, String> {
         });
     }
     if size > READ_LIMIT {
-        return Ok(Shown::Note { note: "Too long to show here - open it with Reveal in Explorer.".into(), size });
+        return Ok(Shown::Note { note: if cfg!(windows) { "Too long to show here - open it with Reveal in Explorer." } else { "Too long to show here - open it with Reveal in Finder." }.into(), size });
     }
     let bytes = std::fs::read(&file).map_err(|_| "The file can't be read.".to_string())?;
     if is_binary(&bytes) {
@@ -203,18 +203,18 @@ pub fn plain_path(path: &Path) -> String {
 /// Windows Explorer opened with the file (or folder) selected - inside the project only.
 pub fn reveal(folder: &Path, rel: &str) -> Result<(), String> {
     let target = plain_path(&inside(folder, rel)?);
-    let mut command = Command::new("explorer.exe");
+    #[cfg(not(windows))]
+    return crate::os::open_path(Path::new(&target), true);
     #[cfg(windows)]
     {
+        let mut command = Command::new("explorer.exe");
         // Explorer wants `/select,"path"` exactly; the usual argument quoting would wrap all of it
         use std::os::windows::process::CommandExt;
         command.raw_arg(format!("/select,\"{target}\""));
+        no_window(&mut command);
+        crate::shell::let_it_come_forward();
+        command.spawn().map(|_| ()).map_err(|_| "Windows could not open it.".to_string())
     }
-    #[cfg(not(windows))]
-    command.arg(format!("/select,{target}"));
-    no_window(&mut command);
-    crate::shell::let_it_come_forward();
-    command.spawn().map(|_| ()).map_err(|_| "Windows could not open it.".to_string())
 }
 
 #[cfg(test)]

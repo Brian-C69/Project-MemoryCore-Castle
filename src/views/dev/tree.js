@@ -58,9 +58,15 @@ export function openedFor(folder) {
   return OPENED.get(folder)
 }
 
-/** The project's file as a Windows path: folder + rel with backslashes. */
+/**
+ * The project's file as a full path: folder + rel, in the folder's own form - backslashes for a
+ * Windows folder (D:\\Work), forward slashes for a Mac one (/Users/rin/Work).
+ */
 export function absPath(folder, rel) {
-  return `${String(folder).replace(/[\\/]+$/, '')}\\${String(rel).replace(/^[\\/]+/, '').replaceAll('/', '\\')}`
+  const base = String(folder)
+  const sep = base.includes('\\') || /^[A-Za-z]:/.test(base) ? '\\' : '/'
+  const inside = String(rel).replace(/^[\\/]+/, '').replace(/[\\/]/g, sep)
+  return inside ? `${base.replace(/[\\/]+$/, '')}${sep}${inside}` : base
 }
 
 /** A text file's lines for the reader (Windows line ends and the last empty line left out). */

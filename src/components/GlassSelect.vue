@@ -280,7 +280,7 @@ onBeforeUnmount(close)
   border: 1px solid var(--line);
   border-radius: 10px;
   background: color-mix(in srgb, var(--panel-background) 92%, #050b1f);
-  backdrop-filter: blur(var(--glass-blur, 12px));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 12px)); backdrop-filter: blur(var(--glass-blur, 12px));
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   color: var(--text);
   font-size: 14px;

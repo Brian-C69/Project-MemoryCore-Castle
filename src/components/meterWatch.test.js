@@ -23,6 +23,12 @@ describe('the gauges keep watch', () => {
     expect(ownerTag('')).toBe('')
   })
 
+  it("names the system's own programs for the computer", () => {
+    expect(ownerTag('system', false)).toBe('Windows')
+    expect(ownerTag('system', true)).toBe('macOS')
+    expect(ownerTag('editor', true)).toBe('editor')
+  })
+
   it('tells the trip honestly', () => {
     expect(tripHeadline({ meter: 'cpu', value: 93 })).toBe('CPU at 93% - here is what is using it')
     expect(tripHeadline({ meter: 'memory', value: 91, freedMb: 600 })).toContain('some comes back as apps use it')

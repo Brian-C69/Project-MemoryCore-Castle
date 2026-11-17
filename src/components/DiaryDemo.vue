@@ -63,7 +63,7 @@ onMounted(() => {
   box-sizing: border-box;
   background: var(--wallpaper) var(--wallpaper-position) / cover no-repeat, #040817;
   color: var(--text);
-  font-family: var(--font, 'Segoe UI', system-ui, sans-serif);
+  font-family: var(--font, -apple-system, 'Segoe UI', system-ui, sans-serif);
 }
 section {
   display: flex;
@@ -84,6 +84,6 @@ h2 {
   background: var(--panel-background);
   border: 1px solid var(--line);
   border-radius: 14px;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 </style>

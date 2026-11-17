@@ -106,7 +106,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--panel-background);
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.4);
   color: var(--text);
   font-size: 13px;

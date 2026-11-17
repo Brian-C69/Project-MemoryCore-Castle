@@ -7,6 +7,7 @@
 import GlassSelect from '../components/GlassSelect.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { absPath } from './dev/tree.js'
 import TerminalPanel from '../components/TerminalPanel.vue'
 import ModalSheet from '../components/ModalSheet.vue'
 import MarkdownText from '../components/MarkdownText.vue'
@@ -43,7 +44,7 @@ let worldTimer = 0
 const look = computed(() => settings.value?.storyLook ?? 'classic')
 const portrait = computed(() => {
   const folder = settings.value?.memoryFolder
-  return folder ? `${folder}\\appearance\\portrait.png` : null
+  return folder ? absPath(folder, 'appearance/portrait.png') : null
 })
 const keyArt = (w) => (w.scenes?.length ? convertFileSrc(w.scenes[w.scenes.length - 1]) : null)
 
@@ -299,7 +300,7 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--panel-background);
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 .card.new {
   justify-content: center;

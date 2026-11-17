@@ -7,7 +7,7 @@
 | Slot | What goes in |
 |---|---|
 | `{{PIECE}}` | What this piece is, from `world.json` and the member's words. Base isle: "a large floating island: rocky underside tapering to a point with hanging roots, a wide flat grassy top, the centre left EMPTY and flat (the centrepiece stands there as its own piece)". Centrepiece: the thing at the heart of the world, standing upright on its own, "no ground, no island, no pedestal". Islet: "a small floating islet: rock underside tapering to a point, grassy top with ...". Isle (archipelago): one island and the building or garden it holds |
-| `{{STYLE}}` | The same look as the concept picture (pass `design/00-concept.png` with `-Reference` when it exists) |
+| `{{STYLE}}` | The same look as the concept picture (pass `design/00-concept.png` with `--reference` when it exists) |
 
 ## Prompt
 

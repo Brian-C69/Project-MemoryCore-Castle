@@ -10,17 +10,117 @@ use std::path::{Path, PathBuf};
 /// as it means to. With no program on PATH (an npm install is only a .cmd), the script is used.
 pub fn find_on_path(command: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
-    let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
-    find_program_first(command, std::env::split_paths(&path).collect::<Vec<_>>(), &exts)
+    #[cfg(windows)]
+    {
+        let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
+        find_program_first(command, std::env::split_paths(&path).collect::<Vec<_>>(), &exts)
+    }
+    #[cfg(not(windows))]
+    find_executable(command, std::env::split_paths(&path))
+}
+
+/// Node, which runs Castle's helpers (castle-image.mjs and the rest): on PATH, else where its
+/// installers put it.
+pub fn node_program() -> Option<PathBuf> {
+    find_on_path("node").or_else(|| {
+        let places: &[&str] = if cfg!(windows) {
+            &[r"C:\Program Files\nodejs\node.exe"]
+        } else {
+            &["/opt/homebrew/bin/node", "/usr/local/bin/node"]
+        };
+        places.iter().map(PathBuf::from).find(|p| p.is_file())
+    })
+}
+
+/// Node, or the bare name so the error says what is missing.
+pub fn node() -> PathBuf {
+    node_program().unwrap_or_else(|| PathBuf::from("node"))
+}
+
+/// The member's home folder: %USERPROFILE% on Windows, $HOME elsewhere.
+pub fn home_dir() -> Option<PathBuf> {
+    let var = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+    std::env::var_os(var).filter(|v| !v.is_empty()).map(PathBuf::from)
+}
+
+/// Where per-user app data lives (Castle's spend log and notices, the helpers write the same place):
+/// %APPDATA% on Windows, ~/Library/Application Support on macOS, $XDG_CONFIG_HOME or ~/.config on Linux.
+pub fn app_data() -> Option<PathBuf> {
+    if cfg!(windows) {
+        return std::env::var_os("APPDATA").filter(|v| !v.is_empty()).map(PathBuf::from);
+    }
+    if cfg!(target_os = "macos") {
+        return home_dir().map(|h| h.join("Library").join("Application Support"));
+    }
+    std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()).map(PathBuf::from).or_else(|| home_dir().map(|h| h.join(".config")))
+}
+
+/// macOS and Linux: the first file named exactly `command` on PATH that may be run.
+#[cfg(not(windows))]
+pub fn find_executable(command: &str, folders: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
+    use std::os::unix::fs::PermissionsExt;
+    folders
+        .into_iter()
+        .map(|folder| folder.join(command))
+        .find(|candidate| std::fs::metadata(candidate).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0))
+}
+
+/// PATH with each folder once, in its first place. A shell profile that adds a folder every time it
+/// runs can grow PATH past what macOS lets a program start with, so Castle keeps only one of each.
+#[cfg(not(windows))]
+pub fn unique_path(path: &str) -> String {
+    let mut seen = std::collections::HashSet::new();
+    path.split(':').filter(|p| !p.is_empty() && seen.insert(*p)).collect::<Vec<_>>().join(":")
+}
+
+/// macOS: an app opened from the Finder or the Dock starts with only the system folders on PATH,
+/// so a CLI installed with npm or Homebrew (and the node it runs on) would not be found. Castle takes
+/// PATH from the member's login shell once, at start, the way their Terminal sees it.
+#[cfg(target_os = "macos")]
+pub fn adopt_login_path() {
+    use std::io::Read;
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+    let Ok(mut child) = std::process::Command::new(shell)
+        .args(["-ilc", "printf '%s' \"$PATH\""])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+    else {
+        return;
+    };
+    // a slow or stuck shell profile must never hold Castle's window back: five seconds, then the
+    // PATH Castle already has
+    let started = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if started.elapsed() < std::time::Duration::from_secs(5) => std::thread::sleep(std::time::Duration::from_millis(50)),
+            _ => {
+                let _ = child.kill();
+                return;
+            }
+        }
+    }
+    let mut stdout = Vec::new();
+    if child.stdout.take().is_some_and(|mut out| out.read_to_end(&mut stdout).is_ok()) {
+        let path = String::from_utf8_lossy(&stdout);
+        // an interactive shell may print a banner first; PATH is the last line
+        if let Some(path) = path.lines().last().map(str::trim).filter(|p| p.contains('/')) {
+            std::env::set_var("PATH", unique_path(path));
+        }
+    }
 }
 
 /// `find_in`, but a program anywhere on PATH before a script anywhere on PATH.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn find_program_first(command: &str, folders: Vec<PathBuf>, pathext: &str) -> Option<PathBuf> {
     let is_program = |e: &&str| matches!(e.to_ascii_lowercase().as_str(), ".exe" | ".com");
     let programs: String = pathext.split(';').filter(is_program).collect::<Vec<_>>().join(";");
     find_in(command, folders.clone(), &programs).or_else(|| find_in(command, folders, pathext))
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn find_in(command: &str, folders: impl IntoIterator<Item = PathBuf>, pathext: &str) -> Option<PathBuf> {
     let exts: Vec<String> = pathext.split(';').filter(|e| !e.is_empty()).map(|e| e.to_ascii_lowercase()).collect();
     for folder in folders {
@@ -44,7 +144,7 @@ pub fn image_mode(cli: Cli, has_openai_key: bool) -> &'static str {
 }
 
 /// How an APPEARANCE or STUDIO picture is drawn: "codex" (a separate Codex job on the member's
-/// ChatGPT plan), "key" (Castle runs castle-look.ps1 / castle-image.ps1 itself with the OpenAI key:
+/// ChatGPT plan), "key" (Castle runs castle-look.mjs / castle-image.mjs itself with the OpenAI key:
 /// no AI writes the prompt; the key never reaches Codex) or "none" (the prompt is saved).
 /// Whoever the main companion is, Codex signed in with ChatGPT draws first, on the plan the member
 /// already pays for; the key is the fallback (issue #39).
@@ -69,6 +169,20 @@ pub fn session_env(cli: Cli, key: &dyn Fn(&str) -> Option<String>, tools: &Path)
     // castle-memory (in the tools folder) starts this same program with --memory
     if let Ok(exe) = std::env::current_exe() {
         vars.push(("CASTLE_EXE".into(), exe.display().to_string()));
+    }
+    // macOS and Linux: `castle-memory` is a script among the tools, so the tools go first on PATH
+    // (and the script must be runnable; an installer may not keep that bit)
+    #[cfg(not(windows))]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let door = tools.join("castle-memory");
+        if let Ok(meta) = std::fs::metadata(&door) {
+            if meta.permissions().mode() & 0o111 == 0 {
+                let _ = std::fs::set_permissions(&door, std::fs::Permissions::from_mode(0o755));
+            }
+        }
+        let path = std::env::var("PATH").unwrap_or_default();
+        vars.push(("PATH".into(), unique_path(&format!("{}:{path}", tools.display()))));
     }
     let openai = key("openai");
     vars.push(("CASTLE_IMAGE".into(), image_mode(cli, openai.is_some()).into()));
@@ -110,6 +224,30 @@ mod tests {
 
     fn get<'a>(vars: &'a [(String, String)], name: &str) -> Option<&'a str> {
         vars.iter().find(|(n, _)| n == name).map(|(_, v)| v.as_str())
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_repeated_folder_stays_on_path_once_in_its_first_place() {
+        let grown = format!("{}/usr/bin:/a/tools::/usr/bin", "/u/.npm-global/bin:".repeat(4776));
+        assert_eq!(unique_path(&grown), "/u/.npm-global/bin:/usr/bin:/a/tools");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn on_macos_the_cli_is_the_runnable_file_with_its_bare_name() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("castle-find-{}", std::process::id()));
+        let (plain, runnable) = (root.join("plain"), root.join("runnable"));
+        std::fs::create_dir_all(&plain).unwrap();
+        std::fs::create_dir_all(&runnable).unwrap();
+        // a file that may not be run is passed over, even earlier on PATH
+        std::fs::write(plain.join("claude"), "").unwrap();
+        std::fs::write(runnable.join("claude"), "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(runnable.join("claude"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(find_executable("claude", [plain.clone(), runnable.clone()]), Some(runnable.join("claude")));
+        assert_eq!(find_executable("codex", [plain, runnable]), None);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

@@ -125,10 +125,52 @@ fn codex_quota() -> Option<Quota> {
     codex_files().iter().find_map(|path| last_codex_quota(path))
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+/// The usable token in Claude Code's credentials text, with when it stops working (ms since 1970,
+/// i64::MAX when the text does not say). An expired token is no token.
+fn token_in(text: &str, now: i64) -> Option<(String, i64)> {
+    let v: Value = serde_json::from_str(text).ok()?;
+    let token = v.pointer("/claudeAiOauth/accessToken")?.as_str().filter(|t| !t.is_empty())?.to_string();
+    // the credentials file writes milliseconds; the macOS Keychain entry writes seconds
+    let until = match v.pointer("/claudeAiOauth/expiresAt").and_then(Value::as_i64) {
+        Some(at) if at < 100_000_000_000 => at * 1000,
+        Some(at) => at,
+        None => i64::MAX,
+    };
+    (until > now).then_some((token, until))
+}
+
 fn claude_token() -> Option<String> {
-    let path: PathBuf = PathBuf::from(std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"))?).join(".claude").join(".credentials.json");
+    #[cfg(target_os = "macos")]
+    if let Some(token) = keychain_token() {
+        return Some(token);
+    }
+    let path: PathBuf = crate::env::home_dir()?.join(".claude").join(".credentials.json");
     let v: Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
     v.pointer("/claudeAiOauth/accessToken")?.as_str().map(str::to_string).filter(|t| !t.is_empty())
+}
+
+/// macOS: Claude Code keeps its live sign-in in the Keychain (a credentials file there may be an
+/// old, expired copy). macOS asks the member once before Castle may read it, so the token is kept
+/// for this run and read again only when it has expired.
+#[cfg(target_os = "macos")]
+fn keychain_token() -> Option<String> {
+    static KEPT: std::sync::Mutex<Option<(String, i64)>> = std::sync::Mutex::new(None);
+    let now = now_ms();
+    let mut kept = KEPT.lock().unwrap();
+    if let Some((token, _)) = kept.as_ref().filter(|(_, until)| *until > now) {
+        return Some(token.clone());
+    }
+    let out = std::process::Command::new("security")
+        .args(["find-generic-password", "-s", "Claude Code-credentials", "-w"])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let found = token_in(&text, now)?;
+    *kept = Some(found.clone());
+    Some(found.0)
 }
 
 /// Claude Code's `/usage` answer, or why there is none.
@@ -366,6 +408,18 @@ pub async fn cli_quota(store: State<'_, SettingsStore>) -> Result<Option<Quota>,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_expired_claude_token_is_no_token() {
+        let text = |until: i64| format!(r#"{{"claudeAiOauth":{{"accessToken":"tok","refreshToken":"r","expiresAt":{until}}}}}"#);
+        assert_eq!(token_in(&text(1_800_000_000_000), 1_790_000_000_000), Some(("tok".into(), 1_800_000_000_000)));
+        assert_eq!(token_in(&text(1_760_000_000_000), 1_790_000_000_000), None, "the old copy a Mac leaves in the file");
+        assert_eq!(token_in(r#"{"claudeAiOauth":{"accessToken":"tok"}}"#, 5), Some(("tok".into(), i64::MAX)));
+        assert_eq!(token_in(r#"{"claudeAiOauth":{"accessToken":""}}"#, 5), None);
+        // the Keychain's seconds: 1_800_000_000 s is 2027, still valid at a 2026 now in ms
+        assert_eq!(token_in(&text(1_800_000_000), 1_790_000_000_000), Some(("tok".into(), 1_800_000_000_000)));
+        assert_eq!(token_in(&text(1_700_000_000), 1_790_000_000_000), None);
+    }
 
     #[test]
     fn claude_gives_the_tightest_weekly_limit() {

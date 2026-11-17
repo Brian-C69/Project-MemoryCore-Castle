@@ -8,6 +8,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview'
 import ChatView from './ChatView.vue'
 import ProfileView from '../views/profile/ProfileView.vue'
 import { isTerminalReply } from './terminalreply.js'
+import { isMac, modKey } from '../platform.js'
 import QuickActions from './QuickActions.vue'
 import {
   clipboardCopy,
@@ -211,19 +212,21 @@ function copySelection() {
 
 // Ctrl+V, Ctrl+Shift+V and Shift+Insert paste; Ctrl+C copies a selection and otherwise goes to
 // the session as usual (interrupt). preventDefault stops the browser's own paste, so nothing doubles.
+// On a Mac the same is ⌘V and ⌘C (Ctrl+C there always interrupts, as in Terminal).
 function clipboardKeys(event) {
   if (event.type !== 'keydown') return true
   const key = event.key.toLowerCase()
-  if ((event.ctrlKey && key === 'v') || (event.shiftKey && event.key === 'Insert')) {
+  if ((modKey(event) && key === 'v') || (event.shiftKey && event.key === 'Insert')) {
     event.preventDefault()
     pasteIntoSession()
     return false
   }
-  if (event.ctrlKey && key === 'c' && term.hasSelection()) {
+  if (modKey(event) && key === 'c' && term.hasSelection()) {
     event.preventDefault()
     copySelection()
     return false
   }
+  if (isMac && event.metaKey && key === 'c') return false // ⌘C with nothing selected: nothing to copy, nothing sent
   return true
 }
 
@@ -282,7 +285,8 @@ onMounted(async () => {
     allowTransparency: true,
     allowProposedApi: true,
     cursorBlink: true,
-    fontFamily: "'Cascadia Mono', Consolas, monospace",
+    ...(isMac ? { macOptionIsMeta: true } : {}),
+    fontFamily: "'Cascadia Mono', Consolas, ui-monospace, Menlo, 'SF Mono', monospace",
     fontSize: 14,
     lineHeight: 1.15,
     scrollback: 10000,
@@ -491,7 +495,7 @@ defineExpose({ wake, screenLines, writeToSession, addPaths })
   background: var(--panel-background);
   border: 1px solid var(--line);
   border-radius: 14px;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
   box-sizing: border-box;
 }
 

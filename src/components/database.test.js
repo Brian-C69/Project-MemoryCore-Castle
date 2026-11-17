@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { card, megabytes, moveLine, nextStep, progressLine, setupStepLabel, shouldOffer, steps } from './database.js'
+import { card, thisComputer, installLine, megabytes, moveLine, nextStep, progressLine, setupStepLabel, shouldOffer, steps } from './database.js'
 
 const none = { state: 'notInstalled', external: null }
 const stopped = { state: 'stopped', port: 3307 }
@@ -26,6 +26,12 @@ describe('the database steps', () => {
 
   it('treats an existing server as installed, and running only while it answers', () => {
     expect(steps(xampp(true), made)[0].label).toBe('Using the database already on this PC')
+    expect(steps(xampp(true), made, false)[0].label).toBe('Using the database already on this PC')
+    expect(steps(xampp(true), made, true)[0].label).toBe('Using the database already on this Mac')
+    expect(card(xampp(false), made, true).line).toBe('The database on this Mac is stopped.')
+    expect(card(xampp(false), made, false).line).toBe('The database on this PC is stopped.')
+    expect(thisComputer(true)).toBe('this Mac')
+    expect(thisComputer(false)).toBe('this PC')
     expect(nextStep(xampp(false), made)).toBe('start')
     expect(nextStep(xampp(true), made)).toBe('move')
   })
@@ -43,6 +49,8 @@ describe('the database steps', () => {
 describe('the words', () => {
   it('rounds the download size and the progress', () => {
     expect(megabytes(95024126)).toBe('91 MB')
+    expect(installLine({ source: 'download', downloadBytes: 95024126 })).toBe('About 91 MB')
+    expect(installLine({ source: 'homebrew', downloadBytes: 95024126 })).toBe('Installed with Homebrew')
     expect(progressLine(0, 0)).toBe('Downloading…')
     expect(progressLine(41, 95)).toBe('Downloading… 43%')
     expect(progressLine(200, 95)).toBe('Downloading… 100%')

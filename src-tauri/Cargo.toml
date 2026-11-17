@@ -26,7 +26,7 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
-keyring = { version = "3", features = ["windows-native"] }
+keyring = { version = "3", features = ["windows-native", "apple-native"] }
 portable-pty = "0.9"
 base64 = "0.22"
 sysinfo = { version = "0.40", default-features = false, features = ["system"] }

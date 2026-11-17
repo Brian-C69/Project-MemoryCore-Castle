@@ -28,23 +28,48 @@ fn known(account: &str) -> Result<(), String> {
 }
 
 fn entry(account: &str) -> Result<Entry, String> {
-    Entry::new(SERVICE, account).map_err(|_| "Windows Credential Manager could not be opened.".to_string())
+    Entry::new(SERVICE, account).map_err(|_| format!("{} could not be opened.", if cfg!(windows) { "Windows Credential Manager" } else { "The Keychain" }))
+}
+
+/// macOS asks the member before an app reads its own Keychain entries (and asks again whenever the
+/// app's build changes), so each key is read from the Keychain at most once per run and kept here
+/// until Castle closes. Windows Credential Manager never asks, so Windows reads it every time.
+#[cfg(target_os = "macos")]
+static READ: std::sync::Mutex<Option<std::collections::HashMap<String, Option<String>>>> = std::sync::Mutex::new(None);
+
+#[cfg(target_os = "macos")]
+fn remember(account: &str, key: Option<String>) {
+    READ.lock().unwrap().get_or_insert_with(Default::default).insert(account.to_string(), key);
 }
 
 fn save_as(account: &str, key: &str) -> Result<(), String> {
     entry(account)?
         .set_password(key)
-        .map_err(|_| "The key could not be kept in Windows Credential Manager.".to_string())
+        .map_err(|_| format!("The key could not be kept in {}.", if cfg!(windows) { "Windows Credential Manager" } else { "the Keychain" }))?;
+    #[cfg(target_os = "macos")]
+    remember(account, Some(key.to_string()).filter(|k| !k.is_empty()));
+    Ok(())
 }
 
 fn load_as(account: &str) -> Option<String> {
-    entry(account).ok()?.get_password().ok().filter(|key| !key.is_empty())
+    #[cfg(target_os = "macos")]
+    if let Some(known) = READ.lock().unwrap().as_ref().and_then(|read| read.get(account)) {
+        return known.clone();
+    }
+    let key = entry(account).ok()?.get_password().ok().filter(|key| !key.is_empty());
+    #[cfg(target_os = "macos")]
+    remember(account, key.clone());
+    key
 }
 
 fn forget_as(account: &str) -> Result<(), String> {
     match entry(account)?.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(_) => Err("The key could not be removed from Windows Credential Manager.".to_string()),
+        Ok(()) | Err(keyring::Error::NoEntry) => {
+            #[cfg(target_os = "macos")]
+            remember(account, None);
+            Ok(())
+        }
+        Err(_) => Err(format!("The key could not be removed from {}.", if cfg!(windows) { "Windows Credential Manager" } else { "the Keychain" })),
     }
 }
 
@@ -157,6 +182,18 @@ pub fn test(account: &str) -> KeyTest {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn on_macos_a_key_is_read_from_the_keychain_once_per_run() {
+        let account = format!("castle-cache-{}", std::process::id());
+        save_as(&account, "sk-test-only-1111").unwrap();
+        // gone from the Keychain behind Castle's back: this run still has what it read
+        entry(&account).unwrap().delete_credential().unwrap();
+        assert_eq!(load_as(&account).as_deref(), Some("sk-test-only-1111"));
+        forget_as(&account).unwrap();
+        assert_eq!(load_as(&account), None);
+    }
 
     #[test]
     fn a_key_is_kept_read_back_and_forgotten() {

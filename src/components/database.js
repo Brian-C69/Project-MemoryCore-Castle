@@ -1,14 +1,20 @@
 // What the Database panel and the HOME card say, worked out from the two things Castle's core
 // reports: the engine ({ state, port, external, answering }) and this memory's own database
 // ({ name, reachable, movedIn, canRestore }). Pure, so it is tested without a window.
+import { isMac } from '../platform.js'
+
+// How the words name this computer: 'this Mac' on a Mac, 'this PC' elsewhere.
+export function thisComputer(mac = isMac) {
+  return mac ? 'this Mac' : 'this PC'
+}
 
 // The four steps, in order, each done or not.
-export function steps(engine, memory) {
+export function steps(engine, memory, mac = isMac) {
   const state = engine?.state
   const installed = state === 'stopped' || state === 'running' || state === 'external'
   const running = state === 'running' || (state === 'external' && engine.answering)
   return [
-    { id: 'install', label: state === 'external' ? 'Using the database already on this PC' : 'Database installed', ok: installed },
+    { id: 'install', label: state === 'external' ? `Using the database already on ${thisComputer(mac)}` : 'Database installed', ok: installed },
     { id: 'start', label: 'Database running', ok: running },
     { id: 'create', label: memory?.name ? `${memory.name} created` : 'Your memory database created', ok: running && !!memory?.name && !!memory?.reachable },
     { id: 'move', label: 'Memory moved in', ok: running && !!memory?.movedIn },
@@ -23,6 +29,11 @@ export function nextStep(engine, memory) {
 // "95 MB" from a byte count.
 export function megabytes(bytes) {
   return `${Math.round((bytes ?? 0) / (1024 * 1024))} MB`
+}
+
+// How Install gets the engine, in words: the download's size, or Homebrew on a Mac.
+export function installLine(view) {
+  return view?.source === 'homebrew' ? 'Installed with Homebrew' : `About ${megabytes(view?.downloadBytes)}`
 }
 
 // "Downloading… 43%" while the engine downloads.
@@ -47,13 +58,13 @@ export function moveLine(counts) {
 }
 
 // The HOME card: one line and at most one button.
-export function card(engine, memory) {
+export function card(engine, memory, mac = isMac) {
   const next = nextStep(engine, memory)
   if (!engine) return { line: 'Checking…', button: null }
   if (next === 'install') return { line: 'Not set up yet.', button: { label: 'Set up', action: 'open' } }
   if (next === 'start') {
     return engine.state === 'external'
-      ? { line: 'The database on this PC is stopped.', button: { label: 'Open', action: 'open' } }
+      ? { line: `The database on ${thisComputer(mac)} is stopped.`, button: { label: 'Open', action: 'open' } }
       : { line: 'Stopped.', button: { label: 'Start', action: 'start' } }
   }
   if (next === 'create') return { line: 'Running · no memory database yet.', button: { label: 'Open', action: 'open' } }

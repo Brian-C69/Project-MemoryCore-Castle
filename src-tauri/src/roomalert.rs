@@ -125,7 +125,9 @@ pub struct SoundChoice {
 
 /// Every sound the member can choose: Windows' own, Castle's pack, then their own files.
 pub fn sound_choices(dir: Option<&std::path::Path>) -> Vec<SoundChoice> {
-    let mut all = vec![SoundChoice { id: "windows".into(), label: "Windows' own sound".into(), built_in: true }];
+    // the system's own sound keeps the id "windows" on every platform; macOS names it its own way
+    let system = if cfg!(target_os = "macos") { "macOS's own sound" } else { "Windows' own sound" };
+    let mut all = vec![SoundChoice { id: "windows".into(), label: system.into(), built_in: true }];
     all.extend(BUILT_IN.iter().map(|(id, label, _)| SoundChoice { id: (*id).into(), label: (*label).into(), built_in: true }));
     if let Some(dir) = dir {
         let mut own: Vec<String> = std::fs::read_dir(dir)
@@ -169,7 +171,22 @@ pub(crate) fn beep(app: &AppHandle, name: &str) -> bool {
     unsafe { PlaySoundW(wav.as_ptr() as *const u16, std::ptr::null_mut(), SND_MEMORY | SND_ASYNC | SND_NODEFAULT) != 0 }
 }
 
-#[cfg(not(windows))]
+/// macOS: the system's own notification sound for "windows" (the default system choice), else the
+/// chosen WAV, written once to the temp folder and played by `afplay` without waiting.
+#[cfg(target_os = "macos")]
+pub(crate) fn beep(app: &AppHandle, name: &str) -> bool {
+    let play = |file: &std::path::Path| std::process::Command::new("afplay").arg(file).spawn().is_ok();
+    if name == "windows" {
+        return play(std::path::Path::new("/System/Library/Sounds/Glass.aiff"));
+    }
+    let dir = user_dir(app);
+    let wav = wav_for(name, dir.as_deref()).or_else(|| wav_for(DEFAULT_SOUND, None));
+    let Some(wav) = wav else { return false };
+    let file = std::env::temp_dir().join(format!("castle-alert-{}.wav", name.replace(|c: char| !c.is_ascii_alphanumeric(), "-")));
+    std::fs::write(&file, wav).is_ok() && play(&file)
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
 pub(crate) fn beep(_app: &AppHandle, _name: &str) -> bool {
     false
 }
@@ -284,6 +301,7 @@ pub fn new_lines(app: &AppHandle, fresh: &[Value], chat_shown: bool) {
 
 /// The address a notification carries, one per room: clicking it (live, or later from the Action
 /// Center, even when Castle was closed in between) starts Castle with it, and Castle opens that room.
+#[cfg_attr(not(windows), allow(dead_code))] // the Windows notification's parts
 pub fn room_url(room: &str) -> String {
     format!("memorycore-castle://open?room={room}")
 }
@@ -315,12 +333,14 @@ pub fn wanted_room<I: IntoIterator<Item = String>>(args: I) -> Option<String> {
     })
 }
 
+#[cfg_attr(not(windows), allow(dead_code))] // the Windows notification's parts
 fn xml_escape(text: &str) -> String {
     text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&apos;")
 }
 
 /// The toast's XML: silent (the Sound choice is the only sound) and carrying the room's address, so a click
 /// opens Castle through Windows itself and does not depend on this process still listening for it.
+#[cfg_attr(not(windows), allow(dead_code))] // the Windows notification's parts
 fn toast_xml(title: &str, body: &str, room: &str) -> String {
     format!(
         r#"<toast activationType="protocol" launch="{url}"><visual><binding template="ToastGeneric"><text>{}</text><text>{}</text></binding></visual><audio silent="true"/></toast>"#,
@@ -390,7 +410,7 @@ pub(crate) fn toast(app: &AppHandle, title: &str, body: &str, room: &str) {
 }
 
 #[cfg(not(windows))]
-pub(crate) fn toast(app: &AppHandle, title: &str, body: &str, room: &str) {
+pub(crate) fn toast(app: &AppHandle, title: &str, body: &str, _room: &str) {
     let _ = app.notification().builder().title(title).body(body).show();
 }
 

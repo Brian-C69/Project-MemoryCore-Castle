@@ -9,6 +9,7 @@ import DiffView from './DiffView.vue'
 import { ASK_TO_COMMIT, LOG_PAGE, ago, badges, canPush, codeOf, commitPaths, isNotRepo, nextTicks, pushQuestion, sourceCard, withNewestPage } from './git.js'
 import { folderName, tabForSlot } from './devtabs.js'
 import { cleanRepoName, githubLine, validRepoName } from './newproject.js'
+import { isMac, shortcutLabel } from '../../platform.js'
 
 // A DEV tab's Source panel: the changed files (each with its diff), the member's commit of the
 // ticked files, a button that asks the companion to commit instead, Push with one question first
@@ -255,8 +256,11 @@ watch(message, (text) => {
   if (!text && box.value) box.value.style.height = ''
 })
 
+// The commit keys as the hint names them: Ctrl+Enter, or ⌘↩ on a Mac.
+const commitKeys = shortcutLabel('Ctrl+Enter')
+
 function onKey(event) {
-  if (event.key === 'Enter' && event.ctrlKey) {
+  if (event.key === 'Enter' && (event.ctrlKey || (isMac && event.metaKey))) {
     event.preventDefault()
     commit()
   }
@@ -368,7 +372,7 @@ defineExpose({ refresh })
           class="message"
           rows="3"
           aria-label="Commit message"
-          :placeholder="`Message (Ctrl+Enter commits on ${status.branch || 'the branch'})`"
+          :placeholder="`Message (${commitKeys} commits on ${status.branch || 'the branch'})`"
           @keydown="onKey"
           @input="grow"
         ></textarea>
@@ -412,7 +416,7 @@ defineExpose({ refresh })
   background: var(--panel-background);
   border: 1px solid var(--line);
   border-radius: 14px;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
   box-sizing: border-box;
   font-size: 13px;
 }
@@ -542,7 +546,7 @@ ul {
 .code {
   flex: none;
   width: 20px;
-  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
   font-size: 12px;
   text-align: center;
 }

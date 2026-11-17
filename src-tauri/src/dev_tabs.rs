@@ -165,7 +165,10 @@ mod tests {
         let block = dev_block("Lyra", "Rin", "shop", true);
         assert!(block.contains("You are Lyra") && block.contains("**shop**") && block.contains("castle-memory plan copy"));
         assert!(dev_block("Lyra", "Rin", "shop", false).contains("castle-memory boot"));
+        #[cfg(windows)]
         assert_eq!(name_of("D:\\Projects\\shop\\"), "shop");
+        #[cfg(not(windows))]
+        assert_eq!(name_of("/Users/rin/Projects/shop/"), "shop");
         assert!(boot_file(Path::new("C:/castle"), 3).ends_with("boot/dev-3.md"));
     }
 }

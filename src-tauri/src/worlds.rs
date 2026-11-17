@@ -8,7 +8,7 @@
 //!   <memory>/worlds/<slug>/hd/          the member's exports from Tripo (GLB, named by number)
 //!   <memory>/worlds/<slug>/pieces/      the prepared pieces the world windows load
 //!
-//! Preparing runs tools/castle-world.ps1 (no session, no tokens).
+//! Preparing runs tools/castle-world.mjs (no session, no tokens).
 
 use crate::session;
 use crate::settings::SettingsStore;
@@ -223,7 +223,7 @@ struct Progress {
 pub async fn world_prepare(app: AppHandle, slug: String, store: State<'_, SettingsStore>) -> Result<(), String> {
     crate::rooms::need(&store, "world")?;
     let dir = world_dir(&store, &slug)?;
-    let helper = session::tools_folder(&app).join("castle-world.ps1");
+    let helper = session::tools_folder(&app).join("castle-world.mjs");
     if !helper.is_file() {
         return Err("Castle's world helper is missing - reinstall Castle.".into());
     }
@@ -232,16 +232,15 @@ pub async fn world_prepare(app: AppHandle, slug: String, store: State<'_, Settin
     };
     let app2 = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let mut command = Command::new("powershell.exe");
+        let mut command = Command::new(crate::env::node());
         command
-            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
             .arg(&helper)
-            .arg("-Prepare")
-            .arg("-Manifest")
+            .arg("--prepare")
+            .arg("--manifest")
             .arg(dir.join("world.json"))
-            .arg("-In")
+            .arg("--in")
             .arg(dir.join("hd"))
-            .arg("-Out")
+            .arg("--out")
             .arg(dir.join("pieces"))
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
@@ -252,7 +251,7 @@ pub async fn world_prepare(app: AppHandle, slug: String, store: State<'_, Settin
         }
         let mut child = match command.spawn() {
             Ok(child) => child,
-            Err(_) => return tell(&app2, &slug, "PowerShell could not be started.".into(), true, false),
+            Err(_) => return tell(&app2, &slug, "Node could not be started (install Node.js 20 or later).".into(), true, false),
         };
         let mut last = String::new();
         if let Some(out) = child.stdout.take() {

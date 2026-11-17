@@ -222,14 +222,19 @@ pub fn dev_media_open(slot: usize, path: String, folder: bool, chats: State<crat
     if !file.is_file() {
         return Err("The file is gone.".into());
     }
-    let mut command = std::process::Command::new("explorer.exe");
-    if folder {
-        command.arg(format!("/select,{}", file.display()));
-    } else {
-        command.arg(file);
+    #[cfg(not(windows))]
+    return crate::os::open_path(file, folder);
+    #[cfg(windows)]
+    {
+        let mut command = std::process::Command::new("explorer.exe");
+        if folder {
+            command.arg(format!("/select,{}", file.display()));
+        } else {
+            command.arg(file);
+        }
+        crate::shell::let_it_come_forward();
+        command.spawn().map(|_| ()).map_err(|_| "Windows could not open it.".to_string())
     }
-    crate::shell::let_it_come_forward();
-    command.spawn().map(|_| ()).map_err(|_| "Windows could not open it.".to_string())
 }
 
 #[cfg(test)]

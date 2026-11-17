@@ -9,7 +9,7 @@
 | `{{WORLD_WORDS}}` | The member's words from `request.md`, cleaned into one or two sentences |
 | `{{LAYOUT}}` | For a centrepiece: "one great floating island with a centrepiece at its heart, three small islets drifting around it in a slow circle". For an archipelago: "five floating islands joined by glowing bridges of light, a few small islets between them" |
 | `{{PIECES}}` | What each piece in `world.json` is, in a few words each, in order |
-| `{{STYLE}}` | The look: the member's picture if they gave one (pass it with `-Reference`), else "hand-painted stylized fantasy, clean shapes" |
+| `{{STYLE}}` | The look: the member's picture if they gave one (pass it with `--reference`), else "hand-painted stylized fantasy, clean shapes" |
 
 ## Prompt
 

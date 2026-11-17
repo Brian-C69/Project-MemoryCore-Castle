@@ -7,7 +7,9 @@ import {
   chooseFolder, dbCreate, dbExport, dbInstall, dbMemory, dbMoveIn, dbMoveOut, dbMovePreview, dbRestore, dbSkills, dbSkillStub, dbStart, dbStatus, dbStop, dbUseExisting,
   getSettings, onDbInstall, saveSettings,
 } from '../api/castle.js'
-import { megabytes, moveLine, nextStep, progressLine, steps as stepsOf } from './database.js'
+import { installLine, moveLine, nextStep, progressLine, steps as stepsOf, thisComputer } from './database.js'
+
+const here = thisComputer()
 
 const props = defineProps({
   companion: { type: String, default: 'your companion' },
@@ -70,7 +72,7 @@ async function install() {
 
 async function useExisting() {
   const result = await attempt('Checking…', dbUseExisting)
-  if (result) done.value = 'Castle will use the database already on this PC.'
+  if (result) done.value = `Castle will use the database already on ${here}.`
   await check()
 }
 
@@ -168,7 +170,7 @@ onBeforeUnmount(() => stopListening?.())
   <div class="database">
     <p class="hint">
       Keep {{ companion }}'s memory in a database on this computer instead of in loose files: faster to search, every change kept, nothing to tidy.
-      It is optional, and nothing leaves this PC.
+      It is optional, and nothing leaves {{ here }}.
     </p>
 
     <ol class="steps">
@@ -180,10 +182,10 @@ onBeforeUnmount(() => stopListening?.())
     <template v-if="next === 'install'">
       <div class="row">
         <button class="primary" :disabled="!!busy" @click="install">Install the database</button>
-        <span class="hint">About {{ megabytes(view?.downloadBytes) }} · MariaDB {{ view?.version }} · no admin needed</span>
+        <span class="hint">{{ installLine(view) }} · MariaDB {{ view?.version }} · no admin needed</span>
       </div>
       <div v-if="engine?.external" class="row">
-        <button :disabled="!!busy" @click="useExisting">Use the database already on this PC</button>
+        <button :disabled="!!busy" @click="useExisting">Use the database already on {{ here }}</button>
         <span class="hint">A MySQL / MariaDB is answering on port {{ engine.external }} (XAMPP, for example).</span>
       </div>
     </template>
@@ -193,7 +195,7 @@ onBeforeUnmount(() => stopListening?.())
         <button class="primary" :disabled="!!busy" @click="start">Start</button>
         <span class="hint">It also starts by itself whenever Castle opens.</span>
       </div>
-      <p v-else class="next">The database on this PC (port {{ engine.port }}) is not answering. Start it in its own program, then press Check again.</p>
+      <p v-else class="next">The database on {{ here }} (port {{ engine.port }}) is not answering. Start it in its own program, then press Check again.</p>
     </template>
 
     <template v-else-if="next === 'create'">

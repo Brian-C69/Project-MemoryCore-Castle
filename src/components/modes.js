@@ -46,7 +46,7 @@ export function pressesTo(from, to) {
   return (b - a + order.length) % order.length
 }
 
-// Castle's status line (castle-statusline.ps1): "<model> | 42% | 120.3k tokens".
+// Castle's status line (castle-statusline.mjs): "<model> | 42% | 120.3k tokens".
 const CONTEXT = /\|\s*(\d{1,3})%\s*\|\s*([\d.]+\s*[kKmM]?)\s*tokens/
 
 /** The context as the status line says it: { percent, tokens } from the newest such line, or null. */
