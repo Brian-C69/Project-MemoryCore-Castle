@@ -91,3 +91,10 @@ If you like, you can also write `public/loader/quips.json`: an array of up to 60
 funny lines (each under 120 characters) for the start-up screen to rotate through, in the spirit of
 "Fluffing the cushions in CHAT." and "Persuading the loading bar to be honest." Keep them kind, silly
 and safe for anyone to read. See the existing ones in `src/loader/quips.js` so you do not repeat them.
+
+## If the picture is for a theme, not the whole build
+
+A theme can carry its own start-up picture: save it in the theme's folder (for example
+`loader.webp` beside `theme.json`) and add `"loader": { "image": "loader.webp" }` to `theme.json`. Keep
+it under about 3 MB. The same spec above applies; MAKE-IT-YOURS.md lists the other `loader` options
+(title, funny lines, colour, where the words sit).

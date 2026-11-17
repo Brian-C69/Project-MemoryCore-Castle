@@ -12,7 +12,7 @@ import DatabaseOffer from './components/DatabaseOffer.vue'
 import { shouldOffer } from './components/database.js'
 import CompanionHeader from './components/CompanionHeader.vue'
 import { onOpenChat, onProviderChanged } from './api/castle.js'
-import { loaderBegin, loaderDone, loaderEnd, loaderExpect } from './loader/loader.js'
+import { loaderBegin, loaderDone, loaderEnd, loaderExpect, loaderRemember } from './loader/loader.js'
 import ModalSheet from './components/ModalSheet.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import AppsView from './views/AppsView.vue'
@@ -284,6 +284,7 @@ async function loadSettingsAndTheme() {
   theme.value = chosen.theme
   themeNotice.value = chosen.notice
   applyTheme(chosen.theme)
+  loaderRemember(chosen.theme)
   loaderEnd('themes')
   if (!setupOpen.value) checkWhatsNew(lastSeen)
 }

@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Themes can dress the start-up screen.** A theme's `theme.json` can now carry a `loader` block: its own picture, title, funny lines (added to Castle's or replacing them), accent colour and where the words sit. Castle remembers the theme in use and shows its start-up design from the next start. A bad value only falls back to Castle's own; it never breaks the theme. See MAKE-IT-YOURS.
+
 - **A start-up screen.** Castle now opens on a picture with a funny line, a progress bar and what it is loading - your settings, your theme, your memory, the backup, the memory database - instead of a blank window. It is on screen before anything else loads, stays long enough to read, and takes the theme's own colour after the first start. A build can ship its own picture (`public/loader/loader.webp`, 16:9) and its own funny lines (`public/loader/quips.json`); see `public/loader/README.md`.
 
 ## 0.2.14 - 2026-11-16

@@ -9,3 +9,7 @@ Castle shows a start-up screen while it loads: a picture, a funny line, a bar an
   120 characters. They are added to the built-in ones.
 
 Both are bundled into the build; nothing else needs changing.
+
+A theme can override all of this for itself with a `loader` block in its `theme.json` (its own
+picture, title, funny lines, colour and where the words sit); see MAKE-IT-YOURS.md, "A start-up
+screen for your theme".

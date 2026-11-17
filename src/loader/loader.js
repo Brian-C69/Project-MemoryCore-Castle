@@ -10,11 +10,12 @@
 // still running. The screen stays up at least MIN_MS so the words can be read, and at most MAX_MS so
 // a slow piece can never keep the member out.
 import { QUIPS } from './quips.js'
+import { forStorage, fromStorage, linesFor, loaderDesign } from './design.js'
 
 export const MIN_MS = 1400
 export const MAX_MS = 12000
 const QUIP_MS = 2600
-const ACCENT_KEY = 'castle-loader-accent'
+const DESIGN_KEY = 'castle-loader-design'
 
 // ---------- pure parts, tested ----------
 
@@ -111,17 +112,34 @@ export function loaderDone() {
   if (file) file.textContent = ''
   const bar = el('castle-loader-bar')
   if (bar) bar.style.width = '100%'
-  try {
-    // the next start shows the theme's own colour from the first moment
-    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
-    if (accent) localStorage.setItem(ACCENT_KEY, accent)
-  } catch {
-    // storage may be blocked; the default colour shows
-  }
   setTimeout(() => {
     root.classList.add('leaving')
     setTimeout(() => root.remove(), 520)
   }, holdFor(now() - started))
+}
+
+// The theme in use asks for its own start-up screen: remembered now, shown from the next start's
+// first moment (the screen is up before the theme is chosen, so it cannot be shown any sooner).
+export function loaderRemember(theme) {
+  try {
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
+    localStorage.setItem(DESIGN_KEY, JSON.stringify(forStorage(loaderDesign(theme), accent)))
+  } catch {
+    // storage may be blocked or full; the next start shows Castle's own screen
+  }
+}
+
+// Puts a remembered design on the screen: colour, title, picture and where the words sit.
+function dress(design) {
+  if (!design) return
+  if (design.accent) root.style.setProperty('--loader-accent', design.accent)
+  if (design.brand) document.querySelector('#castle-loader .brand').textContent = design.brand
+  if (design.position !== 'bottom') root.classList.add(`pos-${design.position}`)
+  if (design.imageUrl) {
+    // a quote or backslash cannot end the url early
+    const safe = design.imageUrl.replace(/["\\\n\r]/g, (c) => encodeURIComponent(c))
+    document.querySelector('#castle-loader .art').style.backgroundImage = `url("${safe}")`
+  }
 }
 
 if (root) {
@@ -129,12 +147,14 @@ if (root) {
   if (window.__CASTLE_VIEW__) {
     root.remove()
   } else {
+    let design = null
     try {
-      const accent = localStorage.getItem(ACCENT_KEY)
-      if (accent) root.style.setProperty('--loader-accent', accent)
+      design = fromStorage(localStorage.getItem(DESIGN_KEY))
     } catch {
-      // the default colour shows
+      // storage blocked: Castle's own screen shows
     }
+    dress(design)
+    quips = linesFor(quips, design)
     turnQuip()
     quipTimer = setInterval(turnQuip, QUIP_MS)
     failsafe = setTimeout(loaderDone, MAX_MS)
@@ -143,7 +163,7 @@ if (root) {
       .then((r) => (r.ok ? r.json() : []))
       .then((raw) => {
         const extra = cleanQuips(raw)
-        if (extra.length) quips = [...quips, ...extra]
+        if (extra.length) quips = linesFor([...QUIPS, ...extra], design)
       })
       .catch(() => {})
   }

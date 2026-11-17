@@ -95,6 +95,25 @@
         font-size: 12px;
         color: #eef3ff;
       }
+      /* where the words sit, when a theme asks (loader.position in theme.json) */
+      #castle-loader.pos-center {
+        align-items: center;
+      }
+      #castle-loader.pos-center .panel {
+        padding: 0;
+      }
+      #castle-loader.pos-center .shade {
+        background: radial-gradient(ellipse at center, rgba(3, 6, 20, 0.7) 0%, rgba(3, 6, 20, 0) 62%);
+      }
+      #castle-loader.pos-top {
+        align-items: flex-start;
+      }
+      #castle-loader.pos-top .panel {
+        padding: 7vh 0 0;
+      }
+      #castle-loader.pos-top .shade {
+        background: linear-gradient(to bottom, rgba(3, 6, 20, 0.88) 0%, rgba(3, 6, 20, 0.35) 34%, rgba(3, 6, 20, 0) 60%);
+      }
       #castle-loader .status code:empty {
         display: none;
       }
