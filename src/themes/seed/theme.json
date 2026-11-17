@@ -6,6 +6,7 @@
   "usageReveal": { "low": "wallpaper-low.jpg", "mode": "rise", "angle": "0deg", "from": 0.3, "to": 0.9 },
   "wallpaperPosition": "center",
   "widgetStyle": "glass",
+  "widgetSkin": "carved-wood",
   "portrait": "panel",
   "colors": {
     "--background": "#0f2620",

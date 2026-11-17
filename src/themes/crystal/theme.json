@@ -6,6 +6,7 @@
   "usageReveal": { "low": "wallpaper-low.jpg", "mode": "fade" },
   "wallpaperPosition": "center",
   "widgetStyle": "glass",
+  "widgetSkin": "prism-lines",
   "portrait": "panel",
   "colors": {
     "--background": "#1a2350",

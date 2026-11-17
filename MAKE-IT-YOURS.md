@@ -57,6 +57,13 @@ By hand, a theme is a folder with a `theme.json` and a wallpaper:
 
 The look a member picks in Sweep's gear always wins over the theme's. A theme that names no place for Sweep still shows it, at its own place.
 
+**Widget skin** - a theme may dress HOME's cards and the companion panel with `"widgetSkin"`, on top of the glass look: `prism-lines` (no boxes, a prismatic light line under each widget), `carved-wood` (wooden frames and amber glass), `sunset-glass` (amber-to-rose glass with a gold rim), `bioluminescent` (navy glass with a glowing cyan edge) or `ripple-glass` (emerald glass with ripple rings). A name Castle does not know is ignored.
+
+```json
+"widgetStyle": "glass",
+"widgetSkin": "bioluminescent"
+```
+
 **Living water** - a theme may give its wallpaper gentle motion on HOME with a `motion` block. Every position is a fraction of the picture (`[across, down]`, each 0 to 1), so the effect stays on the water at any window size. Two kinds:
 
 ```json
@@ -74,7 +81,19 @@ The look a member picks in Sweep's gear always wins over the theme's. A theme th
 
 `river`: light streaks drift across the `water` outline in the `flow` direction, longer and faster nearer the bottom, and ripple rings spread from each `ripples` point and now and then elsewhere on the water.
 
-`color` and `count` are optional (at most 240 points for surf, 120 streaks for a river). A block Castle cannot read is ignored. Members can turn all motion off in **Settings > Rooms > Moving wallpapers**, and it rests while HOME is hidden or when the system asks for reduced motion.
+```json
+"motion": { "kind": "shore", "line": [[0.42, 1.0], [0.68, 0.78], [1.0, 0.5]], "toward": [1, 0.6], "reach": 0.025 }
+```
+
+`shore`: the foam at the waterline (`line`, where the wet sand meets the dry) washes up the sand along `toward` by up to `reach` and draws back on a slow sea rhythm.
+
+```json
+"motion": { "kind": "twinkle", "area": [[0, 0], [1, 0], [1, 0.7], [0, 0.7]], "count": 40 }
+```
+
+`twinkle`: Castle finds the brightest stars inside `area` in the picture itself and lets them flare in turn.
+
+`color` and `count` are optional (at most 240 points for surf, 160 streaks for a river, 80 stars). A block Castle cannot read is ignored. Motion is off until a member turns it on in **Settings > Rooms > Moving wallpapers**, and it rests while HOME is hidden or when the system asks for reduced motion.
 
 Rules the loader checks (`src/themes/loader.js`): an `id` and a `name`; colours only as `--variables` in `colors`; widget places only `left`, `top`, `right`, `bottom`, `width`, `height` (and `size` for the clock: `s`, `m` or `l`). A widget your theme leaves out is not shown (the USAGE card is only on HOME when the theme gives it a place). A broken theme is listed with its reason and never shown. Press **Reload themes** after editing.
 

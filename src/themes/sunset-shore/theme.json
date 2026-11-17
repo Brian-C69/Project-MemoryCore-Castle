@@ -5,6 +5,7 @@
   "wallpaper": "wallpaper.jpg",
   "wallpaperPosition": "center",
   "widgetStyle": "glass",
+  "widgetSkin": "sunset-glass",
   "portrait": "panel",
   "colors": {
     "--background": "#2a1420",
