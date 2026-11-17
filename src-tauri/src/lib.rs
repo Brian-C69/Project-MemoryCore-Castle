@@ -17,6 +17,7 @@ mod credits;
 mod db;
 mod fetch;
 mod node_runtime;
+mod sweep;
 mod dev;
 mod dev_files;
 mod dev_git;
