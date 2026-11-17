@@ -14,11 +14,17 @@ pub fn sessions_root() -> Option<PathBuf> {
     if let Some(home) = std::env::var_os("CODEX_HOME").filter(|v| !v.is_empty()) {
         return Some(PathBuf::from(home).join("sessions"));
     }
-    std::env::var_os("USERPROFILE").map(|home| PathBuf::from(home).join(".codex").join("sessions"))
+    crate::env::home_dir().map(|home| home.join(".codex").join("sessions"))
 }
 
 /// A folder path compared the way Windows does: case-insensitive, either slash, no trailing slash.
+/// macOS: the real folders compared (Codex records the resolved path, the member may have picked a
+/// link to it), keeping case.
 fn same_folder(a: &str, b: &str) -> bool {
+    if !cfg!(windows) {
+        let real = |p: &str| std::fs::canonicalize(p.trim_end_matches('/')).unwrap_or_else(|_| p.trim_end_matches('/').into());
+        return real(a) == real(b);
+    }
     let norm = |p: &str| p.replace('/', "\\").trim_end_matches('\\').to_lowercase();
     norm(a) == norm(b)
 }
@@ -237,6 +243,8 @@ mod tests {
         assert!(parse_line(reasoning).is_empty());
     }
 
+    // these records carry Windows paths, which only a Windows Castle reads
+    #[cfg(windows)]
     #[test]
     fn media_paths_are_found_in_tool_arguments_and_output() {
         let call = r#"{"timestamp":"t","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\"command\":[\"powershell\",\"-File\",\"castle-image.ps1\",\"-OutFile\",\"D:\\\\Memory\\\\media-generation\\\\image-generation\\\\sky.png\"]}"}}"#;
@@ -245,6 +253,21 @@ mod tests {
         assert_eq!(media_candidates(out), ["D:\\Memory\\appearance\\portrait.png"]);
     }
 
+    #[cfg(not(windows))]
+    #[test]
+    fn on_macos_a_linked_folder_is_the_same_folder_and_case_counts() {
+        let root = std::env::temp_dir().join(format!("castle-codex-link-{}", std::process::id()));
+        let real = root.join("Memory");
+        std::fs::create_dir_all(&real).unwrap();
+        let link = root.join("Shortcut");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        assert!(same_folder(&real.display().to_string(), &format!("{}/", link.display())));
+        assert!(!same_folder("/no/such/Memory", "/no/such/memory"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    // a Windows record's folder, matched the Windows way (any case, either slash)
+    #[cfg(windows)]
     #[test]
     fn the_newest_rollout_for_the_folder_is_chosen() {
         let root = std::env::temp_dir().join(format!("castle-codex-{}", std::process::id()));

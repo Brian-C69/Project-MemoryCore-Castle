@@ -1,18 +1,19 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { formatClock } from '../clock.js'
 
-defineProps({ size: { type: String, default: 'm' } })
+// `format` is Settings' clock format ("24h" or "12h"), the same one the top bar's clock uses
+const props = defineProps({ size: { type: String, default: 'm' }, format: { type: String, default: '24h' } })
 // Widgets are handed the whole data bundle; only declared props are used.
 defineOptions({ inheritAttrs: false })
 
 const now = ref(new Date())
 let timer
 
-const time = computed(() => {
-  const hours = now.value.getHours() % 12 || 12
-  return `${hours}:${String(now.value.getMinutes()).padStart(2, '0')}`
-})
-const half = computed(() => (now.value.getHours() < 12 ? 'AM' : 'PM'))
+// "16:31", or "4:31" with its "PM" set apart
+const parts = computed(() => formatClock(now.value, props.format).split(' '))
+const time = computed(() => parts.value[0])
+const half = computed(() => parts.value[1] ?? '')
 const date = computed(() =>
   now.value.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
 )
@@ -29,9 +30,9 @@ onBeforeUnmount(() => clearTimeout(timer))
 </script>
 
 <template>
-  <div class="widget clock" :class="size" role="timer" :aria-label="`${time} ${half}, ${date}`">
+  <div class="widget clock" :class="size" role="timer" :aria-label="`${time}${half ? ' ' + half : ''}, ${date}`">
     <div class="time">
-      {{ time }}<span class="half">{{ half }}</span>
+      {{ time }}<span v-if="half" class="half">{{ half }}</span>
     </div>
     <div class="date">{{ date }}</div>
   </div>

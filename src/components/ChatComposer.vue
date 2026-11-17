@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { chatAttach, clipboardPaste } from '../api/castle.js'
 import ImageViewer from './ImageViewer.vue'
+import { isMac } from '../platform.js'
 
 // Chat's box: the member's words, the pictures they drop, paste or type as paths (shown above the
 // box, removable, opened in a viewer), Enter to send, Shift+Enter for a new line.
@@ -22,8 +23,11 @@ const draftViewer = ref(null)
 
 const fileName = (path) => path.split(/[\\/]/).pop()
 
-// Picture paths in the box as the member writes: dropped, pasted or typed.
-const PICTURE_PATH = /[A-Za-z]:[\\/][^"'<>|*?\r\n]*?\.(?:png|jpe?g|webp)/gi
+// Picture paths in the box as the member writes: dropped, pasted or typed. On a Mac an absolute
+// POSIX path (/Users/…/shot.png) counts too; a URL's path (https://…/a.png) does not.
+const PICTURE_PATH = isMac
+  ? /[A-Za-z]:[\\/][^"'<>|*?\r\n]*?\.(?:png|jpe?g|webp)|(?<![\w:/\\.~-])\/[^"'<>|*?\r\n:]*?\.(?:png|jpe?g|webp|gif)/gi
+  : /[A-Za-z]:[\\/][^"'<>|*?\r\n]*?\.(?:png|jpe?g|webp)/gi
 const draftPictures = computed(() => [...new Set(draft.value.match(PICTURE_PATH) ?? [])])
 
 // A path the member typed or pasted as text is the member's too: the core checks it is a picture, then it shows.
@@ -230,6 +234,10 @@ textarea {
   resize: none;
   box-sizing: border-box;
   scrollbar-width: none;
+}
+
+textarea::-webkit-scrollbar {
+  display: none;
 }
 
 textarea:disabled {

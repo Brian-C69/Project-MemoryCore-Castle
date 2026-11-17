@@ -1,5 +1,5 @@
-//! The Apps room: the member's Start-menu apps, opened through the Windows shell, with how often
-//! each is used.
+//! The Apps room: the member's Start-menu apps (on macOS, the .app bundles in the Applications
+//! folders), opened the way the system opens them, with how often each is used.
 
 use base64::Engine;
 use serde::Serialize;
@@ -21,8 +21,17 @@ pub struct App {
 }
 
 /// The two Start menu folders: every user's, then the member's own (theirs wins a name clash).
+/// macOS: the system's apps, every user's Applications, then the member's own.
 pub fn start_menu_folders() -> Vec<PathBuf> {
     let mut folders = Vec::new();
+    #[cfg(target_os = "macos")]
+    {
+        folders.push(PathBuf::from("/System/Applications"));
+        folders.push(PathBuf::from("/Applications"));
+        if let Some(home) = crate::env::home_dir() {
+            folders.push(home.join("Applications"));
+        }
+    }
     if let Some(all) = std::env::var_os("ProgramData") {
         folders.push(PathBuf::from(all).join("Microsoft\\Windows\\Start Menu\\Programs"));
     }
@@ -32,10 +41,11 @@ pub fn start_menu_folders() -> Vec<PathBuf> {
     folders
 }
 
-/// A shortcut worth showing: a .lnk or .url that is not an uninstaller.
+/// A shortcut worth showing: a .lnk or .url (on macOS, an .app bundle) that is not an uninstaller.
 fn is_app(path: &Path) -> Option<String> {
     let extension = path.extension()?.to_str()?.to_lowercase();
-    if extension != "lnk" && extension != "url" {
+    let wanted = if cfg!(target_os = "macos") { extension == "app" } else { extension == "lnk" || extension == "url" };
+    if !wanted {
         return None;
     }
     let name = path.file_stem()?.to_str()?.trim().to_string();
@@ -52,6 +62,13 @@ fn walk(folder: &Path, depth: usize, found: &mut Vec<(String, PathBuf)>) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
+        // macOS: an app is a folder (Name.app); it is the app itself, never searched inside
+        if cfg!(target_os = "macos") && path.is_dir() {
+            if let Some(name) = is_app(&path) {
+                found.push((name, path));
+                continue;
+            }
+        }
         if path.is_dir() {
             if depth < 4 {
                 walk(&path, depth + 1, found);
@@ -116,8 +133,44 @@ pub fn list(settings_folder: &Path, folders: &[PathBuf]) -> Vec<App> {
         .collect()
 }
 
-/// Draws the icons not yet cached, through PowerShell's icon reader, with no window.
-/// Returns how many were drawn. A failure leaves letter tiles.
+/// macOS: each app's own icon (named in its Info.plist), drawn to a small png by `sips`.
+#[cfg(target_os = "macos")]
+fn draw_app_icons(missing: &[(PathBuf, PathBuf)]) -> usize {
+    use std::process::{Command, Stdio};
+    let mut drawn = 0;
+    for (app, target) in missing {
+        let info = app.join("Contents").join("Info.plist");
+        let named = Command::new("plutil")
+            .args(["-extract", "CFBundleIconFile", "raw", "-o", "-"])
+            .arg(&info)
+            .stderr(Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|n| !n.is_empty());
+        let Some(name) = named else { continue };
+        let file = if name.ends_with(".icns") { name } else { format!("{name}.icns") };
+        let icns = app.join("Contents").join("Resources").join(file);
+        let ok = Command::new("sips")
+            .args(["-s", "format", "png", "-Z", "64"])
+            .arg(&icns)
+            .arg("--out")
+            .arg(target)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success());
+        if ok && target.exists() {
+            drawn += 1;
+        }
+    }
+    drawn
+}
+
+/// Draws the icons not yet cached, through PowerShell's icon reader, with no window
+/// (on macOS, from each app's own icon file). Returns how many were drawn. A failure leaves letter tiles.
+#[cfg_attr(target_os = "macos", allow(unreachable_code))]
 pub fn draw_missing_icons(settings_folder: &Path, folders: &[PathBuf]) -> usize {
     let missing: Vec<(PathBuf, PathBuf)> = scan(folders)
         .into_iter()
@@ -136,6 +189,8 @@ pub fn draw_missing_icons(settings_folder: &Path, folders: &[PathBuf]) -> usize 
     if fs::create_dir_all(&icons).is_err() {
         return 0;
     }
+    #[cfg(target_os = "macos")]
+    return draw_app_icons(&missing);
     // Pairs of shortcut and target, one per line, read by the script.
     let list = icons.join("pending.txt");
     let text: String = missing
@@ -145,6 +200,7 @@ pub fn draw_missing_icons(settings_folder: &Path, folders: &[PathBuf]) -> usize 
     if fs::write(&list, text).is_err() {
         return 0;
     }
+    // platform: windows-only - macOS returned from draw_app_icons above
     let script = format!(
         "Add-Type -AssemblyName System.Drawing; \
          foreach ($pair in Get-Content -LiteralPath '{}' -Encoding UTF8) {{ \
@@ -166,14 +222,20 @@ pub fn draw_missing_icons(settings_folder: &Path, folders: &[PathBuf]) -> usize 
     missing.iter().filter(|(_, t)| t.exists()).count()
 }
 
-/// Opens a shortcut through the Windows shell, the way a Start-menu click does.
+/// Opens a shortcut through the Windows shell, the way a Start-menu click does (on macOS, the app
+/// the way the Finder opens it).
 pub fn open(shortcut: &Path) -> Result<(), String> {
-    crate::shell::let_it_come_forward();
-    std::process::Command::new("explorer.exe")
-        .arg(shortcut)
-        .spawn()
-        .map(|_| ())
-        .map_err(|_| "The app could not be opened.".to_string())
+    #[cfg(not(windows))]
+    return crate::os::open_path(shortcut, false).map_err(|_| "The app could not be opened.".to_string());
+    #[cfg(windows)]
+    {
+        crate::shell::let_it_come_forward();
+        std::process::Command::new("explorer.exe")
+            .arg(shortcut)
+            .spawn()
+            .map(|_| ())
+            .map_err(|_| "The app could not be opened.".to_string())
+    }
 }
 
 #[cfg(test)]
@@ -187,6 +249,8 @@ mod tests {
         folder
     }
 
+    // Start-menu shortcuts (.lnk / .url) are what a Windows Castle lists
+    #[cfg(windows)]
     #[test]
     fn shortcuts_are_found_named_deduplicated_and_uninstallers_left_out() {
         let everyone = temp("everyone");
@@ -209,6 +273,8 @@ mod tests {
         assert!(apps[1].1.starts_with(&mine));
     }
 
+    // Start-menu shortcuts (.lnk / .url) are what a Windows Castle lists
+    #[cfg(windows)]
     #[test]
     fn uses_are_counted_and_listed() {
         let settings = temp("usage");
@@ -219,6 +285,28 @@ mod tests {
         let apps = list(&settings, &[menu]);
         assert_eq!(apps[0].uses, 2);
         assert_eq!(apps[0].icon, None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn on_macos_each_app_bundle_is_one_app_and_its_insides_are_not_searched() {
+        let system = temp("mac-system");
+        let mine = temp("mac-mine");
+        for (folder, app) in [(&system, "Safari.app"), (&system, "Utilities/Terminal.app"), (&mine, "Blender.app"), (&mine, "Uninstall Blender.app")] {
+            fs::create_dir_all(folder.join(app).join("Contents/MacOS")).unwrap();
+        }
+        // a helper app inside a bundle is part of that app, not one of its own
+        fs::create_dir_all(mine.join("Blender.app/Contents/Helpers/Blender Helper.app")).unwrap();
+        fs::write(system.join("readme.txt"), b"").unwrap();
+        let names: Vec<String> = scan(&[system.clone(), mine.clone()]).into_iter().map(|(n, _)| n).collect();
+        assert_eq!(names, ["Blender", "Safari", "Terminal"]);
+        let settings = temp("mac-usage");
+        count_use(&settings, "Safari").unwrap();
+        let apps = list(&settings, &[system.clone()]);
+        assert_eq!(apps.iter().find(|a| a.name == "Safari").unwrap().uses, 1);
+        for f in [system, mine, settings] {
+            let _ = fs::remove_dir_all(f);
+        }
     }
 
     /// Reads this computer's real Start menu and draws icons into a scratch folder.

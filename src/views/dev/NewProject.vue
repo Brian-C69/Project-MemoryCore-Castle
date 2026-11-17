@@ -257,7 +257,7 @@ h4 {
 }
 
 code {
-  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
   font-size: 12px;
   overflow-wrap: anywhere;
 }

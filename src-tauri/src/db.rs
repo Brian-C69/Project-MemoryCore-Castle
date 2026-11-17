@@ -25,6 +25,9 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 /// The MariaDB release Castle installs: 11.4 is the long-term-support line.
 pub const VERSION: &str = "11.4.13";
+/// macOS: Homebrew's formula for the same long-term line, so both platforms run one MariaDB
+/// (newer lines reserve words the schema uses, such as TO_DATE).
+pub const BREW_FORMULA: &str = "mariadb@11.4";
 pub const ZIP_URL: &str = "https://archive.mariadb.org/mariadb-11.4.13/winx64-packages/mariadb-11.4.13-winx64.zip";
 /// From the release's own sha256sums.txt; a download that differs is thrown away.
 pub const ZIP_SHA256: &str = "d62986d433eeebfde218560b276103831604a61e929e87f1a17f5aebd80257e2";
@@ -83,6 +86,7 @@ pub fn choose_port(probe: impl Fn(u16) -> PortUse) -> Option<u16> {
 
 /// Castle's my.ini: only this PC may connect, and text is stored as full Unicode.
 pub fn my_ini(data: &Path, port: u16) -> String {
+    let socket = if cfg!(windows) { String::new() } else { format!("socket={}\n", data.with_file_name("mysql.sock").display()) };
     let data = data.display().to_string().replace('\\', "/");
     format!(
         "# Written by MemoryCore Castle - Castle rewrites this file.\n\
@@ -90,6 +94,7 @@ pub fn my_ini(data: &Path, port: u16) -> String {
          datadir={data}\n\
          port={port}\n\
          bind-address=127.0.0.1\n\
+         {socket}\
          character-set-server=utf8mb4\n\
          collation-server=utf8mb4_unicode_ci\n\
          \n\
@@ -111,6 +116,12 @@ pub fn checksum_ok(bytes: &[u8]) -> bool {
 
 /// One line for a port Castle cannot use, saying what to do about it.
 pub fn port_busy_line(port: u16) -> String {
+    #[cfg(not(windows))]
+    return format!(
+        "Port {port} is being used by another program, so the database cannot start. \
+         See which one with `lsof -nP -iTCP:{port} -sTCP:LISTEN` and close it (or end it with `kill <PID>`), then press Start again."
+    );
+    #[cfg(windows)]
     format!(
         "Port {port} is being used by another program, so the database cannot start. \
          See which one with `netstat -ano | findstr :{port}` and close it (or end it with `taskkill /PID <number>`), then press Start again."
@@ -134,10 +145,41 @@ pub fn home() -> PathBuf {
     if let Some(dir) = std::env::var_os(HOME_VAR).filter(|v| !v.is_empty()) {
         return PathBuf::from(dir);
     }
+    #[cfg(target_os = "macos")]
+    if let Some(user) = std::env::var_os("HOME") {
+        return PathBuf::from(user).join("Library/Application Support/MemoryCore Castle/mariadb");
+    }
     let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
     local.join("MemoryCore Castle").join("mariadb")
 }
 
+/// One of the engine's programs (`mariadbd`, `mariadb-install-db`, `mariadb-admin`). Windows: the
+/// unpacked release's `.exe`. macOS: Homebrew's MariaDB, the way MariaDB itself ships it for Macs;
+/// Castle still keeps its own data folder and my.ini in `home`.
+pub fn program(home: &Path, name: &str) -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = home;
+        let opt = brew().map(|b| b.parent().and_then(Path::parent).map(|p| p.join("opt").join(BREW_FORMULA)).unwrap_or_default());
+        let found = opt
+            .into_iter()
+            .flat_map(|o| [o.join("bin").join(name), o.join("sbin").join(name)])
+            .find(|p| p.is_file());
+        found.unwrap_or_else(|| PathBuf::from(name))
+    }
+    #[cfg(not(target_os = "macos"))]
+    bin_dir(home).join(format!("{name}.exe"))
+}
+
+/// macOS: Homebrew's `brew`, on PATH or in its usual places (Apple silicon, then Intel).
+#[cfg(target_os = "macos")]
+pub fn brew() -> Option<PathBuf> {
+    crate::env::find_on_path("brew").or_else(|| {
+        ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"].into_iter().map(PathBuf::from).find(|p| p.is_file())
+    })
+}
+
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 pub fn bin_dir(home: &Path) -> PathBuf {
     home.join(VERSION).join("bin")
 }
@@ -152,7 +194,7 @@ pub fn ini_path(home: &Path) -> PathBuf {
 
 /// Installed means the server program and its data folder are both there.
 pub fn installed(home: &Path) -> bool {
-    bin_dir(home).join("mariadbd.exe").is_file() && data_dir(home).join("mysql").is_dir()
+    program(home, "mariadbd").is_file() && data_dir(home).join("mysql").is_dir()
 }
 
 // ---------- the port ----------
@@ -223,6 +265,35 @@ fn run_to_end(mut command: Command, limit: Duration) -> bool {
 /// Downloads the release (reporting progress), checks it, unpacks it into the engine folder,
 /// makes the data folder and writes my.ini. Returns the port the engine will use.
 pub fn install(home: &Path, port: u16, progress: impl Fn(u64, u64)) -> Result<u16, String> {
+    #[cfg(target_os = "macos")]
+    {
+        brew_install(progress)?;
+        initialise(home, port)?;
+        return Ok(port);
+    }
+    #[cfg(not(target_os = "macos"))]
+    install_release(home, port, progress)
+}
+
+/// macOS: `brew install mariadb@11.4` (Homebrew needs no admin prompt), unless it is there already.
+#[cfg(target_os = "macos")]
+fn brew_install(progress: impl Fn(u64, u64)) -> Result<(), String> {
+    if program(Path::new(""), "mariadbd").is_file() {
+        return Ok(());
+    }
+    let brew = brew().ok_or("Castle installs the database with Homebrew on a Mac. Install Homebrew from brew.sh, then press Install again.")?;
+    progress(0, 1);
+    let mut command = hidden(&brew);
+    command.args(["install", BREW_FORMULA]).env("HOMEBREW_NO_AUTO_UPDATE", "1");
+    if !run_to_end(command, Duration::from_secs(900)) || !program(Path::new(""), "mariadbd").is_file() {
+        return Err("Homebrew could not install MariaDB. Run `brew install mariadb@11.4` in Terminal to see why, then press Check again.".into());
+    }
+    progress(1, 1);
+    Ok(())
+}
+
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+fn install_release(home: &Path, port: u16, progress: impl Fn(u64, u64)) -> Result<u16, String> {
     let bytes = download(progress)?;
     if !checksum_ok(&bytes) {
         return Err("The download did not match MariaDB's own checksum, so Castle threw it away. Try again later.".into());
@@ -292,8 +363,14 @@ fn unpack(bytes: &[u8], target: &Path) -> Result<(), String> {
 fn initialise(home: &Path, port: u16) -> Result<(), String> {
     let data = data_dir(home);
     if !data.join("mysql").is_dir() {
-        let mut command = hidden(&bin_dir(home).join("mariadb-install-db.exe"));
+        let mut command = hidden(&program(home, "mariadb-install-db"));
         command.arg(format!("--datadir={}", data.display())).arg(format!("--port={port}"));
+        // macOS: root signs in with no password over 127.0.0.1, as on Windows (not the unix socket)
+        #[cfg(target_os = "macos")]
+        {
+            let base = program(home, "mariadbd").parent().and_then(Path::parent).map(Path::to_path_buf).unwrap_or_default();
+            command.arg(format!("--basedir={}", base.display())).arg("--auth-root-authentication-method=normal");
+        }
         if !run_to_end(command, Duration::from_secs(180)) || !data.join("mysql").is_dir() {
             return Err("MariaDB was downloaded but its data folder could not be made.".into());
         }
@@ -318,7 +395,7 @@ pub fn start(home: &Path, port: u16) -> Result<(), String> {
         PortUse::Free => {}
     }
     write_ini(home, port)?;
-    let mut command = hidden(&bin_dir(home).join("mariadbd.exe"));
+    let mut command = hidden(&program(home, "mariadbd"));
     command.arg(format!("--defaults-file={}", ini_path(home).display()));
     command.spawn().map_err(|_| "The database could not be started.".to_string())?;
     let started = Instant::now();
@@ -336,7 +413,7 @@ pub fn stop(home: &Path, port: u16) -> Result<(), String> {
     if probe_port(port) != PortUse::MySql {
         return Ok(());
     }
-    let mut command = hidden(&bin_dir(home).join("mariadb-admin.exe"));
+    let mut command = hidden(&program(home, "mariadb-admin"));
     command.args(["--protocol=tcp", "--host=127.0.0.1", &format!("--port={port}"), "--user=root", "shutdown"]);
     if !run_to_end(command, Duration::from_secs(30)) {
         return Err("The database did not stop when asked.".into());
@@ -361,12 +438,14 @@ pub struct DbView {
     pub version: &'static str,
     /// The size of the download, for the Install button.
     pub download_bytes: u64,
+    /// How Install gets the engine: "download" (the release zip) or "homebrew" (macOS).
+    pub source: &'static str,
     pub keep_running: bool,
 }
 
 fn view_of(store: &SettingsStore) -> DbView {
     let s = store.get();
-    DbView { engine: detect(&home(), s.db_port, s.db_external), version: VERSION, download_bytes: ZIP_BYTES, keep_running: s.db_keep_running }
+    DbView { engine: detect(&home(), s.db_port, s.db_external), version: VERSION, download_bytes: ZIP_BYTES, source: if cfg!(target_os = "macos") { "homebrew" } else { "download" }, keep_running: s.db_keep_running }
 }
 
 /// Keeps the engine's port and kind in settings.json (the page never writes these two).
@@ -822,7 +901,10 @@ mod tests {
     #[test]
     fn a_busy_port_says_how_to_find_the_program() {
         let line = port_busy_line(3307);
+        #[cfg(windows)]
         assert!(line.contains("netstat -ano | findstr :3307") && line.contains("taskkill"));
+        #[cfg(not(windows))]
+        assert!(line.contains("lsof -nP -iTCP:3307") && line.contains("kill <PID>"));
     }
 
     #[test]

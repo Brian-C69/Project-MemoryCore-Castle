@@ -40,11 +40,15 @@ export function githubLine(github) {
   return 'ready'
 }
 
-/** Where the new project lands, as the sheet shows it: <root>\<kind>\<name> (no kind: <root>\<name>). */
+/**
+ * Where the new project lands, as the sheet shows it: <root>\<kind>\<name> (no kind: <root>\<name>),
+ * joined with the root's own separator - backslashes for a Windows root, forward slashes for a Mac one.
+ */
 export function landingFolder(root, kind, name) {
   if (!root) return ''
   const base = String(root).replace(/[\\/]+$/, '')
-  return [base, kind, String(name ?? '').trim() || '<name>'].filter(Boolean).join('\\')
+  const sep = base.includes('\\') || /^[A-Za-z]:/.test(base) ? '\\' : '/'
+  return [base, kind, String(name ?? '').trim() || '<name>'].filter(Boolean).join(sep)
 }
 
 /**

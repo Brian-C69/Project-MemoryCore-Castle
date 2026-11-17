@@ -49,7 +49,7 @@ const emit = defineEmits(['close'])
   border: 1px solid color-mix(in srgb, var(--good, #8fe3b0) 45%, transparent);
   border-radius: 12px;
   background: var(--panel-background);
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
   color: var(--text);
   font-size: 13px;
@@ -92,7 +92,7 @@ th {
 }
 
 .port {
-  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
 }
 
 .open {

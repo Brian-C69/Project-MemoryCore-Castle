@@ -1,15 +1,21 @@
 import './loader/loader.js'
 import { createApp } from 'vue'
 import App from './App.vue'
+import { isMac } from './platform.js'
 
 // Browser keys that would reload, print or search the page. Keys the terminal uses
 // are handled there first, so only keys nothing else wanted are stopped here.
-const BLOCKED = new Set(['F5', 'ctrl+r', 'ctrl+shift+r', 'ctrl+p', 'ctrl+f', 'ctrl+g', 'ctrl+u', 'F3', 'F7'])
+// On a Mac the same browser keys use ⌘ (meta) instead of Ctrl; Ctrl there belongs to the terminal.
+const BLOCKED = isMac
+  ? new Set(['F5', 'meta+r', 'meta+shift+r', 'meta+p', 'meta+f', 'meta+g', 'meta+shift+g', 'meta+u', 'meta+alt+u', 'F3', 'F7'])
+  : new Set(['F5', 'ctrl+r', 'ctrl+shift+r', 'ctrl+p', 'ctrl+f', 'ctrl+g', 'ctrl+u', 'F3', 'F7'])
 
 window.addEventListener('keydown', (event) => {
   if (event.defaultPrevented) return
   const name = event.key.length === 1 ? event.key.toLowerCase() : event.key
-  const combo = [event.ctrlKey && 'ctrl', event.shiftKey && 'shift', name].filter(Boolean).join('+')
+  const combo = isMac
+    ? [event.metaKey && 'meta', event.altKey && 'alt', event.shiftKey && 'shift', name].filter(Boolean).join('+')
+    : [event.ctrlKey && 'ctrl', event.shiftKey && 'shift', name].filter(Boolean).join('+')
   if (BLOCKED.has(combo) || BLOCKED.has(event.key)) event.preventDefault()
 })
 
@@ -30,7 +36,7 @@ const devThemeRoom = import.meta.env.DEV ? new URLSearchParams(location.search).
 if (devThemeRoom) {
   Promise.all([import('./views/ThemeView.vue'), import('./themes/loader.js')]).then(([{ default: ThemeView }, loader]) => {
     loader.applyTheme(loader.chooseTheme(loader.builtInThemes(), new URLSearchParams(location.search).get('theme') || loader.DEFAULT_THEME_ID).theme)
-    Object.assign(document.body.style, { margin: '0', background: 'var(--wallpaper) var(--wallpaper-position) / cover no-repeat fixed, #040817', color: 'var(--text)', fontFamily: "'Segoe UI', system-ui, sans-serif" })
+    Object.assign(document.body.style, { margin: '0', background: 'var(--wallpaper) var(--wallpaper-position) / cover no-repeat fixed, #040817', color: 'var(--text)', fontFamily: "-apple-system, 'Segoe UI', system-ui, sans-serif" })
     Object.assign(document.getElementById('app').style, { position: 'fixed', inset: '0' })
     const q = new URLSearchParams(location.search)
     createApp(ThemeView, { companion: 'lyra', devStory: q.get('story') ?? '', devDiary: q.get('look') ?? '' }).mount('#app')

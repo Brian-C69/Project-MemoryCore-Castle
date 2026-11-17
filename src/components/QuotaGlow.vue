@@ -250,7 +250,7 @@ watch(() => props.visible, (now) => {
   color: var(--text);
   background: rgba(10, 18, 48, 0.32);
   border: 1px solid var(--line);
-  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 .quota-words.low {

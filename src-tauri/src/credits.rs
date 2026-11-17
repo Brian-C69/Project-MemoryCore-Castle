@@ -5,7 +5,7 @@
 //! balance a key can read: their figure comes from the member's own signed-in billing page
 //! (`page_reader`), or from a figure the member types. Between two readings Castle counts that
 //! figure on with the spend its own helpers log (one line per real render, written by
-//! `castle-common.ps1`). A key never appears in an answer or an error.
+//! `castle-common.mjs`). A key never appears in an answer or an error.
 
 use crate::settings::SettingsStore;
 use serde::{Deserialize, Serialize};
@@ -89,10 +89,9 @@ pub struct Credit {
 
 // ---------- the spend log ----------
 
-/// The helpers' spend folder (`castle-common.ps1` writes the same place).
+/// The helpers' spend folder (`castle-common.mjs` writes the same place).
 fn spend_folder() -> Option<PathBuf> {
-    let app_data = std::env::var_os("APPDATA").filter(|v| !v.is_empty())?;
-    Some(PathBuf::from(app_data).join("MemoryCore Castle").join("spend"))
+    Some(crate::env::app_data()?.join("MemoryCore Castle").join("spend"))
 }
 
 fn spend_log(provider: &str) -> String {

@@ -5,6 +5,8 @@
 import GlassSelect from '../components/GlassSelect.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WorldStage from '../worlds/WorldStage.vue'
+import { absPath } from './dev/tree.js'
+import { isMac } from '../platform.js'
 import { allWorlds, DEFAULT_WORLD, findWorld } from '../worlds/registry.js'
 import { statusLine } from '../worlds/readiness.js'
 import { checkWorldStates, readWorldBasics, readWorldQuota, worldMine, worldQuota, worldScreensNow, worldSettings, worldStates } from '../composables/useWorld.js'
@@ -190,14 +192,18 @@ async function pickPicture() {
 // The brief for the companion, sent through the session like typed words.
 function paintBrief(world) {
   const f = world.folder
+  const at = (rel) => absPath(f, rel)
+  const dir = (rel) => at(`${rel}/_`).slice(0, -1) // the folder with its own trailing separator
+  // The styles folder as the companion's shell names it: %CASTLE_STYLES% on Windows, $CASTLE_STYLES on a Mac.
+  const style = (name) => (isMac ? `$CASTLE_STYLES/${name}` : `%CASTLE_STYLES%\\${name}`)
   const picture = ` If there is a picture.* in ${f}, use it for the look.`
   return [
     `Please help me build my 3D world "${world.title}" for Castle's WORLD room.`,
-    `Read ${f}\\request.md (my words) and ${f}\\world.json (Castle's draft of the pieces).`,
+    `Read ${at('request.md')} (my words) and ${at('world.json')} (Castle's draft of the pieces).`,
     '1. Polish world.json: change only "title", "line" (one sentence) and "glow" (a colour like #8fe6ff). Keep every piece exactly as it is.',
-    `2. Paint the concept with the style in %CASTLE_STYLES%\\world-concept.md as ${f}\\design\\00-concept.png, then one picture per piece with %CASTLE_STYLES%\\world-piece.md, each named like its piece file with .png instead of .glb (for example 01-base-isle.png), in ${f}\\design\\.${picture}`,
-    `3. Tell me the cost first and ask before you draw. If pictures cannot be made, write one prompt per piece into ${f}\\design\\prompts.md instead.`,
-    `When you are done, tell me to make each picture in Tripo, export it as a GLB named with the same number, put it in ${f}\\hd\\ and press Prepare pieces in the WORLD room.`,
+    `2. Paint the concept with the style in ${style('world-concept.md')} as ${at('design/00-concept.png')}, then one picture per piece with ${style('world-piece.md')}, each named like its piece file with .png instead of .glb (for example 01-base-isle.png), in ${dir('design')}.${picture}`,
+    `3. Tell me the cost first and ask before you draw. If pictures cannot be made, write one prompt per piece into ${at('design/prompts.md')} instead.`,
+    `When you are done, tell me to make each picture in Tripo, export it as a GLB named with the same number, put it in ${dir('hd')} and press Prepare pieces in the WORLD room.`,
   ]
 }
 
@@ -263,7 +269,7 @@ async function remove(w) {
   }
 }
 
-const openFolder = (w, sub) => chatMediaOpen(sub ? `${w.folder}\\${sub}` : w.folder).catch((reason) => (problem.value = String(reason)))
+const openFolder = (w, sub) => chatMediaOpen(sub ? absPath(w.folder, sub) : w.folder).catch((reason) => (problem.value = String(reason)))
 
 onMounted(async () => {
   refresh()
@@ -465,7 +471,7 @@ watch(
   background: var(--panel-background);
   border: 1px solid var(--line);
   border-radius: 14px;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 .screens,
 .worlds {

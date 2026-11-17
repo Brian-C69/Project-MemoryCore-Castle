@@ -106,7 +106,7 @@ onBeforeUnmount(() => clearInterval(timer))
   background: var(--panel-background);
   border: 1px solid var(--line);
   border-radius: 14px;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
   box-sizing: border-box;
 }
 

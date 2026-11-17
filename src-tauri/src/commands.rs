@@ -36,7 +36,7 @@ pub fn app_open(path: String, store: State<SettingsStore>) -> Result<(), String>
         .into_iter()
         .find(|(_, shortcut)| shortcut.to_string_lossy() == path);
     let Some((name, shortcut)) = known else {
-        return Err("That app is not in the Start menu.".into());
+        return Err(if cfg!(windows) { "That app is not in the Start menu." } else { "That app is not in the Applications folder." }.into());
     };
     apps::open(&shortcut)?;
     let _ = apps::count_use(&store.folder(), &name);
@@ -91,14 +91,19 @@ pub fn hide_castle(app: AppHandle, store: State<SettingsStore>) {
 pub fn media_open(path: String, folder: bool, store: State<SettingsStore>) -> Result<(), String> {
     let memory = store.get().memory_folder.map(PathBuf::from).ok_or("No MemoryCore folder is chosen yet.")?;
     let file = files::fenced(&memory, &path)?;
-    let mut command = std::process::Command::new("explorer.exe");
-    if folder {
-        command.arg(format!("/select,{}", file.display()));
-    } else {
-        command.arg(&file);
+    #[cfg(not(windows))]
+    return crate::os::open_path(&file, folder);
+    #[cfg(windows)]
+    {
+        let mut command = std::process::Command::new("explorer.exe");
+        if folder {
+            command.arg(format!("/select,{}", file.display()));
+        } else {
+            command.arg(&file);
+        }
+        crate::shell::let_it_come_forward();
+        command.spawn().map(|_| ()).map_err(|_| "Windows could not open it.".to_string())
     }
-    crate::shell::let_it_come_forward();
-    command.spawn().map(|_| ()).map_err(|_| "Windows could not open it.".to_string())
 }
 
 /// Which MemoryCore features the member's folder holds (rooms and quick actions follow it).
@@ -182,8 +187,11 @@ pub fn open_url(url: String) -> Result<(), String> {
     if !url.starts_with("https://") || url.contains(char::is_whitespace) {
         return Err("Only https addresses can be opened.".into());
     }
+    #[cfg(not(windows))]
+    return crate::os::open_link(&url);
     // explorer.exe silently fails to hand off a URL with "&" in its query string (opens a plain
     // Explorer window instead); rundll32's FileProtocolHandler is the reliable way to do this.
+    #[cfg(windows)]
     std::process::Command::new("rundll32.exe")
         .arg("url.dll,FileProtocolHandler")
         .arg(&url)

@@ -1,5 +1,5 @@
 // What the STORY stage shows for one beat. First choice: the beat card the story writes with
-// castle-beat.ps1 (<world>/stage/beat-NNNN.json). Fallback: its plain reply, read the same way.
+// castle-beat.mjs (<world>/stage/beat-NNNN.json). Fallback: its plain reply, read the same way.
 //
 // A beat: { beat, chapter, scene, lines: [{ speaker, text, voice }], choices: [text] }
 //   scene   - a path inside the world folder, or a scene name to look up, or null (keep the last)

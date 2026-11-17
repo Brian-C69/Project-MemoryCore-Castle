@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { devFile, devReveal } from '../../api/devfiles.js'
 import ModalSheet from '../../components/ModalSheet.vue'
 import { absPath, fileFacts, textLines } from './tree.js'
+import { isMac } from '../../platform.js'
 
 // A project file in Castle's reader: text with line numbers in a monospace block (shown as plain
 // text, never as markup), a picture as itself, or one line saying why not. Read only; Put in chat
@@ -61,7 +62,7 @@ watch(() => [props.slot, props.entry.rel], read, { immediate: true })
       <span class="facts">{{ facts }}</span>
       <span class="spacer"></span>
       <button class="small" @click="emit('put', absPath(folder, entry.rel))">Put in chat</button>
-      <button class="small" :disabled="revealing" @click="reveal">Reveal in Explorer</button>
+      <button class="small" :disabled="revealing" @click="reveal">{{ isMac ? 'Reveal in Finder' : 'Reveal in Explorer' }}</button>
     </footer>
   </ModalSheet>
 </template>
@@ -69,7 +70,7 @@ watch(() => [props.slot, props.entry.rel], read, { immediate: true })
 <style scoped>
 .code {
   margin: 0;
-  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--text);

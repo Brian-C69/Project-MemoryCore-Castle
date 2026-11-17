@@ -10,6 +10,7 @@ import DiaryCalendar from '../components/DiaryCalendar.vue'
 import DiaryPage from '../components/DiaryPage.vue'
 import { bookPages, lookOf, PAGE_DESIGNS } from '../components/diaryviews.js'
 import { chatMediaOpen, getSettings, memoryRead, memoryShelves } from '../api/castle.js'
+import { absPath } from './dev/tree.js'
 
 const props = defineProps({
   room: { type: String, required: true }, // diary | projects | library
@@ -80,7 +81,7 @@ async function open(page, refresh = false) {
 
 function openOutside() {
   if (!current.value || !memoryFolder.value) return
-  chatMediaOpen(`${memoryFolder.value.replace(/[\\/]+$/, '')}\\${current.value.file.replace(/\//g, '\\')}`, true).catch(() => {})
+  chatMediaOpen(absPath(memoryFolder.value, current.value.file), true).catch(() => {})
 }
 
 async function load() {
@@ -200,7 +201,7 @@ watch(() => [props.room, props.stamp, props.openFile], load)
   background: var(--panel-background);
   border: 1px solid var(--line);
   border-radius: 14px;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 .list {
   display: flex;

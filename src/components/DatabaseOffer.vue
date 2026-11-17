@@ -5,13 +5,17 @@
 // tick in the panel below. "Later" never asks again; Settings > Database stays.
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { dbSetupAll, getSettings, onDbInstall, onDbSetup, saveSettings } from '../api/castle.js'
-import { megabytes, progressLine, setupStepLabel } from './database.js'
+import { megabytes, progressLine, setupStepLabel, thisComputer } from './database.js'
 import DatabasePanel from './DatabasePanel.vue'
 import ModalSheet from './ModalSheet.vue'
+
+const here = thisComputer()
 
 const props = defineProps({
   companion: { type: String, default: 'your companion' },
   downloadBytes: { type: Number, default: 0 },
+  // "homebrew" on a Mac: Castle installs the engine with Homebrew instead of downloading it
+  source: { type: String, default: 'download' },
 })
 const emit = defineEmits(['close', 'changed'])
 
@@ -78,11 +82,11 @@ onBeforeUnmount(() => stops.forEach((stop) => stop()))
         </p>
         <ul>
           <li>Faster to search, and every change is kept.</li>
-          <li>Nothing leaves this PC, and your backup carries it.</li>
+          <li>Nothing leaves {{ here }}, and your backup carries it.</li>
           <li><strong>Export to markdown</strong> gives every file back whenever you like.</li>
         </ul>
         <p class="hint">
-          Castle downloads the database (about {{ megabytes(downloadBytes) }}, no admin needed), starts it and makes {{ companion }}'s own.
+          <template v-if="source === 'homebrew'">Castle installs the database with Homebrew (no admin needed), starts it</template><template v-else>Castle downloads the database (about {{ megabytes(downloadBytes) }}, no admin needed), starts it</template> and makes {{ companion }}'s own.
           Then it shows you what would move and waits: nothing is moved or deleted until you say so.
         </p>
         <div class="row">

@@ -111,7 +111,7 @@ hr {
 
 code,
 .code {
-  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
   font-size: 12.5px;
   background: rgba(0, 0, 0, 0.28);
   border-radius: 5px;

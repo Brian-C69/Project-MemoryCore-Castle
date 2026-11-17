@@ -7,6 +7,7 @@
 
 /// Allows the program Castle is about to start to come to the front. Call it right before starting
 /// Explorer for something the member just asked to see.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn let_it_come_forward() {
     #[cfg(windows)]
     {

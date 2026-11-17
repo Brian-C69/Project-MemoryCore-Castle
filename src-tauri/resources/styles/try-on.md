@@ -40,6 +40,6 @@ One person only. No text, no watermark, no signature, no frame, no extra limbs.
 
 ## Notes
 
-- When `<memory>/appearance/portrait.png` exists, pass `-Reference <memory>/appearance/portrait.png` so the identity stays the same. If a turnaround of this outfit or hairstyle exists, it may be passed as the reference instead when the helper takes only one.
+- When `<memory>/appearance/portrait.png` exists, pass `--reference <memory>/appearance/portrait.png` so the identity stays the same. If a turnaround of this outfit or hairstyle exists, it may be passed as the reference instead when the helper takes only one.
 - When `CASTLE_IMAGE` is `codex`, the AI draws this with its own image tool, using the reference picture the same way, and saves to the same path.
 - The hairstyle reference wins over any hair seen in other pictures: the portrait reference sets the face, `{{HAIR}}` (and its hair turnaround, if any) sets the hair.

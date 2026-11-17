@@ -1,6 +1,6 @@
 <script setup>
 // APPEARANCE: the companion's standard look, the wardrobe and the hairstyles as turnaround
-// sheets, today's outfit and hair, and Try on. A drawing is queued by its parts and castle-look.ps1
+// sheets, today's outfit and hair, and Try on. A drawing is queued by its parts and castle-look.mjs
 // writes its prompt from the notes: Codex draws it on the ChatGPT plan, or Castle draws it with the
 // OpenAI key; with neither the prompt is saved and Castle says so. No AI reads the notes for it.
 import GlassSelect from '../components/GlassSelect.vue'
@@ -167,7 +167,7 @@ async function attempt(label, work) {
   }
 }
 
-// A drawing is queued by its parts; castle-look.ps1 writes the prompt from the member's notes, so
+// A drawing is queued by its parts; castle-look.mjs writes the prompt from the member's notes, so
 // no AI reads them.
 async function queueLook(label, spec, output, reference) {
   await imageRequest(label, output, reference ? [reference] : [], 'appearance', label, spec)
@@ -427,7 +427,7 @@ watch(() => props.stamp, load)
   background: var(--panel-background);
   border: 1px solid var(--line);
   border-radius: 14px;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 .bar,
 .actions,

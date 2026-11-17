@@ -210,6 +210,10 @@ defineExpose({ nearBottom, toBottom })
   scrollbar-width: none;
 }
 
+.messages::-webkit-scrollbar {
+  display: none;
+}
+
 .row {
   display: flex;
 }

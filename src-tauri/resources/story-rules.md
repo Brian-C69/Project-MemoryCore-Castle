@@ -132,7 +132,7 @@ Each turn, in this order:
 2. **Paint only what is new** (see Media): a new place gets a scene picture, a new character a cast portrait, a key moment a voice line. Most turns paint nothing.
 3. **Write the beat card last**, with Castle's helper (it checks the card and writes it whole):
    ```
-   powershell -NoProfile -ExecutionPolicy Bypass -File "$env:CASTLE_TOOLS\castle-beat.ps1" card -World "<world-folder>" -Json '<card>'
+   node "$CASTLE_TOOLS/castle-beat.mjs" card --world "<world-folder>" --json '<card>'
    ```
    The card is JSON:
    ```
@@ -220,7 +220,7 @@ adventures/                 <- this folder
     setting.md              <- world bible
     summary.md              <- story so far (updated on save and end)
     cast/                   <- one portrait per character, named after them (hero.png, <npc-name>.png)
-    stage/                  <- the beat cards (written by castle-beat.ps1) and stage/voice/ for voiced lines
+    stage/                  <- the beat cards (written by castle-beat.mjs) and stage/voice/ for voiced lines
     story/
       story-1.md            <- chapters, up to 1,000 lines
       story-2.md            <- next file once story-1.md passes 1,000 lines
@@ -349,7 +349,7 @@ Castle's helpers live in the folder named by the `CASTLE_TOOLS` environment vari
 Offer a picture at the start of a chapter, a boss entrance, a finisher, or any moment worth keeping.
 
 ```
-& "$env:CASTLE_TOOLS\castle-image.ps1" -Prompt "<scene description>" -OutFile "<world>/scenes/<NN>-<slug>.png" -Size 1536x1024 -Quality medium
+node "$CASTLE_TOOLS/castle-image.mjs" --prompt "<scene description>" --out-file "<world>/scenes/<NN>-<slug>.png" --size 1536x1024 --quality medium
 ```
 
 - `<NN>` is a two-digit running number (01, 02, ...), `<slug>` a few hyphenated words (`03-dragon-gate.png`).
@@ -361,7 +361,7 @@ Offer a picture at the start of a chapter, a boss entrance, a finisher, or any m
 The stage shows a face for each speaker. When the hero or an NPC first matters, offer a portrait (cost first, as always) with the style in `%CASTLE_STYLES%\story-cast.md`:
 
 ```
-& "$env:CASTLE_TOOLS\castle-image.ps1" -Prompt "<filled story-cast style>" -OutFile "<world>/cast/<name>.png" -Size 1024x1536 -Quality medium -Transparent
+node "$CASTLE_TOOLS/castle-image.mjs" --prompt "<filled story-cast style>" --out-file "<world>/cast/<name>.png" --size 1024x1536 --quality medium --transparent
 ```
 
 - With `CASTLE_IMAGE` = `codex`, draw it with your own image tool on a plain transparent (or flat light) background and save it to the same path.
@@ -373,7 +373,7 @@ The stage shows a face for each speaker. When the hero or an NPC first matters, 
 After the world is built, offer an opening theme. Write lyrics from `setting.md` (the world, the heroes, the coming conflict) and a short style line.
 
 ```
-& "$env:CASTLE_TOOLS\castle-song.ps1" -Title "<song title>" -Style "<genre, mood, instruments, vocal>" -Lyrics "<lyrics>" -OutFolder "<world>/music"
+node "$CASTLE_TOOLS/castle-song.mjs" --title "<song title>" --style "<genre, mood, instruments, vocal>" --lyrics "<lyrics>" --out-folder "<world>/music"
 ```
 
 ### Ending song - at the end
@@ -385,7 +385,7 @@ On `end adventure`, offer an ending theme written from `summary.md` (the journey
 For a short line that deserves a voice (a vow before the final battle, a finisher's name, a farewell), offer:
 
 ```
-& "$env:CASTLE_TOOLS\castle-voice.ps1" -Text "<one or two short sentences>" -OutFile "<world>/stage/voice/<beat>-<n>.mp3"
+node "$CASTLE_TOOLS/castle-voice.mjs" --text "<one or two short sentences>" --out-file "<world>/stage/voice/<beat>-<n>.mp3"
 ```
 
 Keep voiced lines short and rare, so they stay special. Put the file in that line's `voice` on the beat card, so the stage plays it.

@@ -140,8 +140,12 @@ pub fn sentence_case(style: &str) -> String {
 }
 
 /// What the block says when the memory files live in the database: one command prints them.
+#[cfg(windows)]
 const BOOT_FROM_DATABASE: &str =
     "run `castle-memory boot` (in PowerShell: `& \"$env:CASTLE_TOOLS\\castle-memory.cmd\" boot`) and follow what it prints to load your memory";
+/// macOS: `castle-memory` is on the session's PATH (Castle puts its tools first).
+#[cfg(not(windows))]
+const BOOT_FROM_DATABASE: &str = "run `castle-memory boot` and follow what it prints to load your memory";
 
 /// What the block says when Castle itself loaded the memory at wake (it is in the session's
 /// system prompt before the companion's first word).
@@ -250,6 +254,7 @@ pub fn block_text(folder: &Path, companion: &str, member: &str, loaded: bool) ->
 /// Runs a program with no console window and a time limit; its first output line.
 fn first_line(program: &Path, args: &[&str], limit: Duration) -> Option<String> {
     let is_script = program.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
+    // platform: windows-only - a .cmd / .bat launcher exists only on Windows
     let mut command = if is_script {
         let mut c = Command::new("cmd.exe");
         c.arg("/c").arg(program);
@@ -293,9 +298,25 @@ pub struct CliCheck {
     pub sign_in_hint: &'static str,
 }
 
+/// macOS: Claude Code keeps its sign-in in the Keychain, not in a file. Only whether the entry
+/// exists is asked (no password is read, so macOS shows no prompt).
+fn in_keychain(cli: Cli) -> bool {
+    #[cfg(target_os = "macos")]
+    if cli == Cli::Claude {
+        return Command::new("security")
+            .args(["find-generic-password", "-s", "Claude Code-credentials"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success());
+    }
+    let _ = cli;
+    false
+}
+
 /// The file each CLI keeps once the member has signed in.
 fn credentials_file(cli: Cli) -> Option<PathBuf> {
-    let home = PathBuf::from(std::env::var_os("USERPROFILE")?);
+    let home = crate::env::home_dir()?;
     Some(match cli {
         Cli::Claude => home.join(".claude").join(".credentials.json"),
         Cli::Codex => std::env::var_os("CODEX_HOME").filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or_else(|| home.join(".codex")).join("auth.json"),
@@ -314,7 +335,7 @@ pub fn check_cli(cli: Cli) -> CliCheck {
         label: cli.label(),
         installed: program.is_some(),
         version,
-        signed_in: credentials_file(cli).map(|f| f.is_file()),
+        signed_in: credentials_file(cli).map(|f| f.is_file() || in_keychain(cli)),
         install_command,
         sign_in_hint,
     }
@@ -332,11 +353,17 @@ pub fn create(target: &Path) -> Result<FolderState, String> {
             .arg(target)
             .status()
             .map_err(|_| "git could not be started.".to_string())?;
-        if !status.success() {
+        if status.success() {
+            // A fresh memory belongs to the member: it starts its own history, not MemoryCore's.
+            let _ = std::fs::remove_dir_all(target.join(".git"));
+        } else if cfg!(windows) {
             return Err("MemoryCore could not be downloaded with git. Check the internet connection and try again.".into());
+        } else {
+            // macOS: /usr/bin/git is only a stand-in until Apple's developer tools are installed;
+            // the zip download needs none of them
+            let _ = std::fs::remove_dir_all(target);
+            download_zip(target)?;
         }
-        // A fresh memory belongs to the member: it starts its own history, not MemoryCore's.
-        let _ = std::fs::remove_dir_all(target.join(".git"));
     } else {
         download_zip(target)?;
     }

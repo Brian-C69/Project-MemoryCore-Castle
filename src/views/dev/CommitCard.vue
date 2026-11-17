@@ -99,7 +99,7 @@ async function openOnGitHub() {
   margin: 0 0 14px;
   padding: 0;
   list-style: none;
-  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
   font-size: 12px;
 }
 
@@ -174,7 +174,7 @@ async function openOnGitHub() {
 }
 
 .hash {
-  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
 }
 
 .problem {

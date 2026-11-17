@@ -38,6 +38,6 @@ Keep the identity exact: the same face shape, eyes, eye color, skin tone, propor
 
 ## Notes
 
-- When `<memory>/appearance/portrait.png` already exists (redrawing or refreshing the portrait), pass `-Reference <memory>/appearance/portrait.png` so the identity stays the same.
+- When `<memory>/appearance/portrait.png` already exists (redrawing or refreshing the portrait), pass `--reference <memory>/appearance/portrait.png` so the identity stays the same.
 - When `CASTLE_IMAGE` is `codex`, the AI draws this with its own image tool, using the reference picture the same way, and saves to the same path.
 - The hairstyle reference wins over any hair seen in other pictures: if a hairstyle turnaround exists for `{{HAIR}}`, follow it rather than the hair in the old portrait.

@@ -21,6 +21,7 @@ pub fn write_if_changed(path: &Path, text: &str) {
 pub fn run(cli: Cli, folder: &Path, rules_file: &str, words: &str, limit: Duration) -> Result<String, String> {
     let program = env::find_on_path(cli.command()).ok_or_else(|| format!("{} is not installed.", cli.label()))?;
     let script = program.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
+    // platform: windows-only - a .cmd / .bat launcher exists only on Windows
     let mut command = if script {
         let mut c = Command::new("cmd.exe");
         c.arg("/c").arg(&program);

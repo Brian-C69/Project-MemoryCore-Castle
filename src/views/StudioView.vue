@@ -12,6 +12,7 @@ import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak } from '../
 import { refreshStudio, studioLib, studioPowersLoaded, studioPowersNow, studioThumbUrls, studioVoiceUp } from '../composables/useStudio.js'
 import { askCompanion } from '../api/ask.js'
 import { POWERS, companionLines, makeAction, powerPill } from '../components/studiomake.js'
+import { isMac } from '../platform.js'
 
 const props = defineProps({
   companion: { type: String, default: 'Your companion' },
@@ -109,7 +110,7 @@ watch(() => props.stamp, load)
     <section class="make widget">
       <h3>MAKE</h3>
       <div class="make-row">
-        <textarea v-model="brief" rows="2" :placeholder="placeholder" aria-label="What to make" :disabled="action.kind === 'key'" @keydown.ctrl.enter="make"></textarea>
+        <textarea v-model="brief" rows="2" :placeholder="placeholder" aria-label="What to make" :disabled="action.kind === 'key'" @keydown.ctrl.enter="make" @keydown.meta.enter="isMac && make()"></textarea>
         <div class="switch" role="radiogroup" aria-label="What to make">
           <button
             v-for="p in POWERS"
@@ -190,7 +191,7 @@ watch(() => props.stamp, load)
   background: var(--panel-background);
   border: 1px solid var(--line);
   border-radius: 14px;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 h3 {
   margin: 0;

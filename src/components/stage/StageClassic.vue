@@ -126,12 +126,12 @@ function pick(i) {
   border: 1px solid rgba(170, 190, 255, 0.45);
   border-radius: 16px;
   background: rgba(16, 22, 70, 0.72);
-  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 .cinema .box {
   background: none;
   border: none;
-  backdrop-filter: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
   text-align: center;
   text-shadow: 0 2px 6px #000;
 }

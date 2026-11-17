@@ -194,7 +194,7 @@ pub fn isolation_args_with(cli: Cli, mcp_config: &Path, session_settings: Option
 }
 
 /// Castle's status line script among its bundled tools.
-pub const STATUS_LINE_SCRIPT: &str = "castle-statusline.ps1";
+pub const STATUS_LINE_SCRIPT: &str = "castle-statusline.mjs";
 
 /// Castle's own settings for a session that is only this companion: kept in its settings folder,
 /// never the memory folder.
@@ -206,7 +206,7 @@ pub fn session_settings_file(store: &SettingsStore) -> PathBuf {
 /// `<model> | NN% | 123.4k tokens` so Chat can show how full the context is (the personal status
 /// line is left out with the rest of the personal setup).
 pub fn status_line_command(tools: &Path) -> String {
-    format!("powershell -NoProfile -ExecutionPolicy Bypass -File \"{}\"", tools.join(STATUS_LINE_SCRIPT).display())
+    format!("\"{}\" \"{}\"", crate::env::node().display(), tools.join(STATUS_LINE_SCRIPT).display())
 }
 
 /// The settings file's text: only the status line.
@@ -641,7 +641,7 @@ mod tests {
         let written: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
         let script = tools.join(STATUS_LINE_SCRIPT).display().to_string();
         assert_eq!(written["statusLine"]["type"], "command");
-        assert_eq!(written["statusLine"]["command"], format!("powershell -NoProfile -ExecutionPolicy Bypass -File \"{script}\""));
+        assert_eq!(written["statusLine"]["command"], format!("\"{}\" \"{script}\"", crate::env::node().display()));
         assert_eq!(written.as_object().unwrap().len(), 1);
 
         // the plain isolation (and the switch off, or Codex) has no status line of Castle's
@@ -651,12 +651,11 @@ mod tests {
         assert!(isolation_with_status(&store, Cli::Codex, true, &tools).unwrap().0.is_empty());
     }
 
-    /// Runs the real script with a session's JSON on stdin (Windows PowerShell, as Claude Code does).
+    /// Runs the real script with a session's JSON on stdin (through Node, as Claude Code does).
     fn status_line(json: &serde_json::Value) -> Option<String> {
         use std::io::Write;
         let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources").join("tools").join(STATUS_LINE_SCRIPT);
-        let mut child = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
+        let mut child = std::process::Command::new(crate::env::node())
             .arg(&script)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())

@@ -18,6 +18,7 @@ import {
 import { loadUserThemes, userThemeFolders } from '../composables/useThemes.js'
 import DiaryPage from '../components/DiaryPage.vue'
 import { lookOf } from '../components/diaryviews.js'
+import { absPath } from './dev/tree.js'
 import { typeLine } from '../components/typeline.js'
 import { DIARY_THEMES, indexOf, SAMPLE_PAGE, SAMPLE_PAGES, SAMPLE_TEXT, step, STORY_THEMES, wearingLine } from '../components/themeroom.js'
 import ProfileCards from './profile/ProfileCards.vue'
@@ -255,11 +256,11 @@ async function askCompanion(theme, paint) {
     ? [
         `Please paint a wallpaper for my Castle theme "${theme.name}".`,
         `Mood: ${theme.description || 'calm and beautiful'}. A wide landscape picture with no text, calm on the left third (a panel sits there) and on the right side (cards sit there).`,
-        `Save it as ${folder}\\wallpaper.png (1536x1024) with Castle's image helper, and set "wallpaper": "wallpaper.png" in ${folder}\\theme.json.`,
+        `Save it as ${absPath(folder, 'wallpaper.png')} (1536x1024) with Castle's image helper, and set "wallpaper": "wallpaper.png" in ${absPath(folder, 'theme.json')}.`,
         'Tell me the cost first and ask before you draw.',
       ]
     : [
-        `Please polish my Castle theme "${theme.name}" in ${folder}\\theme.json.`,
+        `Please polish my Castle theme "${theme.name}" in ${absPath(folder, 'theme.json')}.`,
         `My words for it: ${theme.description || 'make it feel like the picture'}.`,
         'Edit only that file. Keep "id", "name" and "wallpaper". Colours go only in "colors" as --variables (--background, --text, --text-dim, --accent, --line, --panel-background, --widget-background, --bar-background, --hover). Widget places use only left, top, right, bottom, width, height.',
         'Keep text easy to read on the background. Tell me when you are done.',
@@ -431,7 +432,7 @@ onMounted(() => load(false))
   background: var(--panel-background);
   border: 1px solid var(--line);
   border-radius: 14px;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 .bar,
 .row {
@@ -592,7 +593,7 @@ input {
     inset 0 0 0 5px color-mix(in srgb, var(--accent) 7%, transparent),
     inset 0 -30px 40px -26px color-mix(in srgb, var(--accent) 30%, transparent),
     0 18px 40px -18px rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 .lamp {
   position: absolute;
@@ -683,7 +684,7 @@ input {
 .line {
   /* Theme panel colours can contain alpha: back them with a solid surface. */
   background: linear-gradient(var(--panel-background), var(--panel-background)), #04081c;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 .pick {
   display: grid;
@@ -779,7 +780,7 @@ input {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: linear-gradient(var(--panel-background), var(--panel-background)), #04081c;
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
   font-family: 'Palatino Linotype', Palatino, Georgia, serif;
   font-style: italic;
   font-size: 17px;

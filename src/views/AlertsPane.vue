@@ -7,6 +7,11 @@ import { computed, onMounted, ref } from 'vue'
 import GlassSelect from '../components/GlassSelect.vue'
 import HelpTip from '../components/HelpTip.vue'
 import { alertSoundPreview, alertSounds, alertSoundsFolder, alertSources } from '../api/castle.js'
+import { isMac } from '../platform.js'
+
+// where Castle waits when hidden, and the system's quiet mode: Windows' names, or the Mac's
+const hiddenIn = isMac ? 'the menu bar' : 'the tray'
+const quietMode = isMac ? 'macOS Focus' : "Windows' Do Not Disturb"
 
 const props = defineProps({
   settings: { type: Object, required: true },
@@ -81,8 +86,8 @@ defineExpose({ loadSources })
   <section class="alerts-pane">
     <p class="intro">
       Castle can tell you when something happens while you are looking elsewhere - in another room, or with Castle
-      in the tray. Each kind of alert has its own notification, sound and sound choice, and stays quiet while you are
-      already looking at the room it is about. Windows' Do Not Disturb and quiet hours apply to notifications.
+      in {{ hiddenIn }}. Each kind of alert has its own notification, sound and sound choice, and stays quiet while you are
+      already looking at the room it is about. {{ quietMode }} and quiet hours apply to notifications.
     </p>
 
     <article v-for="r in rows" :key="r.id" class="alert-card">

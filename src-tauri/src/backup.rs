@@ -337,13 +337,29 @@ pub async fn backup_now(store: State<'_, SettingsStore>) -> Result<BackupStatus,
 pub fn backup_sign_in() -> Result<(), String> {
     // on PATH or in its install folder: a Castle started before gh was installed still finds it
     let gh = crate::dev_new::gh_program().ok_or("Install the GitHub CLI first (cli.github.com).")?;
-    Command::new("cmd.exe")
+    #[cfg(windows)]
+    let opened = Command::new("cmd.exe")
         .args(["/c", "start", "GitHub sign-in", "cmd", "/k"])
         .arg(gh)
         .args(["auth", "login", "--web", "--hostname", "github.com", "--git-protocol", "https"])
-        .spawn()
-        .map(|_| ())
-        .map_err(|_| "The GitHub sign-in could not be opened.".to_string())
+        .spawn();
+    // macOS: the same sign-in in a new Terminal window
+    #[cfg(target_os = "macos")]
+    let opened = Command::new("osascript")
+        .args(["-e", &format!("tell application \"Terminal\" to do script \"{}\"", terminal_line(&gh))])
+        .args(["-e", "tell application \"Terminal\" to activate"])
+        .spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let opened: std::io::Result<std::process::Child> = Err(std::io::ErrorKind::Unsupported.into());
+    opened.map(|_| ()).map_err(|_| "The GitHub sign-in could not be opened.".to_string())
+}
+
+/// The `gh auth login` line for Terminal: the path quoted for the shell, then escaped for the
+/// AppleScript string it travels in.
+#[cfg(target_os = "macos")]
+fn terminal_line(gh: &Path) -> String {
+    let quoted = format!("'{}'", gh.display().to_string().replace('\'', r"'\''"));
+    format!("{quoted} auth login --web --hostname github.com --git-protocol https").replace('\\', r"\\").replace('"', "\\\"")
 }
 
 /// The newest change time of anything in daily-diary/ (two levels: files and day folders).

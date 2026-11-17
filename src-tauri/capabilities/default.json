@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "What Castle's windows may ask of its core: the main desktop and the world windows on other screens",
   "windows": ["main", "world-*"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "core:window:allow-start-dragging"]
 }

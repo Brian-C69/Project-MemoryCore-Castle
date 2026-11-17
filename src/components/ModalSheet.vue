@@ -49,7 +49,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
   align-items: center;
   justify-content: center;
   background: rgba(6, 4, 20, 0.42);
-  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
 }
 
 .sheet-window {
@@ -61,7 +61,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
   border: 1px solid var(--line, rgba(200, 180, 255, 0.38));
   border-radius: 16px;
   background: var(--panel-background, rgba(20, 16, 58, 0.62));
-  backdrop-filter: blur(var(--glass-blur, 12px)) saturate(1.1);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 12px)) saturate(1.1); backdrop-filter: blur(var(--glass-blur, 12px)) saturate(1.1);
   color: var(--text, #f3efff);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5);
   text-align: left;

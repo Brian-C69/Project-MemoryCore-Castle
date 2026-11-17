@@ -222,7 +222,7 @@ async function shut(positionId) {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--panel-background);
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 
 .strip {

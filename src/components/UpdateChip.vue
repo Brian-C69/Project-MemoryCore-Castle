@@ -114,7 +114,7 @@ onBeforeUnmount(() => clearInterval(timer))
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel-background);
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
 .notes .hint {
   margin: 10px 0 0;

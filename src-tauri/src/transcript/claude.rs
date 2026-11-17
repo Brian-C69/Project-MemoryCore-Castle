@@ -1,6 +1,6 @@
 //! Claude Code's record: one jsonl per session in %USERPROFILE%\.claude\projects\<folder name>.
 
-use super::{media_kind, media_paths, relative_media_paths, strip_insight, work_detail, ChatEntry, Follower};
+use super::{media_kind, media_paths, native, relative_media_paths, SEP, strip_insight, work_detail, ChatEntry, Follower};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -22,11 +22,11 @@ pub fn media_candidates(line: &str) -> Vec<String> {
                 .iter()
                 .filter_map(Value::as_str)
                 .filter(|path| media_kind(path).is_some())
-                .map(|path| path.replace('/', "\\"))
+                .map(native)
                 .collect()
         })
         .unwrap_or_default();
-    let cwd = record.get("cwd").and_then(Value::as_str).map(|c| c.trim_end_matches(['\\', '/']).replace('/', "\\"));
+    let cwd = record.get("cwd").and_then(Value::as_str).map(|c| native(c.trim_end_matches(['\\', '/'])));
     let Some(Value::Array(blocks)) = record.get("message").and_then(|m| m.get("content")) else {
         return found;
     };
@@ -60,7 +60,7 @@ pub fn media_candidates(line: &str) -> Vec<String> {
     for text in &texts {
         found.extend(media_paths(text));
         if let Some(cwd) = &cwd {
-            found.extend(relative_media_paths(text).into_iter().map(|p| format!("{cwd}\\{p}")));
+            found.extend(relative_media_paths(text).into_iter().map(|p| format!("{cwd}{SEP}{p}")));
         }
     }
     let mut seen = std::collections::HashSet::new();
@@ -76,7 +76,7 @@ pub fn project_folder_name(folder: &str) -> String {
 
 /// Where Claude Code keeps the records for this computer's user.
 pub fn projects_root() -> Option<PathBuf> {
-    std::env::var_os("USERPROFILE").map(|home| PathBuf::from(home).join(".claude").join("projects"))
+    crate::env::home_dir().map(|home| home.join(".claude").join("projects"))
 }
 
 /// The newest record in `folder` written since `since` (a minute's grace for clocks).
@@ -290,6 +290,8 @@ mod tests {
         assert_eq!(parse_line(empty)[0].role, "work");
     }
 
+    // these records carry Windows paths, which only a Windows Castle reads
+    #[cfg(windows)]
     #[test]
     fn media_paths_are_found_in_wrapped_lines_commands_and_bash_paths() {
         let wrapped = "saved_path        : D:\\Users\\Rin\\Castle Work\\Project \n                    Resources\\sight\\castle-design-1.png\ncost_estimate_usd : 0.01";
@@ -386,6 +388,8 @@ mod tests {
         assert!(parse_line(&line).is_empty());
     }
 
+    // these records carry Windows paths, which only a Windows Castle reads
+    #[cfg(windows)]
     #[test]
     fn changed_files_and_relative_paths_name_what_she_made() {
         let changed = r#"{"type":"user","uuid":"c","cwd":"D:\\Memory","toolUseResult":{"bashEditDiff":{"changedFiles":["D:\\Memory\\daily-diary\\x-art.png","D:\\Memory\\notes.md"]}},"message":{"content":[{"type":"tool_result","content":"saved_path        : D:\\Memory\\daily-diary\\x-comm\ncost_estimate_usd : 0.01"}]}}"#;
@@ -454,6 +458,18 @@ mod tests {
         let _ = std::fs::remove_dir_all(folder);
     }
 
+    #[cfg(not(windows))]
+    #[test]
+    fn mac_paths_are_found_in_tool_output_commands_and_changed_files() {
+        let wrapped = "saved_path        : /Users/rin/Castle Work/Project \n                    Resources/sight/castle-design-1.png\ncost_estimate_usd : 0.01";
+        assert_eq!(media_paths(wrapped), ["/Users/rin/Castle Work/Project Resources/sight/castle-design-1.png"]);
+        assert_eq!(media_paths("node castle-voice.mjs --text-file \"/tmp/t.txt\" --out-file \"/Users/rin/Memory/voice/day 203.mp3\""), ["/Users/rin/Memory/voice/day 203.mp3"]);
+        assert!(media_paths("edited /Users/rin/castle/src/lib.rs and /tmp/notes.txt").is_empty());
+        assert!(media_paths("a url https://x.test/a.png is not a file").is_empty());
+        let changed = r#"{"type":"user","uuid":"c","cwd":"/Users/rin/Memory","toolUseResult":{"bashEditDiff":{"changedFiles":["/Users/rin/Memory/daily-diary/x-art.png","/Users/rin/Memory/notes.md"]}},"message":{"content":[{"type":"tool_result","content":"SPOKE elevenlabs ja -> daily-diary/current/voice/2047.mp3 (306407 bytes)"}]}}"#;
+        assert_eq!(media_candidates(changed), ["/Users/rin/Memory/daily-diary/x-art.png", "/Users/rin/Memory/daily-diary/current/voice/2047.mp3"]);
+    }
+
     #[test]
     fn a_relative_path_that_does_not_exist_is_never_shown() {
         let folder = std::env::temp_dir().join(format!("castle-relative-{}", std::process::id()));
@@ -461,15 +477,16 @@ mod tests {
         std::fs::write(folder.join("voice").join("here.mp3"), b"mp3").unwrap();
         let record = folder.join("r.jsonl");
         let line = format!(
-            r#"{{"type":"user","uuid":"v","cwd":{},"message":{{"content":[{{"type":"tool_result","content":"SPOKE -> voice\\here.mp3 and voice\\missing.mp3"}}]}}}}"#,
-            serde_json::to_string(&folder.display().to_string()).unwrap()
+            r#"{{"type":"user","uuid":"v","cwd":{},"message":{{"content":[{{"type":"tool_result","content":"SPOKE -> voice{sep}here.mp3 and voice{sep}missing.mp3"}}]}}}}"#,
+            serde_json::to_string(&folder.display().to_string()).unwrap(),
+            sep = if cfg!(windows) { "\\\\" } else { "/" }
         );
         std::fs::write(&record, format!("{line}\n")).unwrap();
         let mut follower = super::follower(record, SystemTime::now());
         let media: Vec<_> = follower.read_new().unwrap().into_iter().filter(|e| e.path.is_some()).collect();
         assert_eq!(media.len(), 1);
         assert_eq!(media[0].role, "voice");
-        assert!(media[0].path.as_deref().unwrap().ends_with("voice\\here.mp3"));
+        assert!(media[0].path.as_deref().unwrap().ends_with(&format!("voice{SEP}here.mp3")));
         let _ = std::fs::remove_dir_all(folder);
     }
 

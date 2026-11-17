@@ -80,8 +80,21 @@ fn unwrap_lines(text: &str) -> String {
     out
 }
 
-/// Every picture or voice path written in `text`: Windows paths (D:\.. or D:/..) and Git Bash
-/// paths (/d/..), each cut at its first picture or voice extension.
+/// The separator Castle writes media paths with: `\` on Windows, `/` on macOS and Linux.
+pub const SEP: char = if cfg!(windows) { '\\' } else { '/' };
+
+/// A path in this platform's own form (Windows turns `/` into `\`; elsewhere it stays as written).
+pub fn native(path: &str) -> String {
+    if cfg!(windows) {
+        path.replace('/', "\\")
+    } else {
+        path.to_string()
+    }
+}
+
+/// Every picture or voice path written in `text`, each cut at its first picture or voice extension.
+/// Windows: drive paths (D:\.. or D:/..) and Git Bash paths (/d/..). macOS and Linux: absolute
+/// paths (/Users/..).
 pub fn media_paths(text: &str) -> Vec<String> {
     let text = unwrap_lines(text);
     let chars: Vec<char> = text.chars().collect();
@@ -89,15 +102,22 @@ pub fn media_paths(text: &str) -> Vec<String> {
     let mut found = Vec::new();
     let mut i = 0;
     while i + 2 < chars.len() {
-        let windows = chars[i].is_ascii_alphabetic()
+        let windows = cfg!(windows)
+            && chars[i].is_ascii_alphabetic()
             && chars[i + 1] == ':'
             && (chars[i + 2] == '\\' || chars[i + 2] == '/')
             && (i == 0 || !chars[i - 1].is_ascii_alphanumeric());
-        let bash = chars[i] == '/'
+        let bash = cfg!(windows)
+            && chars[i] == '/'
             && chars[i + 1].is_ascii_alphabetic()
             && chars[i + 2] == '/'
             && (i == 0 || chars[i - 1].is_whitespace() || stops.contains(&chars[i - 1]));
-        if !(windows || bash) {
+        let unix = !cfg!(windows)
+            && chars[i] == '/'
+            && chars[i + 1] != '/'
+            && !chars[i + 1].is_whitespace()
+            && (i == 0 || chars[i - 1].is_whitespace() || stops.contains(&chars[i - 1]) || chars[i - 1] == '(');
+        if !(windows || bash || unix) {
             i += 1;
             continue;
         }
@@ -123,7 +143,7 @@ pub fn media_paths(text: &str) -> Vec<String> {
                     let drive = path[1..2].to_uppercase();
                     path = format!("{drive}:{}", &path[2..]);
                 }
-                found.push(path.replace('/', "\\"));
+                found.push(native(&path));
                 i += path.chars().count().max(1);
             }
             None => i = end.max(i + 1),
@@ -147,7 +167,7 @@ pub fn relative_media_paths(text: &str) -> Vec<String> {
                 && token.contains(['\\', '/'])
                 && media_kind(token).is_some()
         })
-        .map(|token| token.trim_start_matches(".\\").trim_start_matches("./").replace('/', "\\"))
+        .map(|token| native(token.trim_start_matches(".\\").trim_start_matches("./")))
         .collect()
 }
 

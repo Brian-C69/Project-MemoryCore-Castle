@@ -21,6 +21,7 @@ import {
   setupInspect,
 } from '../api/castle.js'
 import { builtInThemes } from '../themes/loader.js'
+import { isMac } from '../platform.js'
 import BackupPanel from '../components/BackupPanel.vue'
 import DatabasePanel from '../components/DatabasePanel.vue'
 
@@ -134,7 +135,9 @@ async function chooseParent() {
 async function createNew() {
   const name = form.newName.trim().replace(/[<>:"/\\|?*]/g, '')
   if (!form.newParent || !name) return
-  const target = `${form.newParent.replace(/[\\/]+$/, '')}\\${name}`
+  // the parent's own separator: \ for a Windows folder, / for a Mac one
+  const sep = form.newParent.includes('\\') || /^[A-Za-z]:/.test(form.newParent) ? '\\' : '/'
+  const target = `${form.newParent.replace(/[\\/]+$/, '')}${sep}${name}`
   const state = await attempt('Downloading MemoryCore…', () => setupCreate(target))
   if (state) {
     form.folder = target
@@ -365,7 +368,7 @@ onMounted(async () => {
           <button class="primary" @click="importFoundKeys">Keep them encrypted in Castle</button>
           <p class="hint">Your .env stays as it is - you can delete it yourself once Castle keeps the keys.</p>
         </div>
-        <p class="hint">Keys are kept encrypted by Windows and only handed to {{ form.companion || 'your companion' }}'s session. Skip any you don't have - without a key, Castle saves the prompt or lyrics instead and tells you.</p>
+        <p class="hint">Keys are {{ isMac ? "kept in your Mac's Keychain" : 'kept encrypted by Windows' }} and only handed to {{ form.companion || 'your companion' }}'s session. Skip any you don't have - without a key, Castle saves the prompt or lyrics instead and tells you.</p>
         <div v-for="key in shownKeys" :key="key.name" class="key">
           <div>
             <strong>{{ key.label }}</strong>
@@ -395,7 +398,7 @@ onMounted(async () => {
         <div class="styles">
           <button v-for="t in themes" :key="t.id" :class="{ picked: form.theme === t.id }" @click="form.theme = t.id">{{ t.name }}</button>
         </div>
-        <label class="toggle"><input v-model="form.startWithWindows" type="checkbox" /> Start Castle when Windows starts</label>
+        <label class="toggle"><input v-model="form.startWithWindows" type="checkbox" /> {{ isMac ? 'Open Castle when you log in' : 'Start Castle when Windows starts' }}</label>
         <label class="toggle"><input v-model="form.startSessionOnLaunch" type="checkbox" /> Wake {{ form.companion || 'your companion' }} when Castle opens</label>
       </div>
 
@@ -422,7 +425,7 @@ onMounted(async () => {
   display: grid;
   place-items: center;
   background: rgba(2, 6, 20, 0.55);
-  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 .setup {
   position: relative;
@@ -434,7 +437,7 @@ onMounted(async () => {
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--panel-background);
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
   box-sizing: border-box;
 }
 .eyebrow {

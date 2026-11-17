@@ -27,6 +27,7 @@ mod door_look;
 mod door_library;
 mod emotion;
 mod env;
+mod os;
 mod files;
 mod git;
 mod import;
@@ -224,6 +225,8 @@ pub fn run() {
     if args.first().map(String::as_str) == Some(door::FLAG) {
         std::process::exit(door::main(&args[1..]));
     }
+    #[cfg(target_os = "macos")]
+    env::adopt_login_path();
     let builder = tauri::Builder::default();
     // the signed self-updater lives only in official builds (scripts/release.ps1)
     #[cfg(feature = "official")]
@@ -387,6 +390,8 @@ pub fn run() {
             quota::cli_usage,
             rooms::rooms_apply,
             signin::member_sign_in,
+            screen::castle_window_layout,
+            signin::member_sign_in_cancel,
             signin::member_status,
             signin::member_sign_out,
             chatroom::room_companion_in,
@@ -573,6 +578,17 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("MemoryCore Castle could not start")
         .run(|app, event| {
+            // macOS: the Dock icon (or opening Castle again from the Finder) brings the hidden window back
+            #[cfg(target_os = "macos")]
+            if let RunEvent::Reopen { .. } = event {
+                tray::show_main(app);
+            }
+            // macOS: ⌘Q and the Dock's Quit ask first, as the tray's Quit does, when a session would end
+            #[cfg(target_os = "macos")]
+            if let RunEvent::ExitRequested { code: None, api, .. } = &event {
+                api.prevent_exit();
+                tray::quit(app);
+            }
             // The companion's sessions belong to Castle: when Castle ends, so do they.
             if let RunEvent::Exit = event {
                 session::end_all(app);

@@ -8,6 +8,7 @@ import ModalSheet from '../components/ModalSheet.vue'
 import BackupPanel from '../components/BackupPanel.vue'
 import DatabasePanel from '../components/DatabasePanel.vue'
 import HelpTip from '../components/HelpTip.vue'
+import { isMac } from '../platform.js'
 import { DIARY_LOOKS, lookOf } from '../components/diaryviews.js'
 import { PROFILE_LOOKS, profileLookOf } from './profile/profile.js'
 import {
@@ -45,6 +46,27 @@ const props = defineProps({
   updateLine: { type: String, default: '' },
 })
 const emit = defineEmits(['close', 'saved', 'setup', 'whatsnew', 'open-room'])
+
+// The few words that name the computer's own parts: Windows' wording, or the Mac's.
+const words = isMac
+  ? {
+      thisComputer: 'this Mac',
+      keysKept: "kept in your Mac's Keychain",
+      moveKeys: '⌥← / ⌥→',
+      startWith: 'Open Castle when you log in',
+      wakeWhen: 'when Castle opens at log-in',
+      minimise: 'Minimise to the Dock instead of the menu bar',
+      minimiseHint: 'The minus button in the top bar then minimises Castle to the Dock, where one click brings it back. With this off, it hides Castle to the menu bar icon.',
+    }
+  : {
+      thisComputer: 'this PC',
+      keysKept: 'kept encrypted by Windows',
+      moveKeys: 'Alt+Left / Alt+Right',
+      startWith: 'Start Castle when Windows starts',
+      wakeWhen: 'when Castle starts with Windows',
+      minimise: 'Minimise to the taskbar instead of the tray',
+      minimiseHint: 'The minus button in the top bar then minimises Castle to the taskbar, where one click brings it back. With this off, it hides Castle to the tray icon.',
+    }
 
 const SECTIONS = [
   { id: 'companion', label: 'Companion' },
@@ -358,12 +380,12 @@ onMounted(async () => {
         <h3>Local voice (optional)</h3>
         <label class="toggle"><input type="checkbox" :checked="!!settings.voicestudioOn" :disabled="!!busy" @change="toggleVoice($event.target.checked)" /> Use VoiceStudio for the Voice card in STUDIO</label>
         <p v-if="settings.voicestudioOn" class="hint">VoiceStudio is {{ voiceUp === null ? 'being checked…' : voiceUp ? 'running on this computer.' : 'not running. Open it and wait for it to finish starting, then check again.' }} <button v-if="voiceUp === false" @click="checkVoice">Check again</button></p>
-        <p class="hint">For people who run their own <a href="#" @click.prevent="openUrl('https://github.com/debpalash/voicestudio')">VoiceStudio</a> on this PC. Off: Castle never contacts it. On: STUDIO's Voice card can speak a line with it, and the clip is saved with your other voice lines. Everything stays on this computer. Castle does not install or start VoiceStudio, and its voice models carry their own licences (some are non-commercial).</p>
+        <p class="hint">For people who run their own <a href="#" @click.prevent="openUrl('https://github.com/debpalash/voicestudio')">VoiceStudio</a> on {{ words.thisComputer }}. Off: Castle never contacts it. On: STUDIO's Voice card can speak a line with it, and the clip is saved with your other voice lines. Everything stays on this computer. Castle does not install or start VoiceStudio, and its voice models carry their own licences (some are non-commercial).</p>
         <button @click="emit('setup')">Run the first-run setup again</button>
       </section>
 
       <section v-else-if="tab === 'keys'" class="pane">
-        <p class="hint">Keys are kept encrypted by Windows and only handed to your companion's session. Without a key, your companion saves the idea instead and Castle tells you.</p>
+        <p class="hint">Keys are {{ words.keysKept }} and only handed to your companion's session. Without a key, your companion saves the idea instead and Castle tells you.</p>
         <div v-for="k in shownKeys" :key="k.name" class="key">
           <div class="row">
             <strong>{{ k.label }}</strong>
@@ -466,7 +488,7 @@ onMounted(async () => {
         </div>
         <p class="hint">LIBRARY is off to begin with: turn it on for your own books (kept in your memory database) and the Spiral Library.</p>
         <p class="hint">Turning STORY off ends the story session; turning WORLD off closes the world screens; CHAT stops reading the room. Their files stay.</p>
-        <p class="hint">Arrange the tabs your way: drag a tab in the top bar onto another, or press Alt+Left / Alt+Right on a tab. Castle remembers the order.</p>
+        <p class="hint">Arrange the tabs your way: drag a tab in the top bar onto another, or press {{ words.moveKeys }} on a tab. Castle remembers the order.</p>
         <button v-if="settings.tabOrder?.length" :disabled="!!busy" @click="save({ tabOrder: [] }, 'The tabs are back in their first order.')">Put the tabs back in their first order</button>
 
         <h3>Diary</h3>
@@ -495,14 +517,14 @@ onMounted(async () => {
       <section v-else-if="tab === 'startup'" class="pane">
         <label class="toggle"><input type="checkbox" :checked="!!settings.displayClock" :disabled="!!busy" @change="save({ displayClock: $event.target.checked })" /> Display clock</label>
         <label class="clock-format">Clock format
-          <GlassSelect :model-value="settings.clockFormat || '24h'" :options="[{ value: '24h', label: '24-hour (14:30)' }, { value: '12h', label: '12-hour (2:30 PM)' }]" :disabled="!settings.displayClock || !!busy" aria-label="Clock format" @update:model-value="(f) => save({ clockFormat: f })" />
+          <GlassSelect :model-value="settings.clockFormat || '24h'" :options="[{ value: '24h', label: '24-hour (14:30)' }, { value: '12h', label: '12-hour (2:30 PM)' }]" :disabled="!!busy" aria-label="Clock format" @update:model-value="(f) => save({ clockFormat: f })" />
         </label>
         <p class="hint">Shows your local time in the top-right corner, just before the music controls.</p>
-        <label class="toggle"><input type="checkbox" :checked="settings.startWithWindows" @change="save({ startWithWindows: $event.target.checked })" /> Start Castle when Windows starts</label>
+        <label class="toggle"><input type="checkbox" :checked="settings.startWithWindows" @change="save({ startWithWindows: $event.target.checked })" /> {{ words.startWith }}</label>
         <p v-if="view?.startupNote" class="hint">{{ view.startupNote }}</p>
-        <label class="toggle"><input type="checkbox" :checked="settings.startSessionOnLaunch" @change="save({ startSessionOnLaunch: $event.target.checked })" /> Wake {{ settings.companionName ?? 'your companion' }} when Castle starts with Windows</label>
-        <label class="toggle"><input type="checkbox" :checked="settings.minimizeToTaskbar" @change="save({ minimizeToTaskbar: $event.target.checked })" /> Minimise to the taskbar instead of the tray</label>
-        <p class="hint">The minus button in the top bar then minimises Castle to the taskbar, where one click brings it back. With this off, it hides Castle to the tray icon.</p>
+        <label class="toggle"><input type="checkbox" :checked="settings.startSessionOnLaunch" @change="save({ startSessionOnLaunch: $event.target.checked })" /> Wake {{ settings.companionName ?? 'your companion' }} {{ words.wakeWhen }}</label>
+        <label class="toggle"><input type="checkbox" :checked="settings.minimizeToTaskbar" @change="save({ minimizeToTaskbar: $event.target.checked })" /> {{ words.minimise }}</label>
+        <p class="hint">{{ words.minimiseHint }}</p>
         <p class="hint">Change the look in the THEME room.</p>
       </section>
 

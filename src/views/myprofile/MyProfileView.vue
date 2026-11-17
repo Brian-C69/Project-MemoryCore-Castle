@@ -245,7 +245,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel-background);
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
   padding: 16px 18px;
 }
 
@@ -544,7 +544,7 @@ h3 {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--panel-background);
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
   text-align: center;
   display: flex;
   flex-direction: column;

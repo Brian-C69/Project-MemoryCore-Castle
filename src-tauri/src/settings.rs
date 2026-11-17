@@ -224,6 +224,11 @@ pub struct Settings {
     pub world: WorldSettings,
     /// The name of the screen Castle itself lives on ("" = wherever it opens, the primary screen).
     pub castle_screen: String,
+    /// How much of that screen Castle takes: "full" (or "" from older files), "left", "right"
+    /// (half the screen) or "free" (the member drags the edges; `window_bounds` keeps the size).
+    pub window_layout: String,
+    /// The free layout's last place and size: x, y, width, height in physical pixels.
+    pub window_bounds: Option<[i32; 4]>,
     /// True once the first-run setup has finished.
     pub setup_done: bool,
     /// The member's own quick-action buttons, after Castle's built-in ones.
@@ -364,6 +369,8 @@ impl Default for Settings {
             room_companion_name: None,
             world: WorldSettings::default(),
             castle_screen: String::new(),
+            window_layout: String::new(),
+            window_bounds: None,
             setup_done: false,
             quick_actions: Vec::new(),
             backup_after_diary: false,
@@ -720,6 +727,8 @@ mod tests {
                 screens: vec![WorldScreen { screen: "\\\\.\\DISPLAY5".into(), world: "3d/crystal-isle".into(), camera: "orbit".into(), on: true, ..WorldScreen::default() }],
             },
             castle_screen: "\\\\.\\DISPLAY1".into(),
+            window_layout: "left".into(),
+            window_bounds: Some([10, 20, 1600, 900]),
             setup_done: true,
             quick_actions: vec![QuickAction { label: "Plan my day".into(), command: "plan my day".into() }],
             backup_after_diary: true,

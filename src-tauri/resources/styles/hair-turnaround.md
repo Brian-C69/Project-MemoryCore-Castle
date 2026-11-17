@@ -37,6 +37,6 @@ No text, no labels, no arrows, no watermark, no signature, no extra characters.
 
 ## Notes
 
-- When `<memory>/appearance/portrait.png` exists, pass `-Reference <memory>/appearance/portrait.png` so the face and identity stay the same.
+- When `<memory>/appearance/portrait.png` exists, pass `--reference <memory>/appearance/portrait.png` so the face and identity stay the same.
 - When `CASTLE_IMAGE` is `codex`, the AI draws this with its own image tool, using the reference picture the same way, and saves to the same path.
 - The hairstyle reference wins over any hair seen in other pictures: the portrait reference is for the face only - draw the hair from `{{HAIR}}`, not from the portrait.

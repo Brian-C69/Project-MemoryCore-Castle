@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { chatMediaOpen } from '../api/castle.js'
+import { isMac } from '../platform.js'
 
 const props = defineProps({
   // [{ path, name, url }] - every picture in this chat, in order
@@ -118,7 +119,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         <span class="spacer"></span>
         <template v-if="canOpen">
           <button @click="openOutside(true)">Open folder</button>
-          <button @click="openOutside(false)">Open in Photos</button>
+          <button @click="openOutside(false)">{{ isMac ? 'Open in Preview' : 'Open in Photos' }}</button>
         </template>
       </footer>
     </div>
@@ -133,7 +134,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
   display: flex;
   flex-direction: column;
   background: rgba(6, 4, 20, 0.92);
-  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
   color: #f3efff;
 }
 
