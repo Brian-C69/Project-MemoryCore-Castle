@@ -50,7 +50,7 @@ import NoticeToasts from './components/NoticeToasts.vue'
 import MeterAlert from './components/MeterAlert.vue'
 import AmbientMusic from './components/AmbientMusic.vue'
 import { avatarGet, backupNow, backupStatus, dbMemory, dbStart, dbStatus, getSettings, hideCastle, keyStatus, memoryHome, saveSettings, onBackupDone, onStoryOutput, versionSeen } from './api/castle.js'
-import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle } from './themes/loader.js'
+import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle, skinClass } from './themes/loader.js'
 
 // The rooms across the top. A room whose MemoryCore feature is not installed stays hidden
 // (`needs`); the rest always show.
@@ -551,7 +551,7 @@ watch(settingsStamp, () => {
       @hide="hideCastle().catch(() => {})"
     />
     <main class="screen">
-      <div v-show="active === 'home'" ref="homeEl" class="home" :class="[theme?.widgetStyle ?? 'glass', { arranging }]">
+      <div v-show="active === 'home'" ref="homeEl" class="home" :class="[theme?.widgetStyle ?? 'glass', skinClass(theme), { arranging }]">
         <UsageReveal v-if="theme?.usageReveal" :theme="theme" :visible="active === 'home'" />
         <ThemeMotion v-if="theme?.motion" :theme="theme" :visible="active === 'home'" :enabled="wallpaperMotion" />
         <QuotaGlow v-if="theme?.quotaGlow" :theme="theme" :visible="active === 'home'" />

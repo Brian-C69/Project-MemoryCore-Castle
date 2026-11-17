@@ -1,6 +1,8 @@
 import './loader/loader.js'
 import { createApp } from 'vue'
 import App from './App.vue'
+// a theme's widget skin (theme.json widgetSkin), on top of the glass base
+import './themes/skins.css'
 import { isMac } from './platform.js'
 
 // Browser keys that would reload, print or search the page. Keys the terminal uses

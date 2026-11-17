@@ -1,0 +1,84 @@
+/* A theme's widget skin (theme.json "widgetSkin"): HOME's cards and the companion panel dressed for
+   the theme's world, on top of the glass base (.home.glass), so a skin only ever adds to it. The five
+   skins follow the designs Kiyo chose on Nov 18 2026 (Project Resources/Design/widgets-*). Colours come
+   from the theme's own variables where they can; a skin's own accents are written once here. */
+
+/* ---------- prism-lines (Crystal): no boxes, each widget floats over a thin line of prismatic light ---------- */
+.home.glass.skin-prism-lines .widget {
+  position: relative;
+  background: transparent;
+  border-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  text-shadow: 0 1px 8px rgba(24, 14, 70, 0.6), 0 0 2px rgba(24, 14, 70, 0.4);
+}
+.home.glass.skin-prism-lines .widget::after,
+.home.glass.skin-prism-lines .terminal-panel::after {
+  content: '';
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: -2px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #9be7ff 18%, #c9a7ff 45%, #ffc9e8 65%, #ffe0a8 82%, transparent);
+  box-shadow: 0 0 10px rgba(200, 175, 255, 0.85);
+  pointer-events: none;
+}
+.home.glass.skin-prism-lines .terminal-panel {
+  background: color-mix(in srgb, var(--panel-background) 70%, transparent);
+  border-color: transparent;
+}
+
+/* ---------- carved-wood (The Seed of Evolution): wooden frames, dark amber glass, leaf flourishes ---------- */
+.home.glass.skin-carved-wood .widget,
+.home.glass.skin-carved-wood .terminal-panel {
+  background:
+    url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E%3Cg fill='none' stroke='%23e0ac62' stroke-width='1.2' stroke-linecap='round'%3E%3Cpath d='M2 24C8 18 14 12 24 2'/%3E%3Cpath d='M8 18C6 14 7 11 10 10C11 13 10 16 8 18Z'/%3E%3Cpath d='M14 12C13 8 15 6 18 5C18 8 17 11 14 12Z'/%3E%3C/g%3E%3C/svg%3E") no-repeat top 7px left 7px,
+    url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E%3Cg fill='none' stroke='%23e0ac62' stroke-width='1.2' stroke-linecap='round' transform='rotate(180 13 13)'%3E%3Cpath d='M2 24C8 18 14 12 24 2'/%3E%3Cpath d='M8 18C6 14 7 11 10 10C11 13 10 16 8 18Z'/%3E%3Cpath d='M14 12C13 8 15 6 18 5C18 8 17 11 14 12Z'/%3E%3C/g%3E%3C/svg%3E") no-repeat bottom 7px right 7px,
+    linear-gradient(160deg, rgba(62, 34, 14, 0.86), rgba(32, 17, 7, 0.82));
+  border: 2px solid #8a5a2b;
+  border-radius: 10px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 205, 140, 0.32),
+    inset 0 0 20px rgba(255, 170, 60, 0.16),
+    0 4px 18px rgba(0, 0, 0, 0.35);
+}
+.home.glass.skin-carved-wood .widget h3,
+.home.glass.skin-carved-wood .widget .title {
+  font-family: Georgia, 'Times New Roman', serif;
+  letter-spacing: 0.06em;
+  color: #f6dcae;
+}
+
+/* ---------- sunset-glass (The Sunset Shore): amber-to-rose glass with a gold rim ---------- */
+.home.glass.skin-sunset-glass .widget,
+.home.glass.skin-sunset-glass .terminal-panel {
+  background: linear-gradient(160deg, rgba(255, 168, 92, 0.36), rgba(206, 86, 112, 0.34));
+  border: 1px solid rgba(255, 214, 150, 0.78);
+  box-shadow:
+    0 0 14px rgba(255, 180, 90, 0.35),
+    inset 0 0 12px rgba(255, 222, 172, 0.16);
+}
+
+/* ---------- bioluminescent (The Star Shore): navy glass with a glowing cyan edge ---------- */
+.home.glass.skin-bioluminescent .widget,
+.home.glass.skin-bioluminescent .terminal-panel {
+  background: rgba(4, 14, 40, 0.72);
+  border: 1.5px solid #4fd8ff;
+  box-shadow:
+    0 0 10px rgba(79, 216, 255, 0.55),
+    0 0 26px rgba(79, 216, 255, 0.18),
+    inset 0 0 14px rgba(79, 216, 255, 0.12);
+}
+
+/* ---------- ripple-glass (The Emerald River): clear emerald glass, ripple rings and a leaf ---------- */
+.home.glass.skin-ripple-glass .widget,
+.home.glass.skin-ripple-glass .terminal-panel {
+  background:
+    url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpath d='M3 19C3 10 9 4 19 3C18 13 12 19 3 19Z' fill='%2394d66a' fill-opacity='0.85'/%3E%3Cpath d='M3 19L15 7' stroke='%23e9ffd4' stroke-width='1' fill='none'/%3E%3C/svg%3E") no-repeat top 8px right 8px,
+    radial-gradient(circle at 100% 100%, transparent 0 18px, rgba(220, 255, 200, 0.16) 19px 20px, transparent 21px 34px, rgba(220, 255, 200, 0.11) 35px 36px, transparent 37px 52px, rgba(220, 255, 200, 0.07) 53px 54px, transparent 55px),
+    linear-gradient(160deg, rgba(40, 110, 60, 0.44), rgba(12, 58, 28, 0.42));
+  border: 1px solid rgba(200, 240, 170, 0.42);
+  box-shadow: inset 0 0 14px rgba(200, 255, 170, 0.08);
+}
