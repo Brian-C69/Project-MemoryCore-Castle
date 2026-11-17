@@ -228,6 +228,7 @@ pub fn dev_media_open(slot: usize, path: String, folder: bool, chats: State<crat
     } else {
         command.arg(file);
     }
+    crate::shell::let_it_come_forward();
     command.spawn().map(|_| ()).map_err(|_| "Windows could not open it.".to_string())
 }
 

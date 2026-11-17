@@ -168,6 +168,7 @@ pub fn draw_missing_icons(settings_folder: &Path, folders: &[PathBuf]) -> usize 
 
 /// Opens a shortcut through the Windows shell, the way a Start-menu click does.
 pub fn open(shortcut: &Path) -> Result<(), String> {
+    crate::shell::let_it_come_forward();
     std::process::Command::new("explorer.exe")
         .arg(shortcut)
         .spawn()

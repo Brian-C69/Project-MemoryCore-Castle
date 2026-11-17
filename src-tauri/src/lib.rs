@@ -6,6 +6,7 @@ mod appearance_db;
 mod library_db;
 mod spiral;
 mod apps;
+mod shell;
 mod backup;
 mod chat;
 mod chatroom;

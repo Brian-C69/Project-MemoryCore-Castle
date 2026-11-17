@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **"Open folder" comes up in front.** STUDIO's open-folder button (and the same button in DEV chats, the file tree and app shortcuts) opened its Explorer window behind Castle, so it seemed to do nothing. Castle now allows Explorer to take the front before it asks for the window.
+
 ## 0.2.14 - 2026-11-16
 
 - **DIARY keeps your place.** Reading the book (or any page) no longer jumps back to the top every minute or so; a page is read again only when it really changed, and its text stays on screen while it is.
