@@ -15,6 +15,7 @@ mod clipboard;
 mod commands;
 mod credits;
 mod db;
+mod fetch;
 mod dev;
 mod dev_files;
 mod dev_git;

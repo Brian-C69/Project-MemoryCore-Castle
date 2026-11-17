@@ -15,7 +15,6 @@
 
 use crate::settings::SettingsStore;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use std::io::Read;
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
@@ -104,14 +103,12 @@ pub fn my_ini(data: &Path, port: u16) -> String {
     )
 }
 
-/// The lowercase hex SHA-256 of some bytes.
-pub fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
-}
+/// The lowercase hex SHA-256 of some bytes (kept here for the memory tables that fingerprint rows).
+pub use crate::fetch::sha256_hex;
 
 /// A download is kept only when it is exactly the release's own file.
 pub fn checksum_ok(bytes: &[u8]) -> bool {
-    sha256_hex(bytes) == ZIP_SHA256
+    crate::fetch::matches(bytes, ZIP_SHA256)
 }
 
 /// One line for a port Castle cannot use, saying what to do about it.
@@ -294,69 +291,13 @@ fn brew_install(progress: impl Fn(u64, u64)) -> Result<(), String> {
 
 #[cfg_attr(target_os = "macos", allow(dead_code))]
 fn install_release(home: &Path, port: u16, progress: impl Fn(u64, u64)) -> Result<u16, String> {
-    let bytes = download(progress)?;
+    let bytes = crate::fetch::download(ZIP_URL, ZIP_BYTES, "MariaDB", progress)?;
     if !checksum_ok(&bytes) {
         return Err("The download did not match MariaDB's own checksum, so Castle threw it away. Try again later.".into());
     }
-    unpack(&bytes, &home.join(VERSION))?;
+    crate::fetch::unzip_dropping_top(&bytes, &home.join(VERSION), keep_in_unpack, "database")?;
     initialise(home, port)?;
     Ok(port)
-}
-
-fn download(progress: impl Fn(u64, u64)) -> Result<Vec<u8>, String> {
-    let offline = || "MariaDB could not be downloaded. Check the internet connection and try again.".to_string();
-    let mut response = reqwest::blocking::Client::builder()
-        .user_agent(concat!("MemoryCore-Castle/", env!("CARGO_PKG_VERSION")))
-        .timeout(Duration::from_secs(900))
-        .build()
-        .and_then(|c| c.get(ZIP_URL).send())
-        .and_then(|r| r.error_for_status())
-        .map_err(|_| offline())?;
-    let total = response.content_length().unwrap_or(ZIP_BYTES);
-    let mut bytes = Vec::with_capacity(total as usize);
-    let mut chunk = [0u8; 256 * 1024];
-    let mut last = Instant::now();
-    loop {
-        let n = response.read(&mut chunk).map_err(|_| offline())?;
-        if n == 0 {
-            break;
-        }
-        bytes.extend_from_slice(&chunk[..n]);
-        if last.elapsed() > Duration::from_millis(250) {
-            progress(bytes.len() as u64, total);
-            last = Instant::now();
-        }
-    }
-    progress(bytes.len() as u64, total);
-    Ok(bytes)
-}
-
-/// The zip holds one top folder (mariadb-11.4.13-winx64/); its contents land in `target`.
-fn unpack(bytes: &[u8], target: &Path) -> Result<(), String> {
-    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|_| "The download was not a readable zip.".to_string())?;
-    let partial = target.with_extension("partial");
-    let _ = std::fs::remove_dir_all(&partial);
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i).map_err(|_| "The zip could not be read.".to_string())?;
-        let Some(inside) = file.enclosed_name() else { continue };
-        let relative: PathBuf = inside.components().skip(1).collect();
-        if relative.as_os_str().is_empty() || !keep_in_unpack(&relative) {
-            continue;
-        }
-        let out = partial.join(relative);
-        if file.is_dir() {
-            std::fs::create_dir_all(&out).map_err(|_| "A folder could not be created.".to_string())?;
-        } else {
-            if let Some(parent) = out.parent() {
-                std::fs::create_dir_all(parent).map_err(|_| "A folder could not be created.".to_string())?;
-            }
-            let mut writer = std::fs::File::create(&out).map_err(|_| "A file could not be written.".to_string())?;
-            std::io::copy(&mut file, &mut writer).map_err(|_| "A file could not be written.".to_string())?;
-        }
-    }
-    // only a whole unpack becomes the engine
-    let _ = std::fs::remove_dir_all(target);
-    std::fs::rename(&partial, target).map_err(|_| "The database folder could not be put in place.".to_string())
 }
 
 /// Makes the data folder once (root on 127.0.0.1 only) and writes Castle's my.ini.

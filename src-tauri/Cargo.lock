@@ -2380,6 +2380,7 @@ version = "0.2.14"
 dependencies = [
  "arboard",
  "base64 0.22.1",
+ "flate2",
  "getrandom 0.3.4",
  "image",
  "keyring",
@@ -2391,6 +2392,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sysinfo",
+ "tar",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",
