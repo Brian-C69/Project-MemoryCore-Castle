@@ -159,9 +159,12 @@ pub async fn studio_delete(path: String, store: State<'_, SettingsStore>) -> Res
     .map_err(|_| "The delete could not finish.".to_string())?
 }
 
+/// Reading every shelf walks the memory folder and looks at each file, so it runs off the page's
+/// thread: a command that is not async would hold the whole window still while it reads.
 #[tauri::command]
-pub fn studio_library(store: State<SettingsStore>) -> Library {
-    store.get().memory_folder.map(|f| library(Path::new(&f))).unwrap_or_default()
+pub async fn studio_library(store: State<'_, SettingsStore>) -> Result<Library, String> {
+    let Some(folder) = store.get().memory_folder else { return Ok(Library::default()) };
+    tauri::async_runtime::spawn_blocking(move || library(Path::new(&folder))).await.map_err(|_| "The library could not be read.".to_string())
 }
 
 /// The Pictures card's state for a way to draw (`env::picture_way`): the plan is "builtin", the

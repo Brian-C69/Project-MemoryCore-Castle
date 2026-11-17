@@ -4,6 +4,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **STUDIO opens full instead of loading when you arrive.** Castle now reads STUDIO's pictures, videos, songs and powers once at the start, in the background, so the room shows its gallery at once and only checks quietly for anything new. The read also no longer holds the whole window still while it walks a large memory folder.
 - **The start-up screen shows Castle's version** in its corner (for example v0.2.14), so a screenshot or a report says which build it was.
 
 - **Themes can dress the start-up screen.** A theme's `theme.json` can now carry a `loader` block: its own picture, title, funny lines (added to Castle's or replacing them), accent colour and where the words sit. Castle remembers the theme in use and shows its start-up design from the next start. A bad value only falls back to Castle's own; it never breaks the theme. See MAKE-IT-YOURS.
