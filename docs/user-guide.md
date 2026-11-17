@@ -287,7 +287,7 @@ The idea is saved next to where the file would have gone (a `.prompt.md`, `.lyri
 
 Below the Make bar, everything your companion made fills the room.
 
-- **Pictures** - large tiles at their own shape; click one to see it large and use the arrow keys to move between them.
+- **Pictures** - large tiles at their own shape (shown from small copies Castle makes once, at start-up, and keeps in its own settings folder - never in your memory folder); click one to see it large and use the arrow keys to move between them.
 - **Videos**, **Songs** and **Voice** - play them right in Castle. Songs are grouped by album.
 - **Saved prompts** - the ideas saved while a key was missing, with **Show file**.
 - **Backups** - the pictures Castle kept before replacing one (when it draws a new standard look or turnaround, or you upload a new picture).

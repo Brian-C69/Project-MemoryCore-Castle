@@ -64,6 +64,24 @@ For UI work, check keyboard access, focus, disabled and error states, and narrow
 windows. Prefer native buttons, dropdowns, and scrollbars styled with Castle's
 theme; keep controls sized to their content when a wider control is unnecessary.
 
+## Loading: at the start-up screen, not on arrival
+
+Castle has a start-up screen (see `MAKE-IT-YOURS.md`, "A start-up screen of your own"). Its purpose is
+that **a room is simply there when the member opens it**. So:
+
+- A room that reads data or pictures from disk or the network must not make the member wait for that
+  when they open it. Read it at start-up instead, behind the start-up screen, and keep it for the run.
+- Heavy work goes to the core, off the page's thread (`spawn_blocking`, or an `async` command), and is
+  done in turns small enough that the window never freezes.
+- Large files are not shown full size in a list: make small copies once, in the background, and keep
+  them in Castle's own settings folder (STUDIO's `thumbs.rs` is the model).
+- The room still reads again, quietly, when it opens or when something changes, and swaps in anything
+  new; what is already loaded shows first.
+- Start-up never waits forever: every piece has a time limit, and a piece that is slow or fails lets
+  Castle open and finish its work in the background.
+- In the pull request, say what the room loads at start and how long that adds to a first and a later
+  start. A new room that loads on arrival will be asked to move its loading to start-up.
+
 ## Privacy and scope
 
 Never include credentials, personal memory, chat logs, private configuration, or
