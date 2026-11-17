@@ -10,6 +10,10 @@ export const hideCastle = () => invoke('hide_castle')
 export const getSettings = () => invoke('get_settings')
 // The chat alert sounds: the list (Windows', Castle's pack, then the member's own .wav files), a preview
 // and the folder where their own go. -> [{ id, label, builtIn }] / bool / the folder's path
+// Every kind of alert (CHAT, HOME replies, MARKET rounds, pictures...) with the rule now in force, the
+// room it opens, and which room is on screen (so an alert stays quiet while its room is showing).
+export const alertSources = () => invoke('alert_sources')
+export const alertActiveRoom = (room) => invoke('alert_active_room', { room })
 export const alertSounds = () => invoke('alert_sounds')
 export const alertSoundPreview = (name) => invoke('alert_sound_preview', { name })
 export const alertSoundsFolder = () => invoke('alert_sounds_folder')
@@ -282,6 +286,8 @@ export const onProfileProgress = on('profile-progress')
 export const onCastleHidden = on('castle-hidden')
 // the member clicked a chat notification: show the CHAT tab
 export const onOpenChat = on('castle-open-chat')
+// a clicked notification: Castle came forward, show this room
+export const onOpenRoom = on('castle-open-room')
 // "Set it up for me": install, start, create, check - then it stops and gives the move's counts
 export const dbSetupAll = () => invoke('db_setup_all')
 // while it runs: { step: install | start | create | check, state: running | done }

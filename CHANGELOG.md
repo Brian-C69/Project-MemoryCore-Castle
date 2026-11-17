@@ -4,6 +4,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **An Alerts page in Settings, and alerts beyond chat.** Settings > Alerts lists everything Castle can tell you about, one card each with its own desktop notification, sound and sound choice: new chat messages, your companion finishing a reply in HOME, a MARKET round ending, and a picture being ready. An alert stays quiet while you are already looking at the room it is about, and clicking a notification opens that room. Each kind starts with its own different sound so you can tell them apart by ear. A new kind of alert added to Castle later appears on the page by itself.
 - **Chat alerts have their own sound, and you can add yours.** Settings > Chat now picks the alert sound from a list - Castle's own set, so it no longer sounds like every other Windows app - with a Play button to hear each. Drop your own `.wav` files into the folder that "Add your own..." opens and they appear in the list too.
 - **A notification clicked later still opens Castle.** Clicking a chat notification from the Action Center, after the pop-up has gone, now brings Castle back and opens CHAT, instead of only working while the pop-up is still on screen.
 

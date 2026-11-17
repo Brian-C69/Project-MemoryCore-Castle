@@ -65,7 +65,7 @@ pub fn reactions(app: &AppHandle, changed: &[(Value, Value)], chat_shown: bool) 
         beep(app, &settings.alert_sound_name);
     }
     if settings.alert_notify {
-        toast(app, &title, &body);
+        toast(app, &title, &body, "chat");
     }
 }
 
@@ -154,7 +154,7 @@ fn wav_for(name: &str, dir: Option<&std::path::Path>) -> Option<Vec<u8>> {
 /// sound follows the member's sound scheme and volume; the others are played from memory. A choice
 /// that has gone missing falls back to the default rather than to silence.
 #[cfg(windows)]
-fn beep(app: &AppHandle, name: &str) -> bool {
+pub(crate) fn beep(app: &AppHandle, name: &str) -> bool {
     use windows_sys::Win32::Media::Audio::{PlaySoundW, SND_ALIAS, SND_ASYNC, SND_MEMORY, SND_NODEFAULT};
     if name == "windows" {
         let alias: Vec<u16> = "SystemNotification\0".encode_utf16().collect();
@@ -170,7 +170,7 @@ fn beep(app: &AppHandle, name: &str) -> bool {
 }
 
 #[cfg(not(windows))]
-fn beep(_app: &AppHandle, _name: &str) -> bool {
+pub(crate) fn beep(_app: &AppHandle, _name: &str) -> bool {
     false
 }
 
@@ -278,37 +278,55 @@ pub fn new_lines(app: &AppHandle, fresh: &[Value], chat_shown: bool) {
         // No `.sound(..)`: with tauri-plugin-notification 2.8 / notify-rust 4.19 a Windows toast built
         // without one is `<audio silent="true"/>`, so the Sound switch is the only sound (checked in
         // the dependency source, not by ear).
-        toast(app, &title, &body);
+        toast(app, &title, &body, "chat");
     }
 }
 
-/// The link a notification carries: clicking it (live, or later from the Action Center, even when
-/// Castle was closed in between) opens Castle's own address, which Windows hands to Castle.
-pub const CHAT_URL: &str = "memorycore-castle://chat";
-
-/// Brings Castle forward and shows the CHAT tab.
-pub fn open_chat(app: &AppHandle) {
-    use tauri::Emitter;
-    crate::tray::show_main(app);
-    let _ = app.emit("castle-open-chat", ());
+/// The address a notification carries, one per room: clicking it (live, or later from the Action
+/// Center, even when Castle was closed in between) starts Castle with it, and Castle opens that room.
+pub fn room_url(room: &str) -> String {
+    format!("memorycore-castle://open?room={room}")
 }
 
-/// Whether a launch (Castle's own address, from a clicked notification) asked for CHAT.
-pub fn wants_chat<I: IntoIterator<Item = String>>(args: I) -> bool {
-    args.into_iter().any(|a| a.trim_matches('"').trim_end_matches('/').eq_ignore_ascii_case(CHAT_URL))
+/// A room id as the page names its tabs: lower-case letters only, so an address can't carry more.
+fn clean_room(room: &str) -> Option<String> {
+    let room = room.trim().to_ascii_lowercase();
+    (!room.is_empty() && room.len() <= 24 && room.chars().all(|c| c.is_ascii_lowercase())).then_some(room)
+}
+
+/// Brings Castle forward and shows a room (`"chat"`, `"home"`, ...).
+pub fn open_room(app: &AppHandle, room: &str) {
+    use tauri::Emitter;
+    crate::tray::show_main(app);
+    let _ = app.emit("castle-open-room", room);
+}
+
+/// The room a launch asked for (Castle's own address, from a clicked notification), if it did.
+/// `memorycore-castle://chat` from the first version still means CHAT.
+pub fn wanted_room<I: IntoIterator<Item = String>>(args: I) -> Option<String> {
+    args.into_iter().find_map(|a| {
+        let lower = a.trim().trim_matches('"').trim_end_matches('/').to_ascii_lowercase();
+        let rest = lower.strip_prefix("memorycore-castle://")?.trim_end_matches('/');
+        if rest == "chat" {
+            return Some("chat".to_string());
+        }
+        let query = rest.strip_prefix("open?")?;
+        query.split('&').find_map(|kv| kv.strip_prefix("room=")).and_then(clean_room)
+    })
 }
 
 fn xml_escape(text: &str) -> String {
     text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&apos;")
 }
 
-/// The toast's XML: silent (the Sound choice is the only sound) and carrying CHAT_URL, so a click
+/// The toast's XML: silent (the Sound choice is the only sound) and carrying the room's address, so a click
 /// opens Castle through Windows itself and does not depend on this process still listening for it.
-fn toast_xml(title: &str, body: &str) -> String {
+fn toast_xml(title: &str, body: &str, room: &str) -> String {
     format!(
-        r#"<toast activationType="protocol" launch="{CHAT_URL}"><visual><binding template="ToastGeneric"><text>{}</text><text>{}</text></binding></visual><audio silent="true"/></toast>"#,
+        r#"<toast activationType="protocol" launch="{url}"><visual><binding template="ToastGeneric"><text>{}</text><text>{}</text></binding></visual><audio silent="true"/></toast>"#,
         xml_escape(title),
-        xml_escape(body)
+        xml_escape(body),
+        url = xml_escape(&room_url(room))
     )
 }
 
@@ -345,11 +363,11 @@ pub fn register_address() {
 pub fn register_address() {}
 
 /// The desktop notification. On Windows it is built here (not through the plugin) so a click brings
-/// Castle forward and opens CHAT: through CHAT_URL, which works for a notification that has sat in
+/// Castle forward and opens the room: through the room's address, which works for a notification that has sat in
 /// the Action Center too, not only one clicked while it is still on screen. Elsewhere it is the
 /// plugin's plain notification.
 #[cfg(windows)]
-fn toast(app: &AppHandle, title: &str, body: &str) {
+pub(crate) fn toast(app: &AppHandle, title: &str, body: &str, room: &str) {
     use windows::{core::HSTRING, Data::Xml::Dom::XmlDocument, UI::Notifications::{ToastNotification, ToastNotificationManager}};
     // the id the plugin uses: Castle's own when installed, PowerShell's while running from a build folder
     let app_id = match std::env::current_exe() {
@@ -358,7 +376,7 @@ fn toast(app: &AppHandle, title: &str, body: &str) {
         }
         _ => app.config().identifier.clone(),
     };
-    let xml = toast_xml(title, body);
+    let xml = toast_xml(title, body, room);
     let shown = (|| -> windows::core::Result<()> {
         let doc = XmlDocument::new()?;
         doc.LoadXml(&HSTRING::from(xml))?;
@@ -372,7 +390,7 @@ fn toast(app: &AppHandle, title: &str, body: &str) {
 }
 
 #[cfg(not(windows))]
-fn toast(app: &AppHandle, title: &str, body: &str) {
+pub(crate) fn toast(app: &AppHandle, title: &str, body: &str, room: &str) {
     let _ = app.notification().builder().title(title).body(body).show();
 }
 
@@ -387,17 +405,21 @@ mod tests {
 
     #[test]
     fn a_notification_carries_castles_address_so_a_late_click_still_opens_chat() {
-        let xml = toast_xml("A & B", "<hi> \"there\"");
-        assert!(xml.contains(r#"activationType="protocol" launch="memorycore-castle://chat""#));
+        let xml = toast_xml("A & B", "<hi> \"there\"", "home");
+        assert!(xml.contains(r#"activationType="protocol" launch="memorycore-castle://open?room=home""#));
         assert!(xml.contains("A &amp; B") && xml.contains("&lt;hi&gt; &quot;there&quot;"), "text is escaped");
         assert!(xml.contains(r#"<audio silent="true"/>"#), "the Sound choice is the only sound");
     }
 
     #[test]
-    fn a_launch_by_castles_address_asks_for_chat() {
-        assert!(wants_chat(["castle.exe".to_string(), "memorycore-castle://chat".to_string()]));
-        assert!(wants_chat(["\"MEMORYCORE-CASTLE://chat/\"".to_string()]));
-        assert!(!wants_chat(["castle.exe".to_string(), "--sign-in".to_string()]));
+    fn a_launch_by_castles_address_names_the_room() {
+        let args = |a: &str| vec!["castle.exe".to_string(), a.to_string()];
+        assert_eq!(wanted_room(args("memorycore-castle://open?room=home")), Some("home".into()));
+        assert_eq!(wanted_room(args("\"MEMORYCORE-CASTLE://open?room=Market/\"")), Some("market".into()));
+        assert_eq!(wanted_room(args("memorycore-castle://chat")), Some("chat".into()), "the first version's address still works");
+        assert_eq!(wanted_room(args("memorycore-castle://open?room=../x")), None);
+        assert_eq!(wanted_room(args("memorycore-castle://open?room=")), None);
+        assert_eq!(wanted_room(args("--sign-in")), None);
     }
 
     #[test]

@@ -342,7 +342,11 @@ fn round_due(app: &AppHandle, last_round: &mut Option<Instant>) -> Result<(), St
     }
     *last_round = Some(Instant::now());
     drop(conn);
-    let _ = turn(app, "AUTO", None);
+    if let Ok(view) = turn(app, "AUTO", None) {
+        let acted = view.done.iter().filter(|d| d.ok).count();
+        let body = if acted > 0 { format!("{acted} action{} taken.", if acted == 1 { "" } else { "s" }) } else { "No trade this round.".to_string() };
+        crate::alerts::fire(app, "market_round", "MARKET round finished", &body);
+    }
     Ok(())
 }
 
