@@ -9,7 +9,7 @@ import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
 import ThemedAudio from '../components/ThemedAudio.vue'
 import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak } from '../api/castle.js'
-import { refreshStudio, studioLib, studioPowersLoaded, studioPowersNow, studioVoiceUp } from '../composables/useStudio.js'
+import { refreshStudio, studioLib, studioPowersLoaded, studioPowersNow, studioThumbUrls, studioVoiceUp } from '../composables/useStudio.js'
 import { askCompanion } from '../api/ask.js'
 import { POWERS, companionLines, makeAction, powerPill } from '../components/studiomake.js'
 
@@ -146,7 +146,7 @@ watch(() => props.stamp, load)
         <div v-if="tab === 'images' || tab === 'backups'" class="masonry">
           <div v-for="(m, i) in shelfPictures" :key="m.path" class="tile">
             <button class="thumb" :title="m.name" @click="viewerStart = i">
-              <img :src="src(m.path)" :alt="m.name" loading="lazy" />
+              <img :src="studioThumbUrls[m.path] ?? src(m.path)" :alt="m.name" loading="lazy" />
             </button>
             <div v-if="asking === m.path" class="confirm" role="group" aria-label="Delete this picture">
               <span>Delete?</span>

@@ -6,6 +6,7 @@ mod appearance_db;
 mod library_db;
 mod spiral;
 mod apps;
+mod thumbs;
 mod backup;
 mod chat;
 mod chatroom;
@@ -337,6 +338,7 @@ pub fn run() {
             theme::theme_delete,
             theme::theme_folder,
             studio::studio_library,
+            thumbs::studio_thumbs,
             studio::studio_powers,
             studio::picture_way,
             studio::studio_delete,
