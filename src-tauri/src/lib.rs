@@ -447,6 +447,8 @@ pub fn run() {
             chat::chat_media,
             chat::chat_attach,
             db::db_status,
+            node_runtime::node_status,
+            node_runtime::node_prepare,
             db::db_install,
             db::db_start,
             db::db_stop,

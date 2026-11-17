@@ -321,6 +321,28 @@ fn forget_older(home: &Path) {
     }
 }
 
+// ---------- commands ----------
+
+/// Which Node the helpers use right now (judging a Node runs a process: off the page's thread).
+#[tauri::command]
+pub async fn node_status() -> Result<NodeState, String> {
+    tauri::async_runtime::spawn_blocking(status).await.map_err(|_| "The helpers' Node could not be checked.".to_string())
+}
+
+/// Makes sure the helpers have a Node, downloading Castle's own when needed; the page hears the
+/// download on `INSTALL_EVENT` and gets the state at the end (Failed carries the reason).
+#[tauri::command]
+pub async fn node_prepare(app: tauri::AppHandle) -> Result<NodeState, String> {
+    use tauri::Emitter;
+    tauri::async_runtime::spawn_blocking(move || {
+        ensure(move |done, total| {
+            let _ = app.emit(INSTALL_EVENT, serde_json::json!({ "done": done, "total": total }));
+        })
+    })
+    .await
+    .map_err(|_| "The helpers' Node could not be prepared.".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

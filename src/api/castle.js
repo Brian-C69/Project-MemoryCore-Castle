@@ -300,6 +300,14 @@ export const onDbSetup = on('castle://db-setup')
 // while the engine downloads: { done, total } in bytes
 export const onDbInstall = on('castle://db-install')
 
+// The helpers' Node. nodeStatus / nodePrepare -> { state: system | own | fetching | failed | missing | unsupported,
+//   path, version (system, own), done, total (fetching), reason (failed), downloadBytes (missing) }.
+// nodePrepare downloads Castle's own Node when the computer has none new enough, and is a no-op otherwise.
+export const nodeStatus = () => invoke('node_status')
+export const nodePrepare = () => invoke('node_prepare')
+// while Castle's own Node downloads: { done, total } in bytes
+export const onNodeInstall = on('castle://node-install')
+
 // STUDIO: what the companion made, and each power's state (ready | builtin | prompt).
 export const studioLibrary = () => invoke('studio_library')
 // small copies of pictures (made once, kept by Castle): -> { thumbs: [{ path, thumb }], pending }
