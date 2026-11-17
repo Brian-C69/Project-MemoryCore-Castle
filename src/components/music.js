@@ -28,3 +28,11 @@ export function kindFor(worlds, id) {
 export function tracksFor(kind, songs, toUrl) {
   return [...ambienceFor(kind), ...(songs ?? []).map((song) => ({ title: songTitle(song.name), url: toUrl(song.path) }))]
 }
+
+// Scrolling the mouse wheel over the music controls: up is louder, down is quieter, one notch a step
+// of 0.05 (the slider's own step), never outside 0 to 1.
+export function wheelVolume(volume, deltaY) {
+  if (!deltaY) return volume
+  const next = Math.round((Number(volume) + (deltaY < 0 ? 0.05 : -0.05)) * 20) / 20
+  return Math.min(1, Math.max(0, next))
+}
