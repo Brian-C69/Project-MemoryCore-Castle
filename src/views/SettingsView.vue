@@ -3,6 +3,7 @@
 // keys (masked, Show, Test, Remove), quick actions, the room, backup, startup and updates.
 import GlassSelect from '../components/GlassSelect.vue'
 import AlertsPane from './AlertsPane.vue'
+import WidgetsView from './WidgetsView.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import ModalSheet from '../components/ModalSheet.vue'
 import BackupPanel from '../components/BackupPanel.vue'
@@ -43,10 +44,13 @@ import {
 const props = defineProps({
   // which section opens first ("keys" from a toast or a STUDIO card)
   section: { type: String, default: 'companion' },
+  themeId: { type: String, default: '' },
+  themeName: { type: String, default: '' },
+  themeWidgets: { type: Object, default: () => ({}) },
   version: { type: String, default: '' },
   updateLine: { type: String, default: '' },
 })
-const emit = defineEmits(['close', 'saved', 'setup', 'whatsnew', 'open-room'])
+const emit = defineEmits(['close', 'saved', 'setup', 'whatsnew', 'open-room', 'arrange'])
 
 // The few words that name the computer's own parts: Windows' wording, or the Mac's.
 const words = isMac
@@ -71,6 +75,7 @@ const words = isMac
 
 const SECTIONS = [
   { id: 'companion', label: 'Companion' },
+  { id: 'widgets', label: 'Widgets' },
   { id: 'keys', label: 'Keys' },
   { id: 'quick', label: 'Quick actions' },
   { id: 'rooms', label: 'Rooms' },
@@ -81,6 +86,11 @@ const SECTIONS = [
   { id: 'startup', label: 'Start-up' },
   { id: 'about', label: 'About' },
 ]
+
+async function widgetsChanged() {
+  settings.value = (await getSettings()).settings
+  emit('saved')
+}
 
 const tab = ref(props.section)
 function onTabKey(event) {
@@ -173,7 +183,6 @@ async function switchLink(patch) {
 
 // The rooms that can be switched off (HOME always stays).
 const ROOM_SWITCHES = [
-  { id: 'widgets', label: 'WIDGETS' },
   { id: 'theme', label: 'THEME' },
   { id: 'apps', label: 'APPS' },
   { id: 'myprofile', label: 'MY PROFILE' },
@@ -398,6 +407,8 @@ onMounted(async () => {
         <p class="hint">For people who run their own <a href="#" @click.prevent="openUrl('https://github.com/debpalash/voicestudio')">VoiceStudio</a> on {{ words.thisComputer }}. Off: Castle never contacts it. On: STUDIO's Voice card can speak a line with it, and the clip is saved with your other voice lines. Everything stays on this computer. Castle does not install or start VoiceStudio, and its voice models carry their own licences (some are non-commercial).</p>
         <button @click="emit('setup')">Run the first-run setup again</button>
       </section>
+
+      <WidgetsView v-else-if="tab === 'widgets'" :theme-id="themeId" :theme-name="themeName" :theme-widgets="themeWidgets" @arrange="emit('arrange')" @changed="widgetsChanged" />
 
       <section v-else-if="tab === 'keys'" class="pane">
         <p class="hint">Keys are {{ words.keysKept }} and only handed to your companion's session. Without a key, your companion saves the idea instead and Castle tells you.</p>

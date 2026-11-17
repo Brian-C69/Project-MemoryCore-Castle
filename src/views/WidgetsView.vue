@@ -49,7 +49,7 @@ onMounted(load)
   <section class="widgets-room" aria-label="Widgets">
     <header class="top">
       <div>
-        <h2>WIDGETS</h2>
+        <h2>Widgets on HOME</h2>
         <p class="dim">Choose what HOME shows and how big. Arrange moves them on HOME{{ themeName ? ` - ${themeName} keeps its own places` : '' }}.</p>
       </div>
       <div class="actions">
@@ -92,17 +92,10 @@ onMounted(load)
 
 <style scoped>
 .widgets-room {
-  position: absolute;
-  inset: 16px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 20px 24px;
-  background: var(--panel-background);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
+  min-width: 0;
   color: var(--text);
 }
 
@@ -116,7 +109,7 @@ onMounted(load)
 
 h2 {
   margin: 0;
-  letter-spacing: 0.25em;
+  font-size: 1.1rem;
   font-weight: 500;
 }
 
@@ -138,12 +131,13 @@ h3 {
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
   gap: 12px;
 }
 
