@@ -131,6 +131,17 @@ export const memoryRead = (file) => invoke('memory_read', { file })
 // the graphics-card gauges ({ gauges, on, found }) and their switch
 export const gpuMeters = () => invoke('gpu_meters')
 export const gpuGaugesSave = (on) => invoke('gpu_gauges_save', { on })
+
+// SWEEP, HOME's cleaner. sweepStatus -> { settings: { look, recycleBin }, lastSwept (unix s or null), deep (Deep clean offered) };
+// sweepMeasure -> [{ id, label, bytes, files, note }] (nothing deleted; the groups offered on this computer);
+// sweepClean(groups) -> [{ id, freed, files, skipped }]; sweepDeep -> { id, freed, files, skipped } or null when refused.
+export const sweepStatus = () => invoke('sweep_status')
+export const sweepMeasure = () => invoke('sweep_measure')
+export const sweepClean = (groups) => invoke('sweep_clean', { groups })
+export const sweepDeep = () => invoke('sweep_deep')
+export const sweepSettingsSave = (look, recycleBin) => invoke('sweep_settings_save', { look, recycleBin })
+// while a sweep runs: { group, freed } (bytes freed so far in all)
+export const onSweepProgress = (handler) => listen('castle://sweep', (event) => handler(event.payload))
 export const systemMeters = () => invoke('system_meters')
 // The gauges' gear: watch CPU and RAM, tidy RAM, the last trips, close an ordinary app.
 export const meterWatchGet = () => invoke('meter_watch_get')

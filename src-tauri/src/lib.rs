@@ -162,6 +162,8 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
         settings.meter_watch = current.meter_watch;
         // the graphics-card gauges' switch is saved only by its own command (gpu_gauges_save)
         settings.gpu_gauges = current.gpu_gauges.clone();
+        // Sweep's gear is saved only by its own command (sweep_settings_save)
+        settings.sweep = current.sweep.clone();
         // the credit widgets' figures, states and budget are kept by their own commands
         settings.credits = current.credits.clone();
     }
@@ -339,6 +341,11 @@ pub fn run() {
             commands::system_meters,
             gpu::gpu_meters,
             gpu::gpu_gauges_save,
+            sweep::sweep_status,
+            sweep::sweep_measure,
+            sweep::sweep_clean,
+            sweep::sweep_deep,
+            sweep::sweep_settings_save,
             credits::credits_read,
             credits::credits_set,
             credits::credits_budget,

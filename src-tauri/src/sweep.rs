@@ -542,9 +542,107 @@ pub fn last_swept(folder: &Path) -> Option<u64> {
     text.lines().rev().find_map(|l| serde_json::from_str::<serde_json::Value>(l).ok()?.get("unix")?.as_u64())
 }
 
+// ---------- the gear and the commands ----------
+
+/// The three looks of the widget (the three kept designs).
+pub const LOOKS: [&str; 3] = ["ring", "bar", "broom"];
+
+/// Sweep's gear: the look chosen by hand (None: the theme's, else the bar) and whether the Recycle
+/// Bin starts ticked in the sheet.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SweepSettings {
+    pub look: Option<String>,
+    pub recycle_bin: bool,
+}
+
+/// A look Castle knows, or None.
+pub fn clean_look(look: Option<String>) -> Option<String> {
+    look.map(|l| l.trim().to_lowercase()).filter(|l| LOOKS.contains(&l.as_str()))
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SweepStatus {
+    pub settings: SweepSettings,
+    pub last_swept: Option<u64>,
+    /// Deep clean is offered here (Windows, or a test root).
+    pub deep: bool,
+}
+
+/// One sweep at a time (a click while one runs is told so).
+static RUNNING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn status_of(store: &crate::settings::SettingsStore) -> SweepStatus {
+    SweepStatus { settings: store.get().sweep, last_swept: last_swept(&store.folder()), deep: cfg!(windows) || test_root().is_some() }
+}
+
+#[tauri::command]
+pub fn sweep_status(store: tauri::State<'_, crate::settings::SettingsStore>) -> SweepStatus {
+    status_of(&store)
+}
+
+/// What can be freed now (a walk of every offered group: off the page's thread; nothing deleted).
+#[tauri::command]
+pub async fn sweep_measure() -> Result<Vec<GroupSize>, String> {
+    tauri::async_runtime::spawn_blocking(measure).await.map_err(|_| "Sweep could not measure.".to_string())
+}
+
+/// Cleans the ticked groups; the page hears `castle://sweep` { group, freed } as files go.
+#[tauri::command]
+pub async fn sweep_clean(app: tauri::AppHandle, groups: Vec<String>) -> Result<Vec<Cleaned>, String> {
+    use tauri::{Emitter, Manager};
+    tauri::async_runtime::spawn_blocking(move || {
+        let Ok(_one) = RUNNING.try_lock() else { return Err("A sweep is already running.".to_string()) };
+        let folder = app.state::<crate::settings::SettingsStore>().folder();
+        let mut last = std::time::Instant::now() - Duration::from_secs(1);
+        Ok(clean(&groups, &folder, &mut |group, freed| {
+            // a few times a second is enough for the counter
+            if last.elapsed() > Duration::from_millis(150) {
+                let _ = app.emit("castle://sweep", serde_json::json!({ "group": group, "freed": freed }));
+                last = std::time::Instant::now();
+            }
+        }))
+    })
+    .await
+    .map_err(|_| "The sweep stopped.".to_string())?
+}
+
+/// Deep clean on the member's press; None when the administrator prompt was refused.
+#[tauri::command]
+pub async fn sweep_deep(app: tauri::AppHandle) -> Result<Option<Cleaned>, String> {
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || {
+        let Ok(_one) = RUNNING.try_lock() else { return Err("A sweep is already running.".to_string()) };
+        deep_clean(&app.state::<crate::settings::SettingsStore>().folder())
+    })
+    .await
+    .map_err(|_| "Deep clean stopped.".to_string())?
+}
+
+/// The gear's choices, saved alone (the Settings page never overwrites them).
+#[tauri::command]
+pub fn sweep_settings_save(store: tauri::State<'_, crate::settings::SettingsStore>, look: Option<String>, recycle_bin: bool) -> Result<SweepStatus, String> {
+    let mut next = store.get();
+    next.sweep = SweepSettings { look: clean_look(look), recycle_bin };
+    crate::settings::save(&store.path, &next).map_err(|_| "Sweep's settings could not be saved.".to_string())?;
+    *store.current.lock().unwrap() = next;
+    Ok(status_of(&store))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_the_three_looks_are_kept() {
+        assert_eq!(clean_look(Some(" Broom ".into())), Some("broom".into()));
+        assert_eq!(clean_look(Some("ring".into())), Some("ring".into()));
+        assert_eq!(clean_look(Some("sparkle".into())), None);
+        assert_eq!(clean_look(None), None);
+        let older: SweepSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(older, SweepSettings { look: None, recycle_bin: false }, "an older settings file reads as the defaults");
+    }
 
     fn tree(name: &str) -> PathBuf {
         let base = std::env::temp_dir().join(format!("castle-sweep-test-{name}-{}", std::process::id()));
