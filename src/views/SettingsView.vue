@@ -83,6 +83,18 @@ const SECTIONS = [
 ]
 
 const tab = ref(props.section)
+function onTabKey(event) {
+  const index = SECTIONS.findIndex((section) => section.id === tab.value)
+  let next
+  if (event.key === 'ArrowRight') next = (index + 1) % SECTIONS.length
+  else if (event.key === 'ArrowLeft') next = (index + SECTIONS.length - 1) % SECTIONS.length
+  else if (event.key === 'Home') next = 0
+  else if (event.key === 'End') next = SECTIONS.length - 1
+  else return
+  event.preventDefault()
+  tab.value = SECTIONS[next].id
+  event.currentTarget.querySelector(`[data-section="${tab.value}"]`)?.focus()
+}
 const settings = ref(null)
 const view = ref(null)
 const keys = ref([])
@@ -341,12 +353,14 @@ onMounted(async () => {
 </script>
 
 <template>
-  <ModalSheet tag="SETTINGS" title="Settings" @close="emit('close')">
-    <div v-if="settings" class="settings">
-      <nav class="tabs">
-        <button v-for="s in SECTIONS" :key="s.id" :class="{ active: tab === s.id }" @click="tab = s.id">{{ s.label }}</button>
+  <ModalSheet title="Settings" :body-key="tab" @close="emit('close')">
+    <template #navigation>
+      <nav v-if="settings" class="tabs" role="tablist" aria-label="Settings sections" @keydown="onTabKey">
+        <button v-for="s in SECTIONS" :id="`settings-tab-${s.id}`" :key="s.id" role="tab" :data-section="s.id" :aria-selected="tab === s.id" aria-controls="settings-panel" :tabindex="tab === s.id ? 0 : -1" :class="{ active: tab === s.id }" @click="tab = s.id">{{ s.label }}</button>
       </nav>
-
+    </template>
+    <div v-if="settings" class="settings">
+      <div id="settings-panel" role="tabpanel" :aria-labelledby="`settings-tab-${tab}`" tabindex="0">
       <section v-if="tab === 'companion'" class="pane">
         <h3>Memory folder</h3>
         <div class="row"><code>{{ settings.memoryFolder ?? 'Not chosen' }}</code><button @click="changeFolder">Change</button></div>
@@ -543,6 +557,7 @@ onMounted(async () => {
         <p class="hint">The Deep Space world - recipe by Ashran Helmi · ashranhelmi.com (Space Playbook, "Nebula &amp; Starfield").</p>
       </section>
 
+      </div>
       <footer>
         <span v-if="busy" class="busy">{{ busy }}</span>
         <span v-else-if="problem" class="warn">{{ problem }}</span>
@@ -579,11 +594,33 @@ onMounted(async () => {
 .tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 0 4px;
+  align-items: flex-end;
+  margin-bottom: -1px;
+}
+.tabs button {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-top: 3px solid transparent;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.tabs button:hover {
+  color: var(--text);
+  background: var(--hover);
 }
 .tabs .active {
-  border-color: var(--accent);
+  border-color: var(--line);
+  border-top-color: var(--accent);
   background: var(--hover);
+  color: var(--text);
+}
+.tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
 }
 .pane {
   display: flex;

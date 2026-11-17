@@ -1,14 +1,17 @@
 <script setup>
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 // One window for Castle's readers (a plan, a story part, the board's column): 80% of the
 // screen, in the theme's own glass, Castle dimmed and softly blurred behind it - never a black
 // page. The header stays; only the body scrolls. It holds Esc while open, so Esc never reaches
-defineProps({
+const props = defineProps({
   tag: { type: String, default: '' },
   title: { type: String, default: '' },
+  bodyKey: { type: String, default: '' },
 })
 const emit = defineEmits(['close'])
+const body = ref(null)
+watch(() => props.bodyKey, () => { if (body.value) body.value.scrollTop = 0 }, { flush: 'post' })
 
 function onKey(event) {
   if (event.key === 'Escape') {
@@ -32,7 +35,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           <slot name="head" />
           <button class="sheet-close" aria-label="Close" @click="emit('close')">&times;</button>
         </header>
-        <div class="sheet-body">
+        <div v-if="$slots.navigation" class="sheet-navigation"><slot name="navigation" /></div>
+        <div ref="body" class="sheet-body">
           <slot />
         </div>
       </article>
@@ -124,5 +128,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
   line-height: 1.55;
   scrollbar-width: var(--scrollbar-width);
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.sheet-navigation {
+  flex: none;
+  padding: 8px 20px 0;
+  border-bottom: 1px solid var(--line, rgba(200, 180, 255, 0.25));
 }
 </style>
