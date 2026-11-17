@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.16 - 2026-11-18
+
 - **Sweep frees space from HOME.** A new card shows how much can be freed - temp files, browser caches, the thumbnail cache, crash dumps and, if you tick it, the Recycle Bin - and a preview lets you choose before anything is cleaned. Deep clean (Windows) also clears Windows' own temp files and Windows Update leftovers after asking for administrator rights once. It only touches known cache folders, skips files in use and never follows a link. Three looks - Ring, Bar and Broom - in its gear, and a theme can bring its own.
 - **The Spiral Library's covers show again.** In an installed Castle every cover was blocked and left a tall empty box; they now load, and a cover that cannot load shows a small stand-in with the book's first letter (thanks Bernard for the report).
 
