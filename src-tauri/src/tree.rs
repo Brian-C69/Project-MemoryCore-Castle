@@ -213,6 +213,7 @@ pub fn reveal(folder: &Path, rel: &str) -> Result<(), String> {
     #[cfg(not(windows))]
     command.arg(format!("/select,{target}"));
     no_window(&mut command);
+    crate::shell::let_it_come_forward();
     command.spawn().map(|_| ()).map_err(|_| "Windows could not open it.".to_string())
 }
 

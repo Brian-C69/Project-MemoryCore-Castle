@@ -95,6 +95,7 @@ pub fn media_open(path: String, folder: bool, store: State<SettingsStore>) -> Re
     } else {
         command.arg(&file);
     }
+    crate::shell::let_it_come_forward();
     command.spawn().map(|_| ()).map_err(|_| "Windows could not open it.".to_string())
 }
 
