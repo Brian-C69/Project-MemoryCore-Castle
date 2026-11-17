@@ -7,6 +7,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import ModalSheet from '../components/ModalSheet.vue'
 import BackupPanel from '../components/BackupPanel.vue'
 import DatabasePanel from '../components/DatabasePanel.vue'
+import HelpersStatus from '../components/HelpersStatus.vue'
 import HelpTip from '../components/HelpTip.vue'
 import { isMac } from '../platform.js'
 import { DIARY_LOOKS, lookOf } from '../components/diaryviews.js'
@@ -422,6 +423,7 @@ onMounted(async () => {
       </section>
 
       <section v-else-if="tab === 'database'" class="pane">
+        <HelpersStatus />
         <DatabasePanel :companion="settings.companionName ?? 'your companion'" @changed="emit('saved')" />
       </section>
 

@@ -24,6 +24,7 @@ import { builtInThemes } from '../themes/loader.js'
 import { isMac } from '../platform.js'
 import BackupPanel from '../components/BackupPanel.vue'
 import DatabasePanel from '../components/DatabasePanel.vue'
+import HelpersStatus from '../components/HelpersStatus.vue'
 
 const emit = defineEmits(['done', 'close'])
 const props = defineProps({
@@ -329,6 +330,7 @@ onMounted(async () => {
           <p v-else-if="form.cliCheck.signedIn" class="good">✓ Signed in.</p>
           <button @click="checkCli">Check again</button>
         </div>
+        <HelpersStatus />
       </div>
 
       <!-- 3. Names -->
