@@ -114,6 +114,18 @@
       #castle-loader.pos-top .shade {
         background: linear-gradient(to bottom, rgba(3, 6, 20, 0.88) 0%, rgba(3, 6, 20, 0.35) 34%, rgba(3, 6, 20, 0) 60%);
       }
+      #castle-loader .version {
+        position: absolute;
+        right: 20px;
+        bottom: 16px;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        color: rgba(238, 243, 255, 0.6);
+        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+      }
+      #castle-loader .version:empty {
+        display: none;
+      }
       #castle-loader .status code:empty {
         display: none;
       }
@@ -129,6 +141,7 @@
     <div id="castle-loader" role="status" aria-live="polite">
       <div class="art"></div>
       <div class="shade"></div>
+      <div class="version" id="castle-loader-version"></div>
       <div class="panel">
         <div class="brand">MEMORYCORE CASTLE</div>
         <div class="quip" id="castle-loader-quip">Waking the castle…</div>

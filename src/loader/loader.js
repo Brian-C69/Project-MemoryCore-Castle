@@ -9,6 +9,7 @@
 // The bar is the pieces ended out of the pieces expected. The status line shows the newest piece
 // still running. The screen stays up at least MIN_MS so the words can be read, and at most MAX_MS so
 // a slow piece can never keep the member out.
+import { version } from '../../package.json'
 import { QUIPS } from './quips.js'
 import { forStorage, fromStorage, linesFor, loaderDesign } from './design.js'
 
@@ -26,6 +27,11 @@ export function nextQuip(list, last, random = Math.random) {
   let pick = list[Math.floor(random() * list.length)]
   while (pick === last) pick = list[Math.floor(random() * list.length)]
   return pick
+}
+
+// The version as the screen shows it: v0.2.14, or nothing when there is none to show.
+export function versionLabel(v) {
+  return typeof v === 'string' && /^[0-9][0-9A-Za-z.+-]{0,30}$/.test(v.trim()) ? `v${v.trim()}` : ''
 }
 
 // How full the bar is, as 4-100 (a sliver shows from the first moment).
@@ -154,6 +160,7 @@ if (root) {
       // storage blocked: Castle's own screen shows
     }
     dress(design)
+    el('castle-loader-version').textContent = versionLabel(version)
     quips = linesFor(quips, design)
     turnQuip()
     quipTimer = setInterval(turnQuip, QUIP_MS)

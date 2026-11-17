@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_MS, MIN_MS, cleanQuips, holdFor, nextQuip, percent } from './loader.js'
+import { MAX_MS, MIN_MS, cleanQuips, holdFor, nextQuip, percent, versionLabel } from './loader.js'
+import { version } from '../../package.json'
 import { QUIPS } from './quips.js'
 
 describe("Castle's start-up screen", () => {
@@ -23,6 +24,15 @@ describe("Castle's start-up screen", () => {
     }
     expect(nextQuip(['only'], 'only')).toBe('only')
     expect(nextQuip([], '')).toBe('')
+  })
+
+  it('shows the version of the build, and nothing when there is none', () => {
+    expect(versionLabel('0.2.14')).toBe('v0.2.14')
+    expect(versionLabel(' 1.0.0-beta.1 ')).toBe('v1.0.0-beta.1')
+    expect(versionLabel('')).toBe('')
+    expect(versionLabel(undefined)).toBe('')
+    expect(versionLabel('<script>')).toBe('')
+    expect(versionLabel(version)).toMatch(/^v\d+\.\d+\.\d+/)
   })
 
   it('fills the bar from a sliver to full, however many pieces there are', () => {
