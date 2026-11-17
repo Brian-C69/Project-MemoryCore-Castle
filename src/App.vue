@@ -12,6 +12,7 @@ import DatabaseOffer from './components/DatabaseOffer.vue'
 import { shouldOffer } from './components/database.js'
 import CompanionHeader from './components/CompanionHeader.vue'
 import { onOpenChat, onProviderChanged } from './api/castle.js'
+import { loaderBegin, loaderDone, loaderEnd, loaderExpect } from './loader/loader.js'
 import ModalSheet from './components/ModalSheet.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import AppsView from './views/AppsView.vue'
@@ -240,6 +241,7 @@ function showWhatsNew() {
 async function loadSettingsAndTheme() {
   let wanted = DEFAULT_THEME_ID
   let lastSeen = null
+  loaderBegin('settings', 'Reading your settings', 'settings.json')
   try {
     const view = await getSettings()
     lastSeen = view.settings.lastSeenVersion ?? null
@@ -266,6 +268,8 @@ async function loadSettingsAndTheme() {
   } catch {
     // Outside Castle's window (a browser preview): defaults.
   }
+  loaderEnd('settings')
+  loaderBegin('themes', 'Choosing your theme', `themes/${wanted}`)
   let folders = []
   try {
     folders = await userThemes()
@@ -280,6 +284,7 @@ async function loadSettingsAndTheme() {
   theme.value = chosen.theme
   themeNotice.value = chosen.notice
   applyTheme(chosen.theme)
+  loaderEnd('themes')
   if (!setupOpen.value) checkWhatsNew(lastSeen)
 }
 
@@ -438,10 +443,21 @@ onMounted(async () => {
     active.value = 'chat'
     marks.value = marks.value.filter((m) => m !== 'chat')
   }).catch(() => null)
+  // the start-up screen reports what is loading, then goes when it is all in (or after a wait too long)
+  loaderExpect(5)
   await loadSettingsAndTheme()
-  loadHome()
-  loadBackup()
-  loadDatabase()
+  const piece = (id, label, file, work) => {
+    loaderBegin(id, label, file)
+    return Promise.resolve(work()).catch(() => {}).finally(() => loaderEnd(id))
+  }
+  const folder = memoryFolder.value.split(String.fromCharCode(92)).join('/').split('/').filter(Boolean).pop() ?? ''
+  const loading = Promise.allSettled([
+    piece('memory', 'Reading your memory', folder, loadHome),
+    piece('backup', 'Checking the backup', 'backup status', loadBackup),
+    piece('database', 'Waking the memory database', 'memory database', loadDatabase),
+  ])
+  await Promise.race([loading, new Promise((resolve) => setTimeout(resolve, 8000))])
+  loaderDone()
   // the memory changes as the companion writes: read it again every minute
   refresh = setInterval(loadHome, 60000)
   try {

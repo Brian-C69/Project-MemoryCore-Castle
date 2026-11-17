@@ -52,6 +52,15 @@ Rules the loader checks (`src/themes/loader.js`): an `id` and a `name`; colours 
 
 To ship a theme **inside** your build, put its folder in `src/themes/<id>/` instead - built-in themes are found automatically.
 
+### A start-up screen of your own
+
+Castle opens on a start-up screen: a picture, a funny line, a bar and the name of what it is loading. Two files in `public/loader/` change it, and nothing else needs touching:
+
+- `loader.webp` - the picture. 16:9 (for example 1920x1080), with the subject in the top and middle, because the words sit over the bottom third. Without it the screen shows its own night-sky gradient.
+- `quips.json` - more funny lines: an array of strings (up to 60, each up to 120 characters), added to the built-in ones in `src/loader/quips.js`.
+
+The steps it names come from `App.vue` (`loaderBegin` / `loaderEnd`); a room that takes a while to prepare can report its own the same way.
+
 ## 2. A room of your own
 
 1. Make the view: `src/views/MyRoomView.vue`.

@@ -4,8 +4,119 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MemoryCore Castle</title>
+    <!-- The start-up screen: plain HTML and CSS, so it is on screen before any script has loaded.
+         src/loader/loader.js tells it what is loading and removes it when Castle is ready.
+         Its picture is public/loader/loader.webp (16:9; see public/loader/README.md). -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #050b1f;
+      }
+      #castle-loader {
+        --loader-accent: #8fb8ff;
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        overflow: hidden;
+        background: radial-gradient(ellipse at 50% 38%, #12214f 0%, #070e28 58%, #030614 100%);
+        color: #eef3ff;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        transition: opacity 0.45s ease;
+      }
+      #castle-loader.leaving {
+        opacity: 0;
+        pointer-events: none;
+      }
+      html[data-castle-bare] #castle-loader {
+        display: none !important;
+      }
+      #castle-loader .art {
+        position: absolute;
+        inset: 0;
+        background: url('/loader/loader.webp') center / cover no-repeat;
+      }
+      #castle-loader .shade {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to top, rgba(3, 6, 20, 0.88) 0%, rgba(3, 6, 20, 0.35) 34%, rgba(3, 6, 20, 0) 60%);
+      }
+      #castle-loader .panel {
+        position: relative;
+        width: min(640px, 86vw);
+        padding: 0 0 7vh;
+        text-align: center;
+      }
+      #castle-loader .brand {
+        font-size: 12px;
+        letter-spacing: 0.42em;
+        color: var(--loader-accent);
+        text-shadow: 0 0 18px var(--loader-accent);
+      }
+      #castle-loader .quip {
+        min-height: 2.6em;
+        margin: 12px 0 14px;
+        font-size: 17px;
+        line-height: 1.4;
+        text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+      }
+      #castle-loader .bar {
+        height: 4px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.14);
+        overflow: hidden;
+      }
+      #castle-loader .bar i {
+        display: block;
+        height: 100%;
+        width: 4%;
+        border-radius: 4px;
+        background: var(--loader-accent);
+        box-shadow: 0 0 12px var(--loader-accent);
+        transition: width 0.35s ease;
+      }
+      #castle-loader .status {
+        margin-top: 10px;
+        font-size: 12.5px;
+        color: rgba(238, 243, 255, 0.72);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #castle-loader .status code {
+        margin-left: 6px;
+        padding: 1px 7px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.1);
+        font-family: Consolas, 'Cascadia Mono', monospace;
+        font-size: 12px;
+        color: #eef3ff;
+      }
+      #castle-loader .status code:empty {
+        display: none;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #castle-loader,
+        #castle-loader .bar i {
+          transition: none;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="castle-loader" role="status" aria-live="polite">
+      <div class="art"></div>
+      <div class="shade"></div>
+      <div class="panel">
+        <div class="brand">MEMORYCORE CASTLE</div>
+        <div class="quip" id="castle-loader-quip">Waking the castle…</div>
+        <div class="bar"><i id="castle-loader-bar"></i></div>
+        <div class="status"><span id="castle-loader-step">Starting up</span><code id="castle-loader-file"></code></div>
+      </div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
