@@ -141,8 +141,8 @@ const settingsStamp = ref(0)
 const setupOpen = ref(false)
 const setupReopened = ref(false)
 const theme = ref(null)
-// Settings > Rooms > Moving wallpapers: a theme's living water (ThemeMotion), on unless turned off
-const wallpaperMotion = ref(true)
+// Settings > Rooms > Moving wallpapers: a theme's moving wallpaper (ThemeMotion), off until turned on
+const wallpaperMotion = ref(false)
 const themeNotice = ref('')
 const activeLabel = computed(() => allTabs.find((t) => t.id === active.value)?.label ?? '')
 const widgets = computed(() => theme.value?.widgets ?? {})
@@ -267,7 +267,7 @@ async function loadSettingsAndTheme() {
     rooms.value = view.settings.rooms ?? {}
     barClock.value = { enabled: !!view.settings.displayClock, format: view.settings.clockFormat ?? '24h' }
     usageCard.value = view.settings.showUsageCard !== false
-    wallpaperMotion.value = view.settings.wallpaperMotion !== false
+    wallpaperMotion.value = view.settings.wallpaperMotion === true
     widgetPrefs.value = { widgetsOff: view.settings.widgetsOff ?? [], widgetSizes: view.settings.widgetSizes ?? {}, widgetPlaces: view.settings.widgetPlaces ?? {} }
     tabOrder.value = view.settings.tabOrder ?? []
     try {

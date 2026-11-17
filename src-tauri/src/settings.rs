@@ -217,8 +217,8 @@ pub struct Settings {
     /// Whether HOME shows the USAGE card at all. On by default; off hides the whole card and Castle
     /// asks neither CLI.
     pub show_usage_card: bool,
-    /// A theme's living water on HOME (its `motion` block): on by default; off keeps every
-    /// wallpaper still.
+    /// A theme's moving wallpaper on HOME (its `motion` block): off by default, so nobody is
+    /// surprised; the member turns it on in Settings > Rooms.
     pub wallpaper_motion: bool,
     /// The id of the companion's room key Castle made on the Portfolio (so it can be removed again).
     pub room_companion_key_id: Option<String>,
@@ -371,7 +371,7 @@ impl Default for Settings {
             clock_format: "24h".into(),
             voicestudio_on: false,
             show_usage_card: true,
-            wallpaper_motion: true,
+            wallpaper_motion: false,
             room_companion_key_id: None,
             room_companion_name: None,
             world: WorldSettings::default(),
@@ -726,7 +726,7 @@ mod tests {
             clock_format: "12h".into(),
             voicestudio_on: true,
             show_usage_card: false,
-            wallpaper_motion: false,
+            wallpaper_motion: true,
             room_companion_key_id: Some("17".into()),
             room_companion_name: Some("Lyra".into()),
             world: WorldSettings {
@@ -802,7 +802,7 @@ mod tests {
         assert!(settings.start_session_on_launch);
         assert!(!settings.minimize_to_taskbar, "a settings file from before this option keeps the tray behaviour");
         assert!(settings.show_usage_card, "a settings file from before the card switch shows the card");
-        assert!(settings.wallpaper_motion, "a settings file from before moving wallpapers has them on");
+        assert!(!settings.wallpaper_motion, "a settings file from before moving wallpapers starts with them off");
         assert_eq!(settings.world, WorldSettings::default());
     }
 

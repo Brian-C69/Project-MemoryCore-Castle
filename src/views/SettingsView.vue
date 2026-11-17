@@ -490,9 +490,9 @@ onMounted(async () => {
         </div>
         <p class="hint">LIBRARY is off to begin with: turn it on for your own books (kept in your memory database) and the Spiral Library.</p>
         <label class="toggle">
-          <input type="checkbox" :checked="settings.wallpaperMotion !== false" :disabled="!!busy" @change="save({ wallpaperMotion: $event.target.checked }, $event.target.checked ? 'Moving wallpapers are on.' : 'Wallpapers stay still.')" /> Moving wallpapers
+          <input type="checkbox" :checked="settings.wallpaperMotion === true" :disabled="!!busy" @change="save({ wallpaperMotion: $event.target.checked }, $event.target.checked ? 'Moving wallpapers are on.' : 'Wallpapers stay still.')" /> Moving wallpapers
         </label>
-        <p class="hint">Some themes bring living water on HOME - The Star Shore's glowing surf, The Emerald River's flow and ripples. It rests whenever HOME or Castle is hidden, and stays still if Windows or your Mac is set to reduce motion.</p>
+        <p class="hint">Off to begin with. Turn it on and some themes come alive on HOME - The Constellation's stars twinkle, The Star Shore's surf glows along its waves, The Sunset Shore's foam washes in and out, The Emerald River flows. It rests whenever HOME or Castle is hidden, and stays still if Windows or your Mac is set to reduce motion.</p>
         <p class="hint">Turning STORY off ends the story session; turning WORLD off closes the world screens; CHAT stops reading the room. Their files stay.</p>
         <p class="hint">Arrange the tabs your way: drag a tab in the top bar onto another, or press {{ words.moveKeys }} on a tab. Castle remembers the order.</p>
         <button v-if="settings.tabOrder?.length" :disabled="!!busy" @click="save({ tabOrder: [] }, 'The tabs are back in their first order.')">Put the tabs back in their first order</button>
