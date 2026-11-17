@@ -146,7 +146,7 @@ fn wake(app: &AppHandle, store: &SettingsStore, hosts: &DevHosts, slot: usize, c
         return Err(status.message);
     };
     let host = host(hosts, slot)?;
-    let mut vars = env::session_env(settings.cli, &|name| key::load(name), &session::tools_folder(app));
+    let mut vars = env::session_env(settings.cli, &|name| key::load(name), &session::tools_folder(app), env::NodePlace::Last);
     if let Ok(dir) = app.path().resource_dir() {
         vars.push(("CASTLE_STYLES".into(), dir.join("styles").display().to_string()));
     }

@@ -19,17 +19,39 @@ pub fn find_on_path(command: &str) -> Option<PathBuf> {
     find_executable(command, std::env::split_paths(&path))
 }
 
-/// Node, which runs Castle's helpers (castle-image.mjs and the rest): on PATH, else where its
-/// installers put it.
+/// Node, which runs Castle's helpers (castle-image.mjs and the rest): the member's own when it is
+/// Node 20 or later, else the one Castle brought (node_runtime.rs).
 pub fn node_program() -> Option<PathBuf> {
-    find_on_path("node").or_else(|| {
-        let places: &[&str] = if cfg!(windows) {
-            &[r"C:\Program Files\nodejs\node.exe"]
-        } else {
-            &["/opt/homebrew/bin/node", "/usr/local/bin/node"]
-        };
-        places.iter().map(PathBuf::from).find(|p| p.is_file())
-    })
+    crate::node_runtime::choice().map(|c| c.path().to_path_buf())
+}
+
+/// Where Castle's own Node folder goes on a session's PATH, when Castle's own is the one in use.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NodePlace {
+    /// The companion's session: first, so its `node` is the one the helpers were made for.
+    First,
+    /// A DEV tab, the member's own coding terminal: last, so a Node their project uses is never shadowed.
+    Last,
+}
+
+/// The session's PATH with the tools folder (macOS and Linux, where `castle-memory` is a script
+/// among them) and Castle's own Node folder put in, or None when nothing needs to change.
+fn session_path(base: &std::ffi::OsStr, tools: Option<&Path>, node: Option<(&Path, NodePlace)>) -> Option<String> {
+    if tools.is_none() && node.is_none() {
+        return None;
+    }
+    let mut parts: Vec<PathBuf> = std::env::split_paths(base).filter(|p| !p.as_os_str().is_empty()).collect();
+    if let Some(tools) = tools {
+        parts.insert(0, tools.to_path_buf());
+    }
+    match node {
+        Some((folder, NodePlace::First)) => parts.insert(0, folder.to_path_buf()),
+        Some((folder, NodePlace::Last)) => parts.push(folder.to_path_buf()),
+        None => {}
+    }
+    let mut seen = std::collections::HashSet::new();
+    parts.retain(|p| seen.insert(if cfg!(windows) { p.display().to_string().to_lowercase() } else { p.display().to_string() }));
+    std::env::join_paths(parts).ok().map(|p| p.to_string_lossy().into_owned())
 }
 
 /// Node, or the bare name so the error says what is missing.
@@ -160,8 +182,15 @@ pub fn picture_way(codex_chatgpt: impl FnOnce() -> bool, has_openai_key: bool) -
 
 /// Every variable Castle adds to the session. `key` reads a kept key by its account name.
 /// OPENAI_API_KEY is never given to Codex: Codex would switch from the member's ChatGPT login
-/// to paid API billing.
-pub fn session_env(cli: Cli, key: &dyn Fn(&str) -> Option<String>, tools: &Path) -> Vec<(String, String)> {
+/// to paid API billing. `place` says where Castle's own Node folder goes on PATH (only when
+/// Castle's own Node is the one in use; a member's good Node leaves PATH alone).
+pub fn session_env(cli: Cli, key: &dyn Fn(&str) -> Option<String>, tools: &Path, place: NodePlace) -> Vec<(String, String)> {
+    let own_node = crate::node_runtime::own_folder_in_use();
+    session_env_using(cli, key, tools, own_node.as_deref().map(|folder| (folder, place)))
+}
+
+/// `session_env` with Castle's own Node folder given (None when the member's own Node is used).
+fn session_env_using(cli: Cli, key: &dyn Fn(&str) -> Option<String>, tools: &Path, own_node: Option<(&Path, NodePlace)>) -> Vec<(String, String)> {
     let mut vars = vec![
         ("CASTLE_CLI".to_string(), cli.command().to_string()),
         ("CASTLE_TOOLS".to_string(), tools.display().to_string()),
@@ -181,8 +210,10 @@ pub fn session_env(cli: Cli, key: &dyn Fn(&str) -> Option<String>, tools: &Path)
                 let _ = std::fs::set_permissions(&door, std::fs::Permissions::from_mode(0o755));
             }
         }
-        let path = std::env::var("PATH").unwrap_or_default();
-        vars.push(("PATH".into(), unique_path(&format!("{}:{path}", tools.display()))));
+    }
+    let tools_on_path = if cfg!(windows) { None } else { Some(tools) };
+    if let Some(path) = session_path(&std::env::var_os("PATH").unwrap_or_default(), tools_on_path, own_node) {
+        vars.push(("PATH".into(), path));
     }
     let openai = key("openai");
     vars.push(("CASTLE_IMAGE".into(), image_mode(cli, openai.is_some()).into()));
@@ -226,6 +257,40 @@ mod tests {
         vars.iter().find(|(n, _)| n == name).map(|(_, v)| v.as_str())
     }
 
+    fn joined(parts: &[&str]) -> std::ffi::OsString {
+        std::env::join_paths(parts.iter().map(PathBuf::from)).unwrap()
+    }
+
+    fn split(path: &str) -> Vec<PathBuf> {
+        std::env::split_paths(path).collect()
+    }
+
+    #[test]
+    fn castles_own_node_goes_first_for_the_companion_and_last_for_a_dev_tab() {
+        let base = joined(&["/usr/bin", "/projects/nvm/node18"]);
+        let node = Path::new("/castle/node/24.22.2");
+        let first = session_path(&base, None, Some((node, NodePlace::First))).unwrap();
+        assert_eq!(split(&first), [PathBuf::from("/castle/node/24.22.2"), "/usr/bin".into(), "/projects/nvm/node18".into()]);
+        let last = session_path(&base, None, Some((node, NodePlace::Last))).unwrap();
+        assert_eq!(split(&last), [PathBuf::from("/usr/bin"), "/projects/nvm/node18".into(), "/castle/node/24.22.2".into()], "a DEV tab's own Node is never shadowed");
+    }
+
+    #[test]
+    fn a_members_own_good_node_leaves_path_alone() {
+        let base = joined(&["/usr/bin"]);
+        assert_eq!(session_path(&base, None, None), None, "nothing to add: PATH is not even set");
+        let vars = session_env_using(Cli::Claude, &keys(&[]), Path::new("/tools"), None);
+        assert_eq!(get(&vars, "PATH").is_some(), cfg!(not(windows)), "only macOS and Linux put the tools on PATH");
+    }
+
+    #[test]
+    fn the_session_path_carries_castles_node_when_it_is_in_use() {
+        let vars = session_env_using(Cli::Claude, &keys(&[]), Path::new("/tools"), Some((Path::new("/castle/node/24.22.2"), NodePlace::First)));
+        let path = split(get(&vars, "PATH").unwrap());
+        assert_eq!(path[0], PathBuf::from("/castle/node/24.22.2"));
+        assert_eq!(path.iter().filter(|p| **p == PathBuf::from("/castle/node/24.22.2")).count(), 1);
+    }
+
     #[cfg(not(windows))]
     #[test]
     fn a_repeated_folder_stays_on_path_once_in_its_first_place() {
@@ -261,7 +326,7 @@ mod tests {
     #[test]
     fn codex_never_receives_the_openai_key() {
         let all = keys(&["openai", "seedance", "suno", "elevenlabs"]);
-        let vars = session_env(Cli::Codex, &all, Path::new("C:\\tools"));
+        let vars = session_env_using(Cli::Codex, &all, Path::new("C:\\tools"), None);
         assert_eq!(get(&vars, "OPENAI_API_KEY"), None);
         assert_eq!(get(&vars, "CASTLE_IMAGE"), Some("codex"));
         assert_eq!(get(&vars, "ARK_API_KEY"), Some("value-of-seedance"));
@@ -272,7 +337,7 @@ mod tests {
 
     #[test]
     fn claude_code_gets_the_openai_key_when_one_is_kept() {
-        let vars = session_env(Cli::Claude, &keys(&["openai"]), Path::new("C:\\tools"));
+        let vars = session_env_using(Cli::Claude, &keys(&["openai"]), Path::new("C:\\tools"), None);
         assert_eq!(get(&vars, "OPENAI_API_KEY"), Some("value-of-openai"));
         assert_eq!(get(&vars, "CASTLE_IMAGE"), Some("openai"));
         assert_eq!(get(&vars, "ARK_API_KEY"), None);
@@ -281,7 +346,7 @@ mod tests {
 
     #[test]
     fn claude_code_without_a_key_draws_nothing_and_says_so() {
-        let vars = session_env(Cli::Claude, &keys(&[]), Path::new("C:\\tools"));
+        let vars = session_env_using(Cli::Claude, &keys(&[]), Path::new("C:\\tools"), None);
         assert_eq!(get(&vars, "CASTLE_IMAGE"), Some("none"));
         assert_eq!(get(&vars, "OPENAI_API_KEY"), None);
     }

@@ -343,7 +343,7 @@ pub(crate) fn wake_with_prompt(app: &AppHandle, store: &SettingsStore, host: &Pt
     let (Some(folder), Some(program), true) = (room.folder(&settings), program, ready.ready) else {
         return Err(ready.message);
     };
-    let mut vars = env::session_env(settings.cli, &|name| key::load(name), &tools_folder(app));
+    let mut vars = env::session_env(settings.cli, &|name| key::load(name), &tools_folder(app), env::NodePlace::First);
     // the drawing styles (standard appearance, turnarounds, try-on) ship beside the tools
     if let Ok(dir) = app.path().resource_dir() {
         vars.push(("CASTLE_STYLES".into(), dir.join("styles").display().to_string()));
