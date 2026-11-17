@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **LIBRARY opens with its shelves already there.** Your books and the Spiral Library's catalogue (which comes over the internet) are now read at start-up, behind the start-up screen, instead of when you open the room. A slow or unreachable Spiral Library never holds Castle back: the start-up waits for it only a few seconds, and the room reads it on arrival if it was not ready. A room switched off in Settings is not prepared.
+
 - **STUDIO's gallery shows small copies of your pictures.** A drawing is a PNG of a megabyte or two, and STUDIO used to read and decode every one the moment you opened the room. Castle now makes a small JPEG of each picture once, in the background from the start (kept in its own settings folder, never in your memory folder), and the gallery shows those; the real picture opens in the viewer. A picture that is drawn again gets a new small copy.
 
 - **Scroll the mouse wheel over the top bar's music controls to change the volume.** Up is louder, down is quieter, a notch at a time, and the choice is saved when you stop.

@@ -36,7 +36,7 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 
 ### The start-up screen
 
-When Castle opens it shows a start-up screen: a picture, a funny line, a progress bar, what it is loading (your settings, your theme, your memory, the backup, the memory database) and the version of Castle. It is on screen before anything else loads, stays long enough to read, and gives up waiting after a while so a slow piece can never keep you out. A theme can dress it with its own picture, title, funny lines and colour (see Themes below).
+When Castle opens it shows a start-up screen: a picture, a funny line, a progress bar, what it is loading (your settings, your theme, your memory, the backup, the memory database, STUDIO's gallery and LIBRARY's shelves) and the version of Castle. Castle does its loading here, so that every room is already full when you open it instead of loading when you arrive. The first start after an update may take a little longer while Castle makes small copies of your STUDIO pictures; later starts are quick. If something is slow, Castle opens anyway after a while and finishes in the background. A theme can dress the screen with its own picture and words (see Themes below).
 
 ### Opening and hiding Castle
 
