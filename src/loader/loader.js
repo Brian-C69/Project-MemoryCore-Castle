@@ -14,7 +14,7 @@ import { QUIPS } from './quips.js'
 import { forStorage, fromStorage, linesFor, loaderDesign } from './design.js'
 
 export const MIN_MS = 1400
-export const MAX_MS = 12000
+export const MAX_MS = 30000
 const QUIP_MS = 2600
 const DESIGN_KEY = 'castle-loader-design'
 

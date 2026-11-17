@@ -22,17 +22,18 @@ export const studioThumbUrls = ref({})
 let thumbing = false
 let thumbAgain = false
 
+// Loads and decodes a small copy now, so it is ready when the gallery is drawn. Resolves either way.
 function warm(url) {
   const image = new Image()
   image.decoding = 'async'
   image.src = url
+  return image.decode().catch(() => {})
 }
 
-async function buildThumbs() {
-  if (thumbing) {
-    thumbAgain = true
-    return
-  }
+let thumbJob = Promise.resolve()
+let onThumbProgress = null
+
+async function buildThumbsNow() {
   thumbing = true
   try {
     do {
@@ -42,13 +43,16 @@ async function buildThumbs() {
       for (let round = 0; round < 40; round += 1) {
         const { thumbs, pending } = await studioThumbs(paths)
         const next = { ...studioThumbUrls.value }
+        const warming = []
         for (const t of thumbs) {
           if (!next[t.path]) {
             next[t.path] = convertFileSrc(t.thumb)
-            warm(next[t.path])
+            warming.push(warm(next[t.path]))
           }
         }
         studioThumbUrls.value = next
+        await Promise.all(warming)
+        onThumbProgress?.(thumbs.length, paths.length)
         if (!pending) break
       }
     } while (thumbAgain)
@@ -56,6 +60,28 @@ async function buildThumbs() {
     // outside Castle's window, or a copy could not be made: the pictures show as they are
   } finally {
     thumbing = false
+  }
+}
+
+function buildThumbs() {
+  if (thumbing) {
+    thumbAgain = true // the running job goes round again for what changed
+    return thumbJob
+  }
+  thumbJob = buildThumbsNow()
+  return thumbJob
+}
+
+// Everything STUDIO needs to open full: the shelves, the powers and a small copy of every picture,
+// made and decoded. Castle's start-up screen waits on this (and shows its progress), so the room is
+// simply there when it opens; a gallery too large to finish in time carries on in the background.
+export async function prepareStudio(progress) {
+  onThumbProgress = progress ?? null
+  try {
+    await refreshStudio()
+    await thumbJob
+  } finally {
+    onThumbProgress = null
   }
 }
 
@@ -67,7 +93,7 @@ export function refreshStudio() {
     try {
       // the gallery first: it is what the room shows, and it does not wait on Codex's check
       studioLib.value = await studioLibrary()
-      buildThumbs() // in the background: nothing below waits on it
+      buildThumbs() // the powers below do not wait on it; prepareStudio() does
       studioVoiceUp.value = await voiceStudioStatus().catch(() => false)
       studioPowersNow.value = await studioPowers()
       studioPowersLoaded.value = true

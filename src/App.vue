@@ -12,8 +12,8 @@ import DatabaseOffer from './components/DatabaseOffer.vue'
 import { shouldOffer } from './components/database.js'
 import CompanionHeader from './components/CompanionHeader.vue'
 import { onOpenChat, onProviderChanged } from './api/castle.js'
+import { prepareStudio } from './composables/useStudio.js'
 import { loaderBegin, loaderDone, loaderEnd, loaderExpect, loaderRemember } from './loader/loader.js'
-import { refreshStudio } from './composables/useStudio.js'
 import ModalSheet from './components/ModalSheet.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import AppsView from './views/AppsView.vue'
@@ -457,9 +457,10 @@ onMounted(async () => {
     piece('memory', 'Reading your memory', folder, loadHome),
     piece('backup', 'Checking the backup', 'backup status', loadBackup),
     piece('database', 'Waking the memory database', 'memory database', loadDatabase),
-    piece('studio', "Shelving STUDIO's gallery", 'media-generation/', refreshStudio),
+    piece('studio', "Preparing STUDIO's gallery", 'media-generation/', () => prepareStudio((done, total) => loaderBegin('studio', 'Making small copies of your pictures', `${done} / ${total}`))),
   ])
-  await Promise.race([loading, new Promise((resolve) => setTimeout(resolve, 8000))])
+  // long enough for a first start to make a large gallery's small copies; after that it is quick
+  await Promise.race([loading, new Promise((resolve) => setTimeout(resolve, 25000))])
   loaderDone()
   // the memory changes as the companion writes: read it again every minute
   refresh = setInterval(loadHome, 60000)
