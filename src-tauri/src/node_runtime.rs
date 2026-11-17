@@ -453,6 +453,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// The real release from nodejs.org, end to end: download, checksum, unpack, run.
+    /// `cargo test real_node_download -- --ignored` (needs the internet; about 35-50 MB).
+    #[test]
+    #[ignore]
+    fn real_node_download() {
+        let release = release().expect("this computer has a release");
+        let dir = std::env::temp_dir().join(format!("castle-node-real-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let url = format!("https://nodejs.org/dist/v{VERSION}/{}", release.file);
+        bring(&release, &url, &dir, &|_, _| {}).expect("the pinned release downloads, matches and runs");
+        let printed = version_of(&own_program(&dir)).expect("node runs");
+        assert_eq!(printed, format!("v{VERSION}"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_runnable_node_is_asked_its_version() {
