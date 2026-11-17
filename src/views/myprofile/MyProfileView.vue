@@ -221,8 +221,8 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 16px;
   overflow-y: auto;
-  scrollbar-color: var(--line) transparent;
-  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: var(--scrollbar-width);
   padding: 20px 24px;
   /* no card around the page: its own cards (hero, timeline, ...) stand straight on the theme */
   color: var(--text);
@@ -390,8 +390,8 @@ h3 {
   display: flex;
   gap: 0;
   overflow-x: auto;
-  scrollbar-color: var(--line) transparent;
-  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: var(--scrollbar-width);
   padding: 6px 4px 4px;
 }
 

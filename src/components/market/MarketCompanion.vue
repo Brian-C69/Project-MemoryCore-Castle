@@ -106,8 +106,8 @@ h4 {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  scrollbar-color: var(--line) transparent;
-  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: var(--scrollbar-width);
   /* Issue #44: the list sits inside a backdrop-filter panel, where Chromium/WebView2 may scroll it
      without a layer of its own, and lines promoted to their own layers inside such a scroller can
      be drawn at a stale scroll offset - text over text while every box measures correctly. The

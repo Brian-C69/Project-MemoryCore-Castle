@@ -457,8 +457,8 @@ button:disabled {
   min-width: 0;
   overflow-x: auto;
   border-bottom: 1px solid var(--line);
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  scrollbar-width: var(--scrollbar-width);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 .strip-tab {

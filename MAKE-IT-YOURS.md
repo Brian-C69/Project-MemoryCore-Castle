@@ -50,6 +50,18 @@ By hand, a theme is a folder with a `theme.json` and a wallpaper:
 
 Rules the loader checks (`src/themes/loader.js`): an `id` and a `name`; colours only as `--variables` in `colors`; widget places only `left`, `top`, `right`, `bottom`, `width`, `height` (and `size` for the clock: `s`, `m` or `l`). A widget your theme leaves out is not shown (the USAGE card is only on HOME when the theme gives it a place). A broken theme is listed with its reason and never shown. Press **Reload themes** after editing.
 
+**Native controls follow the theme too.** Scrollbars, checkboxes, radio buttons, sliders and the dropdown lists take their look from the theme, so none of them shows the plain Windows grey. Their defaults read your theme's own colours; to change them, set any of these in `colors` like any other variable:
+
+| variable | what it changes | default |
+|---|---|---|
+| `--scrollbar-thumb` | the draggable part of every scrollbar | `var(--line)` |
+| `--scrollbar-track` | the groove behind it | `transparent` |
+| `--scrollbar-width` | `thin`, `auto` (wider) or `none` (hidden) | `thin` |
+| `--control-accent` | checkboxes, radio buttons and sliders | `var(--accent)` |
+| `--color-scheme` | `dark` or `light`: native pickers, spin buttons, selection | `dark` |
+
+A light theme should set `--color-scheme` to `light`. When you add a screen of your own, use `GlassSelect` for a dropdown (not a plain `<select>`) and leave scrollbars to these variables; a test fails the build if a page does otherwise.
+
 To ship a theme **inside** your build, put its folder in `src/themes/<id>/` instead - built-in themes are found automatically.
 
 ## 2. A room of your own

@@ -578,6 +578,24 @@ watch(settingsStamp, () => {
   --bad: #ff9aa8;
   --wallpaper: none;
   --wallpaper-position: center;
+  /* Native controls follow the theme. A theme may set any of these in its "colors" like any other
+     variable; none is needed, the defaults below read the theme's own colours. */
+  --scrollbar-thumb: var(--line); /* the draggable part of every scrollbar */
+  --scrollbar-track: transparent; /* the groove behind it */
+  --scrollbar-width: thin; /* thin, auto (wider) or none (hidden) */
+  --control-accent: var(--accent); /* checkboxes, radio buttons and sliders */
+  --color-scheme: dark; /* dark or light: native pickers, spin buttons and text selection */
+}
+
+:root {
+  color-scheme: var(--color-scheme);
+  accent-color: var(--control-accent);
+}
+
+/* every scroller, also the ones no component styles itself */
+* {
+  scrollbar-width: var(--scrollbar-width);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 html,

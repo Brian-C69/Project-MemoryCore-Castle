@@ -166,8 +166,8 @@ h3 {
   overflow-y: auto;
   align-content: start;
   padding-right: 6px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  scrollbar-width: var(--scrollbar-width);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 .tile {

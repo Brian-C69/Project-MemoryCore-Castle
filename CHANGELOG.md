@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Scrollbars, dropdowns and other native controls follow the theme.** Every scrollbar, checkbox, radio button and slider now takes the theme's colours, and the last plain dropdown (MARKET's account list) uses Castle's themed one. A theme can change how they look with five optional variables (`--scrollbar-thumb`, `--scrollbar-track`, `--scrollbar-width`, `--control-accent`, `--color-scheme`), described in MAKE-IT-YOURS. A test now fails the build if a page brings back a plain dropdown or a fixed scrollbar colour.
+
 ## 0.2.14 - 2026-11-16
 
 - **DIARY keeps your place.** Reading the book (or any page) no longer jumps back to the top every minute or so; a page is read again only when it really changed, and its text stays on screen while it is.

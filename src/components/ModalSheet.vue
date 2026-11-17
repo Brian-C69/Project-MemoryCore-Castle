@@ -122,7 +122,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
   padding: 20px 30px 30px;
   font-size: 14px;
   line-height: 1.55;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line, rgba(200, 180, 255, 0.38)) transparent;
+  scrollbar-width: var(--scrollbar-width);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 </style>

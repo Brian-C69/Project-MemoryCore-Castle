@@ -457,8 +457,8 @@ header {
   min-height: 0;
   overflow-y: auto;
   padding: 8px 6px 0 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  scrollbar-width: var(--scrollbar-width);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 /* the column scrolls as a whole: nothing in it is ever squeezed */
