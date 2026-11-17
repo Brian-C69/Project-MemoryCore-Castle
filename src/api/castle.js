@@ -127,6 +127,9 @@ export const spiralKept = () => invoke('spiral_kept')
 export const memoryRead = (file) => invoke('memory_read', { file })
 
 // The desktop.
+// the graphics-card gauges ({ gauges, on, found }) and their switch
+export const gpuMeters = () => invoke('gpu_meters')
+export const gpuGaugesSave = (on) => invoke('gpu_gauges_save', { on })
 export const systemMeters = () => invoke('system_meters')
 // The gauges' gear: watch CPU and RAM, tidy RAM, the last trips, close an ordinary app.
 export const meterWatchGet = () => invoke('meter_watch_get')

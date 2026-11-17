@@ -291,6 +291,9 @@ pub struct Settings {
     /// The gauges' gear: watch CPU and RAM, and the value each trips at. Changed only by its own
     /// command (meter_watch_save), never by the Settings page.
     pub meter_watch: crate::meter_watch::MeterWatch,
+    /// The graphics-card gauges beside CPU and RAM: shown or not. Changed only by its own command
+    /// (gpu_gauges_save), never by the Settings page.
+    pub gpu_gauges: crate::gpu::GpuGauges,
     /// HOME's credit widgets: the OpenAI and Seedance figures, the page readers' last word, Suno's
     /// whole and the Seedance budget. Changed only by the credits commands.
     pub credits: crate::credits::CreditsSaved,
@@ -388,6 +391,7 @@ impl Default for Settings {
             widget_sizes: std::collections::BTreeMap::new(),
             widget_places: std::collections::BTreeMap::new(),
             meter_watch: crate::meter_watch::MeterWatch::default(),
+            gpu_gauges: crate::gpu::GpuGauges::default(),
             credits: crate::credits::CreditsSaved::default(),
         }
     }
@@ -743,6 +747,7 @@ mod tests {
             widget_sizes: [("clock".to_string(), "l".to_string())].into_iter().collect(),
             widget_places: [("seed".to_string(), [("today".to_string(), WidgetPlace { left: 12.5, top: 40.0 })].into_iter().collect())].into_iter().collect(),
             meter_watch: crate::meter_watch::MeterWatch { on: false, cpu: 75, memory: 85 },
+            gpu_gauges: crate::gpu::GpuGauges { on: false },
             credits: crate::credits::CreditsSaved { seedance_budget: Some(20.0), suno_peak: Some(800.0), ..Default::default() },
         };
         save(&path, &settings).unwrap();

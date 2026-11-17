@@ -1,6 +1,7 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { meterTrimNow, meterTrips, meterWatchGet, meterWatchSave, systemMeters } from '../../api/castle.js'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { gpuGaugesSave, gpuMeters, meterTrimNow, meterTrips, meterWatchGet, meterWatchSave, systemMeters } from '../../api/castle.js'
+import { gpuTitle } from '../gpuGauges.js'
 import { DEFAULT_LIMIT, boundLimit, freedLine, isHot, sizeLabel, timeLabel } from '../meterWatch.js'
 
 defineProps({ size: { type: String, default: 'm' } })
@@ -10,6 +11,9 @@ defineOptions({ inheritAttrs: false })
 const RADIUS = 30
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 const meters = ref({ cpu: 0, memory: 0 })
+// the graphics cards: what to draw, whether they are shown, and how many were found
+const gpu = ref({ gauges: [], on: true, found: 0 })
+const gpuNote = ref('')
 let timer
 
 // The gear: watch on or off, the value each meter trips at, Tidy RAM now, and the last trips.
@@ -30,6 +34,21 @@ async function read() {
     meters.value = await systemMeters()
   } catch {
     // The last reading stays.
+  }
+  try {
+    gpu.value = await gpuMeters()
+  } catch {
+    // The last reading stays.
+  }
+}
+
+// The graphics-card switch in the gear.
+async function saveGpu() {
+  try {
+    gpu.value = await gpuGaugesSave(!!gpu.value.on)
+    gpuNote.value = ''
+  } catch (reason) {
+    gpuNote.value = String(reason)
   }
 }
 
@@ -93,6 +112,13 @@ async function tidyNow() {
   }
 }
 
+// every gauge on the card: CPU and RAM, then one for each graphics card shown
+const gauges = computed(() => [
+  { key: 'cpu', label: 'CPU', value: meters.value.cpu, limit: watch.value.cpu, title: '' },
+  { key: 'memory', label: 'RAM', value: meters.value.memory, limit: watch.value.memory, title: '' },
+  ...gpu.value.gauges.map((g) => ({ key: 'gpu', id: `gpu${g.index}`, label: g.label, value: g.util, limit: null, title: gpuTitle(g) })),
+])
+
 const dash = (value) => `${(value / 100) * CIRCUMFERENCE} ${CIRCUMFERENCE}`
 
 onMounted(async () => {
@@ -115,19 +141,16 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="card" class="widget gauges">
-    <div v-for="gauge in [
-      { key: 'cpu', label: 'CPU', value: meters.cpu, limit: watch.cpu },
-      { key: 'memory', label: 'RAM', value: meters.memory, limit: watch.memory },
-    ]" :key="gauge.key" class="gauge" role="meter" :aria-label="gauge.label" :aria-valuenow="gauge.value" aria-valuemin="0" aria-valuemax="100">
+    <div v-for="gauge in gauges" :key="gauge.id ?? gauge.key" class="gauge" :title="gauge.title || undefined" role="meter" :aria-label="gauge.label" :aria-valuenow="gauge.value" aria-valuemin="0" aria-valuemax="100">
       <svg viewBox="0 0 80 80" aria-hidden="true">
         <circle cx="40" cy="40" :r="RADIUS" class="track" />
-        <circle cx="40" cy="40" :r="RADIUS" class="fill" :class="[gauge.key, { hot: isHot(gauge.value, gauge.limit, watch.on) }]" :stroke-dasharray="dash(gauge.value)" />
+        <circle cx="40" cy="40" :r="RADIUS" class="fill" :class="[gauge.key, { hot: gauge.limit !== null && isHot(gauge.value, gauge.limit, watch.on) }]" :stroke-dasharray="dash(gauge.value)" />
       </svg>
       <span class="value">{{ gauge.value }}%</span>
       <span class="label">{{ gauge.label }}</span>
     </div>
 
-    <button class="gear" type="button" :class="{ on: gearOpen }" aria-label="Watch CPU and RAM" title="Watch CPU and RAM" :aria-expanded="gearOpen" @click="toggleGear">
+    <button class="gear" type="button" :class="{ on: gearOpen }" aria-label="Gauge settings" title="Gauge settings: graphics cards, CPU and RAM watch" :aria-expanded="gearOpen" @click="toggleGear">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="12" r="3" />
         <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
@@ -135,7 +158,17 @@ onBeforeUnmount(() => {
     </button>
 
     <Teleport to="body">
-      <div v-if="gearOpen" ref="panel" class="gauge-panel" role="dialog" aria-label="Watch CPU and RAM" :style="{ top: `${panelAt.top}px`, left: `${panelAt.left}px` }">
+      <div v-if="gearOpen" ref="panel" class="gauge-panel" role="dialog" aria-label="Gauge settings" :style="{ top: `${panelAt.top}px`, left: `${panelAt.left}px` }">
+        <div class="gpu-edit first">
+          <span class="trips-head">GRAPHICS CARDS</span>
+          <label class="toggle">
+            <input v-model="gpu.on" type="checkbox" @change="saveGpu" />
+            <span>Show graphics cards</span>
+          </label>
+          <p class="hint">{{ gpu.found ? `${gpu.found} found.` : 'None found: needs an NVIDIA card with its driver (nvidia-smi).' }}</p>
+          <p v-if="gpuNote" class="note">{{ gpuNote }}</p>
+        </div>
+        <span class="trips-head section">CPU AND RAM</span>
         <label class="toggle">
           <input v-model="watch.on" type="checkbox" @change="save" />
           <span>Watch CPU and RAM</span>
@@ -165,6 +198,7 @@ onBeforeUnmount(() => {
 .gauges {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   gap: 14px;
   padding: 12px 14px;
 }
@@ -201,6 +235,10 @@ circle {
   stroke: var(--accent-2, #8cc8ff);
 }
 
+.fill.gpu {
+  stroke: var(--accent-3, #b9a2ff);
+}
+
 .fill.hot {
   stroke: var(--warn, #ffb37a);
 }
@@ -220,6 +258,10 @@ circle {
 
 .label {
   top: 49px;
+  padding: 0 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: 10px;
   letter-spacing: 0.14em;
   color: var(--text-dim);
@@ -332,6 +374,17 @@ circle {
 .tidy:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.gpu-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
 }
 
 .trips {
