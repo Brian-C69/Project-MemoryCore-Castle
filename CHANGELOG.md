@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.17 - 2026-11-18
+
 - **Three new themes: The Sunset Shore, The Star Shore and The Emerald River.** Three quiet places with nobody in them, each with its own colours, layout and Sweep look.
 - **Each theme dresses its own cards.** HOME's cards and the companion panel take the theme's look: prismatic lines on Crystal, carved wood on The Seed, sunset glass, glowing cyan on The Star Shore and rippled emerald glass on The Emerald River. Theme makers can pick a skin too (see MAKE-IT-YOURS).
 - **Moving wallpapers, off until you turn them on.** In Settings > Rooms: The Constellation's stars twinkle, The Star Shore's surf rolls with light, The Sunset Shore's foam washes in and out, and The Emerald River flows with sun patches and ripples. They rest whenever HOME is hidden.
