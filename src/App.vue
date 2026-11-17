@@ -4,6 +4,7 @@ import TopBar from './components/TopBar.vue'
 import TerminalPanel from './components/TerminalPanel.vue'
 import ClockWidget from './components/widgets/ClockWidget.vue'
 import GaugeWidget from './components/widgets/GaugeWidget.vue'
+import SweepWidget from './components/widgets/SweepWidget.vue'
 import SetupView from './views/SetupView.vue'
 import HomeCards from './components/widgets/HomeCards.vue'
 import UsageWidget from './components/widgets/UsageWidget.vue'
@@ -146,14 +147,17 @@ const widgets = computed(() => theme.value?.widgets ?? {})
 const savedKeys = ref([])
 // The widgets HOME draws: switched on, placed by the theme (all but the clock and the gauges),
 // and for a credit widget, its key saved.
+// clock, gauges and Sweep show even when a theme names no place for them (Sweep then takes its own)
+const SELF_PLACED = ['clock', 'gauges', 'sweep']
+const FALLBACK_PLACES = { sweep: { right: '31%', top: '22%' } }
 const shownWidgets = computed(() =>
   WIDGETS.map((w) => w.id).filter(
-    (id) => isOn(id, { ...widgetPrefs.value, showUsageCard: usageCard.value }) && (['clock', 'gauges'].includes(id) || widgets.value[id]) && hasItsKey(id, savedKeys.value),
+    (id) => isOn(id, { ...widgetPrefs.value, showUsageCard: usageCard.value }) && (SELF_PLACED.includes(id) || widgets.value[id]) && hasItsKey(id, savedKeys.value),
   ),
 )
 
 function slotStyle(id) {
-  const style = placeStyle(placeFor(widgets.value[id], memberPlace(widgetPrefs.value, theme.value?.id, id)))
+  const style = placeStyle(placeFor(widgets.value[id] ?? FALLBACK_PLACES[id], memberPlace(widgetPrefs.value, theme.value?.id, id)))
   const scale = SIZES[sizeOf(id, widgetPrefs.value)]
   const moving = drag.value?.id === id ? `translate(${drag.value.dx}px, ${drag.value.dy}px) ` : ''
   if (moving || scale !== 1) style.transform = `${moving}scale(${scale})`
@@ -568,6 +572,7 @@ watch(settingsStamp, () => {
         >
           <ClockWidget v-if="id === 'clock'" :size="widgets.clock?.size ?? 'm'" :format="barClock.format" />
           <GaugeWidget v-else-if="id === 'gauges'" />
+          <SweepWidget v-else-if="id === 'sweep'" :theme-look="theme?.sweep?.look ?? ''" />
           <UsageWidget v-else-if="id === 'usage'" :stamp="settingsStamp" />
           <CreditWidget v-else-if="isCreditWidget(id)" :widget="id" />
           <HomeCards v-else :kind="id" :data="home" :backup="backup" :database="database" @open="openMemoryFile" @backup="onBackupCard" @database="onDatabaseCard" />

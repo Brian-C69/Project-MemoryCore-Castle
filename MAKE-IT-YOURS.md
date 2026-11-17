@@ -48,6 +48,15 @@ By hand, a theme is a folder with a `theme.json` and a wallpaper:
 }
 ```
 
+**Sweep** (HOME's cleaner) has three looks: `ring`, `bar` and `broom`. A theme may choose the one it starts with, and give Sweep a place like any widget:
+
+```json
+"sweep": { "look": "broom" },
+"widgets": { "sweep": { "right": "31%", "top": "22%" } }
+```
+
+The look a member picks in Sweep's gear always wins over the theme's. A theme that names no place for Sweep still shows it, at its own place.
+
 Rules the loader checks (`src/themes/loader.js`): an `id` and a `name`; colours only as `--variables` in `colors`; widget places only `left`, `top`, `right`, `bottom`, `width`, `height` (and `size` for the clock: `s`, `m` or `l`). A widget your theme leaves out is not shown (the USAGE card is only on HOME when the theme gives it a place). A broken theme is listed with its reason and never shown. Press **Reload themes** after editing.
 
 **Native controls follow the theme too.** Scrollbars, checkboxes, radio buttons, sliders and the dropdown lists take their look from the theme, so none of them shows the plain Windows grey. Their defaults read your theme's own colours; to change them, set any of these in `colors` like any other variable:

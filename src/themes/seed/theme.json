@@ -25,7 +25,9 @@
     "bottom": "3%",
     "width": "31%"
   },
+  "sweep": { "look": "broom" },
   "widgets": {
+    "sweep": { "right": "31%", "top": "22%" },
     "clock": {
       "right": "21%",
       "top": "4%",
