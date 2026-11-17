@@ -437,9 +437,7 @@ onMounted(async () => {
           <HelpTip text="It starts off because it plays even during quiet hours. Pick a sound below; Castle's own are easy to tell from other apps' Windows chime." />
         </div>
         <div class="setting-row sound-pick">
-          <select :value="settings.alertSoundName || 'glass'" :disabled="!!busy || !settings.alertSound" aria-label="Alert sound" @change="save({ alertSoundName: $event.target.value })">
-            <option v-for="s in alertSoundList" :key="s.id" :value="s.id">{{ s.label }}</option>
-          </select>
+          <GlassSelect class="sound-select" :model-value="settings.alertSoundName || 'glass'" :options="alertSoundList.map((s) => ({ value: s.id, label: s.label }))" :disabled="!!busy || !settings.alertSound" aria-label="Alert sound" @update:model-value="(v) => save({ alertSoundName: v })" />
           <button type="button" :disabled="!!busy" @click="alertSoundPreview(settings.alertSoundName || 'glass')">Play</button>
           <button type="button" @click="openSoundsFolder">Add your own…</button>
           <HelpTip text="Add your own: put a .wav file in the folder this opens, then press Refresh sounds. Only .wav files are offered." />
@@ -657,6 +655,10 @@ label.toggle {
 .sound-pick {
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
+}
+.sound-select {
+  min-width: 210px;
 }
 .alert-when input[type='radio'] {
   padding: 0;
