@@ -6,7 +6,7 @@
 // switch: the music plays by it whether or not the WORLD room is shown.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getSettings, worldMusic } from '../api/castle.js'
-import { musicFrom } from './music.js'
+import { musicFrom, wheelVolume } from './music.js'
 
 const POLL_MS = 4000
 const ready = ref(false)
@@ -55,16 +55,31 @@ function slide(event) {
 function release(event) {
   save({ volume: Number(event.target.value) })
 }
+// The mouse wheel over the music controls: up is louder, down is quieter. The sound follows at once;
+// the choice is saved a moment after the wheel stops, not on every notch.
+let wheelSave = 0
+function wheel(event) {
+  const next = wheelVolume(volume.value, event.deltaY)
+  if (next === volume.value) return
+  volume.value = next
+  liveUntil = Date.now() + 5000
+  tell({ volume: next })
+  clearTimeout(wheelSave)
+  wheelSave = setTimeout(() => save({ volume: volume.value }), 300)
+}
 
 onMounted(async () => {
   await read()
   timer = setInterval(read, POLL_MS)
 })
-onBeforeUnmount(() => clearInterval(timer))
+onBeforeUnmount(() => {
+  clearInterval(timer)
+  clearTimeout(wheelSave)
+})
 </script>
 
 <template>
-  <div v-if="ready" class="top-music" :class="{ on }">
+  <div v-if="ready" class="top-music" :class="{ on }" title="Scroll the mouse wheel here to change the volume" @wheel.prevent="wheel">
     <span class="note" aria-hidden="true">&#9835;</span>
     <button class="flip" :class="{ on }" role="switch" :aria-checked="on" aria-label="Music" :title="title" @click="flip">
       <span class="knob"></span>

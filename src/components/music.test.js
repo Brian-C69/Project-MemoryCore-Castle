@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { kindFor, musicFrom, tracksFor, worldWindowOpen } from './music.js'
+import { kindFor, musicFrom, tracksFor, wheelVolume, worldWindowOpen } from './music.js'
 import { allWorlds } from '../worlds/registry.js'
 
 describe("Castle's music", () => {
@@ -28,5 +28,14 @@ describe("Castle's music", () => {
     expect(tracks[0].title).toBe('Castle Theme')
     expect(tracks.at(-1)).toEqual({ title: 'morning light', url: 'asset://D:\\songs\\03-morning-light.mp3' })
     expect(tracksFor('3d', undefined, String).map((t) => t.title)).toEqual(['Floating Isles', 'Floating Isles (second take)'])
+  })
+
+  it('the mouse wheel over the music controls turns the volume up and down, never past either end', () => {
+    expect(wheelVolume(0.5, -100)).toBe(0.55)
+    expect(wheelVolume(0.5, 100)).toBe(0.45)
+    expect(wheelVolume(1, -100)).toBe(1)
+    expect(wheelVolume(0, 100)).toBe(0)
+    expect(wheelVolume(0.3, 0)).toBe(0.3)
+    expect(wheelVolume(0.35, 100)).toBe(0.3)
   })
 })

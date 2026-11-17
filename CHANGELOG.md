@@ -5,6 +5,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 ## Unreleased
 
 - **"Open folder" comes up in front.** STUDIO's open-folder button (and the same button in DEV chats, the file tree and app shortcuts) opened its Explorer window behind Castle, so it seemed to do nothing. Castle now allows Explorer to take the front before it asks for the window.
+- **Scroll the mouse wheel over the top bar's music controls to change the volume.** Up is louder, down is quieter, a notch at a time, and the choice is saved when you stop.
 
 ## 0.2.14 - 2026-11-16
 
