@@ -228,6 +228,10 @@ pub fn run() {
     if args.first().map(String::as_str) == Some(door::FLAG) {
         std::process::exit(door::main(&args[1..]));
     }
+    // `--sweep-deep <result file>`: Sweep's Deep clean, run elevated by Castle itself; it ends, no window
+    if args.first().map(String::as_str) == Some(sweep::DEEP_FLAG) {
+        std::process::exit(sweep::run_deep_cli(&args[1..]));
+    }
     #[cfg(target_os = "macos")]
     env::adopt_login_path();
     let builder = tauri::Builder::default();

@@ -378,14 +378,147 @@ pub fn clean(ids: &[String], log_folder: &Path, progress: &mut dyn FnMut(&str, u
     done
 }
 
-// ---------- the Recycle Bin (Task 2 brings the shell's count and empty) ----------
+// ---------- the Recycle Bin (the shell's own count and empty) ----------
 
+#[cfg(windows)]
+fn recycle_size() -> (u64, u64) {
+    use windows_sys::Win32::UI::Shell::{SHQueryRecycleBinW, SHQUERYRBINFO};
+    let mut info = SHQUERYRBINFO { cbSize: std::mem::size_of::<SHQUERYRBINFO>() as u32, i64Size: 0, i64NumItems: 0 };
+    // SAFETY: a null root asks about every drive; `info` is a live, sized struct for the whole call.
+    let hr = unsafe { SHQueryRecycleBinW(std::ptr::null(), &mut info) };
+    if hr == 0 {
+        (info.i64Size.max(0) as u64, info.i64NumItems.max(0) as u64)
+    } else {
+        (0, 0)
+    }
+}
+
+#[cfg(windows)]
+fn recycle_empty() -> bool {
+    use windows_sys::Win32::UI::Shell::{SHEmptyRecycleBinW, SHERB_NOCONFIRMATION, SHERB_NOPROGRESSUI, SHERB_NOSOUND};
+    // SAFETY: no window, a null root (every drive), flags only.
+    unsafe { SHEmptyRecycleBinW(std::ptr::null_mut(), std::ptr::null(), SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND) == 0 }
+}
+
+#[cfg(not(windows))]
 fn recycle_size() -> (u64, u64) {
     (0, 0)
 }
 
+#[cfg(not(windows))]
 fn recycle_empty() -> bool {
     false
+}
+
+// ---------- Deep clean (Windows: the system's Temp and Windows Update downloads) ----------
+
+/// `memorycore-castle.exe --sweep-deep <result file>`: the elevated Castle runs the same safe walk
+/// over the system folders, writes its result and ends, no window (handled first in `lib.rs::run`).
+pub const DEEP_FLAG: &str = "--sweep-deep";
+
+/// The system folders Deep clean empties (inside the test root's `deep` folder while one is set).
+pub fn deep_roots() -> Vec<Root> {
+    if let Some(test) = test_root() {
+        return vec![Root { path: test.join("deep"), temp: true, prefix: None, skip: None }];
+    }
+    #[cfg(windows)]
+    {
+        let system = env_dir("SystemRoot").unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
+        vec![Root { path: system.join("Temp"), temp: true, prefix: None, skip: None }, Root::plain(system.join("SoftwareDistribution").join("Download"))]
+    }
+    #[cfg(not(windows))]
+    Vec::new()
+}
+
+/// Runs the walk over `roots` and writes the result as JSON into `file`.
+fn deep_into(roots: &[Root], file: &Path) -> Cleaned {
+    let now = SystemTime::now();
+    let mut result = Cleaned { id: "deep".into(), freed: 0, files: 0, skipped: 0 };
+    for root in roots {
+        let t = sweep_root(root, false, now, &mut |_| {});
+        result.freed += t.bytes;
+        result.files += t.files;
+        result.skipped += t.skipped;
+    }
+    let _ = std::fs::write(file, serde_json::to_string(&result).unwrap_or_default());
+    result
+}
+
+/// What an elevated run left in its result file.
+fn read_result(file: &Path) -> Option<Cleaned> {
+    serde_json::from_str(&std::fs::read_to_string(file).ok()?).ok()
+}
+
+/// The `--sweep-deep <result file>` entry: the exit code.
+pub fn run_deep_cli(args: &[String]) -> i32 {
+    let Some(file) = args.first() else { return 2 };
+    deep_into(&deep_roots(), Path::new(file));
+    0
+}
+
+/// Deep clean, on the member's press: Windows asks once for administrator rights and an elevated
+/// Castle cleans the system folders with the same safe walk. `Ok(None)` when the member said no.
+/// With a test root set it runs here, unelevated, on the test folder (an elevated process would not
+/// inherit the test root and would clean the real folders).
+pub fn deep_clean(log_folder: &Path) -> Result<Option<Cleaned>, String> {
+    let file = std::env::temp_dir().join(format!("castle-sweep-deep-{}.json", std::process::id()));
+    let _ = std::fs::remove_file(&file);
+    let result = if test_root().is_some() {
+        Some(deep_into(&deep_roots(), &file))
+    } else {
+        match elevate_deep(&file)? {
+            false => None,
+            true => Some(read_result(&file).ok_or("Deep clean ran but left no result.")?),
+        }
+    };
+    let _ = std::fs::remove_file(&file);
+    if let Some(r) = &result {
+        log(log_folder, r);
+    }
+    Ok(result)
+}
+
+/// Starts Castle itself elevated with `--sweep-deep <file>` and waits for it; false when the member
+/// refused the prompt.
+#[cfg(windows)]
+fn elevate_deep(file: &Path) -> Result<bool, String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_CANCELLED};
+    use windows_sys::Win32::System::Threading::{WaitForSingleObject, INFINITE};
+    use windows_sys::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
+    let wide = |s: &std::ffi::OsStr| s.encode_wide().chain(std::iter::once(0)).collect::<Vec<u16>>();
+    let exe = std::env::current_exe().map_err(|_| "Castle could not find itself to ask for administrator rights.".to_string())?;
+    let verb = wide(std::ffi::OsStr::new("runas"));
+    let program = wide(exe.as_os_str());
+    let params = wide(std::ffi::OsStr::new(&format!("{DEEP_FLAG} \"{}\"", file.display())));
+    // SAFETY: a zeroed SHELLEXECUTEINFOW is its documented empty state; every pointer set below
+    // points into a Vec that outlives the call.
+    let mut info: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
+    info.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
+    info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
+    info.lpVerb = verb.as_ptr();
+    info.lpFile = program.as_ptr();
+    info.lpParameters = params.as_ptr();
+    info.nShow = SW_HIDE;
+    // SAFETY: `info` is fully set up above.
+    if unsafe { ShellExecuteExW(&mut info) } == 0 {
+        // SAFETY: reads this thread's last error, nothing else.
+        return if unsafe { GetLastError() } == ERROR_CANCELLED { Ok(false) } else { Err("Windows could not start Deep clean.".into()) };
+    }
+    if !info.hProcess.is_null() {
+        // SAFETY: the process handle was given to us by ShellExecuteExW (SEE_MASK_NOCLOSEPROCESS) and is closed once.
+        unsafe {
+            WaitForSingleObject(info.hProcess, INFINITE);
+            CloseHandle(info.hProcess);
+        }
+    }
+    Ok(true)
+}
+
+#[cfg(not(windows))]
+fn elevate_deep(_file: &Path) -> Result<bool, String> {
+    Err("Deep clean is for Windows.".into())
 }
 
 // ---------- the log ----------
@@ -523,6 +656,31 @@ mod tests {
         assert!(test_roots(base, "temp")[0].temp);
         assert_eq!(test_roots(base, "thumbs")[0].prefix, Some("thumbcache_"));
         assert!(test_roots(base, "recycle").is_empty());
+    }
+
+    #[test]
+    fn a_deep_run_writes_a_result_the_caller_reads_back() {
+        let base = tree("deep");
+        let system_temp = base.join("Temp");
+        write(&system_temp.join("old.etl"), 40);
+        old(&system_temp.join("old.etl"));
+        write(&system_temp.join("today.etl"), 3);
+        let downloads = base.join("Download");
+        write(&downloads.join("kb123/update.cab"), 60);
+        let file = base.join("result.json");
+        let roots = [Root { path: system_temp.clone(), temp: true, prefix: None, skip: None }, Root::plain(downloads.clone())];
+        let ran = deep_into(&roots, &file);
+        assert_eq!((ran.freed, ran.files, ran.skipped), (100, 2, 0));
+        assert_eq!(read_result(&file), Some(ran));
+        assert!(system_temp.join("today.etl").exists(), "the system's fresh temp files stay");
+        assert!(system_temp.is_dir() && downloads.is_dir(), "the system folders themselves stay");
+        assert_eq!(read_result(&base.join("missing.json")), None);
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn the_deep_entry_needs_its_result_file() {
+        assert_eq!(run_deep_cli(&[]), 2);
     }
 
     #[test]
