@@ -34,6 +34,10 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 - **Claude Code** or **Codex**, installed and signed in with your own account. Castle has no account of its own; your companion uses the subscription you already have.
 - A MemoryCore folder. If you do not have one yet, Castle can create it for you the first time it opens.
 
+### The start-up screen
+
+When Castle opens it shows a start-up screen: a picture, a funny line, a progress bar, what it is loading (your settings, your theme, your memory, the backup, the memory database) and the version of Castle. It is on screen before anything else loads, stays long enough to read, and gives up waiting after a while so a slow piece can never keep you out. A theme can dress it with its own picture, title, funny lines and colour (see Themes below).
+
 ### Opening and hiding Castle
 
 - Castle fills your desktop and keeps the Windows taskbar visible.
@@ -213,6 +217,8 @@ Open **THEME** (right after HOME) to change how Castle looks.
   - **Paint** asks your companion to paint a wallpaper for the theme (it tells you the cost first; with Codex it draws by itself).
   - **Delete** removes the theme (choose another theme first if it is in use).
 - After your companion has worked on a theme, press **Reload themes**. If a theme cannot be read, it is listed at the bottom with the reason, and Castle keeps showing the theme you had.
+
+A theme can also dress the **start-up screen** with its own picture, title, funny lines and colour (see `MAKE-IT-YOURS.md`). Castle remembers the theme in use, so the screen shows its design from the second start after you pick it.
 
 Your themes live in Castle's settings folder (`%APPDATA%\com.memorycore.castle\themes`), one folder each with a `theme.json` and a wallpaper, so you can also make or share themes by hand - see `MAKE-IT-YOURS.md`.
 

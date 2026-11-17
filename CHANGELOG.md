@@ -10,6 +10,11 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 - **An Alerts page in Settings, and alerts beyond chat.** Settings > Alerts lists everything Castle can tell you about, one card each with its own desktop notification, sound and sound choice: new chat messages, your companion finishing a reply in HOME, a MARKET round ending, and a picture being ready. An alert stays quiet while you are already looking at the room it is about, and clicking a notification opens that room. Each kind starts with its own different sound so you can tell them apart by ear. A new kind of alert added to Castle later appears on the page by itself.
 - **Chat alerts have their own sound, and you can add yours.** Settings > Chat now picks the alert sound from a list - Castle's own set, so it no longer sounds like every other Windows app - with a Play button to hear each. Drop your own `.wav` files into the folder that "Add your own..." opens and they appear in the list too.
 - **A notification clicked later still opens Castle.** Clicking a chat notification from the Action Center, after the pop-up has gone, now brings Castle back and opens CHAT, instead of only working while the pop-up is still on screen.
+- **The start-up screen shows Castle's version** in its corner (for example v0.2.14), so a screenshot or a report says which build it was.
+
+- **Themes can dress the start-up screen.** A theme's `theme.json` can now carry a `loader` block: its own picture, title, funny lines (added to Castle's or replacing them), accent colour and where the words sit. Castle remembers the theme in use and shows its start-up design from the next start. A bad value only falls back to Castle's own; it never breaks the theme. See MAKE-IT-YOURS.
+
+- **A start-up screen.** Castle now opens on a picture with a funny line, a progress bar and what it is loading - your settings, your theme, your memory, the backup, the memory database - instead of a blank window. It is on screen before anything else loads, stays long enough to read, and takes the theme's own colour after the first start. A build can ship its own picture (`public/loader/loader.webp`, 16:9) and its own funny lines (`public/loader/quips.json`); see `public/loader/README.md`.
 
 ## 0.2.14 - 2026-11-16
 

@@ -18,6 +18,9 @@ pub struct UserTheme {
     pub wallpaper_url: Option<String>,
     /// the theme's usageReveal low picture, read the same way (a missing one is named by the page)
     pub low_url: Option<String>,
+    /// the theme's start-up screen picture (`loader.image`), read the same way; a missing one only
+    /// means the screen keeps Castle's own picture
+    pub loader_url: Option<String>,
     pub error: Option<String>,
 }
 
@@ -59,7 +62,7 @@ fn read_picture(folder: &Path, name: &str) -> Result<String, String> {
 
 fn read_theme(folder: &Path) -> UserTheme {
     let name = folder.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let broken = |error: String| UserTheme { folder: name.clone(), theme: None, wallpaper_url: None, low_url: None, error: Some(error) };
+    let broken = |error: String| UserTheme { folder: name.clone(), theme: None, wallpaper_url: None, low_url: None, loader_url: None, error: Some(error) };
 
     let text = match fs::read_to_string(folder.join("theme.json")) {
         Ok(text) => text,
@@ -77,7 +80,8 @@ fn read_theme(folder: &Path) -> UserTheme {
         None => None,
     };
     let low_url = theme.pointer("/usageReveal/low").and_then(Value::as_str).and_then(|picture| read_picture(folder, picture).ok());
-    UserTheme { folder: name, theme: Some(theme), wallpaper_url: wallpaper, low_url, error: None }
+    let loader_url = theme.pointer("/loader/image").and_then(Value::as_str).and_then(|picture| read_picture(folder, picture).ok());
+    UserTheme { folder: name, theme: Some(theme), wallpaper_url: wallpaper, low_url, loader_url, error: None }
 }
 
 /// Every folder under `<settings folder>/themes`, in name order. A broken one is listed with its reason.
@@ -121,6 +125,27 @@ mod tests {
         assert_eq!(themes.len(), 1);
         assert!(themes[0].error.is_none());
         assert_eq!(themes[0].wallpaper_url.as_deref(), Some("data:image/png;base64,cG5n"));
+    }
+
+    #[test]
+    fn a_themes_start_up_picture_is_read_but_never_breaks_the_theme() {
+        let root = temp_folder("loader");
+        let good = root.join(FOLDER).join("a-with-picture");
+        let missing = root.join(FOLDER).join("b-picture-missing");
+        let escaping = root.join(FOLDER).join("c-escaping");
+        for folder in [&good, &missing, &escaping] {
+            fs::create_dir_all(folder).unwrap();
+        }
+        fs::write(good.join("theme.json"), r#"{"id":"a","name":"A","loader":{"image":"start.webp","brand":"HELLO"}}"#).unwrap();
+        fs::write(good.join("start.webp"), b"webp").unwrap();
+        fs::write(missing.join("theme.json"), r#"{"id":"b","name":"B","loader":{"image":"nope.webp"}}"#).unwrap();
+        fs::write(escaping.join("theme.json"), r#"{"id":"c","name":"C","loader":{"image":"../../settings.json"}}"#).unwrap();
+        let themes = list(&root);
+        assert_eq!(themes[0].loader_url.as_deref(), Some("data:image/webp;base64,d2VicA=="));
+        for t in &themes[1..] {
+            assert!(t.error.is_none() && t.theme.is_some(), "a missing or unsafe start-up picture only means Castle's own picture shows");
+            assert!(t.loader_url.is_none());
+        }
     }
 
     #[test]

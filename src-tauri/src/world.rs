@@ -152,7 +152,7 @@ async fn apply(app: &AppHandle, entries: &[WorldScreen]) -> Result<(), String> {
             .shadow(false)
             .skip_taskbar(true)
             .visible(false)
-            .initialization_script(&format!("window.__CASTLE_VIEW__ = {init};"))
+            .initialization_script(&format!("window.__CASTLE_VIEW__ = {init};{NO_START_SCREEN}"))
             .build()
             .map_err(|_| "The world window could not be opened.".to_string())?;
         screen::fill_monitor(&window, &monitors[index]).map_err(|_| "The world window could not be placed.".to_string())?;
@@ -160,6 +160,10 @@ async fn apply(app: &AppHandle, entries: &[WorldScreen]) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// A window made for another screen has no start-up screen: this marks the page, before it first
+/// paints, so index.html's CSS keeps the screen from flashing there.
+const NO_START_SCREEN: &str = "(function(){var m=function(){var d=document.documentElement;if(d){d.setAttribute('data-castle-bare','');}};m();new MutationObserver(m).observe(document,{childList:true});})();";
 
 /// The WORLD room's whole list of screens: saved, then every window made to match.
 #[tauri::command]
@@ -252,7 +256,7 @@ pub async fn world_identify(app: AppHandle, index: usize) -> Result<(), String> 
         .skip_taskbar(true)
         .focused(false)
         .visible(false)
-        .initialization_script(&init)
+        .initialization_script(&format!("{init}{NO_START_SCREEN}"))
         .build()
         .map_err(|_| "The screen number could not be shown.".to_string())?;
     screen::fill_monitor(&window, &monitor).map_err(|_| "The screen number could not be placed.".to_string())?;

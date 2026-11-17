@@ -1,3 +1,4 @@
+import './loader/loader.js'
 import { createApp } from 'vue'
 import App from './App.vue'
 

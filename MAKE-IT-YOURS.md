@@ -64,6 +64,41 @@ A light theme should set `--color-scheme` to `light`. When you add a screen of y
 
 To ship a theme **inside** your build, put its folder in `src/themes/<id>/` instead - built-in themes are found automatically.
 
+### A start-up screen for your theme
+
+A theme can dress the start-up screen too. Add a `loader` block to `theme.json` (every part is optional):
+
+```json
+"loader": {
+  "image": "loader.webp",
+  "brand": "SAKURA NIGHT",
+  "quips": ["Counting petals.", "Brewing blossom tea."],
+  "quipsMode": "add",
+  "accent": "#ff9ccf",
+  "position": "bottom"
+}
+```
+
+| key | what it does |
+|---|---|
+| `image` | a 16:9 picture in the theme's own folder (PNG, JPEG or WebP; keep it under about 3 MB so it can be remembered) |
+| `brand` | the small title above the funny line (up to 40 characters) |
+| `quips` | your own funny lines (up to 60, each up to 120 characters) |
+| `quipsMode` | `add` (default) puts them with Castle's own; `replace` shows only yours |
+| `accent` | the bar and title colour: `#hex`, `rgb()` or `hsl()` (default: the theme's `--accent`) |
+| `position` | where the words sit: `bottom` (default), `center` or `top` |
+
+The start-up screen is on screen before any theme is chosen, so it shows a theme's design from the **second start** after the theme was picked: Castle remembers the design of the theme in use. A bad value (an odd colour, an unknown `position`, a missing picture) only means Castle's own choice shows; it never makes the theme unusable. Aim the words so they stay readable: with `position` `bottom` keep the bottom third of the picture calm, with `top` the top third, with `center` the middle.
+
+### A start-up screen of your own
+
+Castle opens on a start-up screen: a picture, a funny line, a bar and the name of what it is loading. Two files in `public/loader/` change it, and nothing else needs touching:
+
+- `loader.webp` - the picture. 16:9 (for example 1920x1080), with the subject in the top and middle, because the words sit over the bottom third. Without it the screen shows its own night-sky gradient.
+- `quips.json` - more funny lines: an array of strings (up to 60, each up to 120 characters), added to the built-in ones in `src/loader/quips.js`.
+
+The steps it names come from `App.vue` (`loaderBegin` / `loaderEnd`); a room that takes a while to prepare can report its own the same way.
+
 ## 2. A room of your own
 
 1. Make the view: `src/views/MyRoomView.vue`.

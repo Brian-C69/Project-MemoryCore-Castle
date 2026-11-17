@@ -27,7 +27,8 @@ export function builtInThemes() {
     const wallpaperUrl = theme.wallpaper ? pictures[`./${pictureFolder}/${theme.wallpaper}`] ?? null : null
     // the picture HOME shows under the wallpaper while the week is not yet used (usagereveal.js)
     const usageReveal = theme.usageReveal?.low ? { ...theme.usageReveal, lowUrl: pictures[`./${pictureFolder}/${theme.usageReveal.low}`] ?? null } : theme.usageReveal
-    return { ...theme, id: theme.id ?? folder, source: 'built-in', wallpaperUrl, usageReveal }
+    const loaderUrl = theme.loader?.image ? pictures[`./${pictureFolder}/${theme.loader.image}`] ?? null : null
+    return { ...theme, id: theme.id ?? folder, source: 'built-in', wallpaperUrl, usageReveal, loaderUrl }
   })
 }
 
@@ -40,7 +41,7 @@ export function fromUserFolders(entries) {
       broken.push({ folder: entry.folder, error: entry.error ?? 'The theme could not be read.' })
     } else {
       const usageReveal = entry.theme.usageReveal?.low ? { ...entry.theme.usageReveal, lowUrl: entry.lowUrl ?? null } : entry.theme.usageReveal
-      themes.push({ ...entry.theme, id: entry.theme.id ?? entry.folder, source: 'yours', wallpaperUrl: entry.wallpaperUrl, usageReveal })
+      themes.push({ ...entry.theme, id: entry.theme.id ?? entry.folder, source: 'yours', wallpaperUrl: entry.wallpaperUrl, usageReveal, loaderUrl: entry.loaderUrl ?? null })
     }
   }
   return { themes, broken }
