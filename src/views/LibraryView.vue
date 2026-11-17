@@ -46,6 +46,12 @@ const asking = ref(null)
 const kept = libraryKept // Spiral ref -> the edition in My books
 const keeping = ref(false)
 const KEEP_WORDS = { keep: 'Add to My books', kept: 'In My books', update: 'Update in My books' }
+// a cover that cannot load (offline, a host Castle does not allow) shows a quiet stand-in, never a broken image
+const brokenCovers = ref(new Set())
+const coverShown = (b) => b.coverUrl && !brokenCovers.value.has(b.coverUrl)
+function coverFailed(b) {
+  brokenCovers.value = new Set([...brokenCovers.value, b.coverUrl])
+}
 
 const books = computed(() => (side.value === 'mine' ? mine.value : spiral.value.books))
 const shelfLabels = computed(() => Object.fromEntries(spiral.value.shelves.map((s) => [s.key, s.label])))
@@ -169,7 +175,8 @@ onMounted(load)
         <div class="grid">
           <article v-for="b in shown" :key="b.id ?? b.ref" class="card" :class="{ active: open && (open.id === b.id && b.id !== undefined || open.spiral?.ref === b.ref) }">
             <button class="open" @click="readBook(b)">
-              <img v-if="b.coverUrl" class="cover" :src="b.coverUrl" :alt="b.title" loading="lazy" />
+              <img v-if="coverShown(b)" class="cover" :src="b.coverUrl" :alt="b.title" loading="lazy" @error="coverFailed(b)" />
+              <span v-else-if="b.coverUrl" class="cover stand-in" aria-hidden="true">{{ (b.title ?? '?').trim().charAt(0) }}</span>
               <span v-if="b.origin" class="badge" :title="`Kept from the Spiral Library (${b.origin})`">Spiral</span>
               <strong>{{ b.title }}</strong>
               <span v-if="b.subtitle" class="sub">{{ b.subtitle }}</span>
@@ -329,6 +336,16 @@ h2 {
   aspect-ratio: 3 / 4;
   object-fit: cover;
   border-radius: 8px;
+}
+.stand-in {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--line);
+  background: linear-gradient(160deg, var(--panel-background), transparent);
+  color: var(--text-dim);
+  font-size: 28px;
+  font-weight: 600;
 }
 .sub,
 .line,

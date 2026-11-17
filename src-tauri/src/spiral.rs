@@ -9,6 +9,12 @@ use serde::Serialize;
 use serde_json::Value;
 use std::time::Duration;
 
+/// Where the Portfolio keeps the books' covers (each card's `coverUrl`). The page shows them as
+/// plain images, so this host must be in `img-src` of `app.security.csp` in tauri.conf.json - a
+/// test below fails when the two drift apart (issue 45: the covers were blocked).
+#[cfg_attr(not(test), allow(dead_code))]
+pub const COVER_HOST: &str = "https://afif-pms.sgp1.digitaloceanspaces.com";
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpiralShelf {
@@ -239,6 +245,16 @@ pub async fn spiral_kept(store: tauri::State<'_, crate::settings::SettingsStore>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_cover_host_is_allowed_to_show_images_and_nothing_wider() {
+        let conf: Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let csp = conf["app"]["security"]["csp"].as_str().unwrap();
+        let img = csp.split(';').map(str::trim).find(|d| d.starts_with("img-src")).unwrap();
+        let sources: Vec<&str> = img.split_whitespace().skip(1).collect();
+        assert!(sources.contains(&COVER_HOST), "the covers' host is missing from img-src: {img}");
+        assert!(!sources.contains(&"https:") && !sources.contains(&"*"), "img-src stays narrow: {img}");
+    }
 
     #[test]
     fn the_room_maps_shelves_and_public_cards() {
