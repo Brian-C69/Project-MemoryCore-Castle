@@ -57,6 +57,25 @@ By hand, a theme is a folder with a `theme.json` and a wallpaper:
 
 The look a member picks in Sweep's gear always wins over the theme's. A theme that names no place for Sweep still shows it, at its own place.
 
+**Living water** - a theme may give its wallpaper gentle motion on HOME with a `motion` block. Every position is a fraction of the picture (`[across, down]`, each 0 to 1), so the effect stays on the water at any window size. Two kinds:
+
+```json
+"motion": { "kind": "surf", "color": "#5fd8ff", "count": 170,
+            "crests": [[[0.0, 0.70], [0.5, 0.63], [0.95, 0.54]], [[0.0, 0.84], [0.48, 0.66]]] }
+```
+
+`surf`: glowing points ride each crest (a line of points along a breaking wave) and a brighter wash runs along it now and then.
+
+```json
+"motion": { "kind": "river", "color": "#e8f7c8", "count": 70, "flow": [0.05, 1],
+            "water": [[0.52, 0.21], [0.17, 1.0], [0.92, 1.0], [0.56, 0.21]],
+            "ripples": [[0.56, 0.60]] }
+```
+
+`river`: light streaks drift across the `water` outline in the `flow` direction, longer and faster nearer the bottom, and ripple rings spread from each `ripples` point and now and then elsewhere on the water.
+
+`color` and `count` are optional (at most 240 points for surf, 120 streaks for a river). A block Castle cannot read is ignored. Members can turn all motion off in **Settings > Rooms > Moving wallpapers**, and it rests while HOME is hidden or when the system asks for reduced motion.
+
 Rules the loader checks (`src/themes/loader.js`): an `id` and a `name`; colours only as `--variables` in `colors`; widget places only `left`, `top`, `right`, `bottom`, `width`, `height` (and `size` for the clock: `s`, `m` or `l`). A widget your theme leaves out is not shown (the USAGE card is only on HOME when the theme gives it a place). A broken theme is listed with its reason and never shown. Press **Reload themes** after editing.
 
 **Native controls follow the theme too.** Scrollbars, checkboxes, radio buttons, sliders and the dropdown lists take their look from the theme, so none of them shows the plain Windows grey. Their defaults read your theme's own colours; to change them, set any of these in `colors` like any other variable:

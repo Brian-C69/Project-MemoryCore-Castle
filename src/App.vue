@@ -267,6 +267,7 @@ async function loadSettingsAndTheme() {
     rooms.value = view.settings.rooms ?? {}
     barClock.value = { enabled: !!view.settings.displayClock, format: view.settings.clockFormat ?? '24h' }
     usageCard.value = view.settings.showUsageCard !== false
+    wallpaperMotion.value = view.settings.wallpaperMotion !== false
     widgetPrefs.value = { widgetsOff: view.settings.widgetsOff ?? [], widgetSizes: view.settings.widgetSizes ?? {}, widgetPlaces: view.settings.widgetPlaces ?? {} }
     tabOrder.value = view.settings.tabOrder ?? []
     try {
