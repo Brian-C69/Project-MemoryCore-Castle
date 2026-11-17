@@ -8,6 +8,11 @@ export const hideCastle = () => invoke('hide_castle')
 
 // Settings. -> { settings, companionLabel, cliLabel, warning, startupNote }
 export const getSettings = () => invoke('get_settings')
+// The chat alert sounds: the list (Windows', Castle's pack, then the member's own .wav files), a preview
+// and the folder where their own go. -> [{ id, label, builtIn }] / bool / the folder's path
+export const alertSounds = () => invoke('alert_sounds')
+export const alertSoundPreview = (name) => invoke('alert_sound_preview', { name })
+export const alertSoundsFolder = () => invoke('alert_sounds_folder')
 export const saveSettings = (settings) => invoke('save_settings', { settings })
 export const chooseFolder = (title) => invoke('choose_folder', { title })
 

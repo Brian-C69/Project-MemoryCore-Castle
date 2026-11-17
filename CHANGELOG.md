@@ -4,6 +4,9 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Chat alerts have their own sound, and you can add yours.** Settings > Chat now picks the alert sound from a list - Castle's own set, so it no longer sounds like every other Windows app - with a Play button to hear each. Drop your own `.wav` files into the folder that "Add your own..." opens and they appear in the list too.
+- **A notification clicked later still opens Castle.** Clicking a chat notification from the Action Center, after the pop-up has gone, now brings Castle back and opens CHAT, instead of only working while the pop-up is still on screen.
+
 ## 0.2.14 - 2026-11-16
 
 - **DIARY keeps your place.** Reading the book (or any page) no longer jumps back to the top every minute or so; a page is read again only when it really changed, and its text stays on screen while it is.

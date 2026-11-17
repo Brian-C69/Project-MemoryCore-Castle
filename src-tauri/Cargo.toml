@@ -44,8 +44,8 @@ trash = "5"
 
 [target.'cfg(windows)'.dependencies]
 # the chat alert's toast is built here (not through the notification plugin) so a click on it can
-# bring Castle forward and open CHAT; same version the plugin already uses
-tauri-winrt-notification = "0.8"
+# bring Castle forward and open CHAT, also from the Action Center; same version the plugin uses
+windows = { version = "0.62", features = ["Data_Xml_Dom", "UI_Notifications", "Foundation"] }
 # the world windows ask which window is on top at a few points, to rest when covered
 # (and the CPU gauge reads processor time with GetSystemTimes, from Threading; DEV's live servers
 # read the listening ports from IP Helper)

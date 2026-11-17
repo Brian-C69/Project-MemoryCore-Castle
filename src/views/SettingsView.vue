@@ -25,6 +25,9 @@ import {
   keySave,
   keyStatus,
   keyTest,
+  alertSoundPreview,
+  alertSounds,
+  alertSoundsFolder,
   openUrl,
   releasesPage,
   roomCard,
@@ -120,6 +123,22 @@ async function saveCard() {
 const avatar = ref(null)
 const cliCheck = ref(null)
 const busy = ref('')
+// The alert sounds on offer: Windows', Castle's pack and the member's own .wav files.
+const alertSoundList = ref([{ id: 'glass', label: 'Glass', builtIn: true }])
+async function loadSounds() {
+  try {
+    alertSoundList.value = await alertSounds()
+  } catch {
+    // outside Castle: keep the default entry
+  }
+}
+async function openSoundsFolder() {
+  try {
+    await alertSoundsFolder()
+  } catch (reason) {
+    problem.value = String(reason?.message ?? reason)
+  }
+}
 const problem = ref('')
 const done = ref('')
 const newAction = ref({ label: '', command: '' })
@@ -308,6 +327,7 @@ onMounted(async () => {
     avatar.value = await avatarGet()
     await readLink()
     await checkVoice()
+    loadSounds()
     if (tab.value === 'chat') loadPictures()
   } catch (reason) {
     problem.value = String(reason)
@@ -414,7 +434,16 @@ onMounted(async () => {
         </div>
         <div class="setting-row">
           <label class="toggle"><input type="checkbox" :checked="!!settings.alertSound" :disabled="!!busy" @change="save({ alertSound: $event.target.checked })" /> Also play a sound</label>
-          <HelpTip text="Windows' own notification sound. It starts off because it plays even during quiet hours." />
+          <HelpTip text="It starts off because it plays even during quiet hours. Pick a sound below; Castle's own are easy to tell from other apps' Windows chime." />
+        </div>
+        <div class="setting-row sound-pick">
+          <select :value="settings.alertSoundName || 'glass'" :disabled="!!busy || !settings.alertSound" aria-label="Alert sound" @change="save({ alertSoundName: $event.target.value })">
+            <option v-for="s in alertSoundList" :key="s.id" :value="s.id">{{ s.label }}</option>
+          </select>
+          <button type="button" :disabled="!!busy" @click="alertSoundPreview(settings.alertSoundName || 'glass')">Play</button>
+          <button type="button" @click="openSoundsFolder">Add your own…</button>
+          <HelpTip text="Add your own: put a .wav file in the folder this opens, then press Refresh sounds. Only .wav files are offered." />
+          <button type="button" @click="loadSounds">Refresh sounds</button>
         </div>
         <fieldset class="alert-when" :disabled="!!busy || (settings.alertNotify === false && !settings.alertSound)">
           <legend>Alert me for</legend>
@@ -624,6 +653,10 @@ label.toggle {
   padding: 0;
   font-size: 13px;
   color: var(--text-dim);
+}
+.sound-pick {
+  gap: 8px;
+  align-items: center;
 }
 .alert-when input[type='radio'] {
   padding: 0;

@@ -178,6 +178,8 @@ pub struct Settings {
     /// member is not looking at CHAT. The notification is on by default; the sound is off by default
     /// (it plays through Windows' quiet hours); each has its own switch in Settings > Rooms.
     pub alert_sound: bool,
+    /// which sound: "windows" (Windows' own notification sound) or one of Castle's own (see roomalert::SOUNDS)
+    pub alert_sound_name: String,
     pub alert_notify: bool,
     /// "all" (every new line, the default) or "named" (only a line that names the member or
     /// their companion, as a whole word): which lines the chat alerts tell about.
@@ -329,6 +331,7 @@ impl Default for Settings {
             start_session_on_launch: true,
             minimize_to_taskbar: false,
             alert_sound: false,
+            alert_sound_name: "glass".into(),
             alert_notify: true,
             alert_when: "all".into(),
             alert_reactions: false,
@@ -380,6 +383,9 @@ impl Settings {
     pub fn normalized(mut self) -> Self {
         if !["12h", "24h"].contains(&self.clock_format.as_str()) { self.clock_format = "24h".into(); }
         if !["all", "named"].contains(&self.alert_when.as_str()) { self.alert_when = "all".into(); }
+        // any id is kept (a member's own sound file is chosen by name); only an empty or absurd one resets
+        self.alert_sound_name = self.alert_sound_name.trim().to_string();
+        if self.alert_sound_name.is_empty() || self.alert_sound_name.len() > 110 { self.alert_sound_name = crate::roomalert::DEFAULT_SOUND.into(); }
         self.room_pictures_per_day = self.room_pictures_per_day.min(5);
         if !["low", "medium"].contains(&self.room_picture_quality.as_str()) { self.room_picture_quality = "low".into(); }
         fn clean(value: Option<String>) -> Option<String> {
@@ -666,6 +672,7 @@ mod tests {
             start_session_on_launch: false,
             minimize_to_taskbar: true,
             alert_sound: true,
+            alert_sound_name: "koto".into(),
             alert_notify: false,
             alert_when: "named".into(),
             alert_reactions: false,

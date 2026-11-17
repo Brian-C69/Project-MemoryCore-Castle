@@ -224,8 +224,12 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     builder
         // Must come first: a second launch only brings the running Castle forward.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             tray::show_main(app);
+            // a clicked notification starts Castle with its own address: show CHAT
+            if roomalert::wants_chat(args) {
+                roomalert::open_chat(app);
+            }
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
@@ -250,6 +254,9 @@ pub fn run() {
         .manage(market::engine::Viewing::default())
         .invoke_handler(tauri::generate_handler![
             get_settings,
+            roomalert::alert_sounds,
+            roomalert::alert_sound_preview,
+            roomalert::alert_sounds_folder,
             providers::providers_list,
             providers::image_request,
             providers::image_jobs,
@@ -471,6 +478,7 @@ pub fn run() {
                 Some(folder) => folder,
                 None => app.path().app_config_dir()?,
             };
+            roomalert::register_address();
             let store = SettingsStore::open(&config);
             session::forget_boot_file(&store);
             let current = store.get();

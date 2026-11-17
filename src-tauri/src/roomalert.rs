@@ -12,9 +12,6 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::NotificationExt;
 
 const PREVIEW: usize = 80;
-/// Told to the page when the member clicks the notification, so it shows the CHAT tab.
-#[cfg(windows)]
-const OPEN_CHAT_EVENT: &str = "castle-open-chat";
 
 /// The notification for a batch of new lines, leaving out lines the member posted from Castle
 /// (`mine`, by id): (title, body), or None when nothing is left to tell. Pure, tested.
@@ -65,7 +62,7 @@ pub fn reactions(app: &AppHandle, changed: &[(Value, Value)], chat_shown: bool) 
     }
     let Some((title, body)) = reaction_news(changed, &crate::chatroom::my_line_ids(&store)) else { return };
     if settings.alert_sound {
-        beep();
+        beep(app, &settings.alert_sound_name);
     }
     if settings.alert_notify {
         toast(app, &title, &body);
@@ -90,19 +87,117 @@ fn preview(text: &str) -> String {
     short
 }
 
-/// Windows' own notification sound, so it follows the member's sound scheme and volume.
-#[cfg(windows)]
-fn beep() -> bool {
-    use windows_sys::Win32::Media::Audio::{PlaySoundW, SND_ALIAS, SND_ASYNC, SND_NODEFAULT};
-    let name: Vec<u16> = "SystemNotification\0".encode_utf16().collect();
-    unsafe {
-        PlaySoundW(name.as_ptr(), std::ptr::null_mut(), SND_ALIAS | SND_ASYNC | SND_NODEFAULT) != 0
+/// Castle's own default pack, as WAV bytes Windows can play straight from memory. It is only the
+/// starting set: any `.wav` the member (or a future theme) drops into the `alert-sounds` folder in
+/// Castle's data folder is offered too, so nothing here limits what can be chosen.
+const BUILT_IN: &[(&str, &str, &[u8])] = &[
+    ("glass", "Glass", include_bytes!("../resources/alerts/glass.wav")),
+    ("chord", "Chord", include_bytes!("../resources/alerts/chord.wav")),
+    ("koto", "Koto", include_bytes!("../resources/alerts/koto.wav")),
+    ("woodblock", "Woodblock", include_bytes!("../resources/alerts/woodblock.wav")),
+    ("bell", "Information bell", include_bytes!("../resources/alerts/bell.wav")),
+    ("flute", "Flit flute", include_bytes!("../resources/alerts/flute.wav")),
+    ("glisten", "Glisten", include_bytes!("../resources/alerts/glisten.wav")),
+];
+/// The sound a fresh install (or a choice that has since gone missing) uses.
+pub const DEFAULT_SOUND: &str = "glass";
+/// A member's own file is chosen as "file:<name>.wav", so it can never be mistaken for a built-in.
+const FILE_PREFIX: &str = "file:";
+
+/// Where the member's own alert sounds go.
+fn user_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_config_dir().ok().map(|d| d.join("alert-sounds"))
+}
+
+/// A bare `.wav` file name (no folders, so a setting can never point outside the sounds folder).
+fn is_wav_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".wav") && !name.contains(['/', '\\', ':']) && !name.contains("..") && name.len() <= 100
+}
+
+/// One choice in Settings' sound list.
+#[derive(serde::Serialize)]
+pub struct SoundChoice {
+    pub id: String,
+    pub label: String,
+    pub built_in: bool,
+}
+
+/// Every sound the member can choose: Windows' own, Castle's pack, then their own files.
+pub fn sound_choices(dir: Option<&std::path::Path>) -> Vec<SoundChoice> {
+    let mut all = vec![SoundChoice { id: "windows".into(), label: "Windows' own sound".into(), built_in: true }];
+    all.extend(BUILT_IN.iter().map(|(id, label, _)| SoundChoice { id: (*id).into(), label: (*label).into(), built_in: true }));
+    if let Some(dir) = dir {
+        let mut own: Vec<String> = std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| e.file_name().into_string().ok())
+            .filter(|n| is_wav_name(n))
+            .collect();
+        own.sort_by_key(|n| n.to_ascii_lowercase());
+        all.extend(own.into_iter().map(|n| SoundChoice { id: format!("{FILE_PREFIX}{n}"), label: n.trim_end_matches(".wav").trim_end_matches(".WAV").to_string(), built_in: false }));
     }
+    all
+}
+
+/// The WAV bytes for a choice, or None for Windows' own sound or a choice that is gone.
+fn wav_for(name: &str, dir: Option<&std::path::Path>) -> Option<Vec<u8>> {
+    if let Some((_, _, wav)) = BUILT_IN.iter().find(|(id, _, _)| *id == name) {
+        return Some(wav.to_vec());
+    }
+    let file = name.strip_prefix(FILE_PREFIX).filter(|n| is_wav_name(n))?;
+    std::fs::read(dir?.join(file)).ok().filter(|b| b.len() > 44)
+}
+
+/// Plays the chosen alert sound at once, without waiting for it to end. Windows' own notification
+/// sound follows the member's sound scheme and volume; the others are played from memory. A choice
+/// that has gone missing falls back to the default rather than to silence.
+#[cfg(windows)]
+fn beep(app: &AppHandle, name: &str) -> bool {
+    use windows_sys::Win32::Media::Audio::{PlaySoundW, SND_ALIAS, SND_ASYNC, SND_MEMORY, SND_NODEFAULT};
+    if name == "windows" {
+        let alias: Vec<u16> = "SystemNotification\0".encode_utf16().collect();
+        return unsafe { PlaySoundW(alias.as_ptr(), std::ptr::null_mut(), SND_ALIAS | SND_ASYNC | SND_NODEFAULT) != 0 };
+    }
+    let dir = user_dir(app);
+    let wav = wav_for(name, dir.as_deref()).or_else(|| wav_for(DEFAULT_SOUND, None));
+    let Some(wav) = wav else { return false };
+    // asynchronous playback reads the buffer after this call returns, so it is kept for the life of
+    // the program (a leak of a few hundred KB per distinct sound at most, since this is rare)
+    let wav: &'static [u8] = Box::leak(wav.into_boxed_slice());
+    unsafe { PlaySoundW(wav.as_ptr() as *const u16, std::ptr::null_mut(), SND_MEMORY | SND_ASYNC | SND_NODEFAULT) != 0 }
 }
 
 #[cfg(not(windows))]
-fn beep() -> bool {
+fn beep(_app: &AppHandle, _name: &str) -> bool {
     false
+}
+
+/// Settings' sound list.
+#[tauri::command]
+pub fn alert_sounds(app: AppHandle) -> Vec<SoundChoice> {
+    sound_choices(user_dir(&app).as_deref())
+}
+
+/// Settings' "Play" button: the member hears the sound they are choosing.
+#[tauri::command]
+pub fn alert_sound_preview(app: AppHandle, name: String) -> bool {
+    beep(&app, &name)
+}
+
+/// Settings' "Open sounds folder": makes the folder if it is not there yet and shows it, so the
+/// member can drop their own `.wav` files in. Returns the folder's path.
+#[tauri::command]
+pub fn alert_sounds_folder(app: AppHandle) -> Result<String, String> {
+    let dir = user_dir(&app).ok_or("Castle could not find its data folder.")?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("explorer.exe").arg(&dir).creation_flags(0x0800_0000).spawn();
+    }
+    Ok(dir.to_string_lossy().into_owned())
 }
 
 /// The member is looking at the room when CHAT is the tab on screen in a visible, focused Castle.
@@ -177,7 +272,7 @@ pub fn new_lines(app: &AppHandle, fresh: &[Value], chat_shown: bool) {
     }
     let Some((title, body)) = summary(&fresh, &crate::chatroom::my_line_ids(&store)) else { return };
     if settings.alert_sound {
-        beep();
+        beep(app, &settings.alert_sound_name);
     }
     if settings.alert_notify {
         // No `.sound(..)`: with tauri-plugin-notification 2.8 / notify-rust 4.19 a Windows toast built
@@ -187,30 +282,89 @@ pub fn new_lines(app: &AppHandle, fresh: &[Value], chat_shown: bool) {
     }
 }
 
-/// The desktop notification. On Windows a click on it brings Castle forward (out of the tray, or
-/// minimised) and opens the CHAT tab, which the plugin's notification cannot do. Elsewhere it is the
+/// The link a notification carries: clicking it (live, or later from the Action Center, even when
+/// Castle was closed in between) opens Castle's own address, which Windows hands to Castle.
+pub const CHAT_URL: &str = "memorycore-castle://chat";
+
+/// Brings Castle forward and shows the CHAT tab.
+pub fn open_chat(app: &AppHandle) {
+    use tauri::Emitter;
+    crate::tray::show_main(app);
+    let _ = app.emit("castle-open-chat", ());
+}
+
+/// Whether a launch (Castle's own address, from a clicked notification) asked for CHAT.
+pub fn wants_chat<I: IntoIterator<Item = String>>(args: I) -> bool {
+    args.into_iter().any(|a| a.trim_matches('"').trim_end_matches('/').eq_ignore_ascii_case(CHAT_URL))
+}
+
+fn xml_escape(text: &str) -> String {
+    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&apos;")
+}
+
+/// The toast's XML: silent (the Sound choice is the only sound) and carrying CHAT_URL, so a click
+/// opens Castle through Windows itself and does not depend on this process still listening for it.
+fn toast_xml(title: &str, body: &str) -> String {
+    format!(
+        r#"<toast activationType="protocol" launch="{CHAT_URL}"><visual><binding template="ToastGeneric"><text>{}</text><text>{}</text></binding></visual><audio silent="true"/></toast>"#,
+        xml_escape(title),
+        xml_escape(body)
+    )
+}
+
+/// Teaches Windows Castle's address, once per run: `memorycore-castle://chat` starts this exe (or,
+/// with Castle already running, brings it forward through the single-instance hand-off). Skipped for
+/// a build running from its own build folder, so a test build never claims the installed address.
+#[cfg(windows)]
+pub fn register_address() {
+    use std::os::windows::process::CommandExt;
+    let Ok(exe) = std::env::current_exe() else { return };
+    if exe.parent().is_some_and(|d| d.ends_with("target/release") || d.ends_with("target/debug")) {
+        return;
+    }
+    std::thread::spawn(move || {
+        let key = r"HKCU\Software\Classes\memorycore-castle";
+        let command = format!("\"{}\" \"%1\"", exe.display());
+        for (path, name, value) in [
+            (key.to_string(), None, "URL:MemoryCore Castle".to_string()),
+            (key.to_string(), Some("URL Protocol"), String::new()),
+            (format!(r"{key}\shell\open\command"), None, command),
+        ] {
+            let mut cmd = std::process::Command::new("reg");
+            cmd.args(["add", &path]);
+            match name {
+                Some(n) => cmd.args(["/v", n]),
+                None => cmd.arg("/ve"),
+            };
+            let _ = cmd.args(["/d", &value, "/f"]).creation_flags(0x0800_0000).status();
+        }
+    });
+}
+
+#[cfg(not(windows))]
+pub fn register_address() {}
+
+/// The desktop notification. On Windows it is built here (not through the plugin) so a click brings
+/// Castle forward and opens CHAT: through CHAT_URL, which works for a notification that has sat in
+/// the Action Center too, not only one clicked while it is still on screen. Elsewhere it is the
 /// plugin's plain notification.
 #[cfg(windows)]
 fn toast(app: &AppHandle, title: &str, body: &str) {
-    use tauri::Emitter;
-    use tauri_winrt_notification::{Sound, Toast};
+    use windows::{core::HSTRING, Data::Xml::Dom::XmlDocument, UI::Notifications::{ToastNotification, ToastNotificationManager}};
     // the id the plugin uses: Castle's own when installed, PowerShell's while running from a build folder
     let app_id = match std::env::current_exe() {
-        Ok(exe) if exe.parent().is_some_and(|d| d.ends_with("target/release") || d.ends_with("target/debug")) => Toast::POWERSHELL_APP_ID.to_string(),
+        Ok(exe) if exe.parent().is_some_and(|d| d.ends_with("target/release") || d.ends_with("target/debug")) => {
+            r"{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe".to_string()
+        }
         _ => app.config().identifier.clone(),
     };
-    let clicked = app.clone();
-    let shown = Toast::new(&app_id)
-        .title(title)
-        .text1(body)
-        // silent: the Sound switch is the only sound (a toast without this plays Windows' own chime)
-        .sound(None::<Sound>)
-        .on_activated(move |_| {
-            crate::tray::show_main(&clicked);
-            let _ = clicked.emit(OPEN_CHAT_EVENT, ());
-            Ok(())
-        })
-        .show();
+    let xml = toast_xml(title, body);
+    let shown = (|| -> windows::core::Result<()> {
+        let doc = XmlDocument::new()?;
+        doc.LoadXml(&HSTRING::from(xml))?;
+        let notice = ToastNotification::CreateToastNotification(&doc)?;
+        ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(app_id))?.Show(&notice)
+    })();
     if shown.is_err() {
         // the toast could not be made: the plugin's plain one still tells the member
         let _ = app.notification().builder().title(title).body(body).show();
@@ -231,19 +385,45 @@ mod tests {
         json!({ "id": id, "text": text, "author": { "name": who, "kind": "member" } })
     }
 
-    /// Plays the sound once, out loud: `cargo test plays_the_windows -- --ignored`.
     #[test]
-    #[ignore]
-    #[cfg(windows)]
-    fn plays_the_windows_notification_sound() {
-        assert!(beep(), "Windows refused to play its notification sound");
+    fn a_notification_carries_castles_address_so_a_late_click_still_opens_chat() {
+        let xml = toast_xml("A & B", "<hi> \"there\"");
+        assert!(xml.contains(r#"activationType="protocol" launch="memorycore-castle://chat""#));
+        assert!(xml.contains("A &amp; B") && xml.contains("&lt;hi&gt; &quot;there&quot;"), "text is escaped");
+        assert!(xml.contains(r#"<audio silent="true"/>"#), "the Sound choice is the only sound");
     }
 
     #[test]
-    fn one_line_names_who_said_it() {
-        let (title, body) = summary(&[line(5, "Kiyo", "Boleh   tengok\nPR tu")], &[]).unwrap();
-        assert_eq!(title, "New in the room");
-        assert_eq!(body, "Kiyo: Boleh tengok PR tu");
+    fn a_launch_by_castles_address_asks_for_chat() {
+        assert!(wants_chat(["castle.exe".to_string(), "memorycore-castle://chat".to_string()]));
+        assert!(wants_chat(["\"MEMORYCORE-CASTLE://chat/\"".to_string()]));
+        assert!(!wants_chat(["castle.exe".to_string(), "--sign-in".to_string()]));
+    }
+
+    #[test]
+    fn the_sound_list_is_the_pack_plus_whatever_the_member_added() {
+        let none = sound_choices(None);
+        assert_eq!(none[0].id, "windows");
+        assert!(none.iter().any(|c| c.id == DEFAULT_SOUND), "the default is always offered");
+        let dir = std::env::temp_dir().join(format!("castle-alert-sounds-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("My Ping.wav"), vec![0u8; 100]).unwrap();
+        std::fs::write(dir.join("notes.txt"), b"not a sound").unwrap();
+        let with = sound_choices(Some(&dir));
+        let mine = with.iter().find(|c| c.id == "file:My Ping.wav").expect("their own wav is offered");
+        assert_eq!((mine.label.as_str(), mine.built_in), ("My Ping", false));
+        assert!(!with.iter().any(|c| c.id.contains("notes")), "only .wav files are offered");
+        assert_eq!(wav_for("file:My Ping.wav", Some(&dir)).map(|b| b.len()), Some(100));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_choice_can_only_name_a_wav_inside_the_sounds_folder() {
+        for bad in ["file:..\\secret.wav", "file:/etc/x.wav", "file:C:\\x.wav", "file:a.txt", "file:", "nope"] {
+            assert!(wav_for(bad, Some(std::path::Path::new("."))).is_none(), "{bad} must not resolve");
+        }
+        assert!(wav_for("glass", None).is_some_and(|b| b.starts_with(b"RIFF")), "the pack is real WAV data");
+        assert!(wav_for("windows", None).is_none(), "Windows' own sound is not a file");
     }
 
     #[test]
