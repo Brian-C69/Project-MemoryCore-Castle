@@ -330,14 +330,20 @@ pub async fn node_status() -> Result<NodeState, String> {
 }
 
 /// Makes sure the helpers have a Node, downloading Castle's own when needed; the page hears the
-/// download on `INSTALL_EVENT` and gets the state at the end (Failed carries the reason).
+/// download on `INSTALL_EVENT` and gets the state at the end. A failed download is also a notice
+/// (the toasts' `castle-notice`, kind `node`), wherever the member is in Castle.
 #[tauri::command]
 pub async fn node_prepare(app: tauri::AppHandle) -> Result<NodeState, String> {
     use tauri::Emitter;
     tauri::async_runtime::spawn_blocking(move || {
-        ensure(move |done, total| {
-            let _ = app.emit(INSTALL_EVENT, serde_json::json!({ "done": done, "total": total }));
-        })
+        let progress = app.clone();
+        let state = ensure(move |done, total| {
+            let _ = progress.emit(INSTALL_EVENT, serde_json::json!({ "done": done, "total": total }));
+        });
+        if let NodeState::Failed { reason } = &state {
+            let _ = app.emit(crate::studio::NOTICE_EVENT, serde_json::json!({ "kind": "node", "reason": reason }));
+        }
+        state
     })
     .await
     .map_err(|_| "The helpers' Node could not be prepared.".to_string())
