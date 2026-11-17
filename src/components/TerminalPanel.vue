@@ -593,8 +593,8 @@ defineExpose({ wake, screenLines, writeToSession, addPaths })
 
 .surface :deep(.xterm-viewport) {
   background-color: transparent !important;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  scrollbar-width: var(--scrollbar-width);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 .surface :deep(.xterm-viewport::-webkit-scrollbar) {
@@ -606,7 +606,7 @@ defineExpose({ wake, screenLines, writeToSession, addPaths })
 }
 
 .surface :deep(.xterm-viewport::-webkit-scrollbar-thumb) {
-  background: var(--line);
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 

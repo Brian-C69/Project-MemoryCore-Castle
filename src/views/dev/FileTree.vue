@@ -159,8 +159,8 @@ header {
   padding: 0;
   overflow-y: auto;
   list-style: none;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  scrollbar-width: var(--scrollbar-width);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 .name {

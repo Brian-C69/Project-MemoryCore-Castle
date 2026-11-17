@@ -121,8 +121,8 @@ watch([tab, kind, page, runId], () => {
   flex-direction: column;
   min-height: 0;
   overflow: auto;
-  scrollbar-color: var(--line) transparent;
-  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: var(--scrollbar-width);
 }
 
 .tabs,

@@ -2,6 +2,7 @@
 // The Trade log (page 4) and the Lessons (page 5): one card per companion turn, and one row per
 // lesson it kept from a closed trade, newest first, each with Delete.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import GlassSelect from '../GlassSelect.vue'
 import { marketLessonDelete, marketLessons, marketTurns, onMarketChanged } from '../../api/castle.js'
 import { actionsOf, chipKind, chipOf, percent, tagOf, turnCounts, unfinishedOf } from './turns.js'
 
@@ -68,10 +69,7 @@ const day = (ms) => new Date(ms).toLocaleDateString('en-US', { month: 'short', d
 
     <template v-if="view === 'log'">
       <div class="panel top">
-        <select v-model="runId" aria-label="Account">
-          <option :value="null">This account</option>
-          <option v-for="a in accounts" :key="a.id" :value="a.id">Account {{ a.runNo }}</option>
-        </select>
+        <GlassSelect v-model="runId" :options="[{ value: null, label: 'This account' }, ...accounts.map((a) => ({ value: a.id, label: `Account ${a.runNo}` }))]" aria-label="Account" />
         <span class="pages">
           <button :disabled="page === 0" aria-label="Newer turns" @click="page--">‹</button>
           <button :disabled="turns.length < 20" aria-label="Older turns" @click="page++">›</button>
@@ -161,8 +159,8 @@ const day = (ms) => new Date(ms).toLocaleDateString('en-US', { month: 'short', d
   display: flex;
   flex-direction: column;
   gap: 12px;
-  scrollbar-color: var(--line) transparent;
-  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: var(--scrollbar-width);
 }
 
 /* ---------- the Trade log: toolbar, counters, ledger ---------- */
@@ -179,7 +177,6 @@ const day = (ms) => new Date(ms).toLocaleDateString('en-US', { month: 'short', d
   gap: 6px;
 }
 
-.top select,
 .top button {
   padding: 6px 12px;
   border: 1px solid var(--line);

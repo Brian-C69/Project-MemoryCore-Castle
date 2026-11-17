@@ -268,8 +268,8 @@ async function shut(positionId) {
   grid-area: ticket;
   min-width: 0;
   overflow: auto;
-  scrollbar-color: var(--line) transparent;
-  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: var(--scrollbar-width);
 }
 
 .tables-area {

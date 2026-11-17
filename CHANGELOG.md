@@ -6,6 +6,7 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **"Open folder" comes up in front.** STUDIO's open-folder button (and the same button in DEV chats, the file tree and app shortcuts) opened its Explorer window behind Castle, so it seemed to do nothing. Castle now allows Explorer to take the front before it asks for the window.
 - **Scroll the mouse wheel over the top bar's music controls to change the volume.** Up is louder, down is quieter, a notch at a time, and the choice is saved when you stop.
+- **Scrollbars, dropdowns and other native controls follow the theme.** Every scrollbar, checkbox, radio button and slider now takes the theme's colours, and the last plain dropdown (MARKET's account list) uses Castle's themed one. A theme can change how they look with five optional variables (`--scrollbar-thumb`, `--scrollbar-track`, `--scrollbar-width`, `--control-accent`, `--color-scheme`), described in MAKE-IT-YOURS. A test now fails the build if a page brings back a plain dropdown or a fixed scrollbar colour.
 
 ## 0.2.14 - 2026-11-16
 

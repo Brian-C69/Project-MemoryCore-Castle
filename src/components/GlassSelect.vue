@@ -284,8 +284,8 @@ onBeforeUnmount(close)
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   color: var(--text);
   font-size: 14px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  scrollbar-width: var(--scrollbar-width);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 .glass-list li {
   padding: 7px 12px;

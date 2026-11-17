@@ -602,8 +602,8 @@ watch(() => props.visible, (on) => {
 <style scoped>
 .lines, .side {
   color-scheme: dark;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text-dim) 45%, transparent) transparent;
+  scrollbar-width: var(--scrollbar-width);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
 }
@@ -886,8 +886,8 @@ li.online .dot, li.here .dot, li.active .dot {
   overflow-y: auto;
   padding-right: 4px;
   margin-right: -4px;
-  scrollbar-color: var(--line) transparent;
-  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: var(--scrollbar-width);
 }
 .hint {
   margin: 0;

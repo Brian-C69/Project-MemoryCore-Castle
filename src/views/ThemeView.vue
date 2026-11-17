@@ -422,8 +422,8 @@ onMounted(load)
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
-  scrollbar-color: var(--line) transparent;
-  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: var(--scrollbar-width);
 }
 .widget {
   background: var(--panel-background);
