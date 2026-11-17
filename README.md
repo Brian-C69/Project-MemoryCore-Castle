@@ -30,7 +30,7 @@ A full-screen Windows desktop for your **MemoryCore** companion. Castle opens yo
 ## Requirements
 
 - Windows 10 or 11, or macOS 12 or later
-- [Node.js](https://nodejs.org/) 20+ for the media helpers (pictures, video, songs, voice, worlds)
+- Nothing to install for the media helpers (pictures, video, songs, voice, worlds): they run on [Node.js](https://nodejs.org/) 20+, and Castle downloads its own copy once when the computer has none new enough
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) or [Codex CLI](https://github.com/openai/codex), installed and signed in
 - A MemoryCore folder ([AI MemoryCore](https://github.com/Kiyoraka/Poject-AI-Memory-Architecture)) - Castle can create one for you on first run
 

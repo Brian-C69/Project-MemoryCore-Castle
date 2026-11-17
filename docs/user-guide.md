@@ -34,9 +34,17 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 - **Claude Code** or **Codex**, installed and signed in with your own account. Castle has no account of its own; your companion uses the subscription you already have.
 - A MemoryCore folder. If you do not have one yet, Castle can create it for you the first time it opens.
 
+Nothing else: the helpers that make pictures, voice, songs, video and worlds bring what they need (see The helpers below).
+
 ### The start-up screen
 
-When Castle opens it shows a start-up screen: a picture, a funny line, a progress bar, what it is loading (your settings, your theme, your memory, the backup, the memory database, STUDIO's gallery, APPEARANCE's wardrobe, WORLD's screens and LIBRARY's shelves) and the version of Castle. Castle does its loading here, so that every room is already full when you open it instead of loading when you arrive. The first start after an update may take a little longer while Castle makes small copies of your STUDIO pictures; later starts are quick. If something is slow, Castle opens anyway after a while and finishes in the background. A theme can dress the screen with its own picture and words (see Themes below).
+When Castle opens it shows a start-up screen: a picture, a funny line, a progress bar, what it is loading (your settings, your theme, your memory, the backup, the memory database, the helpers, STUDIO's gallery, APPEARANCE's wardrobe, WORLD's screens and LIBRARY's shelves) and the version of Castle. Castle does its loading here, so that every room is already full when you open it instead of loading when you arrive. The first start after an update may take a little longer while Castle makes small copies of your STUDIO pictures; later starts are quick. If something is slow, Castle opens anyway after a while and finishes in the background. A theme can dress the screen with its own picture and words (see Themes below).
+
+### The helpers
+
+Pictures, voice, songs, video, WORLD's pieces and Chat's context meter are made by small helpers that run on **Node.js 20 or later**. You do not need to install it. If your computer already has a new enough Node (Claude Code and Codex often bring one), Castle uses it. If not, Castle downloads its own copy once, on the start-up screen ("Downloading the helpers once"), about 35 MB on Windows and 50 MB on a Mac. It checks the download against Node's own fingerprint and keeps it in Castle's own folder, with no admin prompt and no change to your computer's settings.
+
+If the download cannot happen (no internet, for example), Castle still opens and chat and memory work as usual. A notice says the helpers are waiting, with **Try again**. **Settings > Database** shows which Node the helpers use, and Try again too. Setup shows the same line on its first step.
 
 ### Opening and hiding Castle
 
@@ -429,7 +437,7 @@ You can describe a world and have your companion help you build it.
    You can add a picture for the look.
 2. Press **Create and ask <companion>**. Castle makes the world's folder in your memory (`worlds/<name>/`) and asks your companion, through Chat, to polish the world's words and paint a concept picture and one picture of each piece. It tells you the cost first. Without an image key it writes one prompt per piece instead (`design/prompts.md`) so you can make the pictures anywhere.
 3. Make each picture into a 3D model in **Tripo** (tripo3d.ai) or any image-to-3D tool, and export it as a **GLB**. Name each export with its picture's number (`01.glb`, `02 my centrepiece.glb` ...) and put it in the world's **Tripo folder** - the button on its card opens it.
-4. When every piece is in, press **Prepare pieces**. Castle makes them light enough for your screens (fewer triangles, smaller textures) by itself - this needs **Node** (nodejs.org), which Claude Code and Codex already bring. Its card then says *ready*, and you can choose it for any screen.
+4. When every piece is in, press **Prepare pieces**. Castle makes them light enough for your screens (fewer triangles, smaller textures) by itself, with the helpers (see The helpers in Getting started). Its card then says *ready*, and you can choose it for any screen.
 
 **Pictures** opens the companion's drawings, **Paint again** asks for new ones, and **Delete** (press twice) removes the world and its folder.
 
