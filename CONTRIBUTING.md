@@ -79,6 +79,9 @@ that **a room is simply there when the member opens it**. So:
   new; what is already loaded shows first.
 - Start-up never waits forever: every piece has a time limit, and a piece that is slow or fails lets
   Castle open and finish its work in the background.
+- The shared pieces to build on: `src/composables/useThumbs.js` (small copies of any picture),
+  and one composable per room (`useStudio.js`, `useLibrary.js`, `useAppearance.js`, `useThemes.js`,
+  `useWorld.js`), each reported as a start-up piece in `src/App.vue`.
 - In the pull request, say what the room loads at start and how long that adds to a first and a later
   start. A new room that loads on arrival will be asked to move its loading to start-up.
 

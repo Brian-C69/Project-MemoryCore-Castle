@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **THEME, APPEARANCE and WORLD open with everything already there.** Like STUDIO and LIBRARY, these rooms now do their loading at start-up behind the start-up screen. THEME no longer reads and encodes every one of your own theme wallpapers again each time you open it (the read also no longer holds the window still), APPEARANCE shows small copies of your wardrobe and hairstyle pictures that Castle makes once and keeps, and WORLD already knows your screens, your worlds and whether their pieces are ready. Each room still checks quietly for news when you open it. A small copy of a picture that is drawn again is now replaced rather than kept stale.
+
 - **LIBRARY opens with its shelves already there.** Your books and the Spiral Library's catalogue (which comes over the internet) are now read at start-up, behind the start-up screen, instead of when you open the room. A slow or unreachable Spiral Library never holds Castle back: the start-up waits for it only a few seconds, and the room reads it on arrival if it was not ready. A room switched off in Settings is not prepared.
 
 - **STUDIO's gallery shows small copies of your pictures.** A drawing is a PNG of a megabyte or two, and STUDIO used to read and decode every one the moment you opened the room. Castle now makes a small JPEG of each picture once, in the background from the start (kept in its own settings folder, never in your memory folder), and the gallery shows those; the real picture opens in the viewer. A picture that is drawn again gets a new small copy.
