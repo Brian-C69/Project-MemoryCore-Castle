@@ -11,7 +11,7 @@ import CreditWidget from './components/widgets/CreditWidget.vue'
 import DatabaseOffer from './components/DatabaseOffer.vue'
 import { shouldOffer } from './components/database.js'
 import CompanionHeader from './components/CompanionHeader.vue'
-import { alertActiveRoom, onOpenChat, onOpenRoom, onProviderChanged } from './api/castle.js'
+import { alertActiveRoom, nodePrepare, onNodeInstall, onOpenChat, onOpenRoom, onProviderChanged } from './api/castle.js'
 import { prepareStudio } from './composables/useStudio.js'
 import { prepareLibrary } from './composables/useLibrary.js'
 import { loadUserThemes } from './composables/useThemes.js'
@@ -440,6 +440,17 @@ async function onBackupCard(mode) {
   }
 }
 
+// Castle's own Node, when the computer has none new enough: the start-up screen shows the download
+async function prepareHelpers() {
+  const mb = (bytes) => (bytes / 1048576).toFixed(1)
+  const stop = await onNodeInstall(({ done, total }) => loaderBegin('helpers', 'Downloading the helpers once', `${mb(done)} / ${mb(total)} MB`)).catch(() => null)
+  try {
+    await nodePrepare()
+  } finally {
+    stop?.()
+  }
+}
+
 let refresh
 let stopBackupEvents
 let stopStoryEvents
@@ -466,7 +477,7 @@ onMounted(async () => {
   await loadSettingsAndTheme()
   const roomOn = (id) => rooms.value[id] !== false
   const rooms_ = ['studio', 'library', 'appearance', 'world'].filter(roomOn)
-  loaderExpect(2 + 3 + rooms_.length)
+  loaderExpect(2 + 4 + rooms_.length)
   // each piece has its own limit, so one slow piece (the internet, a first run) never holds the rest
   const piece = (id, label, file, work, limit = 25000) => {
     loaderBegin(id, label, file)
@@ -478,6 +489,9 @@ onMounted(async () => {
     piece('memory', 'Reading your memory', folder, loadHome),
     piece('backup', 'Checking the backup', 'backup status', loadBackup),
     piece('database', 'Waking the memory database', 'memory database', loadDatabase),
+    // the helpers' Node: the member's own when new enough, else Castle's own, downloaded once; a
+    // download still running when the screen leaves carries on, and the helpers work once it lands
+    piece('helpers', 'Getting the helpers ready', 'Node', prepareHelpers, 20000),
     roomOn('studio') && piece('studio', "Preparing STUDIO's gallery", 'media-generation/', () => prepareStudio((done, total) => loaderBegin('studio', 'Making small copies of your pictures', `${done} / ${total}`))),
     roomOn('appearance') && piece('appearance', 'Hanging up the wardrobe', 'appearance/', () => prepareAppearance((done, total) => loaderBegin('appearance', 'Making small copies of the wardrobe', `${done} / ${total}`))),
     roomOn('world') && piece('world', 'Counting the screens and worlds', 'screens and worlds', prepareWorld, 8000),
