@@ -3,7 +3,13 @@
   "name": "The Constellation",
   "description": "A deep night sky where every diary day is a star and projects are bright clusters, joined into constellations above a quiet lake.",
   "wallpaper": "wallpaper.jpg",
-  "usageReveal": { "low": "wallpaper-low.jpg", "mode": "rise", "angle": "32deg", "from": 0.29, "to": 0.85 },
+  "usageReveal": {
+    "low": "wallpaper-low.jpg",
+    "mode": "rise",
+    "angle": "32deg",
+    "from": 0.29,
+    "to": 0.85
+  },
   "wallpaperPosition": "center",
   "widgetStyle": "glass",
   "portrait": "panel",
@@ -25,9 +31,37 @@
     "bottom": "3%",
     "width": "31%"
   },
-  "sweep": { "look": "ring" },
+  "sweep": {
+    "look": "ring"
+  },
+  "motion": {
+    "kind": "twinkle",
+    "color": "#cfe3ff",
+    "count": 40,
+    "area": [
+      [
+        0,
+        0
+      ],
+      [
+        1,
+        0
+      ],
+      [
+        1,
+        0.7
+      ],
+      [
+        0,
+        0.7
+      ]
+    ]
+  },
   "widgets": {
-    "sweep": { "right": "31%", "top": "22%" },
+    "sweep": {
+      "right": "31%",
+      "top": "22%"
+    },
     "clock": {
       "right": "21%",
       "top": "4%",
@@ -72,9 +106,25 @@
       "bottom": "4%",
       "width": "16%"
     },
-    "credit-openai": { "right": "56.2%", "bottom": "calc(4% + 330px)", "width": "8%" },
-    "credit-seedance": { "right": "47.8%", "bottom": "calc(4% + 330px)", "width": "8%" },
-    "credit-suno": { "right": "39.4%", "bottom": "calc(4% + 330px)", "width": "8%" },
-    "credit-elevenlabs": { "right": "31%", "bottom": "calc(4% + 330px)", "width": "8%" }
+    "credit-openai": {
+      "right": "56.2%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-seedance": {
+      "right": "47.8%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-suno": {
+      "right": "39.4%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-elevenlabs": {
+      "right": "31%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    }
   }
 }

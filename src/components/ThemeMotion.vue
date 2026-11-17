@@ -1,18 +1,26 @@
 <script setup>
-// A theme's living water on HOME (theme.json `motion`, read by themes/motion.js): the surf's glow
-// riding its waves, or a river's light streaks and ripple rings. One canvas over the wallpaper and
-// under everything else, lined up with the wallpaper's own cover box. Gentle on the machine: at most
-// 30 frames a second, a fixed number of points, a capped pixel ratio, and no frames at all while HOME
-// or the window is hidden, when the member turns moving wallpapers off, or with reduced motion.
+// A theme's moving wallpaper on HOME (theme.json `motion`, read by themes/motion.js): the surf's
+// rolling bands of light, a shore's washing foam, a river's current with sun patches and ripples, or a
+// sky whose brightest stars twinkle. One canvas over the wallpaper and under everything else, lined up
+// with the wallpaper's own cover box. Gentle on the machine: at most 30 frames a second, a fixed number
+// of points, a capped pixel ratio, and no frames at all while HOME or the window is hidden, unless the
+// member turned moving wallpapers on (off to begin with), or with reduced motion.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { coverRect } from '../themes/quotaglow.js'
 import {
   along,
+  bandSpan,
+  brightestPoints,
+  foamSpecks,
+  newPatch,
   newRipple,
   newStreak,
+  patchAlpha,
   pointOnWater,
   readMotion,
   rippleState,
+  shoreSwing,
+  stepPatches,
   stepRipples,
   stepStreaks,
   stepSurf,
@@ -20,17 +28,20 @@ import {
   surfBrightness,
   surfParticles,
   toScreen,
+  twinkleStars,
+  twinkleState,
 } from '../themes/motion.js'
 
 const props = defineProps({
   theme: { type: Object, default: null },
   visible: { type: Boolean, default: true },
-  enabled: { type: Boolean, default: true },
+  enabled: { type: Boolean, default: false },
 })
 
 const FRAME_MS = 1000 / 30
 const MAX_RATIO = 1.5
 const MAX_RIPPLES = 10
+const GRID_WIDTH = 320 // the picture is read this wide to find its stars
 
 const layer = ref(null)
 const canvas = ref(null)
@@ -47,14 +58,18 @@ let last = 0
 let seconds = 0
 let particles = []
 let streaks = []
+let patches = []
 let ripples = []
+let specks = []
+let stars = []
 let nextFixed = 0
 let nextRandom = 0
 let fixedIndex = 0
-let sprite = null
+let glow = null
+let sparkle = null
 
 // A soft round glow in the theme's colour, drawn once and stamped for every point.
-function makeSprite(color) {
+function makeGlow(color) {
   const size = 32
   const c = document.createElement('canvas')
   c.width = c.height = size
@@ -68,24 +83,53 @@ function makeSprite(color) {
   return c
 }
 
+// A star's sparkle: a bright core and four soft rays.
+function makeSparkle(color) {
+  const size = 64
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const g = c.getContext('2d')
+  const mid = size / 2
+  const core = g.createRadialGradient(mid, mid, 0, mid, mid, mid * 0.45)
+  core.addColorStop(0, '#ffffff')
+  core.addColorStop(0.3, color)
+  core.addColorStop(1, 'rgba(0, 0, 0, 0)')
+  g.fillStyle = core
+  g.fillRect(0, 0, size, size)
+  for (const [w, h] of [[size, 2.2], [2.2, size]]) {
+    const ray = g.createRadialGradient(mid, mid, 0, mid, mid, mid)
+    ray.addColorStop(0, 'rgba(255, 255, 255, 0.9)')
+    ray.addColorStop(1, 'rgba(255, 255, 255, 0)')
+    g.fillStyle = ray
+    g.fillRect(mid - w / 2, mid - h / 2, w, h)
+  }
+  return c
+}
+
 function reset() {
   const m = motion.value
   seconds = 0
   particles = []
   streaks = []
+  patches = []
   ripples = []
+  specks = []
+  stars = []
   nextFixed = 0.5
   nextRandom = 1.5
-  sprite = null
+  glow = null
+  sparkle = null
   if (!m) return
-  if (m.kind === 'surf') {
-    particles = surfParticles(m)
-    sprite = makeSprite(m.color)
-  } else {
+  glow = makeGlow(m.color)
+  if (m.kind === 'surf') particles = surfParticles(m)
+  if (m.kind === 'river') {
     streaks = Array.from({ length: m.count }, () => newStreak(m)).filter(Boolean)
-    // spread their ages so they do not all appear at once
-    for (const s of streaks) s.age = Math.random() * s.life
+    for (const s of streaks) s.age = Math.random() * s.life // not all at once
+    patches = Array.from({ length: m.patches }, () => newPatch(m)).filter(Boolean)
+    for (const p of patches) p.age = Math.random() * p.life
   }
+  if (m.kind === 'shore') specks = foamSpecks(m)
+  if (m.kind === 'twinkle') sparkle = makeSparkle(m.color)
 }
 
 function measure() {
@@ -102,6 +146,27 @@ function measure() {
   rect = wall && { ...wall, x: wall.x + box.left - own.left, y: wall.y + box.top - own.top }
 }
 
+// The twinkle's stars, found once in the picture itself (a picture that cannot be read leaves the sky still).
+function findStars(img) {
+  const m = motion.value
+  if (m?.kind !== 'twinkle') return
+  try {
+    const width = GRID_WIDTH
+    const height = Math.max(1, Math.round((img.naturalHeight / img.naturalWidth) * width))
+    const c = document.createElement('canvas')
+    c.width = width
+    c.height = height
+    const g = c.getContext('2d', { willReadFrequently: true })
+    g.drawImage(img, 0, 0, width, height)
+    const data = g.getImageData(0, 0, width, height).data
+    const grid = new Float32Array(width * height)
+    for (let i = 0; i < grid.length; i++) grid[i] = (0.2126 * data[i * 4] + 0.7152 * data[i * 4 + 1] + 0.0722 * data[i * 4 + 2]) / 255
+    stars = twinkleStars(brightestPoints(grid, width, height, m.area, m.count))
+  } catch {
+    stars = []
+  }
+}
+
 function loadImage() {
   image = null
   rect = null
@@ -111,33 +176,68 @@ function loadImage() {
   img.onload = () => {
     if (props.theme?.wallpaperUrl !== url) return
     image = { width: img.naturalWidth, height: img.naturalHeight }
+    findStars(img)
     measure()
   }
   img.src = url
 }
 
+// A stretch of a polyline between two fractions of its length, as screen points.
+function stretch(line, from, to, steps = 14) {
+  return Array.from({ length: steps + 1 }, (_, i) => toScreen(along(line, from + ((to - from) * i) / steps), rect))
+}
+
+function strokePath(g, pts) {
+  g.beginPath()
+  pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)))
+  g.stroke()
+}
+
 function drawSurf(g, m) {
   g.globalCompositeOperation = 'lighter'
-  const unit = rect.width / 1000 // a point's size follows the picture's size on screen
+  const unit = rect.width / 1000
+  g.strokeStyle = m.color
+  g.lineCap = 'round'
+  g.lineJoin = 'round'
+  // the rolling bands: a wide soft stroke and a bright narrow one over the part of each crest they light
+  m.crests.forEach((crest, i) => {
+    const span = bandSpan(i, seconds)
+    if (!span) return
+    const pts = stretch(crest, span.from, span.to)
+    g.globalAlpha = 0.22
+    g.lineWidth = 14 * unit
+    strokePath(g, pts)
+    g.globalAlpha = 0.45
+    g.lineWidth = 4 * unit
+    strokePath(g, pts)
+  })
   for (const p of particles) {
     const at = along(m.crests[p.crest], p.t)
     const s = toScreen({ x: at.x, y: at.y + p.lift }, rect)
-    const r = (2.5 + p.size * 2.5) * unit
-    g.globalAlpha = surfBrightness(p, seconds) * 0.85
-    g.drawImage(sprite, s.x - r, s.y - r, r * 2, r * 2)
+    const b = surfBrightness(p, seconds)
+    const r = (2.5 + p.size * 2.5) * unit * (1 + b)
+    g.globalAlpha = b * 0.9
+    g.drawImage(glow, s.x - r, s.y - r, r * 2, r * 2)
   }
 }
 
 function drawRiver(g, m) {
   g.globalCompositeOperation = 'lighter'
+  // sun patches: soft light flattened on the water
+  for (const p of patches) {
+    const c = toScreen(p, rect)
+    const r = p.size * rect.width
+    g.globalAlpha = patchAlpha(p) * 0.28
+    g.drawImage(glow, c.x - r, c.y - r * 0.45, r * 2, r * 0.9)
+  }
   g.strokeStyle = m.color
   g.lineCap = 'round'
   for (const s of streaks) {
     const head = toScreen(s, rect)
     const near = 0.35 + s.y
-    const length = rect.height * 0.012 * near * s.speed
-    g.globalAlpha = streakAlpha(s) * 0.32
-    g.lineWidth = Math.max(0.6, rect.width / 1600 * near)
+    const length = rect.height * 0.02 * near * s.speed
+    g.globalAlpha = streakAlpha(s) * 0.5
+    g.lineWidth = Math.max(0.8, (rect.width / 1300) * near)
     g.beginPath()
     g.moveTo(head.x, head.y)
     g.lineTo(head.x - m.flow.x * length, head.y - m.flow.y * length)
@@ -155,11 +255,53 @@ function drawRiver(g, m) {
   }
 }
 
+function drawShore(g, m) {
+  const unit = rect.width / 1000
+  const shifted = (swing, scale = 1) => m.line.map((p) => toScreen({ x: p.x + m.toward.x * m.reach * swing * scale, y: p.y + m.toward.y * m.reach * swing * scale }, rect))
+  const swing = shoreSwing(seconds)
+  g.strokeStyle = m.color
+  g.lineCap = 'round'
+  g.lineJoin = 'round'
+  // the wet sheen the wave leaves behind, then the foam edge itself
+  g.globalCompositeOperation = 'lighter'
+  g.globalAlpha = 0.1 + 0.12 * swing
+  g.lineWidth = 18 * unit
+  strokePath(g, shifted(swing, 0.55))
+  g.globalCompositeOperation = 'source-over'
+  g.globalAlpha = 0.35 + 0.35 * swing
+  g.lineWidth = 3 * unit
+  strokePath(g, shifted(swing))
+  g.globalCompositeOperation = 'lighter'
+  for (const s of specks) {
+    const reach = shoreSwing(seconds - s.lag * 8)
+    const at = along(m.line, s.t)
+    const p = toScreen({ x: at.x + m.toward.x * m.reach * reach, y: at.y + m.toward.y * m.reach * reach }, rect)
+    const r = (2 + s.size * 2) * unit
+    g.globalAlpha = (0.35 + 0.35 * Math.sin(seconds * 3 + s.phase)) * (0.4 + 0.6 * reach)
+    g.drawImage(glow, p.x - r, p.y - r, r * 2, r * 2)
+  }
+}
+
+function drawTwinkle(g) {
+  g.globalCompositeOperation = 'lighter'
+  const unit = rect.width / 1000
+  for (const s of stars) {
+    const v = twinkleState(s, seconds)
+    if (v < 0.02) continue
+    const c = toScreen(s, rect)
+    const r = (5 + 16 * v) * unit * (0.6 + s.b * 0.6)
+    g.globalAlpha = Math.min(1, 0.25 + 0.75 * v)
+    g.drawImage(sparkle, c.x - r, c.y - r, r * 2, r * 2)
+  }
+}
+
 function step(dt) {
   const m = motion.value
   seconds += dt
   if (m.kind === 'surf') return stepSurf(particles, dt)
+  if (m.kind !== 'river') return
   stepStreaks(streaks, m, dt)
+  stepPatches(patches, m, dt)
   ripples = stepRipples(ripples, dt)
   if (seconds > nextFixed && m.ripples.length && ripples.length < MAX_RIPPLES) {
     ripples.push(newRipple(m.ripples[fixedIndex++ % m.ripples.length]))
@@ -187,7 +329,9 @@ function tick(now) {
   g.globalAlpha = 1
   g.clearRect(0, 0, c.width / ratio, c.height / ratio)
   if (m.kind === 'surf') drawSurf(g, m)
-  else drawRiver(g, m)
+  else if (m.kind === 'river') drawRiver(g, m)
+  else if (m.kind === 'shore') drawShore(g, m)
+  else if (m.kind === 'twinkle') drawTwinkle(g)
 }
 
 function start() {
