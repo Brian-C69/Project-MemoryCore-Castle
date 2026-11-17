@@ -198,10 +198,27 @@ At the top: your companion's picture (or the glowing crystal), their name, and t
 | **DIARY** | Your newest diary entry. Click it to open the page | `daily-diary/` |
 | **GROWTH** | How many memory files, days since your first diary, and skills | Your MemoryCore folder |
 | **BACKUP** | When your memory was last backed up, with **Back up now** | Your private GitHub backup (chapter 5) |
+| **SWEEP** | How much space can be freed and when you last swept, with a **Sweep** button | Your computer's temp and cache folders (see Sweep below) |
 
 A card with nothing to show yet says so in a friendly line - for example, a new memory's DIARY card reminds you to press **Save diary** after a talk.
 
 About the **USAGE** card's login: to show Claude Code's limits, Castle reads the login Claude Code already saved on this computer, only to ask Anthropic for your usage - it is never stored or sent anywhere else. Codex's usage is read from Codex's own files on your computer. You can turn off either one in **Settings › Companion**, or the whole USAGE card in **WIDGETS** (Castle then asks neither app).
+
+### Sweep
+
+**Sweep** frees space on your computer. Its card shows how much can be freed and when you last swept. Press **Sweep** and a preview opens first: each group with its size and a tick, and nothing is deleted until you press **Clean now**.
+
+- **Temp files** - files your apps left in the temp folder and have not touched for a day (your Claude Code sessions' working files always stay).
+- **Browser caches** - Chrome, Edge, Brave and Firefox. A browser that is open is skipped and the sheet says so; close it to include it.
+- **Thumbnail cache** (Windows) - Explorer's picture previews; they are made again when needed.
+- **Crash dumps and logs** - reports left after an app crashed.
+- **Recycle Bin** (Windows) - starts unticked, because emptying it can't be undone.
+
+**Deep clean** (Windows) also empties Windows' own temp folder and the leftovers of Windows Update. Windows asks once for administrator rights; say no and nothing changes.
+
+Sweep only ever deletes inside these known folders. It never touches your documents, downloads, desktop, pictures, your memory or project folders, cookies or saved passwords, and it never follows a shortcut-like link out of a folder. A file in use is skipped and counted. Nothing is cleaned on a timer: only when you press the button. Every sweep is written to `sweep-log.jsonl` in Castle's settings folder.
+
+The gear on the card (hover it) chooses its look: **Ring**, **Bar** or **Broom**. A theme may bring its own look; the one you pick always wins. The same gear can start the sheet with the Recycle Bin ticked.
 
 ### Turning a room off
 

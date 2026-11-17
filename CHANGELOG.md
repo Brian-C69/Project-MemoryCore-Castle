@@ -4,6 +4,9 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Sweep frees space from HOME.** A new card shows how much can be freed - temp files, browser caches, the thumbnail cache, crash dumps and, if you tick it, the Recycle Bin - and a preview lets you choose before anything is cleaned. Deep clean (Windows) also clears Windows' own temp files and Windows Update leftovers after asking for administrator rights once. It only touches known cache folders, skips files in use and never follows a link. Three looks - Ring, Bar and Broom - in its gear, and a theme can bring its own.
+- **The Spiral Library's covers show again.** In an installed Castle every cover was blocked and left a tall empty box; they now load, and a cover that cannot load shows a small stand-in with the book's first letter (thanks Bernard for the report).
+
 ## 0.2.15 - 2026-11-17
 
 - **Castle runs on a Mac too.** One Castle now serves Windows and macOS: the same rooms, memory, database (through Homebrew), chat room, backup and companion, with Mac words, ⌘ shortcuts and Finder. The Mac download is a `.dmg` beside the Windows installer; it is not signed yet, so the first time it opens, press System Settings > Privacy & Security > Open Anyway once, and update it by downloading the new `.dmg`. Thanks to a new contributor for the whole port.
