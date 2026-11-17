@@ -229,7 +229,8 @@ function glb(json) {
   }
   const pieces = path.join(worldDir, 'pieces2');
   const r = await run('castle-world.mjs', ['--prepare', '--manifest', manifest, '--in', hd2, '--out', pieces], { PATH: fakeBin, Path: null, CASTLE_NO_NETWORK: null });
-  const said = exists(argLog) ? fs.readFileSync(argLog, 'utf8') : '';
+  // cmd's %* keeps the quotes Node put around each argument; the check reads the arguments, not the quoting
+  const said = exists(argLog) ? fs.readFileSync(argLog, 'utf8').replace(/"/g, '') : '';
   report(
     r.code === 0 && exists(path.join(pieces, '01-base.glb')) && exists(path.join(pieces, '02-crystal.glb')) &&
       /piece 01-base\.glb: 0\.0 MB -> 0\.0 MB, 100010 -> 100010 triangles \(1\/2\)/.test(r.out) && /result: prepared 2 pieces into /.test(r.out),
