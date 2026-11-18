@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **In CHAT, the reaction bar follows the message and Reply puts the cursor in the message box.** Pointing at someone's line now shows the reactions and Reply bar on the message itself, at its top corner, instead of at one fixed spot on the row (and it no longer appears when the pointer is only in the empty space beside a short line). A line's reaction chips sit inside its box too. Pressing Reply moves the cursor straight into the message box, so you can type at once without clicking it first.
+
 ## 0.2.17 - 2026-11-18
 
 - **Three new themes: The Sunset Shore, The Star Shore and The Emerald River.** Three quiet places with nobody in them, each with its own colours, layout and Sweep look.

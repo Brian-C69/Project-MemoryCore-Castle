@@ -50,15 +50,16 @@ const chips = () => reactionChips(props.line)
       <span class="text">{{ line.text }}</span>
       <audio v-if="line.voice && files[line.voice.fileId]" :src="files[line.voice.fileId]" controls preload="none"></audio>
       <img v-if="line.picture && files[line.picture.fileId]" :src="files[line.picture.fileId]" alt="" class="picture" />
+      <!-- inside the message box, so the reactions and the bar follow the box wherever it sits -->
+      <span v-if="chips().length" class="chips">
+        <button v-for="r in chips()" :key="r.emoji" class="chip" :class="{ mine: r.mine }" :disabled="!can.reactions" @click="emit('react', r.emoji)">{{ r.emoji }} {{ r.count }}</button>
+      </span>
+      <span v-if="can.reactions || can.replies" class="tools" role="toolbar" aria-label="React or reply">
+        <template v-if="can.reactions"><button v-for="e in REACTIONS" :key="e" :aria-label="'React ' + e" @click="emit('react', e)">{{ e }}</button></template>
+        <button v-if="can.replies" @click="emit('reply')">Reply</button>
+      </span>
     </div>
     <span class="meta">{{ clock }}</span>
-    <span v-if="chips().length" class="chips">
-      <button v-for="r in chips()" :key="r.emoji" class="chip" :class="{ mine: r.mine }" :disabled="!can.reactions" @click="emit('react', r.emoji)">{{ r.emoji }} {{ r.count }}</button>
-    </span>
-    <span v-if="can.reactions || can.replies" class="tools" role="toolbar" aria-label="React or reply">
-      <template v-if="can.reactions"><button v-for="e in REACTIONS" :key="e" :aria-label="'React ' + e" @click="emit('react', e)">{{ e }}</button></template>
-      <button v-if="can.replies" @click="emit('reply')">Reply</button>
-    </span>
   </div>
 </template>
 
@@ -81,6 +82,7 @@ const chips = () => reactionChips(props.line)
   background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 .bubble.theirs .body {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -190,7 +192,17 @@ const chips = () => reactionChips(props.line)
   background: color-mix(in srgb, var(--panel-background) 92%, #050b1f);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
-.bubble:hover .tools,
+/* The bar hangs from the message box: from its left corner for someone else's line and its right
+   corner for the member's own, so a bar wider than a short message always grows into the empty space
+   beside it and never past the edge of the list. */
+.bubble.theirs .tools {
+  right: auto;
+  left: 8px;
+}
+/* the bar shows when the pointer is on the message box itself (not the empty space beside it) or
+   when something in the line has the keyboard */
+.bubble.mine:hover .tools,
+.bubble.theirs .body:hover .tools,
 .bubble:focus-within .tools {
   display: flex;
 }
