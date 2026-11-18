@@ -18,7 +18,7 @@ const savedKeys = ref([])
 const problem = ref('')
 const notice = ref('')
 
-const placed = (id) => ['clock', 'gauges', 'sweep'].includes(id) || Boolean(props.themeWidgets[id])
+const placed = (id) => ['clock', 'gauges', 'sweep', 'weather'].includes(id) || Boolean(props.themeWidgets[id])
 const hasPlaces = () => Object.keys(settings.value.widgetPlaces?.[props.themeId] ?? {}).length > 0
 
 async function load() {
