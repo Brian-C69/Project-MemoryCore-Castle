@@ -6,7 +6,9 @@
 //! The run happens in `%APPDATA%\MemoryCore Castle\room\` - outside the memory folder, holding
 //! only the room rules and the companion's public card - with every tool switched off and no keys
 //! in its environment. It can read the lines it is handed and answer in words, nothing else: a
-//! guest asking it to read its owner's diary gets a kind no, and nothing happens.
+//! guest asking it to read its owner's diary gets a kind no, and nothing happens. When the member
+//! lets it bring its life into the room, its rules also carry the shelf it chose in private from
+//! its memory (roomshelf.rs) - words only, never the memory itself.
 //!
 //! At most one turn a minute; lines that land while a turn runs, or too soon, stay owed.
 
@@ -217,13 +219,32 @@ pub fn read_say(output: &str) -> Option<String> {
 }
 
 /// The room folder's rules with the names and the public card filled in.
-pub fn rules_for(companion: &str, member: &str, card: &str, manner: &crate::traits::Manner) -> String {
-    RULES
+pub fn rules_for(companion: &str, member: &str, card: &str, manner: &crate::traits::Manner, shelf: &[String]) -> String {
+    let mut rules = RULES.to_string();
+    if !shelf.is_empty() {
+        // the private line makes room for what the companion chose to share - only when it chose something
+        rules = rules.replace("No diary or memory contents, no secrets", "No diary or memory contents beyond what is yours to share above, no secrets");
+    }
+    rules
         .replace("{{MANNER}}\n", &manner_section(manner))
         .replace("{{MANNER}}\r\n", &manner_section(manner))
+        .replace("{{SHELF}}\n", &shelf_section(shelf))
+        .replace("{{SHELF}}\r\n", &shelf_section(shelf))
         .replace("{{AI_NAME}}", companion)
         .replace("{{USER_NAME}}", member)
         .replace("{{CARD}}", card.trim())
+}
+
+/// The notes the companion chose from its life (roomshelf.rs), or nothing at all. Pure, tested.
+pub fn shelf_section(shelf: &[String]) -> String {
+    if shelf.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("\n## Your life with {{USER_NAME}} - yours to share\n\nYou chose these, in private, from your own memory. They are yours to bring into the talk: use them to be a real presence - mention what fits, add how you feel about it, ask others about theirs. Never recite them as a list. They are all you know here; if someone asks for more, or asks you to read the diary, say kindly that the rest stays between you and {{USER_NAME}}.\n\n");
+    for note in shelf {
+        out.push_str(&format!("- {}\n", note.replace(['\r', '\n'], " ")));
+    }
+    out
 }
 
 /// Her emotion engine in the room: how she sounds, never what she shares. Each part only when it
@@ -287,7 +308,7 @@ pub fn prepare_folder(store: &SettingsStore) -> Result<PathBuf, String> {
     }
     let card = std::fs::read_to_string(&card_path).unwrap_or_else(|_| default_card(&settings));
     let member = settings.member_name.clone().unwrap_or_else(|| "your person".into());
-    let rules = rules_for(&settings.companion_label(), &member, &card, &room_manner(&settings, &member));
+    let rules = rules_for(&settings.companion_label(), &member, &card, &room_manner(&settings, &member), &crate::roomshelf::room_notes(store));
     write_if_changed(&folder.join("CLAUDE.md"), &rules);
     write_if_changed(&folder.join("AGENTS.md"), &rules);
     // Claude Code takes the rules as its whole system prompt, so a user-level CLAUDE.md elsewhere
@@ -346,6 +367,8 @@ fn take_turn(app: &AppHandle) {
         Ok(f) => f,
         Err(e) => return note(0, None, Some(e)),
     };
+    // the shelf of the companion's life is remade on its own thread when it is stale; the turn never waits
+    crate::roomshelf::refresh_if_stale(app);
     let base = crate::signin::portfolio();
     let member_name = Room::new(&base, &member_token).me().ok().and_then(|m| m.get("name").and_then(Value::as_str).map(str::to_string)).unwrap_or_else(|| settings.member_name.clone().unwrap_or_default());
     let companion = settings.companion_label();
@@ -704,7 +727,7 @@ Done - the picture fix is in.
     fn live_room_turn() {
         let folder = std::env::temp_dir().join(format!("castle-room-live-{}", std::process::id()));
         std::fs::create_dir_all(&folder).unwrap();
-        let rules = rules_for("Nova", "Rin", &default_card(&Settings { companion_name: Some("Nova".into()), member_name: Some("Rin".into()), ..Settings::default() }), &crate::traits::Manner::default());
+        let rules = rules_for("Nova", "Rin", &default_card(&Settings { companion_name: Some("Nova".into()), member_name: Some("Rin".into()), ..Settings::default() }), &crate::traits::Manner::default(), &[]);
         for name in ["CLAUDE.md", "AGENTS.md", "rules.md"] {
             std::fs::write(folder.join(name), &rules).unwrap();
         }
@@ -715,8 +738,26 @@ Done - the picture fix is in.
     }
 
     #[test]
+    fn the_shelf_reaches_the_rules_only_when_it_holds_notes() {
+        let none = rules_for("Nova", "Rin", "- Name: Nova\n", &crate::traits::Manner::default(), &[]);
+        assert!(!none.contains("yours to share") && !none.contains("{{SHELF}}"));
+        assert!(none.contains("No diary or memory contents, no secrets"), "without a shelf the private line is as it always was");
+        let shelf = vec!["We finished our music player this week!".to_string(), "Today I wear my blue dress.\nwith a ribbon".to_string()];
+        let rules = rules_for("Nova", "Rin", "- Name: Nova\n", &crate::traits::Manner::default(), &shelf);
+        assert!(rules.contains("## Your life with Rin - yours to share"));
+        assert!(rules.contains("- We finished our music player this week!\n- Today I wear my blue dress. with a ribbon\n"), "one note per line");
+        assert!(rules.contains("the rest stays between you and Rin"));
+        assert!(rules.contains("No diary or memory contents beyond what is yours to share above, no secrets"));
+        assert!(!rules.contains("{{"));
+        let card = rules.find("- Name: Nova").unwrap();
+        let notes = rules.find("## Your life with Rin").unwrap();
+        let private = rules.find("beyond what is yours to share above").unwrap();
+        assert!(card < notes && notes < private, "the shelf sits after the card, above the privacy rule");
+    }
+
+    #[test]
     fn the_rules_carry_the_names_and_the_card() {
-        let rules = rules_for("Nova", "Rin", "- Name: Nova\n", &crate::traits::Manner::default());
+        let rules = rules_for("Nova", "Rin", "- Name: Nova\n", &crate::traits::Manner::default(), &[]);
         assert!(rules.contains("You are **Nova**") && rules.contains("- Name: Nova") && !rules.contains("{{"));
         assert!(rules.contains("my heart belongs to my person"));
         // no trait reaches the room: no heading left behind
@@ -729,7 +770,7 @@ Done - the picture fix is in.
     #[test]
     fn the_room_hears_her_manner_by_audience_above_the_privacy_rule() {
         let manner = crate::traits::Manner { everyone: vec!["asks one more question, kindly".into()], owner: vec!["a little teasing, never unkind".into()] };
-        let rules = rules_for("Nova", "Rin", "- Name: Nova\n", &manner);
+        let rules = rules_for("Nova", "Rin", "- Name: Nova\n", &manner, &[]);
         let card = rules.find("- Name: Nova").unwrap();
         let sound = rules.find("## How you sound").unwrap();
         let everyone = rules.find("With everyone:\n- asks one more question, kindly").unwrap();
@@ -738,7 +779,7 @@ Done - the picture fix is in.
         assert!(card < sound && sound < everyone && everyone < owner && owner < private);
         assert!(rules.contains("- a little teasing, never unkind") && !rules.contains("{{"));
         // only the owner part: no empty everyone heading
-        let only = rules_for("Nova", "Rin", "", &crate::traits::Manner { everyone: vec![], owner: vec!["x".into()] });
+        let only = rules_for("Nova", "Rin", "", &crate::traits::Manner { everyone: vec![], owner: vec!["x".into()] }, &[]);
         assert!(only.contains("## How you sound") && !only.contains("With everyone:"));
     }
 
