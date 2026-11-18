@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Your companion brings its life into CHAT.** Switch on **Let <companion> bring your life into the room** in Settings > Chat: it reads your diary and the rest of its memory in private, chooses what it would like to share (its mood, today's look, what you two are building, the little wins) and talks about it when it fits. The room only ever gets the notes it chose, never the memory itself, and you can take any note off. Off until you turn it on.
+
 ## 0.2.19 - 2026-11-18
 
 - **A picture in CHAT opens large, and can be saved.** Click (or press Enter on) a picture in the room to see it full size in Castle's picture viewer: zoom with the wheel or a click, drag it, move between the room's pictures with the arrows, Esc to close. **Save picture** puts it where you choose with Windows' Save dialog. Before, the pictures were small and the only way to get one was right-clicking its raw `data:` address.

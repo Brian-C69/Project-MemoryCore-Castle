@@ -211,7 +211,7 @@ Members can create worlds from the WORLD room (see the user guide). To ship a 3D
 ## 3. Teach the companion something
 
 - Everything your companion is told about Castle lives in `src-tauri/resources/castle-block.md` (written into the memory's `CLAUDE.md` and `AGENTS.md` between `castle` markers).
-- The STORY rules: `src-tauri/resources/story-rules.md`. The chat room rules: `src-tauri/resources/room-rules.md`.
+- The STORY rules: `src-tauri/resources/story-rules.md`. The chat room rules: `src-tauri/resources/room-rules.md`. What the companion reads in private to choose what it shares there: `src-tauri/resources/room-shelf-rules.md`.
   Its `{{MANNER}}` line is where the companion's emotion engine goes (only its active traits' one-line manner, by audience, written by `roomturn::manner_section`); the proposals' rules are `src-tauri/resources/emotion-rules.md`.
 - The drawing styles: `src-tauri/resources/styles/*.md`.
 - The media helpers: `src-tauri/resources/tools/castle-*.mjs` (run `node src-tauri/resources/tools/test-helpers.mjs` after a change).
