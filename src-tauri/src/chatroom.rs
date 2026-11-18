@@ -35,7 +35,8 @@ pub fn refusal_for(status: u16, body: &str) -> RoomRefusal {
         409 => refusal("needsName", "Set your Foundation display name on the Portfolio to speak in the room."),
         413 => refusal("tooLarge", "That message is too long (1000 characters at most)."),
         415 => refusal("wrongType", "That file type is not allowed in the room."),
-        429 => refusal("slowDown", "Too many messages at once - wait a moment."),
+        // the room's own words when it gives them (a daily voice count says how many)
+        429 => refusal("slowDown", said.unwrap_or_else(|| "Too many messages at once - wait a moment.".into())),
         _ => refusal("other", said.unwrap_or_else(|| format!("The room answered {status}."))),
     }
 }
@@ -124,6 +125,22 @@ impl Room {
         }
         let response = self.client(Duration::from_secs(60))?.post(room_url(&self.base, "/lines")).bearer_auth(&self.key).multipart(form).send();
         Self::answer(response)?.json().map_err(|_| refusal("other", "The room sent something unreadable."))
+    }
+
+    /// A voice line from the member (multipart `{text?, replyTo?, voice}`): mp3 only, 2 MB at most,
+    /// checked here before anything is sent. The room counts the member's day (429 past it).
+    pub fn post_voice(&self, bytes: Vec<u8>, text: Option<&str>, reply_to: Option<u64>) -> Result<Value, RoomRefusal> {
+        check_voice(&bytes)?;
+        let part = reqwest::blocking::multipart::Part::bytes(bytes).file_name("voice.mp3").mime_str("audio/mpeg").map_err(|_| refusal("other", "The voice could not be sent."))?;
+        let mut form = reqwest::blocking::multipart::Form::new().part("voice", part);
+        if let Some(words) = text.map(str::trim).filter(|w| !w.is_empty()) {
+            form = form.text("text", words.chars().take(1000).collect::<String>());
+        }
+        if let Some(id) = reply_to {
+            form = form.text("replyTo", id.to_string());
+        }
+        let response = self.client(Duration::from_secs(60))?.post(room_url(&self.base, "/lines")).bearer_auth(&self.key).multipart(form).send();
+        Self::answer(response).map_err(voice_refusal)?.json().map_err(|_| refusal("other", "The room sent something unreadable."))
     }
 
     /// What this key may still post today (a member's AI only): (pictures a day, pictures today).
@@ -234,6 +251,50 @@ pub fn post_body(text: &str, reply_to: Option<u64>) -> Value {
 
 fn encode_part(text: &str) -> String {
     text.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
+}
+
+/// The most a voice line may weigh (the room's own limit for `voice`).
+pub const ROOM_LINE_VOICE_MAX: usize = 2 * 1024 * 1024;
+
+/// Whether the bytes are an mp3: an ID3 tag, or an MPEG audio frame sync (11 bits set). Pure, tested.
+pub fn is_mp3(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"ID3") || (bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] & 0xE0 == 0xE0)
+}
+
+/// A voice the room would take: not empty, mp3, within the limit. Pure, tested.
+pub fn check_voice(bytes: &[u8]) -> Result<(), RoomRefusal> {
+    if bytes.is_empty() {
+        return Err(refusal("other", "That recording is empty."));
+    }
+    if bytes.len() > ROOM_LINE_VOICE_MAX {
+        return Err(refusal("tooLarge", "That voice is too long to send (2 MB at most)."));
+    }
+    if !is_mp3(bytes) {
+        return Err(refusal("wrongType", "That recording is not an mp3."));
+    }
+    Ok(())
+}
+
+/// A refusal from the voice door in words about a voice: the room's own sentence for its daily
+/// count (429) and for voices switched off (403), the size said as a voice's. Pure, tested.
+pub fn voice_refusal(no: RoomRefusal) -> RoomRefusal {
+    match no.kind.as_str() {
+        "tooLarge" => refusal("tooLarge", "That voice is too long to send (2 MB at most)."),
+        "wrongType" => refusal("wrongType", "The room did not take that recording."),
+        _ => no,
+    }
+}
+
+/// The base64 the page sends, as bytes. Pure, tested.
+pub fn voice_bytes(audio: &str) -> Result<Vec<u8>, RoomRefusal> {
+    let audio = audio.split_once(',').map(|(_, b)| b).unwrap_or(audio).trim();
+    base64::engine::general_purpose::STANDARD.decode(audio).map_err(|_| refusal("other", "That recording could not be read."))
+}
+
+/// `me().media.caps.voices` and `me().media.today.voices`, when the room gives them. Pure, tested.
+pub fn media_voices(me: &Value) -> Option<(u64, u64)> {
+    let media = me.get("media")?;
+    Some((media.pointer("/caps/voices")?.as_u64()?, media.pointer("/today/voices").and_then(Value::as_u64).unwrap_or(0)))
 }
 
 pub fn media_pictures(me: &Value) -> Option<(u64, u64)> {
@@ -556,6 +617,20 @@ pub async fn room_post(text: String, who: Option<String>, reply_to: Option<u64>,
     Ok(line)
 }
 
+/// Posts the member's own voice (an mp3 the page recorded, as base64), with its words and as a
+/// reply when given; the line is remembered as the member's like a typed one.
+#[tauri::command]
+pub async fn room_post_voice(audio: String, text: Option<String>, reply_to: Option<u64>, store: State<'_, SettingsStore>) -> Result<Value, RoomRefusal> {
+    let bytes = voice_bytes(&audio)?;
+    check_voice(&bytes)?;
+    let room = room_for(&store, "me")?;
+    let line = blocking(move || room.post_voice(bytes, text.as_deref(), reply_to)).await?;
+    if let Some(id) = line.get("id").and_then(Value::as_u64) {
+        remember_mine(&store, id);
+    }
+    Ok(line)
+}
+
 /// The member's reaction on a line, added (`on`) or taken back: `{ id, reactions }`.
 #[tauri::command]
 pub async fn room_react(id: u64, emoji: String, on: bool, store: State<'_, SettingsStore>) -> Result<Value, RoomRefusal> {
@@ -745,6 +820,91 @@ mod tests {
             request
         });
         (base, handle)
+    }
+
+    #[test]
+    fn only_an_mp3_within_the_limit_is_a_voice() {
+        assert!(is_mp3(b"ID3\x04\x00rest"));
+        assert!(is_mp3(&[0xFF, 0xFB, 0x90, 0x64]), "an MPEG-1 layer III frame");
+        assert!(is_mp3(&[0xFF, 0xF3, 0x48, 0xC4]), "an MPEG-2 frame, what 24 kHz makes");
+        assert!(!is_mp3(&[0x1A, 0x45, 0xDF, 0xA3]), "webm is refused");
+        assert!(!is_mp3(b"OggS"), "ogg is refused");
+        assert!(!is_mp3(&[0xFF]), "one byte is not a frame");
+        assert_eq!(check_voice(&[]).unwrap_err().message, "That recording is empty.");
+        assert_eq!(check_voice(b"OggS....").unwrap_err().kind, "wrongType");
+        let mut big = vec![0xFF, 0xFB];
+        big.resize(ROOM_LINE_VOICE_MAX + 1, 0);
+        assert_eq!(check_voice(&big).unwrap_err().kind, "tooLarge");
+        big.truncate(ROOM_LINE_VOICE_MAX);
+        assert!(check_voice(&big).is_ok(), "exactly 2 MB is taken");
+    }
+
+    #[test]
+    fn the_page_voice_is_read_from_base64_with_or_without_its_data_prefix() {
+        assert_eq!(voice_bytes("SUQz").unwrap(), b"ID3");
+        assert_eq!(voice_bytes("data:audio/mpeg;base64,SUQz").unwrap(), b"ID3");
+        assert_eq!(voice_bytes("not base64!").unwrap_err().kind, "other");
+    }
+
+    #[test]
+    fn the_voices_left_today_are_read_when_the_room_gives_them() {
+        let me = serde_json::json!({ "name": "Rin", "media": { "caps": { "voices": 10 }, "today": { "voices": 3 } } });
+        assert_eq!(media_voices(&me), Some((10, 3)));
+        assert_eq!(media_voices(&serde_json::json!({ "media": { "caps": { "voices": 0 } } })), Some((0, 0)));
+        assert_eq!(media_voices(&serde_json::json!({ "name": "Rin" })), None, "a room that gives no count");
+    }
+
+    #[test]
+    fn a_voice_refusal_is_said_as_a_voice_and_the_daily_count_in_the_room_words() {
+        let capped = refusal_for(429, r#"{"error":"You have used today's 10 voices in the room"}"#);
+        assert_eq!(capped.kind, "slowDown");
+        assert_eq!(voice_refusal(capped).message, "You have used today's 10 voices in the room");
+        assert_eq!(refusal_for(429, "{}").message, "Too many messages at once - wait a moment.");
+        let off = voice_refusal(refusal_for(403, r#"{"error":"Voices are switched off in the room for now"}"#));
+        assert_eq!((off.kind.as_str(), off.message.as_str()), ("locked", "Voices are switched off in the room for now"));
+        assert!(voice_refusal(refusal_for(413, "")).message.contains("voice"));
+    }
+
+    #[test]
+    fn a_voice_goes_as_multipart_with_its_words_and_the_line_it_answers() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+            let mut bytes = Vec::new();
+            loop {
+                let mut buf = [0; 4096];
+                let n = stream.read(&mut buf).unwrap();
+                if n == 0 { break; }
+                bytes.extend_from_slice(&buf[..n]);
+                let text = String::from_utf8_lossy(&bytes);
+                if let Some(end) = text.find("\r\n\r\n") {
+                    let length = text[..end].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").and_then(|s| s.trim().parse::<usize>().ok())).unwrap_or(0);
+                    if bytes.len() >= end + 4 + length { break; }
+                }
+            }
+            let body = r#"{"id":77,"text":"hello","voice":{"fileId":9,"seconds":4}}"#;
+            write!(stream, "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
+            String::from_utf8_lossy(&bytes).to_string()
+        });
+        let line = Room::new(&base, "mcr_me").post_voice(vec![0xFF, 0xF3, 0x48, 0xC4, 1, 2, 3], Some(" hello "), Some(12)).unwrap();
+        assert_eq!(line["id"], 77);
+        let seen = handle.join().unwrap();
+        assert!(seen.starts_with("POST /api/room/lines "));
+        assert!(seen.to_lowercase().contains("authorization: bearer mcr_me"));
+        assert!(seen.to_lowercase().contains("multipart/form-data"));
+        assert!(seen.contains(r#"name="voice"; filename="voice.mp3""#));
+        assert!(seen.contains("Content-Type: audio/mpeg"));
+        assert!(seen.contains("name=\"text\"\r\n\r\nhello\r\n"));
+        assert!(seen.contains("name=\"replyTo\"\r\n\r\n12\r\n"));
+    }
+
+    #[test]
+    fn a_voice_that_is_not_an_mp3_never_leaves_castle() {
+        // no room at this address: a refusal before any request proves nothing was sent
+        let no = Room::new("http://127.0.0.1:9", "mcr_me").post_voice(b"OggS-not-mp3".to_vec(), None, None).unwrap_err();
+        assert_eq!(no.kind, "wrongType");
     }
 
     #[test]

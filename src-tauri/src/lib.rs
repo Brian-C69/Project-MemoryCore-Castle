@@ -446,6 +446,7 @@ pub fn run() {
             chatroom::room_lines,
             chatroom::room_presence,
             chatroom::room_post,
+            chatroom::room_post_voice,
             chatroom::room_react,
             chatroom::room_file,
             update::update_check,
