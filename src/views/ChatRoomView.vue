@@ -8,6 +8,8 @@
 import GlassSelect from '../components/GlassSelect.vue'
 import RoomLine from '../components/room/RoomLine.vue'
 import RoomComposer from '../components/room/RoomComposer.vue'
+import ModalSheet from '../components/ModalSheet.vue'
+import HelpTip from '../components/HelpTip.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../components/roomsteps.js'
 import { listen } from '@tauri-apps/api/event'
@@ -34,7 +36,7 @@ const lines = ref([])
 const seen = ref([]) // who has read how far (the ticks)
 const myIds = ref([]) // the lines Castle posted for the member
 const faces = ref({}) // avatar token -> picture
-const tab = ref('chat') // CHAT | LOG
+const logOpen = ref(false) // the companion's turn log, opened from the side panel
 const readProblem = ref('')
 const faceLine = ref('')
 const displayName = ref('')
@@ -43,9 +45,6 @@ const nameSaving = ref(false)
 const nameLine = ref('')
 const turnLog = ref('') // the companion's room turns, raw
 const presence = ref([])
-// IN THE ROOM shows this many rows before it scrolls on its own, so a busy room never pushes
-// the switches and YOUR PROFILE below it out of sight.
-const ROSTER_ROWS = 12
 const refused = ref(null)
 const draft = ref('')
 const files = ref({})
@@ -65,6 +64,16 @@ const haveCompanionKey = computed(() => keys.value.some((k) => k.name === 'room-
 const ready = computed(() => !!member.value?.roomOpen)
 const locked = computed(() => !ready.value || refused.value?.kind === 'locked' || refused.value?.kind === 'notSetUp')
 const mode = computed(() => settings.value?.roomCompanionMode ?? 'off')
+// what the companion's rule means, kept behind a (?) so the panel does not change height with it
+const participationHelp = computed(() =>
+  !haveCompanionKey.value
+    ? `Switch on to let ${props.companion} enter, then choose a rule.`
+    : mode.value === 'off'
+      ? `${props.companion} listens without posting replies.`
+      : mode.value === 'named'
+        ? `${props.companion} replies when someone mentions its name.`
+        : `${props.companion} may join the conversation on your usage, without sharing anything private.`,
+)
 const today = ref(new Date())
 const shown = computed(() => datedLines(lines.value, today.value))
 const avatarToken = (author) => currentAvatar(author, presence.value)
@@ -499,12 +508,8 @@ watch(() => props.visible, (on) => {
         <div v-if="me?.needsName" class="banner">Set your Foundation display name on the Portfolio to speak here. You can read already.</div>
         <div v-else-if="me?.muted || refused?.kind === 'muted'" class="banner">You are muted in this room for now. You can still read.</div>
         <div v-else-if="refused && !['locked', 'notSetUp'].includes(refused.kind)" class="banner">{{ refused.message }}</div>
-        <div class="tabs">
-          <button :class="{ on: tab === 'chat' }" @click="tab = 'chat'">CHAT</button>
-          <button :class="{ on: tab === 'log' }" @click="tab = 'log'">LOG</button>
-        </div>
         <p v-if="readProblem" class="problem">{{ readProblem }}</p>
-        <div v-show="tab === 'chat'" ref="scroller" class="lines">
+        <div ref="scroller" class="lines">
           <p v-if="!shown.length" class="hint">The room is quiet. Say hello.</p>
           <template v-for="item in shown" :key="item.key">
             <div v-if="item.kind === 'day'" class="day-divider"><time :datetime="item.key" :title="item.date">{{ item.label }}</time></div>
@@ -528,11 +533,6 @@ watch(() => props.visible, (on) => {
             </template>
           </template>
         </div>
-        <div v-show="tab === 'log'" class="lines log">
-          <p class="hint">{{ companion }}'s turns in the room, raw: what it was handed, and what it said or chose not to say. It answers from a room-only run that holds just its public card - it cannot open your memory or run anything.</p>
-          <pre v-if="turnLog" class="turns">{{ turnLog }}</pre>
-          <p v-else class="hint">No turns yet.</p>
-        </div>
         <RoomComposer
           ref="composer"
           v-model="draft"
@@ -544,27 +544,6 @@ watch(() => props.visible, (on) => {
       </section>
 
       <aside class="side widget">
-        <h3>IN THE ROOM<span v-if="presence.length" class="count"> ({{ presence.length }})</span></h3>
-        <ul class="roster" :class="{ scrolls: presence.length > ROSTER_ROWS }">
-          <li v-for="(p, index) in presence" :key="`${p.kind}:${p.name}:${index}`" :class="presenceState(p)">
-            <span class="face small"><img v-if="faces[p.avatar]" :src="faces[p.avatar]" alt="" /><template v-else>{{ initial(p) }}</template></span>
-            <span class="dot" role="img" :aria-label="presenceState(p)" :title="presenceState(p)">●</span>
-            <span class="name" :title="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : speaker(p).name" :tabindex="speaker(p).title ? 0 : undefined" :aria-label="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : undefined">{{ speaker(p).name }}<span v-if="['assistant', 'member_assistant'].includes(p.kind)"> ✦</span></span>
-            <span v-if="p.kind === 'host'" class="tag">host</span>
-            <span v-else-if="p.foundation" class="tag">Foundation</span>
-          </li>
-        </ul>
-        <h3>{{ companion.toUpperCase() }} IN THE ROOM</h3>
-        <button type="button" role="switch" :aria-checked="haveCompanionKey" :aria-label="`Let ${companion} in`" :disabled="roomSaving" class="room-toggle" @click="setCompanionIn(!haveCompanionKey)">
-          <span>{{ roomSaving ? 'Updating…' : `Let ${companion} in` }}</span>
-          <span class="toggle-track" :class="{ enabled: haveCompanionKey }" aria-hidden="true"><span class="toggle-thumb"></span></span>
-        </button>
-        <label for="room-participation" class="hint participation-label">Participation rule</label>
-        <GlassSelect id="room-participation" class="participation-select" :model-value="mode" :options="[{ value: 'off', label: 'Listening only' }, { value: 'named', label: 'When named' }, { value: 'joins', label: 'Joins in' }]" :disabled="!haveCompanionKey || roomSaving" @update:model-value="changeParticipation" />
-        <p class="hint">{{ !haveCompanionKey ? `Switch on to let ${companion} enter, then choose a rule.` : mode === 'off' ? `${companion} listens without posting replies.` : mode === 'named' ? `${companion} replies when someone mentions its name.` : `${companion} may join the conversation on your usage, without sharing anything private.` }}</p>
-        <p v-if="doorProblem" class="problem">{{ doorProblem }}</p>
-        <button class="chat-settings-open" @click="emit('settings', 'chat')">Chat settings</button>
-        <p class="hint">The alerts, and {{ companion }}'s voice here and public card once it is in.</p>
         <h3>YOUR PROFILE</h3>
         <div class="profile-pair">
           <section class="profile-person" aria-label="Your room picture" @focusout="menuOut">
@@ -595,21 +574,48 @@ watch(() => props.visible, (on) => {
         </div>
         <p v-if="faceLine" role="status" class="hint">{{ faceLine }}</p>
         <form v-if="nameEditing" class="name-edit" @submit.prevent="saveDisplayName">
-          <label for="room-display-name">Public display name</label>
+          <label for="room-display-name" class="has-tip">Public display name<HelpTip block text="Shown to everyone in the Foundation room. Leave empty to use your Library card name." /></label>
           <input id="room-display-name" v-model="displayName" maxlength="80" :disabled="nameSaving" />
-          <p class="hint">Shown to everyone in the Foundation room. Leave empty to use your Library card name.</p>
           <div class="row wrap"><button class="primary" :disabled="nameSaving">{{ nameSaving ? 'Saving…' : 'Save name' }}</button><button type="button" :disabled="nameSaving" @click="nameEditing = false">Cancel</button></div>
         </form>
         <form v-if="companionEditing" class="name-edit" @submit.prevent="saveCompanionName">
-          <label for="companion-name">{{ companion }}'s name</label>
+          <label for="companion-name" class="has-tip">{{ companion }}'s name<HelpTip block :text="`The new name shows everywhere in Castle at once, and in the chat room if ${companion} is in it. Names already written in your memory files stay as they are: ask ${companion} to update the memory.`" /></label>
           <input id="companion-name" v-model="companionName" maxlength="40" :disabled="companionSaving" />
-          <p class="hint">The new name shows everywhere in Castle at once, and in the chat room if {{ companion }} is in it. Names already written in your memory files stay as they are: ask {{ companion }} to update the memory.</p>
           <div class="row wrap"><button class="primary" :disabled="companionSaving || !companionName.trim()">{{ companionSaving ? 'Saving…' : 'Save name' }}</button><button type="button" :disabled="companionSaving" @click="companionEditing = false">Cancel</button></div>
         </form>
         <p v-if="nameLine" role="status" class="hint">{{ nameLine }}</p>
         <p v-if="companionLine" role="status" class="hint">{{ companionLine }}</p>
-        <div class="profile-footer"><button @click="signOut">Sign out</button></div>
+        <h3 class="has-tip">{{ companion.toUpperCase() }} IN THE ROOM<HelpTip block :text="`Switch on to let ${companion} in, then choose how it joins. Chat settings holds the alerts, and ${companion}'s voice here and public card once it is in.`" /></h3>
+        <button type="button" role="switch" :aria-checked="haveCompanionKey" :aria-label="`Let ${companion} in`" :disabled="roomSaving" class="room-toggle" @click="setCompanionIn(!haveCompanionKey)">
+          <span>{{ roomSaving ? 'Updating…' : `Let ${companion} in` }}</span>
+          <span class="toggle-track" :class="{ enabled: haveCompanionKey }" aria-hidden="true"><span class="toggle-thumb"></span></span>
+        </button>
+        <label for="room-participation" class="hint participation-label has-tip">Participation rule<HelpTip block :text="participationHelp" /></label>
+        <GlassSelect id="room-participation" class="participation-select" :model-value="mode" :options="[{ value: 'off', label: 'Listening only' }, { value: 'named', label: 'When named' }, { value: 'joins', label: 'Joins in' }]" :disabled="!haveCompanionKey || roomSaving" @update:model-value="changeParticipation" />
+        <p v-if="doorProblem" class="problem">{{ doorProblem }}</p>
+        <button class="chat-settings-open" @click="emit('settings', 'chat')">Chat settings</button>
+        <div class="roster-area">
+          <h3>IN THE ROOM<span v-if="presence.length" class="count"> ({{ presence.length }})</span></h3>
+          <ul class="roster">
+            <li v-for="(p, index) in presence" :key="`${p.kind}:${p.name}:${index}`" :class="presenceState(p)">
+              <span class="face small"><img v-if="faces[p.avatar]" :src="faces[p.avatar]" alt="" /><template v-else>{{ initial(p) }}</template></span>
+              <span class="dot" role="img" :aria-label="presenceState(p)" :title="presenceState(p)">●</span>
+              <span class="name" :title="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : speaker(p).name" :tabindex="speaker(p).title ? 0 : undefined" :aria-label="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : undefined">{{ speaker(p).name }}<span v-if="['assistant', 'member_assistant'].includes(p.kind)"> ✦</span></span>
+              <span v-if="p.kind === 'host'" class="tag">host</span>
+              <span v-else-if="p.foundation" class="tag">Foundation</span>
+            </li>
+          </ul>
+        </div>
+        <div class="profile-footer">
+          <button type="button" :title="`${companion}'s turns in the room, raw`" @click="logOpen = true">Log</button>
+          <button @click="signOut">Sign out</button>
+        </div>
       </aside>
+      <ModalSheet v-if="logOpen" tag="LOG" :title="`${companion}'s turns in the room`" @close="logOpen = false">
+        <p class="hint">{{ companion }}'s turns in the room, raw: what it was handed, and what it said or chose not to say. It answers from a room-only run that holds just its public card - it cannot open your memory or run anything.</p>
+        <pre v-if="turnLog" class="turns">{{ turnLog }}</pre>
+        <p v-else class="hint">No turns yet.</p>
+      </ModalSheet>
     </template>
   </div>
 </template>
@@ -628,6 +634,11 @@ watch(() => props.visible, (on) => {
 .toggle-track.enabled { background: var(--accent); }
 .toggle-track.enabled .toggle-thumb { transform: translateX(16px); background: #07142e; }
 .participation-label { margin-top: 4px; }
+/* a row with a (?) whose bubble spans the row (HelpTip block) */
+.has-tip { position: relative; }
+/* labels are columns here (text over its input); a label that carries a (?) keeps the (?) on the same
+   line as its words */
+label.has-tip { flex-direction: row; align-items: center; gap: 0; }
 .participation-select { width: 100%; min-height: 40px; padding: 8px 10px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel-background); font: inherit; font-size: 13px; }
 .participation-select:disabled { opacity: .45; cursor: not-allowed; }
 .room-toggle:focus-visible, .participation-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -645,7 +656,7 @@ watch(() => props.visible, (on) => {
 .pic-menu { position: absolute; z-index: 3; top: 62px; left: 6px; right: 6px; display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-background); -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur)); box-shadow: 0 10px 24px -10px rgba(0, 0, 0, .7); }
 .profile-person .pic-menu button { min-height: 32px; }
 .profile-person button.subtle { border-color: transparent; color: var(--text-dim); }
-.profile-footer { padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--line); }
+.profile-footer { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--line); }
 .profile-footer button { width: 100%; }
 .name-edit { display: flex; flex-direction: column; gap: 8px; }
 .name-edit input { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: transparent; }
@@ -657,15 +668,6 @@ watch(() => props.visible, (on) => {
   font: 12px/1.5 ui-monospace, Consolas, monospace;
   white-space: pre-wrap;
   color: var(--text-dim);
-}
-.tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.tabs button.on {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 .face {
   display: grid;
@@ -894,10 +896,21 @@ li.online .dot, li.here .dot, li.active .dot {
   font-weight: 400;
   color: var(--text-dim);
 }
-/* 12 rows (22px face + 6px row gap each) before the room's own scrollbar takes over, so a busy
-   room scrolls in place instead of pushing the switches and YOUR PROFILE further down the sidebar */
-.roster.scrolls {
-  max-height: calc(12 * 28px - 6px);
+/* The panel reads top to bottom as: your profile and your companion's switches (always the same size,
+   so they stay put), then who is in the room (takes what is left and scrolls inside itself however
+   many people come and go), then Log and Sign out at the bottom. */
+.roster-area {
+  display: flex;
+  flex: 1 1 140px;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 96px;
+}
+.roster-area h3 { flex: none; }
+.roster {
+  flex: 1;
+  align-content: start; /* rows keep their own height instead of stretching down the area */
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
   margin-right: -4px;

@@ -3,12 +3,14 @@
 // so the page stays short and the words are still one step away (also for screen readers).
 import { useId } from 'vue'
 
-defineProps({ text: { type: String, required: true } })
+// `block`: the bubble spans the width of the nearest positioned parent instead of hanging from the (?)
+// at a fixed width, for a narrow panel where a wide bubble would run past the edge.
+defineProps({ text: { type: String, required: true }, block: { type: Boolean, default: false } })
 const id = `tip-${useId()}`
 </script>
 
 <template>
-  <span class="help-tip">
+  <span class="help-tip" :class="{ block }">
     <button type="button" class="mark" :aria-describedby="id" aria-label="More about this" @click.prevent>?</button>
     <span :id="id" role="tooltip" class="bubble">{{ text }}</span>
   </span>
@@ -20,6 +22,15 @@ const id = `tip-${useId()}`
   display: inline-flex;
   vertical-align: middle;
   margin-left: 4px;
+}
+.help-tip.block {
+  position: static;
+}
+.help-tip.block .bubble {
+  right: 0;
+  left: 0;
+  width: auto;
+  max-width: none;
 }
 .mark {
   width: 16px;
@@ -51,7 +62,10 @@ const id = `tip-${useId()}`
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--panel-background);
+  /* solid: the theme's own page colour underneath, with the panel's tint on top, so words behind the
+     bubble never show through it (the panel colour alone is see-through) */
+  background-color: var(--background, #07102c);
+  background-image: linear-gradient(var(--panel-background), var(--panel-background));
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
   color: var(--text);
   font-size: 12px;

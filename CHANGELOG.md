@@ -6,6 +6,12 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **In CHAT, the reaction bar follows the message and Reply puts the cursor in the message box.** Pointing at someone's line now shows the reactions and Reply bar on the message itself, at its top corner, instead of at one fixed spot on the row (and it no longer appears when the pointer is only in the empty space beside a short line). A line's reaction chips sit inside its box too. Pressing Reply moves the cursor straight into the message box, so you can type at once without clicking it first.
 
+- **CHAT's side panel explains itself behind a (?), so it stays still.** The sentences under the participation rule ("may join the conversation on your usage..."), under Chat settings and in the two name forms are now small **?** tips you point at. The panel no longer grows or shrinks when you change the rule (it used to move about 16 px), and it is shorter, so the room list gets more space.
+
+- **CHAT's side panel keeps still.** It now reads YOUR PROFILE, then your companion's switches, then who is IN THE ROOM, with Log and Sign out fixed at the bottom. The first two never change size, and the room list takes the space that is left and scrolls inside itself, so people joining or leaving no longer push your profile and your companion's controls up and down.
+
+- **CHAT is just the chat.** The CHAT and LOG tabs above the room are gone: the conversation fills the whole page. The companion's log, which few people need, now opens from a **Log** button in the side panel, just above **Sign out**, in its own window (Esc closes it).
+
 ## 0.2.17 - 2026-11-18
 
 - **Three new themes: The Sunset Shore, The Star Shore and The Emerald River.** Three quiet places with nobody in them, each with its own colours, layout and Sweep look.
