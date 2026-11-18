@@ -269,7 +269,7 @@ async function loadSettingsAndTheme() {
     barClock.value = { enabled: !!view.settings.displayClock, format: view.settings.clockFormat ?? '24h' }
     usageCard.value = view.settings.showUsageCard !== false
     wallpaperMotion.value = view.settings.wallpaperMotion === true
-    widgetPrefs.value = { widgetsOff: view.settings.widgetsOff ?? [], widgetSizes: view.settings.widgetSizes ?? {}, widgetPlaces: view.settings.widgetPlaces ?? {} }
+    widgetPrefs.value = { widgetsOff: view.settings.widgetsOff ?? [], widgetsOn: view.settings.widgetsOn ?? [], widgetSizes: view.settings.widgetSizes ?? {}, widgetPlaces: view.settings.widgetPlaces ?? {} }
     tabOrder.value = view.settings.tabOrder ?? []
     try {
       savedKeys.value = (await keyStatus()).filter((k) => k.set).map((k) => k.name)

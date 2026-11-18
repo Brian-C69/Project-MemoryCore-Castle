@@ -28,15 +28,26 @@ export function hasItsKey(id, keys = []) {
 
 export const SIZES = { s: 0.85, m: 1, l: 1.15 }
 
-// Is this widget shown? USAGE has its own switch (it also stops Castle asking the CLIs).
+// Widgets that stay hidden until the member switches them on (listed in `widgetsOn`).
+export const OPT_IN = ['weather']
+
+// Is this widget shown? USAGE has its own switch (it also stops Castle asking the CLIs); an opt-in
+// widget is shown only once it was switched on.
 export function isOn(id, settings = {}) {
   if (id === 'usage') return settings.showUsageCard !== false
+  if (OPT_IN.includes(id)) return (settings.widgetsOn ?? []).includes(id)
   return !(settings.widgetsOff ?? []).includes(id)
 }
 
 // The settings change for switching a widget on or off.
 export function switchPatch(id, on, settings = {}) {
   if (id === 'usage') return { showUsageCard: on }
+  if (OPT_IN.includes(id)) {
+    const wanted = new Set(settings.widgetsOn ?? [])
+    if (on) wanted.add(id)
+    else wanted.delete(id)
+    return { widgetsOn: [...wanted].sort() }
+  }
   const off = new Set(settings.widgetsOff ?? [])
   if (on) off.delete(id)
   else off.add(id)

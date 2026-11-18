@@ -9,6 +9,15 @@ describe('HOME widgets as the member arranges them', () => {
     ])
   })
 
+  it('keeps an opt-in widget hidden until it is switched on', () => {
+    expect(isOn('weather', {})).toBe(false)
+    expect(isOn('weather', { widgetsOff: [] })).toBe(false)
+    expect(isOn('weather', { widgetsOn: ['weather'] })).toBe(true)
+    expect(switchPatch('weather', true, {})).toEqual({ widgetsOn: ['weather'] })
+    expect(switchPatch('weather', false, { widgetsOn: ['weather'] })).toEqual({ widgetsOn: [] })
+    expect(switchPatch('diary', false, {})).toEqual({ widgetsOff: ['diary'] })
+  })
+
   it('shows a credit widget only once its key is saved', () => {
     expect(hasItsKey('credit-suno', [])).toBe(false)
     expect(hasItsKey('credit-suno', ['suno', 'openai'])).toBe(true)
