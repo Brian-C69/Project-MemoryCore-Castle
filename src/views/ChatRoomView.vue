@@ -632,6 +632,9 @@ watch(() => props.visible, (on) => {
 .participation-label { margin-top: 4px; }
 /* a row with a (?) whose bubble spans the row (HelpTip block) */
 .has-tip { position: relative; }
+/* labels are columns here (text over its input); a label that carries a (?) keeps the (?) on the same
+   line as its words */
+label.has-tip { flex-direction: row; align-items: center; gap: 0; }
 .participation-select { width: 100%; min-height: 40px; padding: 8px 10px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel-background); font: inherit; font-size: 13px; }
 .participation-select:disabled { opacity: .45; cursor: not-allowed; }
 .room-toggle:focus-visible, .participation-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
