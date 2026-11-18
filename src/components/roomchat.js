@@ -124,16 +124,34 @@ export function currentAvatar(author, presence = []) {
 // ---------- reactions and replies (shown only when the room lists them in /me's features) ----------
 export const REACTIONS = ['👍', '❤️', '👏', '😂', '😮', '😢']
 
-/** What the room can do, from /me: { replies, reactions }. */
+/** What the room can do, from /me: { replies, reactions, customReactions }. */
 export function roomFeatures(me) {
   const f = Array.isArray(me?.features) ? me.features : []
-  return { replies: f.includes('replies'), reactions: f.includes('reactions') }
+  return { replies: f.includes('replies'), reactions: f.includes('reactions'), customReactions: f.includes('customReactions') }
 }
 
-/** A line's chips: the reactions with a count, in the room's order. */
+/** A line's chips: the six first in their order, then any other emoji the room sent, as it sent them. */
 export function reactionChips(line) {
-  const list = Array.isArray(line?.reactions) ? line.reactions : []
-  return REACTIONS.map((e) => list.find((r) => r.emoji === e)).filter((r) => r && r.count > 0)
+  const list = (Array.isArray(line?.reactions) ? line.reactions : []).filter((r) => r && typeof r.emoji === 'string' && r.count > 0)
+  const six = REACTIONS.map((e) => list.find((r) => r.emoji === e)).filter(Boolean)
+  return [...six, ...list.filter((r) => !REACTIONS.includes(r.emoji))]
+}
+
+/** The picker's emoji beyond the six (any other single emoji can be typed or pasted). */
+export const PICKER = [
+  '🔥', '🎉', '🙏', '💜', '✨', '😍', '🥰', '🤔', '👀', '💯', '🥳', '😭',
+  '🙌', '😅', '🤣', '😎', '🤗', '😴', '🤯', '😡', '👌', '✅', '💪', '🫶',
+  '🌸', '⭐', '🌙', '☕', '🍰', '🎵', '💡', '🚀', '🐱', '🐶', '🌈', '🍀',
+]
+
+const PICTOGRAPH = /\p{Extended_Pictographic}|\p{Regional_Indicator}|⃣/u
+
+/** Whether `text` is exactly one emoji (a flag, a keycap, a skin tone or a joined one included), at most 32 bytes. */
+export function isOneEmoji(text) {
+  const s = String(text ?? '').trim()
+  if (!s || new TextEncoder().encode(s).length > 32 || !PICTOGRAPH.test(s) || /[A-Za-z\s]/.test(s)) return false
+  const graphemes = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(s)]
+  return graphemes.length === 1
 }
 
 /** Whether pressing `emoji` on `line` adds it (true) or takes the member's own back (false). */

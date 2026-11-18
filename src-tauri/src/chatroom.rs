@@ -104,7 +104,8 @@ impl Room {
 
     /// Adds (`on`) or removes the caller's reaction on a line: `{ id, reactions }`.
     pub fn react(&self, id: u64, emoji: &str, on: bool) -> Result<Value, RoomRefusal> {
-        if !REACTIONS.contains(&emoji) {
+        // the six, or any one emoji (a room that offers customReactions takes it; the room has the last word)
+        if !REACTIONS.contains(&emoji) && !one_emoji(emoji) {
             return Err(refusal("other", "That reaction is not one the room knows."));
         }
         let url = room_url(&self.base, &format!("/lines/{id}/reactions/{}", encode_part(emoji)));
@@ -225,6 +226,16 @@ const ROOM_LINE_PICTURE_SIDE: u32 = 1024;
 /// `me().media.caps.pictures` and `me().media.today.pictures` (a member's AI only). Pure, tested.
 /// The reactions the room knows (the room server holds the same list).
 pub const REACTIONS: [&str; 6] = ["👍", "❤️", "👏", "😂", "😮", "😢"];
+
+/// Whether a reaction looks like one emoji: not empty, at most 32 bytes, no space, control or ASCII
+/// letter, and at least one character at or above U+2000 (emoji, flags, keycaps). A loose check
+/// before the request; the room decides. Pure, tested.
+pub fn one_emoji(emoji: &str) -> bool {
+    !emoji.is_empty()
+        && emoji.len() <= 32
+        && !emoji.chars().any(|c| c.is_whitespace() || c.is_control() || c.is_ascii_alphabetic())
+        && emoji.chars().any(|c| c as u32 >= 0x2000)
+}
 
 /// What the room says it can do (`/me`'s `features`); none from a room that says nothing. Pure.
 pub fn features(me: &Value) -> Vec<String> {
@@ -1094,5 +1105,22 @@ mod tests {
         assert!(features(&serde_json::json!({"name": "Kiyo"})).is_empty());
         assert_eq!(features(&serde_json::json!({"features": ["replies", 3, "reactions"]})), vec!["replies", "reactions"]);
         assert!(REACTIONS.contains(&"👍") && REACTIONS.len() == 6);
+    }
+
+    #[test]
+    fn a_reaction_may_be_any_one_emoji_but_never_words() {
+        for ok in ["🔥", "🇲🇾", "1️⃣", "👨‍👩‍👧", "👍🏽", "❤️", "❤"] {
+            assert!(one_emoji(ok), "{ok}");
+        }
+        for no in ["", " ", "hi", "a😀", "🔥 ", ":)", "1", &"🔥".repeat(9)] {
+            assert!(!one_emoji(no), "{no:?}");
+        }
+    }
+
+    #[test]
+    fn words_as_a_reaction_never_leave_castle() {
+        // no room at this address: a refusal before any request proves nothing was sent
+        let no = Room::new("http://127.0.0.1:9", "mcr_me").react(5, "hello", true).unwrap_err();
+        assert_eq!(no.kind, "other");
     }
 }

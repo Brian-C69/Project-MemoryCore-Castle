@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { initial, isMine, reactionChips, readers, replySnippet, replyingLine, roomFeatures, ticks, toggleReaction } from './roomchat.js'
+import { PICKER, REACTIONS, initial, isMine, isOneEmoji, reactionChips, readers, replySnippet, replyingLine, roomFeatures, ticks, toggleReaction } from './roomchat.js'
 
 const me = { name: 'Rin', kind: 'member' }
 const line = (id, name, kind) => ({ id, text: 'x', author: { name, kind } })
@@ -40,8 +40,23 @@ describe('the room as a chat', () => {
 
 describe('reactions and replies in the room', () => {
   it('shows them only when the room lists them', () => {
-    expect(roomFeatures({})).toEqual({ replies: false, reactions: false })
-    expect(roomFeatures({ features: ['replies'] })).toEqual({ replies: true, reactions: false })
+    expect(roomFeatures({})).toEqual({ replies: false, reactions: false, customReactions: false })
+    expect(roomFeatures({ features: ['replies'] })).toEqual({ replies: true, reactions: false, customReactions: false })
+    expect(roomFeatures({ features: ['reactions', 'customReactions'] }).customReactions).toBe(true)
+  })
+  it('chips the six first, then any other emoji the room sent, in its order', () => {
+    const line = { reactions: [{ emoji: '🔥', count: 3 }, { emoji: '😂', count: 1 }, { emoji: '🇲🇾', count: 1, mine: true }, { emoji: '👍', count: 2 }, { emoji: '🎉', count: 0 }] }
+    expect(reactionChips(line).map((r) => r.emoji)).toEqual(['👍', '😂', '🔥', '🇲🇾'])
+  })
+  it('knows one emoji from words, two emoji or plain text', () => {
+    for (const ok of ['🔥', '🇲🇾', '1️⃣', '👨‍👩‍👧', '👍🏽', '❤️', ' 🎉 ']) expect(isOneEmoji(ok), ok).toBe(true)
+    for (const no of ['', ' ', 'hi', 'a😀', '🔥🔥', ':)', '1', null]) expect(isOneEmoji(no), String(no)).toBe(false)
+  })
+  it('offers a picker of single emoji beyond the six', () => {
+    expect(PICKER.length).toBeGreaterThanOrEqual(30)
+    expect(PICKER.every(isOneEmoji)).toBe(true)
+    expect(PICKER.some((e) => REACTIONS.includes(e))).toBe(false)
+    expect(new Set(PICKER).size).toBe(PICKER.length)
   })
   it('chips the reactions with a count, in order', () => {
     const line = { reactions: [{ emoji: '😂', count: 1, mine: false }, { emoji: '👍', count: 2, mine: true }, { emoji: '😢', count: 0 }] }
