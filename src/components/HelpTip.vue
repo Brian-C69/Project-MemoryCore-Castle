@@ -62,7 +62,10 @@ const id = `tip-${useId()}`
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--panel-background);
+  /* solid: the theme's own page colour underneath, with the panel's tint on top, so words behind the
+     bubble never show through it (the panel colour alone is see-through) */
+  background-color: var(--background, #07102c);
+  background-image: linear-gradient(var(--panel-background), var(--panel-background));
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
   color: var(--text);
   font-size: 12px;
