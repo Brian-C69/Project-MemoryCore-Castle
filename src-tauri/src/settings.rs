@@ -302,6 +302,9 @@ pub struct Settings {
     /// The graphics-card gauges beside CPU and RAM: shown or not. Changed only by its own command
     /// (gpu_gauges_save), never by the Settings page.
     pub gpu_gauges: crate::gpu::GpuGauges,
+    /// The weather widget's place and units. Changed only by its own command (weather_save), never
+    /// by the Settings page.
+    pub weather: crate::weather::WeatherSettings,
     /// Sweep's gear: the look chosen by hand and whether the Recycle Bin starts ticked. Changed only
     /// by its own command (sweep_settings_save), never by the Settings page.
     pub sweep: crate::sweep::SweepSettings,
@@ -406,6 +409,7 @@ impl Default for Settings {
             widget_places: std::collections::BTreeMap::new(),
             meter_watch: crate::meter_watch::MeterWatch::default(),
             gpu_gauges: crate::gpu::GpuGauges::default(),
+            weather: crate::weather::WeatherSettings::default(),
             sweep: crate::sweep::SweepSettings::default(),
             credits: crate::credits::CreditsSaved::default(),
         }
@@ -766,6 +770,7 @@ mod tests {
             widget_places: [("seed".to_string(), [("today".to_string(), WidgetPlace { left: 12.5, top: 40.0 })].into_iter().collect())].into_iter().collect(),
             meter_watch: crate::meter_watch::MeterWatch { on: false, cpu: 75, memory: 85 },
             gpu_gauges: crate::gpu::GpuGauges { on: false },
+            weather: crate::weather::WeatherSettings { place: Some(crate::weather::Place { name: "Ipoh".into(), region: "Perak, Malaysia".into(), lat: 4.6, lon: 101.08 }), units: "imperial".into() },
             sweep: crate::sweep::SweepSettings { look: Some("broom".into()), recycle_bin: true },
             credits: crate::credits::CreditsSaved { seedance_budget: Some(20.0), suno_peak: Some(800.0), ..Default::default() },
         };

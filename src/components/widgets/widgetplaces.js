@@ -5,6 +5,7 @@
 export const WIDGETS = [
   { id: 'clock', name: 'Clock', about: 'The time and the date.' },
   { id: 'gauges', name: 'Gauges', about: "Your computer's CPU and memory." },
+  { id: 'weather', name: 'Weather', about: 'The weather where you are, and the next days. Uses your location if you allow it, or a city you search.' },
   { id: 'sweep', name: 'Sweep', about: 'Frees space: temp files, caches and more, after a preview.' },
   { id: 'usage', name: 'Usage', about: 'How much of your Claude Code and Codex limits is used.' },
   { id: 'today', name: 'Today', about: 'Your reminders for today.' },
