@@ -1,8 +1,11 @@
 <script setup>
 // One line of the chat room: a system note, the member's own bubble (on the right, with its
 // ticks), or someone else's (with a face). A reply shows its quote; reactions show as chips and a
-// small bar on hover or focus, only when the room offers them. Props in, events out.
+// small bar on hover or focus, only when the room offers them; a + opens a picker for any one emoji
+// when the room offers customReactions. Props in, events out.
+import { ref } from 'vue'
 import { REACTIONS, reactionChips, replySnippet } from '../roomchat.js'
+import EmojiPicker from './EmojiPicker.vue'
 
 const props = defineProps({
   line: { type: Object, required: true },
@@ -19,18 +22,24 @@ const props = defineProps({
   clock: { type: String, default: '' },
   // the member's ticks: { mark, read, title }
   tick: { type: Object, default: null },
-  // what the room offers: { replies, reactions }
-  can: { type: Object, default: () => ({ replies: false, reactions: false }) },
+  // what the room offers: { replies, reactions, customReactions }
+  can: { type: Object, default: () => ({ replies: false, reactions: false, customReactions: false }) },
 })
 const emit = defineEmits(['react', 'reply', 'jump'])
 
 const quote = () => replySnippet(props.line, props.lines)
 const chips = () => reactionChips(props.line)
+// the picker is open on this line (the bar stays shown while it is)
+const picking = ref(false)
+function picked(emoji) {
+  picking.value = false
+  emit('react', emoji)
+}
 </script>
 
 <template>
   <p v-if="line.author?.kind === 'system'" class="system"><em>{{ line.text }}</em></p>
-  <div v-else-if="mine" :id="'room-line-' + line.id" class="bubble mine" tabindex="-1">
+  <div v-else-if="mine" :id="'room-line-' + line.id" class="bubble mine" :class="{ picking }" tabindex="-1">
     <button v-if="quote()" class="quote" :disabled="!quote().loaded" @click="emit('jump', line.replyTo.id)"><strong>{{ quote().name }}</strong> {{ quote().text }}</button>
     <span class="text">{{ line.text }}</span>
     <span class="meta">{{ clock }} <span v-if="tick" class="tick" :class="{ read: tick.read }" :title="tick.title">{{ tick.mark }}</span></span>
@@ -39,10 +48,12 @@ const chips = () => reactionChips(props.line)
     </span>
     <span v-if="can.reactions || can.replies" class="tools" role="toolbar" aria-label="React or reply">
       <template v-if="can.reactions"><button v-for="e in REACTIONS" :key="e" :aria-label="'React ' + e" @click="emit('react', e)">{{ e }}</button></template>
+      <button v-if="can.reactions && can.customReactions" class="more" aria-label="Another reaction" title="Another reaction" :aria-expanded="picking" @click="picking = !picking">+</button>
       <button v-if="can.replies" @click="emit('reply')">Reply</button>
     </span>
+    <EmojiPicker v-if="picking" class="pick-mine" @pick="picked" @close="picking = false" />
   </div>
-  <div v-else :id="'room-line-' + line.id" class="bubble theirs" :class="[line.author?.kind, { ai }]" tabindex="-1">
+  <div v-else :id="'room-line-' + line.id" class="bubble theirs" :class="[line.author?.kind, { ai, picking }]" tabindex="-1">
     <span class="face"><img v-if="face" :src="face" alt="" /><template v-else>{{ initial }}</template></span>
     <div class="body">
       <span class="who" :title="speaker.title" :tabindex="ai ? 0 : undefined" :aria-label="speaker.title ? `${speaker.name}, ${speaker.title}` : undefined">{{ speaker.name }}<span v-if="ai" class="spark"> ✦</span></span>
@@ -56,8 +67,10 @@ const chips = () => reactionChips(props.line)
       </span>
       <span v-if="can.reactions || can.replies" class="tools" role="toolbar" aria-label="React or reply">
         <template v-if="can.reactions"><button v-for="e in REACTIONS" :key="e" :aria-label="'React ' + e" @click="emit('react', e)">{{ e }}</button></template>
+      <button v-if="can.reactions && can.customReactions" class="more" aria-label="Another reaction" title="Another reaction" :aria-expanded="picking" @click="picking = !picking">+</button>
         <button v-if="can.replies" @click="emit('reply')">Reply</button>
       </span>
+      <EmojiPicker v-if="picking" class="pick-theirs" @pick="picked" @close="picking = false" />
     </div>
     <span class="meta">{{ clock }}</span>
   </div>
@@ -203,8 +216,19 @@ const chips = () => reactionChips(props.line)
    when something in the line has the keyboard */
 .bubble.mine:hover .tools,
 .bubble.theirs .body:hover .tools,
-.bubble:focus-within .tools {
+.bubble:focus-within .tools,
+.bubble.picking .tools {
   display: flex;
+}
+/* the picker opens under the bar, from the same corner the bar hangs from */
+.pick-mine {
+  right: 8px;
+}
+.pick-theirs {
+  left: 8px;
+}
+.bubble.picking {
+  z-index: 4;
 }
 .tools button {
   padding: 2px 6px;
