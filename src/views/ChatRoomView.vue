@@ -44,9 +44,6 @@ const nameSaving = ref(false)
 const nameLine = ref('')
 const turnLog = ref('') // the companion's room turns, raw
 const presence = ref([])
-// IN THE ROOM shows this many rows before it scrolls on its own, so a busy room never pushes
-// the switches and YOUR PROFILE below it out of sight.
-const ROSTER_ROWS = 12
 const refused = ref(null)
 const draft = ref('')
 const files = ref({})
@@ -532,27 +529,6 @@ watch(() => props.visible, (on) => {
       </section>
 
       <aside class="side widget">
-        <h3>IN THE ROOM<span v-if="presence.length" class="count"> ({{ presence.length }})</span></h3>
-        <ul class="roster" :class="{ scrolls: presence.length > ROSTER_ROWS }">
-          <li v-for="(p, index) in presence" :key="`${p.kind}:${p.name}:${index}`" :class="presenceState(p)">
-            <span class="face small"><img v-if="faces[p.avatar]" :src="faces[p.avatar]" alt="" /><template v-else>{{ initial(p) }}</template></span>
-            <span class="dot" role="img" :aria-label="presenceState(p)" :title="presenceState(p)">●</span>
-            <span class="name" :title="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : speaker(p).name" :tabindex="speaker(p).title ? 0 : undefined" :aria-label="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : undefined">{{ speaker(p).name }}<span v-if="['assistant', 'member_assistant'].includes(p.kind)"> ✦</span></span>
-            <span v-if="p.kind === 'host'" class="tag">host</span>
-            <span v-else-if="p.foundation" class="tag">Foundation</span>
-          </li>
-        </ul>
-        <h3>{{ companion.toUpperCase() }} IN THE ROOM</h3>
-        <button type="button" role="switch" :aria-checked="haveCompanionKey" :aria-label="`Let ${companion} in`" :disabled="roomSaving" class="room-toggle" @click="setCompanionIn(!haveCompanionKey)">
-          <span>{{ roomSaving ? 'Updating…' : `Let ${companion} in` }}</span>
-          <span class="toggle-track" :class="{ enabled: haveCompanionKey }" aria-hidden="true"><span class="toggle-thumb"></span></span>
-        </button>
-        <label for="room-participation" class="hint participation-label">Participation rule</label>
-        <GlassSelect id="room-participation" class="participation-select" :model-value="mode" :options="[{ value: 'off', label: 'Listening only' }, { value: 'named', label: 'When named' }, { value: 'joins', label: 'Joins in' }]" :disabled="!haveCompanionKey || roomSaving" @update:model-value="changeParticipation" />
-        <p class="hint">{{ !haveCompanionKey ? `Switch on to let ${companion} enter, then choose a rule.` : mode === 'off' ? `${companion} listens without posting replies.` : mode === 'named' ? `${companion} replies when someone mentions its name.` : `${companion} may join the conversation on your usage, without sharing anything private.` }}</p>
-        <p v-if="doorProblem" class="problem">{{ doorProblem }}</p>
-        <button class="chat-settings-open" @click="emit('settings', 'chat')">Chat settings</button>
-        <p class="hint">The alerts, and {{ companion }}'s voice here and public card once it is in.</p>
         <h3>YOUR PROFILE</h3>
         <div class="profile-pair">
           <section class="profile-person" aria-label="Your room picture" @focusout="menuOut">
@@ -596,6 +572,29 @@ watch(() => props.visible, (on) => {
         </form>
         <p v-if="nameLine" role="status" class="hint">{{ nameLine }}</p>
         <p v-if="companionLine" role="status" class="hint">{{ companionLine }}</p>
+        <h3>{{ companion.toUpperCase() }} IN THE ROOM</h3>
+        <button type="button" role="switch" :aria-checked="haveCompanionKey" :aria-label="`Let ${companion} in`" :disabled="roomSaving" class="room-toggle" @click="setCompanionIn(!haveCompanionKey)">
+          <span>{{ roomSaving ? 'Updating…' : `Let ${companion} in` }}</span>
+          <span class="toggle-track" :class="{ enabled: haveCompanionKey }" aria-hidden="true"><span class="toggle-thumb"></span></span>
+        </button>
+        <label for="room-participation" class="hint participation-label">Participation rule</label>
+        <GlassSelect id="room-participation" class="participation-select" :model-value="mode" :options="[{ value: 'off', label: 'Listening only' }, { value: 'named', label: 'When named' }, { value: 'joins', label: 'Joins in' }]" :disabled="!haveCompanionKey || roomSaving" @update:model-value="changeParticipation" />
+        <p class="hint">{{ !haveCompanionKey ? `Switch on to let ${companion} enter, then choose a rule.` : mode === 'off' ? `${companion} listens without posting replies.` : mode === 'named' ? `${companion} replies when someone mentions its name.` : `${companion} may join the conversation on your usage, without sharing anything private.` }}</p>
+        <p v-if="doorProblem" class="problem">{{ doorProblem }}</p>
+        <button class="chat-settings-open" @click="emit('settings', 'chat')">Chat settings</button>
+        <p class="hint">The alerts, and {{ companion }}'s voice here and public card once it is in.</p>
+        <div class="roster-area">
+          <h3>IN THE ROOM<span v-if="presence.length" class="count"> ({{ presence.length }})</span></h3>
+          <ul class="roster">
+            <li v-for="(p, index) in presence" :key="`${p.kind}:${p.name}:${index}`" :class="presenceState(p)">
+              <span class="face small"><img v-if="faces[p.avatar]" :src="faces[p.avatar]" alt="" /><template v-else>{{ initial(p) }}</template></span>
+              <span class="dot" role="img" :aria-label="presenceState(p)" :title="presenceState(p)">●</span>
+              <span class="name" :title="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : speaker(p).name" :tabindex="speaker(p).title ? 0 : undefined" :aria-label="speaker(p).title ? `${speaker(p).name}, ${speaker(p).title}` : undefined">{{ speaker(p).name }}<span v-if="['assistant', 'member_assistant'].includes(p.kind)"> ✦</span></span>
+              <span v-if="p.kind === 'host'" class="tag">host</span>
+              <span v-else-if="p.foundation" class="tag">Foundation</span>
+            </li>
+          </ul>
+        </div>
         <div class="profile-footer">
           <button type="button" :title="`${companion}'s turns in the room, raw`" @click="logOpen = true">Log</button>
           <button @click="signOut">Sign out</button>
@@ -881,10 +880,21 @@ li.online .dot, li.here .dot, li.active .dot {
   font-weight: 400;
   color: var(--text-dim);
 }
-/* 12 rows (22px face + 6px row gap each) before the room's own scrollbar takes over, so a busy
-   room scrolls in place instead of pushing the switches and YOUR PROFILE further down the sidebar */
-.roster.scrolls {
-  max-height: calc(12 * 28px - 6px);
+/* The panel reads top to bottom as: your profile and your companion's switches (always the same size,
+   so they stay put), then who is in the room (takes what is left and scrolls inside itself however
+   many people come and go), then Log and Sign out at the bottom. */
+.roster-area {
+  display: flex;
+  flex: 1 1 140px;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 96px;
+}
+.roster-area h3 { flex: none; }
+.roster {
+  flex: 1;
+  align-content: start; /* rows keep their own height instead of stretching down the area */
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
   margin-right: -4px;

@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **CHAT's side panel keeps still.** It now reads YOUR PROFILE, then your companion's switches, then who is IN THE ROOM, with Log and Sign out fixed at the bottom. The first two never change size, and the room list takes the space that is left and scrolls inside itself, so people joining or leaving no longer push your profile and your companion's controls up and down.
+
 - **CHAT is just the chat.** The CHAT and LOG tabs above the room are gone: the conversation fills the whole page. The companion's log, which few people need, now opens from a **Log** button in the side panel, just above **Sign out**, in its own window (Esc closes it).
 
 ## 0.2.17 - 2026-11-18
