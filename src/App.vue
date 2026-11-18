@@ -5,6 +5,7 @@ import TerminalPanel from './components/TerminalPanel.vue'
 import ClockWidget from './components/widgets/ClockWidget.vue'
 import GaugeWidget from './components/widgets/GaugeWidget.vue'
 import WeatherWidget from './components/widgets/WeatherWidget.vue'
+import DisksWidget from './components/widgets/DisksWidget.vue'
 import SweepWidget from './components/widgets/SweepWidget.vue'
 import SetupView from './views/SetupView.vue'
 import HomeCards from './components/widgets/HomeCards.vue'
@@ -150,8 +151,8 @@ const savedKeys = ref([])
 // The widgets HOME draws: switched on, placed by the theme (all but the clock and the gauges),
 // and for a credit widget, its key saved.
 // clock, gauges, Sweep and weather show even when a theme names no place for them (Sweep and weather then take their own)
-const SELF_PLACED = ['clock', 'gauges', 'sweep', 'weather']
-const FALLBACK_PLACES = { sweep: { right: '31%', top: '22%' }, weather: { left: '2%', bottom: '4%' } }
+const SELF_PLACED = ['clock', 'gauges', 'sweep', 'weather', 'disks']
+const FALLBACK_PLACES = { sweep: { right: '31%', top: '22%' }, weather: { left: '2%', bottom: '4%' }, disks: { right: '2%', bottom: '4%' } }
 const shownWidgets = computed(() =>
   WIDGETS.map((w) => w.id).filter(
     (id) => isOn(id, { ...widgetPrefs.value, showUsageCard: usageCard.value }) && (SELF_PLACED.includes(id) || widgets.value[id]) && hasItsKey(id, savedKeys.value),
@@ -577,6 +578,7 @@ watch(settingsStamp, () => {
           <ClockWidget v-if="id === 'clock'" :size="widgets.clock?.size ?? 'm'" :format="barClock.format" />
           <GaugeWidget v-else-if="id === 'gauges'" />
           <WeatherWidget v-else-if="id === 'weather'" />
+          <DisksWidget v-else-if="id === 'disks'" />
           <SweepWidget v-else-if="id === 'sweep'" :theme-look="theme?.sweep?.look ?? ''" />
           <UsageWidget v-else-if="id === 'usage'" :stamp="settingsStamp" />
           <CreditWidget v-else-if="isCreditWidget(id)" :widget="id" />

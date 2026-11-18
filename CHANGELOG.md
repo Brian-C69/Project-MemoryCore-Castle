@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **A DISKS widget on HOME.** Shows every drive of your computer with a bar for how full it is (amber from 85%, red from 95%) and how much is free of its size, with the total across all drives when there is more than one. It only reads the drive list from your computer, sends nothing anywhere and changes nothing; Sweep is still the widget that frees space. It is on by default and can be switched off in Settings > Widgets.
+
 ## 0.2.20 - 2026-11-19
 
 - **A new mood every day.** Your companion wakes each morning in a mood of its own, written from three words drawn at random, its traits and today's look. It shows under its portrait as chips and one sentence, colours how it talks (in CHAT too), stays the day, and changes only when something truly moves your companion. Every mood is kept in your memory database. On to begin with; Settings > Companion > Mood turns it off.
