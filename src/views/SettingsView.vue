@@ -455,6 +455,8 @@ onMounted(async () => {
             <small>Leave out my personal Claude Code setup (its own CLAUDE.md, hooks and plugins) in Castle's session. Turn this on when that setup is another companion, or to test with a clean one.</small>
           </span>
         </label>
+        <h3 class="with-tip">Mood <HelpTip :text="`Every morning ${settings.companionName ?? 'your companion'} wakes in a new mood, written from three words drawn at random, its traits and today's look. It shows under its portrait, colours how it talks, and stays the day - unless something truly moves it and it changes the mood itself. Each morning's mood is one short run on your own plan.`" /></h3>
+        <label class="toggle"><input type="checkbox" :checked="settings.dailyMoodOn !== false" :disabled="!!busy" @change="save({ dailyMoodOn: $event.target.checked }, $event.target.checked ? 'A new mood every morning.' : 'The mood stays as it is.')" /> A new mood every day</label>
         <h3>Names</h3>
         <div class="row">
           <label>Companion <input v-model="settings.companionName" maxlength="40" /></label>
