@@ -401,3 +401,8 @@ export const marketStop = () => invoke('market_stop')
 export const marketTurns = (runId, page) => invoke('market_turns', { runId, page })
 export const marketLessons = () => invoke('market_lessons')
 export const marketLessonDelete = (lessonId) => invoke('market_lesson_delete', { lessonId })
+
+// PROJECTS: where the project behind a reader page (db/project/<id>.md) is, and moving it.
+// -> { name, shelf: active|paused|archived|deleted, note, daysLeft }
+export const projectState = (file) => invoke('project_state', { file })
+export const projectShelve = (file, to, note = null) => invoke('project_shelve', { file, to, note })

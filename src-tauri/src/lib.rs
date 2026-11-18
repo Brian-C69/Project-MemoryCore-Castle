@@ -44,6 +44,7 @@ mod weather;
 mod meter_watch;
 mod mirror;
 mod plans;
+mod project_room;
 mod profile;
 mod pty;
 mod providers;
@@ -287,6 +288,8 @@ pub fn run() {
         .manage(market::engine::Viewing::default())
         .invoke_handler(tauri::generate_handler![
             get_settings,
+            project_room::project_state,
+            project_room::project_shelve,
             alerts::alert_sources,
             alerts::alert_active_room,
             roomalert::alert_sounds,
