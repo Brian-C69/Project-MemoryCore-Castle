@@ -16,6 +16,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **A WEATHER widget on HOME.** Shows the temperature, what it feels like, humidity, wind, today's high and low and the next four days, with a drawn icon for the sky (sun or moon, cloud, rain, snow, fog, storm) and a soft glow in the sky's colour that sits on any theme. The gear sets the place: **Use my location** asks Windows first, or search for a city; °C / km/h or °F / mph. The weather comes from Open-Meteo, which is free and needs no key; Castle sends only a city name you typed or coordinates rounded to about 1 km, and keeps readings for ten minutes. It stays off until you switch it on in Widgets, and Windows only asks for your location when you press **Use my location**. Move it like any other widget.
 
+- **Your companion can speak in CHAT.** With an ElevenLabs key saved, switch on **Let <companion> speak in the room** in Settings > Chat: it speaks a short line aloud when someone asks to hear it, and everyone in the room gets the words with a player. Up to 5 voices a day (two to begin with) under the room's own count, in the ElevenLabs voice you choose or the default one. If a voice cannot be made, the words are posted as text, so nothing is lost. It is off until you turn it on.
+
 ## 0.2.17 - 2026-11-18
 
 - **Three new themes: The Sunset Shore, The Star Shore and The Emerald River.** Three quiet places with nobody in them, each with its own colours, layout and Sweep look.
