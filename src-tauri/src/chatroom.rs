@@ -143,6 +143,11 @@ impl Room {
         Self::answer(response).map_err(voice_refusal)?.json().map_err(|_| refusal("other", "The room sent something unreadable."))
     }
 
+    /// The same for voices (a member's AI only): (voices a day, voices today).
+    pub fn voice_day(&self) -> Option<(u64, u64)> {
+        media_voices(&self.me().ok()?)
+    }
+
     /// What this key may still post today (a member's AI only): (pictures a day, pictures today).
     pub fn picture_day(&self) -> Option<(u64, u64)> {
         media_pictures(&self.me().ok()?)
@@ -283,12 +288,6 @@ pub fn voice_refusal(no: RoomRefusal) -> RoomRefusal {
         "wrongType" => refusal("wrongType", "The room did not take that recording."),
         _ => no,
     }
-}
-
-/// The base64 the page sends, as bytes. Pure, tested.
-pub fn voice_bytes(audio: &str) -> Result<Vec<u8>, RoomRefusal> {
-    let audio = audio.split_once(',').map(|(_, b)| b).unwrap_or(audio).trim();
-    base64::engine::general_purpose::STANDARD.decode(audio).map_err(|_| refusal("other", "That recording could not be read."))
 }
 
 /// `me().media.caps.voices` and `me().media.today.voices`, when the room gives them. Pure, tested.
@@ -617,20 +616,6 @@ pub async fn room_post(text: String, who: Option<String>, reply_to: Option<u64>,
     Ok(line)
 }
 
-/// Posts the member's own voice (an mp3 the page recorded, as base64), with its words and as a
-/// reply when given; the line is remembered as the member's like a typed one.
-#[tauri::command]
-pub async fn room_post_voice(audio: String, text: Option<String>, reply_to: Option<u64>, store: State<'_, SettingsStore>) -> Result<Value, RoomRefusal> {
-    let bytes = voice_bytes(&audio)?;
-    check_voice(&bytes)?;
-    let room = room_for(&store, "me")?;
-    let line = blocking(move || room.post_voice(bytes, text.as_deref(), reply_to)).await?;
-    if let Some(id) = line.get("id").and_then(Value::as_u64) {
-        remember_mine(&store, id);
-    }
-    Ok(line)
-}
-
 /// The member's reaction on a line, added (`on`) or taken back: `{ id, reactions }`.
 #[tauri::command]
 pub async fn room_react(id: u64, emoji: String, on: bool, store: State<'_, SettingsStore>) -> Result<Value, RoomRefusal> {
@@ -837,13 +822,6 @@ mod tests {
         assert_eq!(check_voice(&big).unwrap_err().kind, "tooLarge");
         big.truncate(ROOM_LINE_VOICE_MAX);
         assert!(check_voice(&big).is_ok(), "exactly 2 MB is taken");
-    }
-
-    #[test]
-    fn the_page_voice_is_read_from_base64_with_or_without_its_data_prefix() {
-        assert_eq!(voice_bytes("SUQz").unwrap(), b"ID3");
-        assert_eq!(voice_bytes("data:audio/mpeg;base64,SUQz").unwrap(), b"ID3");
-        assert_eq!(voice_bytes("not base64!").unwrap_err().kind, "other");
     }
 
     #[test]

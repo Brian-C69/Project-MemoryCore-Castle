@@ -207,6 +207,12 @@ pub struct Settings {
     pub room_pictures_on: bool,
     pub room_pictures_per_day: u32,
     pub room_picture_quality: String,
+    /// The companion may speak a short line aloud in the chat room with the member's ElevenLabs
+    /// key (off by default), at most this many a day (0..5, under the room's own cap), in this
+    /// ElevenLabs voice (none = the default voice STUDIO uses).
+    pub room_voices_on: bool,
+    pub room_voices_per_day: u32,
+    pub room_voice_id: Option<String>,
     /// Optional local-time clock immediately before the top bar's music controls.
     pub display_clock: bool,
     /// "12h" or "24h".
@@ -375,6 +381,9 @@ impl Default for Settings {
             room_pictures_on: false,
             room_pictures_per_day: 1,
             room_picture_quality: "low".into(),
+            room_voices_on: false,
+            room_voices_per_day: 2,
+            room_voice_id: None,
             display_clock: false,
             clock_format: "24h".into(),
             voicestudio_on: false,
@@ -440,6 +449,9 @@ impl Settings {
         if self.alert_sound_name.is_empty() || self.alert_sound_name.len() > 110 { self.alert_sound_name = crate::roomalert::DEFAULT_SOUND.into(); }
         self.room_pictures_per_day = self.room_pictures_per_day.min(5);
         if !["low", "medium"].contains(&self.room_picture_quality.as_str()) { self.room_picture_quality = "low".into(); }
+        self.room_voices_per_day = self.room_voices_per_day.min(5);
+        // an ElevenLabs voice id is letters and digits; anything else is no choice (the default voice)
+        self.room_voice_id = self.room_voice_id.take().map(|v| v.trim().to_string()).filter(|v| !v.is_empty() && v.len() <= 64 && v.chars().all(|c| c.is_ascii_alphanumeric()));
         fn clean(value: Option<String>) -> Option<String> {
             value.map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
         }
@@ -711,6 +723,17 @@ mod tests {
     }
 
     #[test]
+    fn room_voices_start_off_two_a_day_with_the_default_voice_and_stay_in_bounds() {
+        let old: Settings = serde_json::from_str::<Settings>(r#"{"setupDone":true}"#).unwrap().normalized();
+        assert!(!old.room_voices_on, "an older file never starts speaking by itself");
+        assert_eq!((old.room_voices_per_day, old.room_voice_id.as_deref()), (2, None));
+        let wild: Settings = serde_json::from_str::<Settings>(r#"{"roomVoicesPerDay":40,"roomVoiceId":" abc/../x "}"#).unwrap().normalized();
+        assert_eq!((wild.room_voices_per_day, wild.room_voice_id.as_deref()), (5, None), "never more than 5 a day; an id that is not letters and digits is no choice");
+        let chosen: Settings = serde_json::from_str::<Settings>(r#"{"roomVoiceId":" 21m00Tcm4TlvDq8ikWAM "}"#).unwrap().normalized();
+        assert_eq!(chosen.room_voice_id.as_deref(), Some("21m00Tcm4TlvDq8ikWAM"));
+    }
+
+    #[test]
     fn a_missing_file_gives_the_defaults_with_start_up_off() {
         let folder = temp_folder("missing");
         let (settings, warning) = load(&folder.join(FILE_NAME));
@@ -745,6 +768,9 @@ mod tests {
             room_pictures_on: true,
             room_pictures_per_day: 3,
             room_picture_quality: "medium".into(),
+            room_voices_on: true,
+            room_voices_per_day: 4,
+            room_voice_id: Some("21m00Tcm4TlvDq8ikWAM".into()),
             display_clock: true,
             clock_format: "12h".into(),
             voicestudio_on: true,

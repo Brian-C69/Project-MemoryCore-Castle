@@ -54,6 +54,7 @@ mod quota;
 mod alerts;
 mod roomalert;
 mod roomdraw;
+mod roomvoice;
 mod roomread;
 mod rooms;
 mod roomturn;
@@ -436,6 +437,7 @@ pub fn run() {
             roomread::room_reconnect,
             roomturn::room_log,
             roomdraw::room_pictures_status,
+            roomvoice::room_voices_status,
             roomturn::room_card,
             roomturn::room_card_save,
             worlds::worlds_mine,
@@ -446,7 +448,6 @@ pub fn run() {
             chatroom::room_lines,
             chatroom::room_presence,
             chatroom::room_post,
-            chatroom::room_post_voice,
             chatroom::room_react,
             chatroom::room_file,
             update::update_check,
