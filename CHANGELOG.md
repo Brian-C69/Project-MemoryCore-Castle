@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.19 - 2026-11-18
+
 - **A picture in CHAT opens large, and can be saved.** Click (or press Enter on) a picture in the room to see it full size in Castle's picture viewer: zoom with the wheel or a click, drag it, move between the room's pictures with the arrows, Esc to close. **Save picture** puts it where you choose with Windows' Save dialog. Before, the pictures were small and the only way to get one was right-clicking its raw `data:` address.
 
 ## 0.2.18 - 2026-11-18
