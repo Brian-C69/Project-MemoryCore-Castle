@@ -131,6 +131,11 @@ export const memoryRead = (file) => invoke('memory_read', { file })
 // the graphics-card gauges ({ gauges, on, found }) and their switch
 export const gpuMeters = () => invoke('gpu_meters')
 export const gpuGaugesSave = (on) => invoke('gpu_gauges_save', { on })
+export const weatherGet = () => invoke('weather_get')
+export const weatherSearch = (query) => invoke('weather_search', { query })
+export const weatherSave = (place, units) => invoke('weather_save', { place, units })
+export const weatherHere = (lat, lon) => invoke('weather_here', { lat, lon })
+export const weatherRead = (force = false) => invoke('weather_read', { force })
 
 // SWEEP, HOME's cleaner. sweepStatus -> { settings: { look, recycleBin }, lastSwept (unix s or null), deep (Deep clean offered) };
 // sweepMeasure -> [{ id, label, bytes, files, note }] (nothing deleted; the groups offered on this computer);

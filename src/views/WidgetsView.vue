@@ -18,7 +18,6 @@ const savedKeys = ref([])
 const problem = ref('')
 const notice = ref('')
 
-const placed = (id) => ['clock', 'gauges', 'sweep'].includes(id) || Boolean(props.themeWidgets[id])
 const hasPlaces = () => Object.keys(settings.value.widgetPlaces?.[props.themeId] ?? {}).length > 0
 
 async function load() {
@@ -71,8 +70,7 @@ onMounted(load)
         </div>
         <p class="dim">{{ w.about }}</p>
         <p v-if="w.id === 'usage'" class="dim small">Off also stops Castle asking Claude Code and Codex for their limits.</p>
-        <p v-if="!placed(w.id)" class="dim small">This theme has no place for it.</p>
-        <p v-else-if="!hasItsKey(w.id, savedKeys)" class="dim small">Shown once its key is saved in Settings &gt; Keys.</p>
+        <p v-if="!hasItsKey(w.id, savedKeys)" class="dim small">Shown once its key is saved in Settings &gt; Keys.</p>
         <div class="sizes" role="group" :aria-label="`${w.name} size`">
           <button
             v-for="size in ['s', 'm', 'l']"

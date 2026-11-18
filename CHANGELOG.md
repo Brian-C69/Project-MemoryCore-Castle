@@ -14,6 +14,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **Clicking a notification brings Castle back again.** Since the notification started carrying Castle's own address, a click from outside Castle could leave Castle where it was and only flash its taskbar button, because Windows lets the freshly started copy come to the front, not the one already running. The new copy now brings the running Castle forward itself (restoring it if it was minimised or hidden in the tray), and the running one raises its window above the others, so you land on the room the notification was about. (Windows also rewrites the notification's address with an extra "/"; Castle now reads that form too, so the click opens the right room and not only the window.)
 
+- **A WEATHER widget on HOME.** Shows the temperature, what it feels like, humidity, wind, today's high and low and the next four days, with a drawn icon for the sky (sun or moon, cloud, rain, snow, fog, storm) and a soft glow in the sky's colour that sits on any theme. The gear sets the place: **Use my location** asks Windows first, or search for a city; °C / km/h or °F / mph. The weather comes from Open-Meteo, which is free and needs no key; Castle sends only a city name you typed or coordinates rounded to about 1 km, and keeps readings for ten minutes. It stays off until you switch it on in Widgets, and Windows only asks for your location when you press **Use my location**. Move it like any other widget.
+
 ## 0.2.17 - 2026-11-18
 
 - **Three new themes: The Sunset Shore, The Star Shore and The Emerald River.** Three quiet places with nobody in them, each with its own colours, layout and Sweep look.

@@ -291,6 +291,9 @@ pub struct Settings {
     /// HOME's widgets the member switched off in WIDGETS. USAGE is not listed here: its switch is
     /// `show_usage_card`, which also stops Castle asking the CLIs.
     pub widgets_off: Vec<String>,
+    /// HOME's widgets that stay hidden until the member switches them on (WIDGET_OPT_IN), so one that
+    /// asks for something, like the weather's location, never appears by itself after an update.
+    pub widgets_on: Vec<String>,
     /// Each widget's size on HOME: one of WIDGET_SIZES (a widget not listed is "m").
     pub widget_sizes: std::collections::BTreeMap<String, String>,
     /// Where the member put HOME's widgets, per theme id: the widget's top-left corner as
@@ -302,6 +305,9 @@ pub struct Settings {
     /// The graphics-card gauges beside CPU and RAM: shown or not. Changed only by its own command
     /// (gpu_gauges_save), never by the Settings page.
     pub gpu_gauges: crate::gpu::GpuGauges,
+    /// The weather widget's place and units. Changed only by its own command (weather_save), never
+    /// by the Settings page.
+    pub weather: crate::weather::WeatherSettings,
     /// Sweep's gear: the look chosen by hand and whether the Recycle Bin starts ticked. Changed only
     /// by its own command (sweep_settings_save), never by the Settings page.
     pub sweep: crate::sweep::SweepSettings,
@@ -311,11 +317,13 @@ pub struct Settings {
 }
 
 /// HOME's widgets, by id (the theme's `widgets` keys).
-pub const WIDGETS: [&str; 13] = [
-    "clock", "gauges", "usage", "today", "projects", "diary", "growth", "backup", "database",
+pub const WIDGETS: [&str; 14] = [
+    "clock", "gauges", "weather", "usage", "today", "projects", "diary", "growth", "backup", "database",
     // HOME's credit widgets, each shown once its key is saved
     "credit-openai", "credit-seedance", "credit-suno", "credit-elevenlabs",
 ];
+/// Widgets that are off until the member switches them on.
+pub const WIDGET_OPT_IN: [&str; 1] = ["weather"];
 pub const WIDGET_SIZES: [&str; 3] = ["s", "m", "l"];
 /// The most themes whose widget places are kept.
 const WIDGET_THEMES_MAX: usize = 64;
@@ -402,10 +410,12 @@ impl Default for Settings {
             dev_root: None,
             tab_order: Vec::new(),
             widgets_off: Vec::new(),
+            widgets_on: Vec::new(),
             widget_sizes: std::collections::BTreeMap::new(),
             widget_places: std::collections::BTreeMap::new(),
             meter_watch: crate::meter_watch::MeterWatch::default(),
             gpu_gauges: crate::gpu::GpuGauges::default(),
+            weather: crate::weather::WeatherSettings::default(),
             sweep: crate::sweep::SweepSettings::default(),
             credits: crate::credits::CreditsSaved::default(),
         }
@@ -476,6 +486,10 @@ impl Settings {
         off.sort();
         off.dedup();
         self.widgets_off = off;
+        let mut on: Vec<String> = std::mem::take(&mut self.widgets_on).into_iter().filter(|w| WIDGET_OPT_IN.contains(&w.as_str())).collect();
+        on.sort();
+        on.dedup();
+        self.widgets_on = on;
         self.widget_sizes.retain(|w, size| WIDGETS.contains(&w.as_str()) && WIDGET_SIZES.contains(&size.as_str()) && size != "m");
         self.widget_places = std::mem::take(&mut self.widget_places)
             .into_iter()
@@ -637,6 +651,15 @@ mod tests {
     }
 
     #[test]
+    fn the_weather_widget_stays_off_until_it_is_switched_on() {
+        let old: Settings = serde_json::from_str(r#"{"setupDone":true,"widgetsOff":["diary"]}"#).unwrap();
+        assert!(old.normalized().widgets_on.is_empty(), "a settings file from before the weather widget has it off");
+        let on: Settings = serde_json::from_str(r#"{"widgetsOn":["weather","weather","diary","nonsense"]}"#).unwrap();
+        assert_eq!(on.normalized().widgets_on, ["weather"], "only opt-in widgets are kept, once");
+        assert!(WIDGETS.contains(&"weather"), "its size and place are kept like every widget's");
+    }
+
+    #[test]
     fn clock_defaults_and_invalid_formats_are_safe() {
         let old: Settings = serde_json::from_str(r#"{"setupDone":true}"#).unwrap();
         assert!(!old.display_clock);
@@ -762,10 +785,12 @@ mod tests {
             dev_root: Some("D:/Projects".into()),
             tab_order: vec!["dev".into(), "home".into(), "chat".into()],
             widgets_off: vec!["growth".into()],
+            widgets_on: vec!["weather".into()],
             widget_sizes: [("clock".to_string(), "l".to_string())].into_iter().collect(),
             widget_places: [("seed".to_string(), [("today".to_string(), WidgetPlace { left: 12.5, top: 40.0 })].into_iter().collect())].into_iter().collect(),
             meter_watch: crate::meter_watch::MeterWatch { on: false, cpu: 75, memory: 85 },
             gpu_gauges: crate::gpu::GpuGauges { on: false },
+            weather: crate::weather::WeatherSettings { place: Some(crate::weather::Place { name: "Ipoh".into(), region: "Perak, Malaysia".into(), lat: 4.6, lon: 101.08 }), units: "imperial".into() },
             sweep: crate::sweep::SweepSettings { look: Some("broom".into()), recycle_bin: true },
             credits: crate::credits::CreditsSaved { seedance_budget: Some(20.0), suno_peak: Some(800.0), ..Default::default() },
         };

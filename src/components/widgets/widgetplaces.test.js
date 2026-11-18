@@ -4,9 +4,18 @@ import { dragBegins, dropPlace, isOn, startsOnControl, memberPlace, placeFor, pl
 describe('HOME widgets as the member arranges them', () => {
   it('lists every widget the themes place', () => {
     expect(WIDGETS.map((w) => w.id)).toEqual([
-      'clock', 'gauges', 'sweep', 'usage', 'today', 'projects', 'diary', 'growth', 'backup', 'database',
+      'clock', 'gauges', 'weather', 'sweep', 'usage', 'today', 'projects', 'diary', 'growth', 'backup', 'database',
       'credit-openai', 'credit-seedance', 'credit-suno', 'credit-elevenlabs',
     ])
+  })
+
+  it('keeps an opt-in widget hidden until it is switched on', () => {
+    expect(isOn('weather', {})).toBe(false)
+    expect(isOn('weather', { widgetsOff: [] })).toBe(false)
+    expect(isOn('weather', { widgetsOn: ['weather'] })).toBe(true)
+    expect(switchPatch('weather', true, {})).toEqual({ widgetsOn: ['weather'] })
+    expect(switchPatch('weather', false, { widgetsOn: ['weather'] })).toEqual({ widgetsOn: [] })
+    expect(switchPatch('diary', false, {})).toEqual({ widgetsOff: ['diary'] })
   })
 
   it('shows a credit widget only once its key is saved', () => {

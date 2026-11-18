@@ -40,6 +40,7 @@ mod memdb;
 mod market;
 mod memory;
 mod gpu;
+mod weather;
 mod meter_watch;
 mod mirror;
 mod plans;
@@ -162,6 +163,8 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
         settings.meter_watch = current.meter_watch;
         // the graphics-card gauges' switch is saved only by its own command (gpu_gauges_save)
         settings.gpu_gauges = current.gpu_gauges.clone();
+        // the weather widget's place and units are saved only by its own command (weather_save)
+        settings.weather = current.weather.clone();
         // Sweep's gear is saved only by its own command (sweep_settings_save)
         settings.sweep = current.sweep.clone();
         // the credit widgets' figures, states and budget are kept by their own commands
@@ -347,6 +350,11 @@ pub fn run() {
             commands::system_meters,
             gpu::gpu_meters,
             gpu::gpu_gauges_save,
+            weather::weather_get,
+            weather::weather_search,
+            weather::weather_save,
+            weather::weather_here,
+            weather::weather_read,
             sweep::sweep_status,
             sweep::sweep_measure,
             sweep::sweep_clean,
