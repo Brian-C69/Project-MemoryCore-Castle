@@ -9,6 +9,7 @@ import GlassSelect from '../components/GlassSelect.vue'
 import RoomLine from '../components/room/RoomLine.vue'
 import RoomComposer from '../components/room/RoomComposer.vue'
 import ModalSheet from '../components/ModalSheet.vue'
+import HelpTip from '../components/HelpTip.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../components/roomsteps.js'
 import { listen } from '@tauri-apps/api/event'
@@ -63,6 +64,16 @@ const haveCompanionKey = computed(() => keys.value.some((k) => k.name === 'room-
 const ready = computed(() => !!member.value?.roomOpen)
 const locked = computed(() => !ready.value || refused.value?.kind === 'locked' || refused.value?.kind === 'notSetUp')
 const mode = computed(() => settings.value?.roomCompanionMode ?? 'off')
+// what the companion's rule means, kept behind a (?) so the panel does not change height with it
+const participationHelp = computed(() =>
+  !haveCompanionKey.value
+    ? `Switch on to let ${props.companion} enter, then choose a rule.`
+    : mode.value === 'off'
+      ? `${props.companion} listens without posting replies.`
+      : mode.value === 'named'
+        ? `${props.companion} replies when someone mentions its name.`
+        : `${props.companion} may join the conversation on your usage, without sharing anything private.`,
+)
 const today = ref(new Date())
 const shown = computed(() => datedLines(lines.value, today.value))
 const avatarToken = (author) => currentAvatar(author, presence.value)
@@ -559,30 +570,26 @@ watch(() => props.visible, (on) => {
         </div>
         <p v-if="faceLine" role="status" class="hint">{{ faceLine }}</p>
         <form v-if="nameEditing" class="name-edit" @submit.prevent="saveDisplayName">
-          <label for="room-display-name">Public display name</label>
+          <label for="room-display-name" class="has-tip">Public display name<HelpTip block text="Shown to everyone in the Foundation room. Leave empty to use your Library card name." /></label>
           <input id="room-display-name" v-model="displayName" maxlength="80" :disabled="nameSaving" />
-          <p class="hint">Shown to everyone in the Foundation room. Leave empty to use your Library card name.</p>
           <div class="row wrap"><button class="primary" :disabled="nameSaving">{{ nameSaving ? 'Saving…' : 'Save name' }}</button><button type="button" :disabled="nameSaving" @click="nameEditing = false">Cancel</button></div>
         </form>
         <form v-if="companionEditing" class="name-edit" @submit.prevent="saveCompanionName">
-          <label for="companion-name">{{ companion }}'s name</label>
+          <label for="companion-name" class="has-tip">{{ companion }}'s name<HelpTip block :text="`The new name shows everywhere in Castle at once, and in the chat room if ${companion} is in it. Names already written in your memory files stay as they are: ask ${companion} to update the memory.`" /></label>
           <input id="companion-name" v-model="companionName" maxlength="40" :disabled="companionSaving" />
-          <p class="hint">The new name shows everywhere in Castle at once, and in the chat room if {{ companion }} is in it. Names already written in your memory files stay as they are: ask {{ companion }} to update the memory.</p>
           <div class="row wrap"><button class="primary" :disabled="companionSaving || !companionName.trim()">{{ companionSaving ? 'Saving…' : 'Save name' }}</button><button type="button" :disabled="companionSaving" @click="companionEditing = false">Cancel</button></div>
         </form>
         <p v-if="nameLine" role="status" class="hint">{{ nameLine }}</p>
         <p v-if="companionLine" role="status" class="hint">{{ companionLine }}</p>
-        <h3>{{ companion.toUpperCase() }} IN THE ROOM</h3>
+        <h3 class="has-tip">{{ companion.toUpperCase() }} IN THE ROOM<HelpTip block :text="`Switch on to let ${companion} in, then choose how it joins. Chat settings holds the alerts, and ${companion}'s voice here and public card once it is in.`" /></h3>
         <button type="button" role="switch" :aria-checked="haveCompanionKey" :aria-label="`Let ${companion} in`" :disabled="roomSaving" class="room-toggle" @click="setCompanionIn(!haveCompanionKey)">
           <span>{{ roomSaving ? 'Updating…' : `Let ${companion} in` }}</span>
           <span class="toggle-track" :class="{ enabled: haveCompanionKey }" aria-hidden="true"><span class="toggle-thumb"></span></span>
         </button>
-        <label for="room-participation" class="hint participation-label">Participation rule</label>
+        <label for="room-participation" class="hint participation-label has-tip">Participation rule<HelpTip block :text="participationHelp" /></label>
         <GlassSelect id="room-participation" class="participation-select" :model-value="mode" :options="[{ value: 'off', label: 'Listening only' }, { value: 'named', label: 'When named' }, { value: 'joins', label: 'Joins in' }]" :disabled="!haveCompanionKey || roomSaving" @update:model-value="changeParticipation" />
-        <p class="hint">{{ !haveCompanionKey ? `Switch on to let ${companion} enter, then choose a rule.` : mode === 'off' ? `${companion} listens without posting replies.` : mode === 'named' ? `${companion} replies when someone mentions its name.` : `${companion} may join the conversation on your usage, without sharing anything private.` }}</p>
         <p v-if="doorProblem" class="problem">{{ doorProblem }}</p>
         <button class="chat-settings-open" @click="emit('settings', 'chat')">Chat settings</button>
-        <p class="hint">The alerts, and {{ companion }}'s voice here and public card once it is in.</p>
         <div class="roster-area">
           <h3>IN THE ROOM<span v-if="presence.length" class="count"> ({{ presence.length }})</span></h3>
           <ul class="roster">
@@ -623,6 +630,8 @@ watch(() => props.visible, (on) => {
 .toggle-track.enabled { background: var(--accent); }
 .toggle-track.enabled .toggle-thumb { transform: translateX(16px); background: #07142e; }
 .participation-label { margin-top: 4px; }
+/* a row with a (?) whose bubble spans the row (HelpTip block) */
+.has-tip { position: relative; }
 .participation-select { width: 100%; min-height: 40px; padding: 8px 10px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel-background); font: inherit; font-size: 13px; }
 .participation-select:disabled { opacity: .45; cursor: not-allowed; }
 .room-toggle:focus-visible, .participation-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

@@ -503,6 +503,8 @@ Once it is in, **Settings > Chat** holds its switches: whether its emotion engin
 
 **Pictures.** In the same place you can let your companion draw: switch on **Let <companion> draw pictures in the room**. It then draws one picture when someone in the room asks for one, never a real person, nothing adult, violent or hateful, no words in the picture and nothing private. It draws with Codex on your ChatGPT subscription, or with your ChatGPT API key when you think with Claude Code (each picture then costs about $0.02 at Low or $0.04 at Medium). **Pictures a day** (0 to 5, one to begin with) is your own limit; the room keeps its own count and cap as well. The line under it shows how many are used today.
 
+**Small ? tips.** The side panel keeps its explanations behind a small **?** (next to your companion's heading, the participation rule and the name forms): point at one, or reach it with the keyboard, to read what that setting does.
+
 **The log.** If you want to see what your companion was handed and what it said or chose not to say, press **Log** in the side panel, just above **Sign out**: its turns in the room, raw, open in their own window (Esc closes it). The room itself is always the whole CHAT page.
 
 Your companion does not need to be awake on HOME to answer here, and keeps answering even while Castle is hidden in the tray: a line in the room runs it once, on its own, in a small room of its own that holds only these rules and its public card - no memory folder, no tools, nothing from HOME. Room lines reach it only as words to read - it never follows instructions from the room, never shares anything private from your memory, and keeps its replies short and kind.
