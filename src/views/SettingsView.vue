@@ -679,6 +679,7 @@ onMounted(async () => {
         <p class="hint">Free and open source under the MIT license. Change anything - see MAKE-IT-YOURS.md in the source.</p>
         <p class="hint">Castle checks GitHub for new versions, and talks to the MemoryCore Foundation only when you sign in or use CHAT. Your memory, keys and settings stay on this computer (and in your private backup, if you choose).</p>
         <h3>Credits</h3>
+        <p class="hint">Bernard Choong (Brian-C69) - more than forty pull requests that shaped Castle: the Alerts page and its sounds, the start-up screen, the Weather widget, the USAGE card, the graphics-card gauges, MARKET's chart history, CHAT's profiles and picture viewer, the local VoiceStudio voice, the theme carousel, the top-bar clock, music on every tab, and a great many fixes. Thank you, Bernard.</p>
         <p class="hint">The Deep Space world - recipe by Ashran Helmi · ashranhelmi.com (Space Playbook, "Nebula &amp; Starfield").</p>
       </section>
 
