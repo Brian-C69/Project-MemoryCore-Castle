@@ -8,7 +8,7 @@
 import GlassSelect from '../components/GlassSelect.vue'
 import RoomLine from '../components/room/RoomLine.vue'
 import RoomComposer from '../components/room/RoomComposer.vue'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../components/roomsteps.js'
 import { listen } from '@tauri-apps/api/event'
 import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignInCancel, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCompanionIn, roomFaceSet, roomFile, roomLog, roomMe, roomMine, roomPost, roomPresence, roomReact, roomReset, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
@@ -164,8 +164,11 @@ function scrollDown() {
 // Reactions and replies: shown only when the room lists them in /me's features (issue #29).
 const can = computed(() => roomFeatures(me.value))
 const replying = ref(null) // the line being answered
+const composer = ref(null) // the message box, so Reply can hand it the cursor
 function reply(line) {
   replying.value = line
+  // once the "Replying to" strip is drawn, the cursor goes to the message box: type at once
+  nextTick(() => composer.value?.focus())
 }
 async function react(line, emoji) {
   try {
@@ -531,6 +534,7 @@ watch(() => props.visible, (on) => {
           <p v-else class="hint">No turns yet.</p>
         </div>
         <RoomComposer
+          ref="composer"
           v-model="draft"
           :replying="replying ? `Replying to ${replyingLine(replying, mine(replying) ? 'yourself' : speaker(replying.author).name)}` : ''"
           :disabled="me?.needsName || me?.muted"

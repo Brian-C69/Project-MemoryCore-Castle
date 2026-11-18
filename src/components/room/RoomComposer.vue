@@ -1,6 +1,8 @@
 <script setup>
 // The chat room's composer: the "Replying to" strip (with its cancel) and the message box.
 // v-model is the draft; `send` and `cancel` go up to the room.
+import { ref } from 'vue'
+
 defineProps({
   modelValue: { type: String, default: '' },
   // "Replying to Mira: the start of her line", or '' when not replying
@@ -8,6 +10,10 @@ defineProps({
   disabled: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue', 'send', 'cancel'])
+
+// The room asks for the cursor here when the member presses Reply, so they can type at once.
+const input = ref(null)
+defineExpose({ focus: () => input.value?.focus() })
 </script>
 
 <template>
@@ -16,7 +22,7 @@ const emit = defineEmits(['update:modelValue', 'send', 'cancel'])
     <button type="button" aria-label="Stop replying" @click="emit('cancel')">&#x2715;</button>
   </p>
   <form class="say" @submit.prevent="emit('send')">
-    <input :value="modelValue" maxlength="1000" placeholder="Write to the room..." :disabled="disabled" @input="emit('update:modelValue', $event.target.value)" />
+    <input ref="input" :value="modelValue" maxlength="1000" placeholder="Write to the room..." :disabled="disabled" @input="emit('update:modelValue', $event.target.value)" />
     <button class="primary" :disabled="!modelValue.trim()">Send</button>
   </form>
 </template>
