@@ -316,6 +316,12 @@ fn clean_room(room: &str) -> Option<String> {
 pub fn open_room(app: &AppHandle, room: &str) {
     use tauri::Emitter;
     crate::tray::show_main(app);
+    // If Windows still kept the keyboard focus from Castle (it may when Castle was not the program the
+    // member just clicked), the window is at least raised above the others, not just flashed.
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_always_on_top(true);
+        let _ = window.set_always_on_top(false);
+    }
     let _ = app.emit("castle-open-room", room);
 }
 

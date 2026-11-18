@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Clicking a notification brings Castle back again.** Since the notification started carrying Castle's own address, a click from outside Castle could leave Castle where it was and only flash its taskbar button, because Windows lets the freshly started copy come to the front, not the one already running. The new copy now brings the running Castle forward itself (restoring it if it was minimised or hidden in the tray), and the running one raises its window above the others, so you land on the room the notification was about.
+
 ## 0.2.17 - 2026-11-18
 
 - **Three new themes: The Sunset Shore, The Star Shore and The Emerald River.** Three quiet places with nobody in them, each with its own colours, layout and Sweep look.
