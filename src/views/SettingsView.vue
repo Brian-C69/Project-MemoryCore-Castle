@@ -605,9 +605,23 @@ onMounted(async () => {
 .tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 4px;
   align-items: flex-end;
-  margin-bottom: -1px;
+}
+/* The line under the tabs is drawn by the tabs themselves: every tab but the selected one has it,
+   and an empty piece before the first and after the last carries it to the window's edges. The
+   selected tab has none, so it opens straight into the content below it. */
+.tabs::before,
+.tabs::after {
+  content: '';
+  align-self: stretch;
+  border-bottom: 1px solid var(--line);
+}
+.tabs::before {
+  flex: none;
+  width: 20px;
+}
+.tabs::after {
+  flex: 1 1 20px;
 }
 .tabs button {
   margin: 0;
@@ -615,18 +629,27 @@ onMounted(async () => {
   border: 1px solid transparent;
   border-top: 3px solid transparent;
   border-radius: 8px 8px 0 0;
-  background: transparent;
+  /* the line under the tab is a 1px stripe along its bottom edge (a border would leave a notch at
+     each corner where it meets the side border) */
+  background-color: transparent;
+  background-image: linear-gradient(var(--line), var(--line));
+  background-origin: border-box;
+  background-position: 0 100%;
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
   color: var(--text-dim);
   white-space: nowrap;
 }
 .tabs button:hover {
   color: var(--text);
-  background: var(--hover);
+  background-color: var(--hover);
 }
 .tabs .active {
   border-color: var(--line);
   border-top-color: var(--accent);
-  background: var(--hover);
+  border-bottom-color: transparent;
+  background-color: var(--hover);
+  background-image: none;
   color: var(--text);
 }
 .tabs button:focus-visible {

@@ -132,7 +132,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 
 .sheet-navigation {
   flex: none;
-  padding: 8px 20px 0;
-  border-bottom: 1px solid var(--line, rgba(200, 180, 255, 0.25));
+  /* no rule of its own: the tabs draw the line under themselves, so the selected tab can be left
+     open and sit flush with the content below it */
+  padding: 8px 0 0;
 }
 </style>
