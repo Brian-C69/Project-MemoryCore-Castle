@@ -3,6 +3,7 @@
 // keys (masked, Show, Test, Remove), quick actions, the room, backup, startup and updates.
 import GlassSelect from '../components/GlassSelect.vue'
 import AlertsPane from './AlertsPane.vue'
+import WidgetsView from './WidgetsView.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import ModalSheet from '../components/ModalSheet.vue'
 import BackupPanel from '../components/BackupPanel.vue'
@@ -43,10 +44,13 @@ import {
 const props = defineProps({
   // which section opens first ("keys" from a toast or a STUDIO card)
   section: { type: String, default: 'companion' },
+  themeId: { type: String, default: '' },
+  themeName: { type: String, default: '' },
+  themeWidgets: { type: Object, default: () => ({}) },
   version: { type: String, default: '' },
   updateLine: { type: String, default: '' },
 })
-const emit = defineEmits(['close', 'saved', 'setup', 'whatsnew', 'open-room'])
+const emit = defineEmits(['close', 'saved', 'setup', 'whatsnew', 'open-room', 'arrange'])
 
 // The few words that name the computer's own parts: Windows' wording, or the Mac's.
 const words = isMac
@@ -71,6 +75,7 @@ const words = isMac
 
 const SECTIONS = [
   { id: 'companion', label: 'Companion' },
+  { id: 'widgets', label: 'Widgets' },
   { id: 'keys', label: 'Keys' },
   { id: 'quick', label: 'Quick actions' },
   { id: 'rooms', label: 'Rooms' },
@@ -82,7 +87,24 @@ const SECTIONS = [
   { id: 'about', label: 'About' },
 ]
 
+async function widgetsChanged() {
+  settings.value = (await getSettings()).settings
+  emit('saved')
+}
+
 const tab = ref(props.section)
+function onTabKey(event) {
+  const index = SECTIONS.findIndex((section) => section.id === tab.value)
+  let next
+  if (event.key === 'ArrowRight') next = (index + 1) % SECTIONS.length
+  else if (event.key === 'ArrowLeft') next = (index + SECTIONS.length - 1) % SECTIONS.length
+  else if (event.key === 'Home') next = 0
+  else if (event.key === 'End') next = SECTIONS.length - 1
+  else return
+  event.preventDefault()
+  tab.value = SECTIONS[next].id
+  event.currentTarget.querySelector(`[data-section="${tab.value}"]`)?.focus()
+}
 const settings = ref(null)
 const view = ref(null)
 const keys = ref([])
@@ -161,7 +183,6 @@ async function switchLink(patch) {
 
 // The rooms that can be switched off (HOME always stays).
 const ROOM_SWITCHES = [
-  { id: 'widgets', label: 'WIDGETS' },
   { id: 'theme', label: 'THEME' },
   { id: 'apps', label: 'APPS' },
   { id: 'myprofile', label: 'MY PROFILE' },
@@ -341,12 +362,14 @@ onMounted(async () => {
 </script>
 
 <template>
-  <ModalSheet tag="SETTINGS" title="Settings" @close="emit('close')">
-    <div v-if="settings" class="settings">
-      <nav class="tabs">
-        <button v-for="s in SECTIONS" :key="s.id" :class="{ active: tab === s.id }" @click="tab = s.id">{{ s.label }}</button>
+  <ModalSheet title="Settings" :body-key="tab" @close="emit('close')">
+    <template #navigation>
+      <nav v-if="settings" class="tabs" role="tablist" aria-label="Settings sections" @keydown="onTabKey">
+        <button v-for="s in SECTIONS" :id="`settings-tab-${s.id}`" :key="s.id" role="tab" :data-section="s.id" :aria-selected="tab === s.id" aria-controls="settings-panel" :tabindex="tab === s.id ? 0 : -1" :class="{ active: tab === s.id }" @click="tab = s.id">{{ s.label }}</button>
       </nav>
-
+    </template>
+    <div v-if="settings" class="settings">
+      <div id="settings-panel" role="tabpanel" :aria-labelledby="`settings-tab-${tab}`" tabindex="0">
       <section v-if="tab === 'companion'" class="pane">
         <h3>Memory folder</h3>
         <div class="row"><code>{{ settings.memoryFolder ?? 'Not chosen' }}</code><button @click="changeFolder">Change</button></div>
@@ -384,6 +407,8 @@ onMounted(async () => {
         <p class="hint">For people who run their own <a href="#" @click.prevent="openUrl('https://github.com/debpalash/voicestudio')">VoiceStudio</a> on {{ words.thisComputer }}. Off: Castle never contacts it. On: STUDIO's Voice card can speak a line with it, and the clip is saved with your other voice lines. Everything stays on this computer. Castle does not install or start VoiceStudio, and its voice models carry their own licences (some are non-commercial).</p>
         <button @click="emit('setup')">Run the first-run setup again</button>
       </section>
+
+      <WidgetsView v-else-if="tab === 'widgets'" :theme-id="themeId" :theme-name="themeName" :theme-widgets="themeWidgets" @arrange="emit('arrange')" @changed="widgetsChanged" />
 
       <section v-else-if="tab === 'keys'" class="pane">
         <p class="hint">Keys are {{ words.keysKept }} and only handed to your companion's session. Without a key, your companion saves the idea instead and Castle tells you.</p>
@@ -547,6 +572,7 @@ onMounted(async () => {
         <p class="hint">The Deep Space world - recipe by Ashran Helmi · ashranhelmi.com (Space Playbook, "Nebula &amp; Starfield").</p>
       </section>
 
+      </div>
       <footer>
         <span v-if="busy" class="busy">{{ busy }}</span>
         <span v-else-if="problem" class="warn">{{ problem }}</span>
@@ -583,11 +609,56 @@ onMounted(async () => {
 .tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: flex-end;
+}
+/* The line under the tabs is drawn by the tabs themselves: every tab but the selected one has it,
+   and an empty piece before the first and after the last carries it to the window's edges. The
+   selected tab has none, so it opens straight into the content below it. */
+.tabs::before,
+.tabs::after {
+  content: '';
+  align-self: stretch;
+  border-bottom: 1px solid var(--line);
+}
+.tabs::before {
+  flex: none;
+  width: 20px;
+}
+.tabs::after {
+  flex: 1 1 20px;
+}
+.tabs button {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-top: 3px solid transparent;
+  border-radius: 8px 8px 0 0;
+  /* the line under the tab is a 1px stripe along its bottom edge (a border would leave a notch at
+     each corner where it meets the side border) */
+  background-color: transparent;
+  background-image: linear-gradient(var(--line), var(--line));
+  background-origin: border-box;
+  background-position: 0 100%;
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.tabs button:hover {
+  color: var(--text);
+  background-color: var(--hover);
 }
 .tabs .active {
-  border-color: var(--accent);
-  background: var(--hover);
+  border-color: var(--line);
+  border-top-color: var(--accent);
+  border-bottom-color: transparent;
+  background-color: var(--hover);
+  background-image: none;
+  color: var(--text);
+}
+.tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
 }
 .pane {
   display: flex;
