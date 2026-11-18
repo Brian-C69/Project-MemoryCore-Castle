@@ -14,7 +14,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../components/roomsteps.js'
 import { listen } from '@tauri-apps/api/event'
 import { choosePicture, getSettings, keyStatus, memberSignIn, memberSignInCancel, memberSignOut, memberStatus, openUrl, roomAvatar, roomBacklog, roomCompanionIn, roomFaceSet, roomFile, roomLog, roomMe, roomMine, roomPost, roomPresence, roomReact, roomReset, roomSeen, roomVisible, saveSettings } from '../api/castle.js'
-import { avatarLoader, currentAvatar, datedLines, initial, isMine, replyingLine, roomFeatures, roomMembers, roomPresenceState, speakerPresentation, ticks, toggleReaction } from '../components/roomchat.js'
+import { avatarLoader, currentAvatar, fileLoader, datedLines, initial, isMine, replyingLine, roomFeatures, roomMembers, roomPresenceState, speakerPresentation, ticks, toggleReaction } from '../components/roomchat.js'
 import { roomCompanionRefresh, roomNameSet, setupApply } from '../api/castle.js'
 import { avatarGet } from '../api/castle.js'
 
@@ -95,15 +95,30 @@ function clock(at) {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
-async function loadFile(id) {
-  if (!id || files.value[id] !== undefined) return
-  files.value = { ...files.value, [id]: null }
-  try {
-    files.value = { ...files.value, [id]: await roomFile(id) }
-  } catch {
-    // shown as a name only
-  }
+// Pictures and voice lines. Several load at once when the room opens, so each is added to the files as
+// they are when it ARRIVES (a copy taken before the wait made the ones that finished first vanish), and one
+// that failed (the room not ready right at start-up) is asked for again a little later.
+let fileRetry = null
+let fileRetries = 0
+function retryFilesLater() {
+  if (fileRetry || fileRetries >= 5 || !alive) return
+  fileRetries += 1
+  fileRetry = setTimeout(() => {
+    fileRetry = null
+    lines.value.forEach((l) => {
+      loadFile(l.voice?.fileId)
+      loadFile(l.picture?.fileId)
+    })
+  }, 11000)
 }
+const loadFile = fileLoader(
+  roomFile,
+  (id, data) => {
+    fileRetries = 0
+    files.value = { ...files.value, [id]: data }
+  },
+  { onFail: retryFilesLater },
+)
 
 const loadFace = avatarLoader(roomAvatar, (token, face) => {
   faces.value = { ...faces.value, [token]: face }
@@ -449,6 +464,7 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => {
   alive = false
+  clearTimeout(fileRetry)
   clearInterval(presenceTimer)
   clearTimeout(doorTimer)
   stops.forEach((stop) => stop())

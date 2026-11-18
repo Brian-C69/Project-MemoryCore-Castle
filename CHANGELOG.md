@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **CHAT's pictures and voice lines show when you open the room, not only after a new message.** Several loaded at once when Castle started, and each one that finished wiped the ones before it (the page saved its list from before the wait), so earlier pictures were left as empty bubbles; a file that failed because the room was not ready yet was never asked for again. Files now load once each, are added as they arrive, and a failed one is asked for again a little later.
+
 ## 0.2.18 - 2026-11-18
 
 - **In CHAT, the reaction bar follows the message and Reply puts the cursor in the message box.** Pointing at someone's line now shows the reactions and Reply bar on the message itself, at its top corner, instead of at one fixed spot on the row (and it no longer appears when the pointer is only in the empty space beside a short line). A line's reaction chips sit inside its box too. Pressing Reply moves the cursor straight into the message box, so you can type at once without clicking it first.

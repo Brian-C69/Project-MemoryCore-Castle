@@ -115,6 +115,31 @@ export function avatarLoader(fetchFace, onFace, { now = Date.now, retryMs = 1000
   }
 }
 
+// A room file (a picture or a voice line) is fetched once per id however many lines ask at once, and one
+// that failed is asked for again after a wait instead of staying "loading" for good. `onFile(id, data)`
+// is called as each one arrives, in whatever order they finish: the page must add it to its files as they
+// are THEN (not as they were when the request started), or loads that finish together wipe each other.
+// `onFail` lets the page ask again after the wait even when no new line arrives.
+export function fileLoader(fetchFile, onFile, { now = Date.now, retryMs = 10000, onFail = () => {} } = {}) {
+  const loaded = new Set(), pending = new Map(), failed = new Map()
+  return async (id) => {
+    if (!id || loaded.has(id)) return
+    if (pending.has(id)) return pending.get(id)
+    if (failed.has(id) && now() - failed.get(id) < retryMs) return
+    const request = Promise.resolve().then(() => fetchFile(id)).then((data) => {
+      if (!data) throw new Error('Empty file')
+      onFile(id, data)
+      loaded.add(id)
+      failed.delete(id)
+    }).catch(() => {
+      failed.set(id, now())
+      onFail(id)
+    }).finally(() => pending.delete(id))
+    pending.set(id, request)
+    return request
+  }
+}
+
 export function currentAvatar(author, presence = []) {
   if (author?.avatar) return author.avatar
   const matches = presence.filter((p) => author?.name && p.name === author.name && p.kind === author.kind)
