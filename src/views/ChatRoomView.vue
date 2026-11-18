@@ -9,6 +9,7 @@ import GlassSelect from '../components/GlassSelect.vue'
 import RoomLine from '../components/room/RoomLine.vue'
 import RoomComposer from '../components/room/RoomComposer.vue'
 import ModalSheet from '../components/ModalSheet.vue'
+import ImageViewer from '../components/ImageViewer.vue'
 import HelpTip from '../components/HelpTip.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../components/roomsteps.js'
@@ -86,6 +87,18 @@ const hostName = computed(() => {
   return names.length === 1 ? names[0] : ''
 })
 const speaker = (author) => speakerPresentation(author, hostName.value)
+
+// The room's pictures, in order, for the viewer a click on one opens (with Save for each)
+const roomPictures = computed(() =>
+  lines.value
+    .filter((l) => l.picture && files.value[l.picture.fileId])
+    .map((l) => ({ path: String(l.picture.fileId), name: `${speaker(l.author).name}'s picture`, url: files.value[l.picture.fileId] })),
+)
+const viewerAt = ref(null)
+function openPicture(fileId) {
+  const at = roomPictures.value.findIndex((p) => p.path === String(fileId))
+  if (at >= 0) viewerAt.value = at
+}
 
 const isAi = (l) => ['assistant', 'member_assistant'].includes(l.author?.kind)
 const mine = (l) => isMine(l, myIds.value, me.value)
@@ -529,6 +542,7 @@ watch(() => props.visible, (on) => {
               @react="(e) => react(l, e)"
               @reply="reply(l)"
               @jump="jumpTo"
+              @open-picture="openPicture"
             />
             </template>
           </template>
@@ -611,6 +625,7 @@ watch(() => props.visible, (on) => {
           <button @click="signOut">Sign out</button>
         </div>
       </aside>
+      <ImageViewer v-if="viewerAt !== null" :pictures="roomPictures" :start="viewerAt" :can-open="false" saveable @close="viewerAt = null" />
       <ModalSheet v-if="logOpen" tag="LOG" :title="`${companion}'s turns in the room`" @close="logOpen = false">
         <p class="hint">{{ companion }}'s turns in the room, raw: what it was handed, and what it said or chose not to say. It answers from a room-only run that holds just its public card - it cannot open your memory or run anything.</p>
         <pre v-if="turnLog" class="turns">{{ turnLog }}</pre>

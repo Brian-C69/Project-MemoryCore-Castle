@@ -22,7 +22,7 @@ const props = defineProps({
   // what the room offers: { replies, reactions }
   can: { type: Object, default: () => ({ replies: false, reactions: false }) },
 })
-const emit = defineEmits(['react', 'reply', 'jump'])
+const emit = defineEmits(['react', 'reply', 'jump', 'open-picture'])
 
 const quote = () => replySnippet(props.line, props.lines)
 const chips = () => reactionChips(props.line)
@@ -49,7 +49,17 @@ const chips = () => reactionChips(props.line)
       <button v-if="quote()" class="quote" :disabled="!quote().loaded" @click="emit('jump', line.replyTo.id)"><strong>{{ quote().name }}</strong> {{ quote().text }}</button>
       <span class="text">{{ line.text }}</span>
       <audio v-if="line.voice && files[line.voice.fileId]" :src="files[line.voice.fileId]" controls preload="none"></audio>
-      <img v-if="line.picture && files[line.picture.fileId]" :src="files[line.picture.fileId]" alt="" class="picture" />
+      <img
+        v-if="line.picture && files[line.picture.fileId]"
+        :src="files[line.picture.fileId]"
+        alt="A picture in the room"
+        class="picture"
+        role="button"
+        tabindex="0"
+        title="Open the picture"
+        @click="emit('open-picture', line.picture.fileId)"
+        @keydown.enter.prevent="emit('open-picture', line.picture.fileId)"
+      />
       <!-- inside the message box, so the reactions and the bar follow the box wherever it sits -->
       <span v-if="chips().length" class="chips">
         <button v-for="r in chips()" :key="r.emoji" class="chip" :class="{ mine: r.mine }" :disabled="!can.reactions" @click="emit('react', r.emoji)">{{ r.emoji }} {{ r.count }}</button>
@@ -134,6 +144,7 @@ const chips = () => reactionChips(props.line)
 .body .picture {
   max-width: 320px;
   border-radius: 8px;
+  cursor: zoom-in;
 }
 .quote {
   display: block;

@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **A picture in CHAT opens large, and can be saved.** Click (or press Enter on) a picture in the room to see it full size in Castle's picture viewer: zoom with the wheel or a click, drag it, move between the room's pictures with the arrows, Esc to close. **Save picture** puts it where you choose with Windows' Save dialog. Before, the pictures were small and the only way to get one was right-clicking its raw `data:` address.
+
 - **In CHAT, the reaction bar follows the message and Reply puts the cursor in the message box.** Pointing at someone's line now shows the reactions and Reply bar on the message itself, at its top corner, instead of at one fixed spot on the row (and it no longer appears when the pointer is only in the empty space beside a short line). A line's reaction chips sit inside its box too. Pressing Reply moves the cursor straight into the message box, so you can type at once without clicking it first.
 
 - **CHAT's side panel explains itself behind a (?), so it stays still.** The sentences under the participation rule ("may join the conversation on your usage..."), under Chat settings and in the two name forms are now small **?** tips you point at. The panel no longer grows or shrinks when you change the rule (it used to move about 16 px), and it is shorter, so the room list gets more space.
