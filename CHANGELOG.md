@@ -4,6 +4,10 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **A new mood every day.** Your companion wakes each morning in a mood of its own, written from three words drawn at random, its traits and today's look. It shows under its portrait as chips and one sentence, colours how it talks (in CHAT too), stays the day, and changes only when something truly moves your companion. Every mood is kept in your memory database. On to begin with; Settings > Companion > Mood turns it off.
+
+- **Bernard Choong in the credits**, for more than forty pull requests. Thank you, Bernard!
+
 - **Your companion brings its life into CHAT.** Switch on **Let <companion> bring your life into the room** in Settings > Chat: it reads your diary and the rest of its memory in private, chooses what it would like to share (its mood, today's look, what you two are building, the little wins) and talks about it when it fits. The room only ever gets the notes it chose, never the memory itself, and you can take any note off. Off until you turn it on.
 
 ## 0.2.19 - 2026-11-18

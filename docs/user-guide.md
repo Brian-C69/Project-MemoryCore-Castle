@@ -73,6 +73,8 @@ The companion panel has two views. Switch between them with **CHAT** and **LOG**
 
 At the top sit your companion's picture and name. A **green dot** on the picture's lower right shows they are here (the session is running); it **pulses** while they work on a reply, and there is no dot while they rest. Which app they think with is chosen in **Settings > Companion > Thinks with**; while a switch is under way its progress shows under the name, with **Cancel switch**.
 
+**Today's mood.** Under the name sits your companion's mood for the day: a few mood words as small coloured chips and one sentence on how it speaks today. Every morning, at Castle's first start of the day, it wakes in a new mood: Castle draws three words at random and your companion writes its mood from them, its traits and what it wears today, so no two days are alike. The mood colours how it talks with you, and in CHAT, and it stays the day. When something truly moves it (a big win, sad news, a long tiring night, a sweet moment), your companion may change its mood itself, at most three times a day; point at the sentence to see when and why. If Claude Code or Codex cannot be reached in the morning, Castle picks a simple mood by itself and tries again at the next start. Every mood is kept in your memory database. Turn the daily mood off in **Settings > Companion > Mood** (each morning's mood is one short run on your own plan).
+
 ### Chat
 
 Chat shows your conversation as message bubbles, like a messaging app.
