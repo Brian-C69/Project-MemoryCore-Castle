@@ -8,6 +8,7 @@
 import GlassSelect from '../components/GlassSelect.vue'
 import RoomLine from '../components/room/RoomLine.vue'
 import RoomComposer from '../components/room/RoomComposer.vue'
+import ModalSheet from '../components/ModalSheet.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { rememberLibraryOpened, rememberedLibraryOpened, roomSteps } from '../components/roomsteps.js'
 import { listen } from '@tauri-apps/api/event'
@@ -34,7 +35,7 @@ const lines = ref([])
 const seen = ref([]) // who has read how far (the ticks)
 const myIds = ref([]) // the lines Castle posted for the member
 const faces = ref({}) // avatar token -> picture
-const tab = ref('chat') // CHAT | LOG
+const logOpen = ref(false) // the companion's turn log, opened from the side panel
 const readProblem = ref('')
 const faceLine = ref('')
 const displayName = ref('')
@@ -496,12 +497,8 @@ watch(() => props.visible, (on) => {
         <div v-if="me?.needsName" class="banner">Set your Foundation display name on the Portfolio to speak here. You can read already.</div>
         <div v-else-if="me?.muted || refused?.kind === 'muted'" class="banner">You are muted in this room for now. You can still read.</div>
         <div v-else-if="refused && !['locked', 'notSetUp'].includes(refused.kind)" class="banner">{{ refused.message }}</div>
-        <div class="tabs">
-          <button :class="{ on: tab === 'chat' }" @click="tab = 'chat'">CHAT</button>
-          <button :class="{ on: tab === 'log' }" @click="tab = 'log'">LOG</button>
-        </div>
         <p v-if="readProblem" class="problem">{{ readProblem }}</p>
-        <div v-show="tab === 'chat'" ref="scroller" class="lines">
+        <div ref="scroller" class="lines">
           <p v-if="!shown.length" class="hint">The room is quiet. Say hello.</p>
           <template v-for="item in shown" :key="item.key">
             <div v-if="item.kind === 'day'" class="day-divider"><time :datetime="item.key" :title="item.date">{{ item.label }}</time></div>
@@ -524,11 +521,6 @@ watch(() => props.visible, (on) => {
             />
             </template>
           </template>
-        </div>
-        <div v-show="tab === 'log'" class="lines log">
-          <p class="hint">{{ companion }}'s turns in the room, raw: what it was handed, and what it said or chose not to say. It answers from a room-only run that holds just its public card - it cannot open your memory or run anything.</p>
-          <pre v-if="turnLog" class="turns">{{ turnLog }}</pre>
-          <p v-else class="hint">No turns yet.</p>
         </div>
         <RoomComposer
           v-model="draft"
@@ -604,8 +596,16 @@ watch(() => props.visible, (on) => {
         </form>
         <p v-if="nameLine" role="status" class="hint">{{ nameLine }}</p>
         <p v-if="companionLine" role="status" class="hint">{{ companionLine }}</p>
-        <div class="profile-footer"><button @click="signOut">Sign out</button></div>
+        <div class="profile-footer">
+          <button type="button" :title="`${companion}'s turns in the room, raw`" @click="logOpen = true">Log</button>
+          <button @click="signOut">Sign out</button>
+        </div>
       </aside>
+      <ModalSheet v-if="logOpen" tag="LOG" :title="`${companion}'s turns in the room`" @close="logOpen = false">
+        <p class="hint">{{ companion }}'s turns in the room, raw: what it was handed, and what it said or chose not to say. It answers from a room-only run that holds just its public card - it cannot open your memory or run anything.</p>
+        <pre v-if="turnLog" class="turns">{{ turnLog }}</pre>
+        <p v-else class="hint">No turns yet.</p>
+      </ModalSheet>
     </template>
   </div>
 </template>
@@ -641,7 +641,7 @@ watch(() => props.visible, (on) => {
 .pic-menu { position: absolute; z-index: 3; top: 62px; left: 6px; right: 6px; display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-background); -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur)); box-shadow: 0 10px 24px -10px rgba(0, 0, 0, .7); }
 .profile-person .pic-menu button { min-height: 32px; }
 .profile-person button.subtle { border-color: transparent; color: var(--text-dim); }
-.profile-footer { padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--line); }
+.profile-footer { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--line); }
 .profile-footer button { width: 100%; }
 .name-edit { display: flex; flex-direction: column; gap: 8px; }
 .name-edit input { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: transparent; }
@@ -653,15 +653,6 @@ watch(() => props.visible, (on) => {
   font: 12px/1.5 ui-monospace, Consolas, monospace;
   white-space: pre-wrap;
   color: var(--text-dim);
-}
-.tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.tabs button.on {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 .face {
   display: grid;

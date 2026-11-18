@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **CHAT is just the chat.** The CHAT and LOG tabs above the room are gone: the conversation fills the whole page. The companion's log, which few people need, now opens from a **Log** button in the side panel, just above **Sign out**, in its own window (Esc closes it).
+
 ## 0.2.17 - 2026-11-18
 
 - **Three new themes: The Sunset Shore, The Star Shore and The Emerald River.** Three quiet places with nobody in them, each with its own colours, layout and Sweep look.
