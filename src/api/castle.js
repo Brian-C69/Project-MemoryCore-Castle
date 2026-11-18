@@ -233,6 +233,7 @@ export const roomPost = (text, who, replyTo = null) => invoke('room_post', { tex
 // the member's reaction on a line, added (on) or taken back: { id, reactions }
 export const roomReact = (id, emoji, on) => invoke('room_react', { id, emoji, on })
 export const roomFile = (id) => invoke('room_file', { id })
+export const roomPictureSave = (address, name) => invoke('room_picture_save', { address, name })
 export const roomSeen = () => invoke('room_seen')
 export const roomAvatar = (token) => invoke('room_avatar', { token })
 export const roomMine = () => invoke('room_mine')

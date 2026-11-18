@@ -741,11 +741,106 @@ pub async fn room_file(id: Value, store: State<'_, SettingsStore>) -> Result<Str
     blocking(move || room.file(&id)).await
 }
 
+/// The biggest room picture Castle will save, in bytes.
+const SAVE_MAX: usize = 25 * 1024 * 1024;
+
+/// The picture inside a data address (`data:image/jpeg;base64,...`, how the room's pictures reach the
+/// page), as its type and bytes. Only the picture types the room serves, and not past SAVE_MAX. Pure, tested.
+pub fn picture_from_data_address(address: &str) -> Option<(&'static str, Vec<u8>)> {
+    let rest = address.trim().strip_prefix("data:")?;
+    let (head, body) = rest.split_once(',')?;
+    let mut parts = head.split(';');
+    let mime = match parts.next()?.trim().to_ascii_lowercase().as_str() {
+        "image/jpeg" | "image/jpg" => "image/jpeg",
+        "image/png" => "image/png",
+        "image/webp" => "image/webp",
+        "image/gif" => "image/gif",
+        _ => return None,
+    };
+    if !parts.any(|p| p.trim().eq_ignore_ascii_case("base64")) || body.len() > SAVE_MAX / 3 * 4 + 8 {
+        return None;
+    }
+    let bytes = base64::engine::general_purpose::STANDARD.decode(body.trim()).ok()?;
+    (!bytes.is_empty() && bytes.len() <= SAVE_MAX).then_some((mime, bytes))
+}
+
+/// A file name for a saved picture: plain letters, digits, spaces, dashes and underscores, cut short,
+/// with the extension its type needs. Pure, tested.
+pub fn picture_file_name(wanted: &str, mime: &str) -> String {
+    let ext = match mime {
+        "image/png" => "png",
+        "image/webp" => "webp",
+        "image/gif" => "gif",
+        _ => "jpg",
+    };
+    let stem = wanted.rsplit_once('.').map_or(wanted, |(stem, _)| stem);
+    let plain: String = stem.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_')).take(60).collect();
+    let plain = plain.trim();
+    format!("{}.{ext}", if plain.is_empty() { "castle-room-picture" } else { plain })
+}
+
+/// Saves a picture from the room where the member chooses (Windows' own Save dialog). Returns the saved
+/// path, or none when the member closes the dialog.
+#[tauri::command]
+pub async fn room_picture_save(app: tauri::AppHandle, address: String, name: String) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (mime, bytes) = picture_from_data_address(&address).ok_or_else(|| "That is not a picture Castle can save.".to_string())?;
+    let file_name = picture_file_name(&name, mime);
+    tauri::async_runtime::spawn_blocking(move || {
+        let chosen = app.dialog().file().set_title("Save the picture").set_file_name(&file_name).add_filter("Pictures", &["jpg", "jpeg", "png", "webp", "gif"]).blocking_save_file();
+        let Some(path) = chosen.and_then(|file| file.into_path().ok()) else { return Ok(None) };
+        std::fs::write(&path, &bytes).map_err(|_| "The picture could not be saved there.".to_string())?;
+        Ok(Some(path.display().to_string()))
+    })
+    .await
+    .map_err(|_| "The save stopped before it finished.".to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::{Read, Write};
     use std::net::TcpListener;
+
+    #[test]
+    fn a_room_picture_is_read_from_its_data_address() {
+        let bytes = [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3];
+        let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+        assert_eq!(picture_from_data_address(&format!("data:image/jpeg;base64,{encoded}")), Some(("image/jpeg", bytes.to_vec())));
+        assert_eq!(picture_from_data_address(&format!("  data:IMAGE/PNG;base64,{encoded}  ")).map(|p| p.0), Some("image/png"));
+        assert_eq!(picture_from_data_address(&format!("data:image/webp;charset=x;base64,{encoded}")).map(|p| p.0), Some("image/webp"));
+    }
+
+    #[test]
+    fn only_a_picture_in_a_data_address_is_saved() {
+        let encoded = base64::engine::general_purpose::STANDARD.encode([1u8, 2, 3]);
+        for bad in [
+            format!("data:text/html;base64,{encoded}"),
+            format!("data:image/svg+xml;base64,{encoded}"),
+            format!("data:application/octet-stream;base64,{encoded}"),
+            "data:image/jpeg;base64,".to_string(),
+            "data:image/jpeg;base64,!!!not base64!!!".to_string(),
+            format!("data:image/jpeg,{encoded}"),
+            format!("https://example.com/a.jpg?{encoded}"),
+            "C:/Windows/system32/config".to_string(),
+            String::new(),
+        ] {
+            assert_eq!(picture_from_data_address(&bad), None, "should refuse: {}", &bad[..bad.len().min(40)]);
+        }
+        let huge = "A".repeat(SAVE_MAX / 3 * 4 + 100);
+        assert_eq!(picture_from_data_address(&format!("data:image/png;base64,{huge}")), None, "too big");
+    }
+
+    #[test]
+    fn a_saved_picture_gets_a_plain_name_with_the_right_ending() {
+        assert_eq!(picture_file_name("Mira cat in the rain", "image/jpeg"), "Mira cat in the rain.jpg");
+        assert_eq!(picture_file_name("tea-table_2.png", "image/png"), "tea-table_2.png");
+        assert_eq!(picture_file_name("tea.png", "image/jpeg"), "tea.jpg", "the ending follows the real type");
+        assert_eq!(picture_file_name("../../evil:name?.exe", "image/webp"), "evilname.webp", "no path or odd characters");
+        assert_eq!(picture_file_name("", "image/gif"), "castle-room-picture.gif");
+        assert_eq!(picture_file_name("   ", "image/jpeg"), "castle-room-picture.jpg");
+        assert!(picture_file_name(&"x".repeat(200), "image/jpeg").len() <= 64);
+    }
 
     #[test]
     fn a_room_file_id_is_taken_as_the_room_sends_it() {

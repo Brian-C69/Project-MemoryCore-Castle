@@ -450,6 +450,7 @@ pub fn run() {
             chatroom::room_post,
             chatroom::room_react,
             chatroom::room_file,
+            chatroom::room_picture_save,
             update::update_check,
             update::update_install,
             update::version_seen,

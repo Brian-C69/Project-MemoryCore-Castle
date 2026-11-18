@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { chatMediaOpen } from '../api/castle.js'
+import { chatMediaOpen, roomPictureSave } from '../api/castle.js'
 import { isMac } from '../platform.js'
 
 const props = defineProps({
@@ -9,6 +9,9 @@ const props = defineProps({
   start: { type: Number, default: 0 },
   // Chat's pictures can be opened in Windows; other rooms show them here only.
   canOpen: { type: Boolean, default: true },
+  // A room's pictures are not files Castle keeps, so this offers to save the one shown to a place the
+  // member chooses (the Save dialog); the picture's `url` is its data address.
+  saveable: { type: Boolean, default: false },
 })
 const emit = defineEmits(['close'])
 
@@ -16,6 +19,7 @@ const index = ref(props.start)
 const scale = ref(1)
 const offset = ref({ x: 0, y: 0 })
 const problem = ref('')
+const note = ref('')
 let dragFrom = null
 
 const picture = computed(() => props.pictures[index.value])
@@ -24,6 +28,7 @@ function reset() {
   scale.value = 1
   offset.value = { x: 0, y: 0 }
   problem.value = ''
+  note.value = ''
 }
 
 function go(step) {
@@ -61,6 +66,17 @@ function startDrag(event) {
   }
   window.addEventListener('pointermove', move)
   window.addEventListener('pointerup', stop)
+}
+
+async function save() {
+  problem.value = ''
+  note.value = ''
+  try {
+    const where = await roomPictureSave(picture.value.url, picture.value.name)
+    if (where) note.value = `Saved to ${where}`
+  } catch (reason) {
+    problem.value = String(reason)
+  }
 }
 
 async function openOutside(folder) {
@@ -116,7 +132,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
         <span class="name">{{ picture?.name }}</span>
         <span v-if="pictures.length > 1" class="count">{{ index + 1 }} / {{ pictures.length }}</span>
         <span v-if="problem" class="problem">{{ problem }}</span>
+        <span v-else-if="note" class="note" :title="note">{{ note }}</span>
         <span class="spacer"></span>
+        <button v-if="saveable" @click="save">Save picture</button>
         <template v-if="canOpen">
           <button @click="openOutside(true)">Open folder</button>
           <button @click="openOutside(false)">{{ isMac ? 'Open in Preview' : 'Open in Photos' }}</button>
@@ -242,6 +260,14 @@ button:focus-visible {
 
 .problem {
   color: #ff9aa8;
+}
+
+.note {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #a8e6c1;
 }
 
 .spacer {
