@@ -35,6 +35,9 @@ import {
   roomCardSave,
   roomPicturesStatus,
   roomVoicesStatus,
+  roomShelf,
+  roomShelfRefresh,
+  roomShelfRemove,
   saveSettings,
   setupApply,
   setupCheckCli,
@@ -160,10 +163,53 @@ async function saveVoices(patch) {
   await save(patch)
   await loadVoices()
 }
+// The companion's life in the room: the shelf of notes it chose from its memory
+const shelf = ref(null)
+const shelfBusy = ref(false)
+const shelfProblem = ref('')
+async function loadShelf() {
+  try {
+    shelf.value = await roomShelf()
+  } catch {
+    shelf.value = null
+  }
+}
+async function remakeShelf() {
+  shelfBusy.value = true
+  shelfProblem.value = ''
+  try {
+    shelf.value = await roomShelfRefresh()
+  } catch (reason) {
+    shelfProblem.value = String(reason)
+  } finally {
+    shelfBusy.value = false
+  }
+}
+async function switchShelf(on) {
+  const saved = await save({ roomShelfOn: on }, on ? `${companionLabel.value} will bring your life into the room.` : 'The room hears nothing of your life.')
+  if (saved && on && !shelf.value?.notes?.length) await remakeShelf()
+}
+async function takeOff(index) {
+  shelfProblem.value = ''
+  try {
+    shelf.value = await roomShelfRemove(index)
+  } catch (reason) {
+    shelfProblem.value = String(reason)
+  }
+}
+const shelfMade = computed(() => {
+  const at = shelf.value?.madeAt
+  if (!at) return `${companionLabel.value} has not read its memory for the room yet.`
+  const count = shelf.value.notes?.length ?? 0
+  const when = new Date(at * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+  if (!count) return `Read on ${when}: ${companionLabel.value} chose nothing to share this time.`
+  return `Read on ${when}: ${count} ${count === 1 ? 'note' : 'notes'} ${companionLabel.value} chose to share. It reads again by itself when your memory changes (at most every 3 hours).`
+})
 watch(tab, (now) => {
   if (now === 'chat') {
     loadPictures()
     loadVoices()
+    loadShelf()
   }
 })
 
@@ -376,6 +422,7 @@ onMounted(async () => {
     if (tab.value === 'chat') {
       loadPictures()
       loadVoices()
+      loadShelf()
     }
   } catch (reason) {
     problem.value = String(reason)
@@ -545,6 +592,24 @@ onMounted(async () => {
               <HelpTip text="Copy a voice's ID from your ElevenLabs Voices page. Leave it empty for the default voice, the same one STUDIO uses." />
             </div>
             <p v-if="voices" class="hint">Today: {{ voices.usedToday }} of {{ voices.limit }} spoken.<template v-if="voices.roomCap != null"> The room allows {{ voices.roomCap }} ({{ voices.roomToday ?? 0 }} used).</template></p>
+          </template>
+
+          <h3 class="with-tip">Your life in the room <HelpTip :text="`${companionLabel} reads its memory in private - your recent diary, what it is up to, today's look, your projects, your profile and its traits - and chooses what it would like to share. The room only ever gets those notes, never the memory itself, so no one there can ask it for more. You can take any note off.`" /></h3>
+          <div class="setting-row">
+            <label class="toggle"><input type="checkbox" :checked="!!settings.roomShelfOn" :disabled="!!busy" @change="switchShelf($event.target.checked)" /> Let {{ companionLabel }} bring your life into the room</label>
+          </div>
+          <template v-if="settings.roomShelfOn">
+            <p class="hint">{{ shelfMade }}</p>
+            <ul v-if="shelf?.notes?.length" class="shelf">
+              <li v-for="(note, i) in shelf.notes" :key="i + note">
+                <span>{{ note }}</span>
+                <button class="take-off" :disabled="!!busy || shelfBusy" :aria-label="'Take this note off: ' + note" title="Take it off" @click="takeOff(i)">&#x2715;</button>
+              </li>
+            </ul>
+            <div class="row">
+              <button :disabled="!!busy || shelfBusy || shelf?.making" @click="remakeShelf">{{ shelfBusy || shelf?.making ? 'Reading…' : 'Read my memory again' }}</button>
+            </div>
+            <p v-if="shelfProblem" class="hint bad">{{ shelfProblem }}</p>
           </template>
         </template>
       </section>
@@ -735,6 +800,34 @@ input.wide {
 }
 .clock-format { align-self: flex-start; }
 input.voice-id { width: 15rem; max-width: 100%; margin-left: 8px; }
+.shelf {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.shelf li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+  font-size: 13px;
+}
+.shelf li span { flex: 1; }
+.shelf .take-off {
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.shelf .take-off:hover { color: var(--bad); }
+.hint.bad { color: var(--bad); }
 label.toggle {
   flex-direction: row;
   align-items: center;
