@@ -18,6 +18,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **Your companion can speak in CHAT.** With an ElevenLabs key saved, switch on **Let <companion> speak in the room** in Settings > Chat: it speaks a short line aloud when someone asks to hear it, and everyone in the room gets the words with a player. Up to 5 voices a day (two to begin with) under the room's own count, in the ElevenLabs voice you choose or the default one. If a voice cannot be made, the words are posted as text, so nothing is lost. It is off until you turn it on.
 
+- **Any emoji as a reaction in CHAT, once the room offers it.** A **+** after the six reactions opens a picker of common emoji and a box for any other single emoji (Win + . works there). Up to 12 different emoji on one message. Until the room allows it, the bar stays as it is. (Thanks to Bernard, issue #56.)
+
 ## 0.2.17 - 2026-11-18
 
 - **Three new themes: The Sunset Shore, The Star Shore and The Emerald River.** Three quiet places with nobody in them, each with its own colours, layout and Sweep look.
