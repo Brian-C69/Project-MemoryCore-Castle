@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- macOS asks the member once before the companion's session may listen. Claude Code's voice
+	     dictation runs inside Castle's terminal, so macOS counts it as Castle using the microphone;
+	     without this line macOS refuses (or ends) the session when it opens the mic. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Castle uses the microphone only when you dictate to your companion with Claude Code's voice mode.</string>
+</dict>
+</plist>
