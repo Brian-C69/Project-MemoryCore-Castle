@@ -57,6 +57,7 @@ mod roomdraw;
 mod roomvoice;
 mod roomshelf;
 mod mood;
+mod door_mood;
 mod roomread;
 mod rooms;
 mod roomturn;

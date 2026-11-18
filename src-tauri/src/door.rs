@@ -42,6 +42,7 @@ use crate::door_plan::{next_line, plan_copy, plan_mark, plan_show, plan_status, 
 use crate::door_trait::{trait_list, trait_propose, trait_retire, trait_set, trait_show};
 use crate::door_look::{look_item_add, look_item_set, look_json, look_set, look_show};
 use crate::door_library::{library_add, library_list, library_set, library_show};
+use crate::door_mood::{mood_set, mood_show};
 use mysql::prelude::Queryable;
 use mysql::{Conn, Row, Value};
 use std::collections::BTreeMap;
@@ -195,6 +196,8 @@ pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> 
         ["trait", "propose"] => trait_propose(conn, ask),
         ["trait", "set"] => trait_set(conn, ask),
         ["trait", "retire"] => trait_retire(conn, ask),
+        ["mood", "show"] => mood_show(conn),
+        ["mood", "set"] => mood_set(conn, ask),
         ["look", "show"] => look_show(conn, memory),
         ["look", "json"] => look_json(conn, ask, memory),
         ["look", "set"] => look_set(conn, ask, memory),

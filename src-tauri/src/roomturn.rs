@@ -279,7 +279,17 @@ fn room_manner(settings: &Settings, member: &str) -> crate::traits::Manner {
         return crate::traits::Manner::default();
     };
     let traits = crate::traits::list(&mut conn, Some("active")).unwrap_or_default();
-    crate::traits::manner_block(&traits, &[member, &settings.companion_label()])
+    let mut manner = crate::traits::manner_block(&traits, &[member, &settings.companion_label()]);
+    // today's mood colours the room too: words only, public-safe
+    if let Some(mood) = crate::mood::today(&mut conn).ok().flatten() {
+        manner.everyone.push(mood_line(&mood));
+    }
+    manner
+}
+
+/// Today's mood as a manner line for the room. Pure, tested.
+pub fn mood_line(mood: &crate::mood::Mood) -> String {
+    format!("Today you feel {}: {}", mood.words.join(", "), mood.tone)
 }
 
 pub fn default_card(settings: &Settings) -> String {
@@ -735,6 +745,17 @@ Done - the picture fix is in.
         let out = run_cli(Cli::Claude, &folder, &words).unwrap();
         println!("answer: {:?}", read_say(&out));
         let _ = std::fs::remove_dir_all(folder);
+    }
+
+    #[test]
+    fn todays_mood_reaches_the_room_as_a_manner_line_for_everyone() {
+        let mood = crate::mood::Mood { words: vec!["bold".into(), "sunny".into(), "witty".into()], tone: "Bright and quick to laugh.".into(), source: "daily".into(), why: None, at: "08:00".into() };
+        let line = mood_line(&mood);
+        assert_eq!(line, "Today you feel bold, sunny, witty: Bright and quick to laugh.");
+        let rules = rules_for("Nova", "Rin", "- Name: Nova
+", &crate::traits::Manner { everyone: vec![line], owner: vec![] }, &[]);
+        assert!(rules.contains("With everyone:
+- Today you feel bold, sunny, witty: Bright and quick to laugh."));
     }
 
     #[test]

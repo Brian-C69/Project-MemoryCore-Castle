@@ -377,7 +377,26 @@ fn memory_body(conn: &mut impl Queryable) -> Result<Option<String>, String> {
     }
     let file = if session.is_empty() { String::new() } else { session_file(conn)?.unwrap_or_default() };
     let engine = crate::traits::engine_for_wake(conn);
-    Ok(Some(compose_body(&files, &engine, &file, &session)))
+    let mut body = compose_body(&files, &engine, &file, &session);
+    // today's mood, when the day has one (mood.rs); a table not made yet is simply no mood
+    if let Some(mood) = crate::mood::today(conn).ok().flatten() {
+        body.push_str(&mood_block(&mood));
+    }
+    Ok(Some(body))
+}
+
+/// Today's mood as the companion wakes with it. Pure, tested.
+pub fn mood_block(mood: &crate::mood::Mood) -> String {
+    format!(
+        "
+===== your mood today =====
+Mood: {}
+How you speak today: {}
+Let it flavour how you speak - subtly, the wrapper and never the content. It is yours: when something truly moves you (a big win, sad news, a long tiring night, a sweet moment), change it with `castle-memory mood set --words \"a, b, c\" --tone \"...\" --why \"...\"`. `castle-memory mood show` reads it again.
+",
+        mood.words.join(", "),
+        mood.tone
+    )
 }
 
 /// Everything the companion reads at the start of a session, in order, as one text.
@@ -611,6 +630,15 @@ pub fn remove_skill(conn: &mut impl Queryable, folder: &Path, plugin: &str, name
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_companion_wakes_with_its_mood_and_knows_it_may_change_it() {
+        let mood = crate::mood::Mood { words: vec!["sweet".into(), "dreamy".into(), "regal".into()], tone: "Soft and unhurried.".into(), source: "daily".into(), why: None, at: "08:00".into() };
+        let block = mood_block(&mood);
+        assert!(block.contains("===== your mood today ====="));
+        assert!(block.contains("Mood: sweet, dreamy, regal") && block.contains("How you speak today: Soft and unhurried."));
+        assert!(block.contains("castle-memory mood set") && block.contains("never the content"));
+    }
+
     use super::*;
 
     #[test]
