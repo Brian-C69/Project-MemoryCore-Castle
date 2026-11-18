@@ -316,6 +316,12 @@ fn clean_room(room: &str) -> Option<String> {
 pub fn open_room(app: &AppHandle, room: &str) {
     use tauri::Emitter;
     crate::tray::show_main(app);
+    // If Windows still kept the keyboard focus from Castle (it may when Castle was not the program the
+    // member just clicked), the window is at least raised above the others, not just flashed.
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_always_on_top(true);
+        let _ = window.set_always_on_top(false);
+    }
     let _ = app.emit("castle-open-room", room);
 }
 
@@ -328,7 +334,9 @@ pub fn wanted_room<I: IntoIterator<Item = String>>(args: I) -> Option<String> {
         if rest == "chat" {
             return Some("chat".to_string());
         }
-        let query = rest.strip_prefix("open?")?;
+        // Windows hands a clicked notification's address over as `memorycore-castle://open/?room=chat`
+        // (it adds a "/" after the name), so a "/" before the "?" is accepted as well
+        let query = rest.strip_prefix("open?").or_else(|| rest.strip_prefix("open/?"))?;
         query.split('&').find_map(|kv| kv.strip_prefix("room=")).and_then(clean_room)
     })
 }
@@ -439,6 +447,14 @@ mod tests {
         assert_eq!(wanted_room(args("memorycore-castle://chat")), Some("chat".into()), "the first version's address still works");
         assert_eq!(wanted_room(args("memorycore-castle://open?room=../x")), None);
         assert_eq!(wanted_room(args("memorycore-castle://open?room=")), None);
+        // the forms Windows really passes for a clicked notification (checked on Windows 10: it inserts
+        // a "/" after "open", and may end the address with one)
+        assert_eq!(wanted_room(args("memorycore-castle://open/?room=chat")), Some("chat".into()));
+        assert_eq!(wanted_room(args("memorycore-castle://open/?room=chat/")), Some("chat".into()));
+        assert_eq!(wanted_room(args("\"memorycore-castle://open/?room=home\"")), Some("home".into()));
+        assert_eq!(wanted_room(args("memorycore-castle://chat/")), Some("chat".into()));
+        assert_eq!(wanted_room(args("memorycore-castle://open/?room=../x")), None);
+        assert_eq!(wanted_room(args("memorycore-castle://open/?foo=bar")), None);
         assert_eq!(wanted_room(args("--sign-in")), None);
     }
 
