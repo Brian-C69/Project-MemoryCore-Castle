@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.20 - 2026-11-19
+
 - **A new mood every day.** Your companion wakes each morning in a mood of its own, written from three words drawn at random, its traits and today's look. It shows under its portrait as chips and one sentence, colours how it talks (in CHAT too), stays the day, and changes only when something truly moves your companion. Every mood is kept in your memory database. On to begin with; Settings > Companion > Mood turns it off.
 
 - **Bernard Choong in the credits**, for more than forty pull requests. Thank you, Bernard!
