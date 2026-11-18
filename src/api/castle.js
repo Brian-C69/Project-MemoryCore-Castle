@@ -252,6 +252,7 @@ export const roomReconnect = () => invoke('room_reconnect')
 // the companion's room turns and its public card
 export const roomLog = () => invoke('room_log')
 export const roomPicturesStatus = () => invoke('room_pictures_status')
+export const roomVoicesStatus = () => invoke('room_voices_status')
 export const roomCard = () => invoke('room_card')
 export const roomCardSave = (text) => invoke('room_card_save', { text })
 

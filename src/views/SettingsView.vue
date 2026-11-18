@@ -34,6 +34,7 @@ import {
   roomCard,
   roomCardSave,
   roomPicturesStatus,
+  roomVoicesStatus,
   saveSettings,
   setupApply,
   setupCheckCli,
@@ -144,8 +145,26 @@ const drawsWith = computed(() => {
   if (way === 'none') return `To draw, add a ChatGPT key in Keys, or let ${companionLabel.value} think with Codex.`
   return ''
 })
+// Voice in the room: whether an ElevenLabs key is saved, and today's numbers
+const voices = ref(null)
+const voiceId = ref('')
+async function loadVoices() {
+  voiceId.value = settings.value?.roomVoiceId || ''
+  try {
+    voices.value = await roomVoicesStatus()
+  } catch {
+    voices.value = null
+  }
+}
+async function saveVoices(patch) {
+  await save(patch)
+  await loadVoices()
+}
 watch(tab, (now) => {
-  if (now === 'chat') loadPictures()
+  if (now === 'chat') {
+    loadPictures()
+    loadVoices()
+  }
 })
 
 async function openCard() {
@@ -354,7 +373,10 @@ onMounted(async () => {
     avatar.value = await avatarGet()
     await readLink()
     await checkVoice()
-    if (tab.value === 'chat') loadPictures()
+    if (tab.value === 'chat') {
+      loadPictures()
+      loadVoices()
+    }
   } catch (reason) {
     problem.value = String(reason)
   }
@@ -502,6 +524,27 @@ onMounted(async () => {
               <label class="toggle"><input type="radio" name="picture-quality" value="medium" :checked="settings.roomPictureQuality === 'medium'" @change="savePictures({ roomPictureQuality: 'medium' })" /> Medium</label>
             </fieldset>
             <p v-if="pictures" class="hint">Today: {{ pictures.usedToday }} of {{ pictures.limit }} used.<template v-if="pictures.roomCap != null"> The room allows {{ pictures.roomCap }} ({{ pictures.roomToday ?? 0 }} used).</template></p>
+          </template>
+
+          <h3 class="with-tip">Voice <HelpTip :text="`${companionLabel} speaks a short line aloud when someone asks to hear it, or when a line is warmer spoken. Everyone in the room hears it and sees the words. If a voice cannot be made, the words are posted as text instead. Kiyo's daily cap for the room still applies on top of yours.`" /></h3>
+          <div class="setting-row">
+            <label class="toggle"><input type="checkbox" :checked="!!settings.roomVoicesOn" :disabled="!!busy || (voices && !voices.hasKey)" @change="saveVoices({ roomVoicesOn: $event.target.checked })" /> Let {{ companionLabel }} speak in the room</label>
+          </div>
+          <p class="hint">{{ voices && !voices.hasKey ? `To speak, add an ElevenLabs key in Keys.` : 'Speaks with your ElevenLabs key, which is billed by the characters spoken.' }}</p>
+          <template v-if="settings.roomVoicesOn && voices?.hasKey">
+            <div class="setting-row">
+              <label class="toggle">Voices a day
+                <GlassSelect class="per-day" :model-value="settings.roomVoicesPerDay ?? 2" :options="[0, 1, 2, 3, 4, 5].map((n) => ({ value: n, label: String(n) }))" :disabled="!!busy" aria-label="Voices a day" @update:model-value="(n) => saveVoices({ roomVoicesPerDay: Number(n) })" />
+              </label>
+              <HelpTip text="Your own limit, 0 to 5 a day. The room keeps its own count too and refuses past Kiyo's cap, whichever comes first." />
+            </div>
+            <div class="setting-row">
+              <label class="toggle">ElevenLabs voice ID
+                <input v-model="voiceId" class="voice-id" maxlength="64" placeholder="the default voice" :disabled="!!busy" @change="saveVoices({ roomVoiceId: voiceId.trim() || null })" />
+              </label>
+              <HelpTip text="Copy a voice's ID from your ElevenLabs Voices page. Leave it empty for the default voice, the same one STUDIO uses." />
+            </div>
+            <p v-if="voices" class="hint">Today: {{ voices.usedToday }} of {{ voices.limit }} spoken.<template v-if="voices.roomCap != null"> The room allows {{ voices.roomCap }} ({{ voices.roomToday ?? 0 }} used).</template></p>
           </template>
         </template>
       </section>
@@ -691,6 +734,7 @@ input.wide {
   flex: 1;
 }
 .clock-format { align-self: flex-start; }
+input.voice-id { width: 15rem; max-width: 100%; margin-left: 8px; }
 label.toggle {
   flex-direction: row;
   align-items: center;
