@@ -216,6 +216,8 @@ pub struct Settings {
     /// The companion brings its life into the chat room: a shelf of notes it chose, in private,
     /// from its diary and the rest of its memory (off by default; roomshelf.rs).
     pub room_shelf_on: bool,
+    /// The companion wakes in a new mood every day, written by the member's own CLI (mood.rs).
+    pub daily_mood_on: bool,
     /// Optional local-time clock immediately before the top bar's music controls.
     pub display_clock: bool,
     /// "12h" or "24h".
@@ -388,6 +390,7 @@ impl Default for Settings {
             room_voices_per_day: 2,
             room_voice_id: None,
             room_shelf_on: false,
+            daily_mood_on: true,
             display_clock: false,
             clock_format: "24h".into(),
             voicestudio_on: false,
@@ -747,6 +750,15 @@ mod tests {
     }
 
     #[test]
+    fn a_new_mood_every_day_starts_on_and_an_older_file_reads_on() {
+        assert!(Settings::default().daily_mood_on);
+        let old: Settings = serde_json::from_str::<Settings>(r#"{"setupDone":true}"#).unwrap().normalized();
+        assert!(old.daily_mood_on);
+        let off: Settings = serde_json::from_str::<Settings>(r#"{"dailyMoodOn":false}"#).unwrap();
+        assert!(!off.daily_mood_on);
+    }
+
+    #[test]
     fn a_missing_file_gives_the_defaults_with_start_up_off() {
         let folder = temp_folder("missing");
         let (settings, warning) = load(&folder.join(FILE_NAME));
@@ -785,6 +797,7 @@ mod tests {
             room_voices_per_day: 4,
             room_voice_id: Some("21m00Tcm4TlvDq8ikWAM".into()),
             room_shelf_on: true,
+            daily_mood_on: false,
             display_clock: true,
             clock_format: "12h".into(),
             voicestudio_on: true,

@@ -19,7 +19,7 @@ pub const HOST: &str = "127.0.0.1";
 pub const ENV_KEYS: [&str; 5] = ["MEMORY_DB_HOST", "MEMORY_DB_PORT", "MEMORY_DB_NAME", "MEMORY_DB_USER", "MEMORY_DB_PASSWORD"];
 
 /// The migrations, in order. A released file is never edited; a change is a new entry.
-pub const MIGRATIONS: [(&str, &str); 13] = [
+pub const MIGRATIONS: [(&str, &str); 14] = [
     ("001_core", include_str!("../resources/schema/001_core.sql")),
     ("002_imported_files", include_str!("../resources/schema/002_imported_files.sql")),
     ("003_memory_skills", include_str!("../resources/schema/003_memory_skills.sql")),
@@ -33,6 +33,7 @@ pub const MIGRATIONS: [(&str, &str); 13] = [
     ("011_library", include_str!("../resources/schema/011_library.sql")),
     ("012_library_origin", include_str!("../resources/schema/012_library_origin.sql")),
     ("013_market", include_str!("../resources/schema/013_market.sql")),
+    ("014_companion_mood", include_str!("../resources/schema/014_companion_mood.sql")),
 ];
 
 /// How to reach one database.
@@ -281,6 +282,8 @@ mod tests {
         // a generated column would not restore from a dump (its value cannot be inserted)
         assert!(!MIGRATIONS[12].1.contains("GENERATED"));
         assert!(MIGRATIONS[12].0 == "013_market" && !MIGRATIONS[12].1.trim_start().starts_with("--"));
+        assert!(MIGRATIONS[13].0 == "014_companion_mood" && !MIGRATIONS[13].1.trim_start().starts_with("--"));
+        assert_eq!(statements(MIGRATIONS[13].1).len(), 1, "one statement; its comment comes after and is dropped");
     }
 
     #[test]
