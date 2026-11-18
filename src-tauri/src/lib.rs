@@ -55,6 +55,7 @@ mod alerts;
 mod roomalert;
 mod roomdraw;
 mod roomvoice;
+mod roomshelf;
 mod roomread;
 mod rooms;
 mod roomturn;
@@ -438,6 +439,9 @@ pub fn run() {
             roomturn::room_log,
             roomdraw::room_pictures_status,
             roomvoice::room_voices_status,
+            roomshelf::room_shelf,
+            roomshelf::room_shelf_refresh,
+            roomshelf::room_shelf_remove,
             roomturn::room_card,
             roomturn::room_card_save,
             worlds::worlds_mine,
