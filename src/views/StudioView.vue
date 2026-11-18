@@ -165,7 +165,7 @@ watch(() => props.stamp, load)
               <span v-if="m.group" class="group">{{ m.group }}</span>
               <span class="group">{{ when(m.at) }}</span>
             </div>
-            <audio v-if="tab === 'songs' || tab === 'voices'" :src="src(m.path)" controls preload="none"></audio>
+            <ThemedAudio v-if="tab === 'songs' || tab === 'voices'" class="clip" :src="src(m.path)" />
             <button v-if="tab === 'saved'" @click="chatMediaOpen(m.path, true)">Show file</button>
             <span v-if="asking === m.path" class="inline-confirm">Delete? <button class="danger" @click="remove(m.path)">Yes</button> <button @click="asking = ''">No</button></span>
             <button v-else class="text-delete" @click="asking = m.path">Delete</button>
