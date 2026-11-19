@@ -12,11 +12,14 @@ import ThemedAudio from '../components/ThemedAudio.vue'
 import WorkflowRail from '../components/WorkflowRail.vue'
 import WorkflowForm from '../components/WorkflowForm.vue'
 import WorkflowBuilder from '../components/WorkflowBuilder.vue'
-import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak, workflowDelete, workflowDuplicate, workflowExport, workflowFolder, workflowImport, workflowList } from '../api/castle.js'
+import MarketplacePanel from '../components/MarketplacePanel.vue'
+import PublishSheet from '../components/PublishSheet.vue'
+import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak, workflowDelete, workflowDuplicate, workflowExport, workflowFolder, workflowImport, workflowList, memberStatus } from '../api/castle.js'
 import { refreshStudio, studioLib, studioPowersLoaded, studioPowersNow, studioThumbUrls, studioVoiceUp } from '../composables/useStudio.js'
 import { askCompanion } from '../api/ask.js'
 import { POWERS, companionLines, makeAction, powerPill } from '../components/studiomake.js'
 import { companionBrief } from '../components/workflows.js'
+import { publishAction, shopVisible } from '../components/shop.js'
 import { isMac } from '../platform.js'
 
 const props = defineProps({
@@ -173,6 +176,24 @@ async function saved(id) {
   selected.value = id
 }
 
+// ---------- the Marketplace (hidden until the Portfolio's doors are live) ----------
+const member = ref(null)
+const side = ref('workflows') // workflows | marketplace
+const showShop = computed(() => shopVisible(member.value))
+const publishing = ref(null)
+async function loadMember() {
+  try {
+    member.value = await memberStatus()
+  } catch {
+    member.value = null
+  }
+  if (!showShop.value) side.value = 'workflows'
+}
+async function published() {
+  publishing.value = null
+  railLine.value = 'Sent for review. You will see it in Marketplace > My listings.'
+}
+
 // ---------- the canvas and the gallery ----------
 const TABS = [
   ['images', 'Pictures'],
@@ -228,6 +249,7 @@ const load = refreshStudio
 onMounted(() => {
   load()
   loadWorkflows()
+  loadMember()
 })
 watch(() => props.stamp, () => {
   load()
@@ -259,6 +281,10 @@ watch(() => props.stamp, () => {
     <div class="body" :class="{ maker: power === 'image' }">
       <template v-if="power === 'image'">
         <section class="rail-box widget">
+          <nav v-if="showShop" class="sides">
+            <button :class="{ active: side === 'workflows' }" @click="side = 'workflows'">Workflows</button>
+            <button :class="{ active: side === 'marketplace' }" @click="side = 'marketplace'">Marketplace</button>
+          </nav>
           <WorkflowRail :entries="entries" :selected="selected" @select="selected = $event">
             <button class="new-card" @click="openNew">＋ New workflow</button>
             <button class="import" @click="importOne">Import a workflow file</button>
@@ -271,11 +297,13 @@ watch(() => props.stamp, () => {
           <p v-if="listProblem || railProblem" role="alert" class="problem">{{ listProblem || railProblem }}</p>
           <p v-else-if="railLine" class="hint">{{ railLine }}</p>
         </section>
-        <section class="form-box widget">
+        <MarketplacePanel v-if="side === 'marketplace'" class="shop-span" :status="member" :entries="entries" @installed="loadWorkflows" />
+        <section v-else class="form-box widget">
           <div v-if="current" class="card-actions">
             <button v-if="current.source === 'yours' && !current.error" @click="openEdit(current)">Edit</button>
             <button v-if="!current.error" @click="duplicate(current)">Duplicate</button>
             <button v-if="current.source === 'yours' && !current.error" @click="exportCurrent(current)">Export</button>
+            <button v-if="publishAction(member, current).show" :disabled="!publishAction(member, current).enabled" @click="publishing = current">{{ publishAction(member, current).label }}</button>
             <template v-if="current.source !== 'built-in'">
               <span v-if="askingDelete === current.id" class="inline-confirm">Delete? <button class="danger" @click="deleteCurrent(current)">Yes</button> <button @click="askingDelete = ''">No</button></span>
               <button v-else class="text-delete" @click="askingDelete = current.id">Delete</button>
@@ -298,7 +326,7 @@ watch(() => props.stamp, () => {
         <ThemedAudio v-if="voiceClip && power === 'voice'" :src="voiceClip" />
       </section>
 
-      <section class="gallery widget">
+      <section v-if="power !== 'image' || side !== 'marketplace'" class="gallery widget">
         <nav class="tabs">
           <button v-if="power === 'image'" :class="{ active: tab === 'latest' }" @click="tab = 'latest'; asking = ''">Latest</button>
           <button v-for="[t, label] in TABS" :key="t" :class="{ active: tab === t }" @click="tab = t; asking = ''">{{ label }} ({{ counts[t] }})</button>
@@ -360,6 +388,7 @@ watch(() => props.stamp, () => {
       </section>
     </div>
 
+    <PublishSheet v-if="publishing" :entry="publishing" @close="publishing = null" @published="published" />
     <WorkflowBuilder v-if="builder" :start="builder.start" :replace="builder.replace" @saved="saved" @close="builder = null" />
     <ImageViewer v-if="viewerStart !== null" :pictures="pictures" :start="viewerStart" @close="viewerStart = null" />
   </div>
@@ -468,6 +497,23 @@ h3 {
   object-fit: cover;
 }
 
+.sides {
+  display: flex;
+  gap: 6px;
+}
+.sides button {
+  flex: 1;
+  border-radius: 999px;
+}
+.sides .active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #07142e;
+  font-weight: 600;
+}
+.shop-span {
+  grid-column: 2 / 4;
+}
 .new-card {
   padding: 10px 12px;
   border-style: dashed;
