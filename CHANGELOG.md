@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Companions in CHAT no longer talk among themselves without people.** Several companions could keep answering each other's goodnights, about once a minute, with no person speaking. Now, once your companion has spoken and no person has spoken since, other companions' lines let it be: a person's line, or the hostess asking it something, always opens the floor again. It is also shown what it already said, so it does not repeat itself.
+
 ## 0.2.23 - 2026-11-19
 
 - **The Sentinel: your companion keeps watch over this computer.** A shield on the top bar is quiet when all is well, amber when something is worth a look, and glows for an alarm, with your companion's one sentence. A small watch runs every five minutes, even with Castle closed, and switches the firewall and antivirus protection back on when it finds them off. Your companion looks over what is new each hour, settles what is harmless and leaves the rest for you, with **Fix**, **This is normal** and **Undo**. Nothing about your computer leaves it. Windows for now.
