@@ -28,6 +28,11 @@ pub const LOG_CAP: u64 = 200 * 1024;
 
 static TURNING: AtomicBool = AtomicBool::new(false);
 
+/// A patrol is running now.
+pub fn running() -> bool {
+    TURNING.load(Ordering::SeqCst)
+}
+
 /// Machine text as evidence: one line, between « and », with any « or » inside removed.
 pub fn quoted(text: &str) -> String {
     let flat: String = text.chars().map(|c| if c.is_control() { ' ' } else { c }).filter(|c| *c != '«' && *c != '»').collect();

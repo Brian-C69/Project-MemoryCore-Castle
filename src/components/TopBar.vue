@@ -2,6 +2,7 @@
 import { onBeforeUnmount, ref } from 'vue'
 import TopMusic from './TopMusic.vue'
 import TopClock from './TopClock.vue'
+import SentinelShield from './SentinelShield.vue'
 import { neighbourOf } from './taborder.js'
 import { castleWindowLayout, getSettings } from '../api/castle.js'
 import { isMac } from '../platform.js'
@@ -21,7 +22,7 @@ const props = defineProps({
   // what is new, per tab, for its tooltip ("2 new · Rin online")
   markTitles: { type: Object, default: () => ({}) },
 })
-const emit = defineEmits(['select', 'settings', 'hide', 'reorder'])
+const emit = defineEmits(['select', 'settings', 'hide', 'reorder', 'sentinel'])
 
 // How much of the screen Castle takes: the whole screen, half of it, or a size the member drags.
 const LAYOUTS = [
@@ -133,6 +134,7 @@ onBeforeUnmount(stopListening)
       </button>
     </nav>
     <div class="actions">
+      <SentinelShield @open="$emit('sentinel')" />
       <TopClock v-if="displayClock" :format="clockFormat" />
       <TopMusic />
       <div class="layout" @focusout="layoutOut" @keydown.esc="layoutOpen = false">

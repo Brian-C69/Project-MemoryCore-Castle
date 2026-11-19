@@ -145,6 +145,14 @@ export const sweepMeasure = () => invoke('sweep_measure')
 export const sweepClean = (groups) => invoke('sweep_clean', { groups })
 export const sweepDeep = () => invoke('sweep_deep')
 export const sweepSettingsSave = (look, recycleBin) => invoke('sweep_settings_save', { look, recycleBin })
+
+// The Sentinel: the member's companion keeps watch over this computer.
+// -> { supported, on, installed, current, setupLine, patrol: { status, line, minutesAgo } | null,
+//      patrolling, unread, open: { alarm, look, note }, watchMinutes, problem }
+export const sentinelStatus = () => invoke('sentinel_status')
+export const sentinelPatrolNow = () => invoke('sentinel_patrol_now')
+export const sentinelSettingsSave = (on, model, patrolMinutes) => invoke('sentinel_settings_save', { on, model, patrolMinutes })
+export const onSentinelChanged = (handler) => listen('sentinel-changed', () => handler())
 // while a sweep runs: { group, freed } (bytes freed so far in all)
 export const onSweepProgress = (handler) => listen('castle://sweep', (event) => handler(event.payload))
 export const systemMeters = () => invoke('system_meters')

@@ -13,6 +13,7 @@
 #![allow(dead_code)]
 
 pub mod book;
+pub mod commands;
 pub mod hand;
 pub mod look;
 pub mod officer;
