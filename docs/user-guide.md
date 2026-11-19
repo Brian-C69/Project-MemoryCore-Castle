@@ -197,6 +197,7 @@ At the top: your companion's picture (or the glowing crystal), their name, and t
 | **CPU / RAM / graphics cards** | How busy your computer is: the processor, the memory and, with an NVIDIA card, one gauge for each graphics card (up to four). Hover a card's gauge for its full name, memory and temperature. The small gear opens **Gauge settings**: **Show graphics cards** switches them off, and the CPU and RAM watch lives there too | Your computer (the cards are read with `nvidia-smi`, which comes with the NVIDIA driver; without one no graphics gauges show) |
 | **Weather** | The weather where you are: the temperature, how it feels, humidity and wind, today's high and low and the next four days. The small gear sets the place: **Use my location** (Windows asks you first; only a spot rounded to about 1 km is kept, on this computer) or a city you search for, and °C or °F | Your place, sent to [Open-Meteo](https://open-meteo.com/), a free weather service that needs no account or key. Only a city name you type or the rounded coordinates leave your computer |
 | **Disks** | Every drive of your computer with a bar for how full it is (amber from 85%, red from 95%) and how much is free of its size. Read only: Sweep is the widget that frees space. | Your computer |
+| **Sentinel** | Your companion keeping watch over this computer: the shield's state (all quiet, worth a look, alarm, not set up), its one sentence, when the last patrol ran and when the five-minute watch ran (amber once it has missed its ticks). A click opens the Sentinel (see **18. The Sentinel**). On a Mac it says it keeps watch on Windows for now | Your computer: the Sentinel's own book in your memory database |
 | **USAGE** | How much of Claude Code's and Codex's **five-hour** and **weekly** limits you have used, and when each starts over. A bar turns warm at 80% and red at 100%. Codex only reports its limits while you use it, so its numbers can say "as of" an earlier time | Claude Code's `/usage` (with the login it already keeps) and Codex's own session files, read every five minutes |
 | **TODAY** | Your open reminders, with their due dates | `main/reminders.md` (MemoryCore's Reminders) |
 | **PROJECTS** | Your active projects, most recent first. Click one to open its file | `projects/project-list.md` (MemoryCore's Projects) |
@@ -684,6 +685,8 @@ Castle never asks for administrator rights itself. After an update that changes 
 ### The shield and the panel
 
 The shield sits on the top bar on every tab: green and quiet when all is well, amber when something is worth a look, glowing red for an alarm, faded when the last patrol is more than two hours old, and dim when the Sentinel is off or not set up. Hover it to read your companion's sentence.
+
+HOME has a **SENTINEL** card too, so you can see at a glance that the watch is working: the same state and sentence, when the last patrol ran, and when the five-minute watch last ran. That last line turns amber once the watch has gone more than 15 minutes without running, which means it has stopped. A click on the card opens the Sentinel too. It is on to begin with; switch it off, resize it or move it like any widget (**14. Widgets**). The shield on the top bar stays either way.
 
 Click it to open the Sentinel: the sentence, **Patrol now**, then **Alarms** and **Worth a look**, each with its buttons:
 
