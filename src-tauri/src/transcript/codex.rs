@@ -11,10 +11,15 @@ use std::time::{Duration, SystemTime};
 
 /// Where Codex keeps its sessions for this computer's user.
 pub fn sessions_root() -> Option<PathBuf> {
+    codex_home().map(|home| home.join("sessions"))
+}
+
+/// Codex's own folder: %CODEX_HOME% when set, else ~/.codex (%USERPROFILE%\.codex on Windows).
+pub fn codex_home() -> Option<PathBuf> {
     if let Some(home) = std::env::var_os("CODEX_HOME").filter(|v| !v.is_empty()) {
-        return Some(PathBuf::from(home).join("sessions"));
+        return Some(PathBuf::from(home));
     }
-    crate::env::home_dir().map(|home| home.join(".codex").join("sessions"))
+    crate::env::home_dir().map(|home| home.join(".codex"))
 }
 
 /// A folder path compared the way Windows does: case-insensitive, either slash, no trailing slash.

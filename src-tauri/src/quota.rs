@@ -7,20 +7,28 @@
 //! simply keeps its normal glow. The token is read for each ask, goes out only in the
 //! Authorization header, and is never kept, logged or sent to a page.
 //!
-//! Codex: its session files carry the limits it was last told (`token_count` lines with
-//! `rate_limits`); the newest one is read.
+//! Codex signed in with ChatGPT: the endpoint behind Codex's own `/status` limits
+//! (`GET https://chatgpt.com/backend-api/wham/usage`, see openai/codex
+//! `codex-rs/backend-client/src/client/rate_limit_resets.rs`), asked with the login Codex keeps in
+//! `$CODEX_HOME/auth.json` (default `~/.codex`, `%USERPROFILE%\.codex` on Windows). Like Claude's,
+//! it is not a documented API; the token is read for each ask, goes out only in the Authorization
+//! header, and is never kept, logged, put in an error or sent to a page. When the ask fails, the
+//! session files are read instead: they carry the limits Codex was last told (`token_count` lines
+//! with `rate_limits`), though Codex Desktop writes `null` there. Codex with an API key has no
+//! weekly limit: it is billed per use, and the card says so.
 
 use crate::settings::{Cli, SettingsStore};
 use crate::transcript::codex;
 use serde::Serialize;
 use serde_json::Value;
 use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::State;
 
 const CLAUDE_USAGE: &str = "https://api.anthropic.com/api/oauth/usage";
+const CODEX_USAGE: &str = "https://chatgpt.com/backend-api/wham/usage";
 const EVERY: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -88,30 +96,6 @@ pub fn parse_claude(answer: &Value) -> Option<Quota> {
     Some(quota("claude", week.get("utilization")?.as_f64()?, week.get("resets_at").and_then(Value::as_str).and_then(iso_ms)))
 }
 
-/// One Codex session line -> the weekly limit it reports (the secondary window, else the primary).
-pub fn parse_codex(line: &str, now: i64) -> Option<Quota> {
-    let v: Value = serde_json::from_str(line).ok()?;
-    let payload = v.get("payload")?;
-    if payload.get("type").and_then(Value::as_str) != Some("token_count") {
-        return None;
-    }
-    let limits = payload.get("rate_limits").or_else(|| payload.pointer("/info/rate_limits"))?;
-    let window = limits.get("secondary").filter(|w| !w.is_null()).or_else(|| limits.get("primary"))?;
-    let used = window.get("used_percent")?.as_f64()?;
-    let resets = window
-        .get("resets_at")
-        .and_then(|r| r.as_i64().map(|s| s * 1000).or_else(|| r.as_str().and_then(iso_ms)))
-        .or_else(|| window.get("resets_in_seconds").and_then(Value::as_i64).map(|s| now + s * 1000));
-    Some(quota("codex", used, resets))
-}
-
-/// The last limits line in a Codex session file.
-fn last_codex_quota(path: &Path) -> Option<Quota> {
-    let file = std::fs::File::open(path).ok()?;
-    let now = now_ms();
-    BufReader::new(file).lines().map_while(Result::ok).filter_map(|l| parse_codex(&l, now)).last()
-}
-
 /// The newest Codex session files from the last eight days, newest first.
 fn codex_files() -> Vec<PathBuf> {
     let Some(root) = codex::sessions_root() else { return Vec::new() };
@@ -121,8 +105,132 @@ fn codex_files() -> Vec<PathBuf> {
     files.into_iter().take(5).map(|(_, path)| path).collect()
 }
 
+/// How Codex is signed in, from its `auth.json`. The token is wrapped so it can never be printed.
+#[derive(Debug, PartialEq)]
+enum CodexAuth {
+    ChatGpt { token: Secret, account_id: Option<String> },
+    ApiKey,
+    None,
+}
+
+/// A login that prints as `<hidden>`, so a `{:?}` anywhere can never leak it.
+#[derive(PartialEq)]
+struct Secret(String);
+
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("<hidden>")
+    }
+}
+
+/// Codex's `auth.json` text -> how it is signed in. `auth_mode` says it when present; older files
+/// only have `tokens` (ChatGPT) or `OPENAI_API_KEY` (an API key).
+fn codex_auth_in(text: &str) -> CodexAuth {
+    let Ok(v) = serde_json::from_str::<Value>(text) else { return CodexAuth::None };
+    let chatgpt = || {
+        let tokens = v.get("tokens")?;
+        let token = tokens.get("access_token")?.as_str().filter(|t| !t.is_empty())?.to_string();
+        let account_id = tokens.get("account_id").and_then(Value::as_str).filter(|a| !a.is_empty()).map(str::to_string);
+        Some(CodexAuth::ChatGpt { token: Secret(token), account_id })
+    };
+    let api_key = || v.get("OPENAI_API_KEY").and_then(Value::as_str).filter(|k| !k.is_empty()).map(|_| CodexAuth::ApiKey);
+    let mode = v.get("auth_mode").and_then(Value::as_str).map(|m| m.to_ascii_lowercase().replace(['_', '-'], ""));
+    match mode.as_deref() {
+        Some("apikey") => CodexAuth::ApiKey,
+        Some("chatgpt") => chatgpt().unwrap_or(CodexAuth::None),
+        _ => chatgpt().or_else(api_key).unwrap_or(CodexAuth::None),
+    }
+}
+
+fn codex_auth() -> CodexAuth {
+    let Some(path) = codex::codex_home().map(|home| home.join("auth.json")) else { return CodexAuth::None };
+    std::fs::read_to_string(path).map(|text| codex_auth_in(&text)).unwrap_or(CodexAuth::None)
+}
+
+/// Codex's usage answer, asked the way Codex asks it. Errors are fixed words, never the token.
+fn codex_answer(token: &Secret, account_id: Option<&str>) -> Result<Value, &'static str> {
+    let client = reqwest::blocking::Client::builder().timeout(Duration::from_secs(15)).build().map_err(|_| "unknown")?;
+    let mut ask = client.get(CODEX_USAGE).bearer_auth(&token.0).header(reqwest::header::USER_AGENT, "codex-cli");
+    if let Some(account) = account_id {
+        ask = ask.header("chatgpt-account-id", account);
+    }
+    let answer = ask.send().map_err(|_| "unknown")?;
+    if !answer.status().is_success() {
+        return Err("unknown");
+    }
+    answer.json().map_err(|_| "unknown")
+}
+
+/// Codex's usage answer -> its windows. Each window says how long it is, so a plan with only a
+/// weekly limit (it comes as the primary window) still lands on the Week bar.
+pub fn parse_codex_answer(answer: &Value, now: i64) -> Option<CliUsage> {
+    let limits = answer.get("rate_limit").filter(|l| !l.is_null())?;
+    let mut out = usage(Cli::Codex, "ok");
+    out.observed_at = Some(now);
+    for (key, fallback_weekly) in [("primary_window", false), ("secondary_window", true)] {
+        let Some(w) = limits.get(key).filter(|w| !w.is_null()) else { continue };
+        let Some(used) = w.get("used_percent").and_then(Value::as_f64) else { continue };
+        let resets = w
+            .get("reset_at")
+            .and_then(Value::as_i64)
+            .filter(|at| *at > 0)
+            .map(|at| at * 1000)
+            .or_else(|| w.get("reset_after_seconds").and_then(Value::as_i64).map(|s| now + s * 1000));
+        let weekly = match w.get("limit_window_seconds").and_then(Value::as_i64).filter(|s| *s > 0) {
+            Some(seconds) => seconds >= 2 * 86_400,
+            None => fallback_weekly,
+        };
+        let slot = if weekly { &mut out.weekly } else { &mut out.five_hour };
+        if slot.is_none() {
+            *slot = Some(window(used, resets));
+        }
+    }
+    (out.five_hour.is_some() || out.weekly.is_some()).then_some(out)
+}
+
+/// The newest limits Codex wrote into its session files, if any.
+fn codex_from_sessions() -> Option<CliUsage> {
+    let now = now_ms();
+    codex_files().iter().find_map(|path| {
+        let file = std::fs::File::open(path).ok()?;
+        BufReader::new(file).lines().map_while(Result::ok).filter_map(|l| parse_codex_usage(&l, now)).last()
+    })
+}
+
+/// Codex's line from its login: ChatGPT asks the usage endpoint, an API key is billed per use, and
+/// whatever cannot be asked falls back to the session files.
+fn codex_reading_from(
+    auth: CodexAuth,
+    ask: impl FnOnce(&Secret, Option<&str>) -> Result<Value, &'static str>,
+    sessions: impl FnOnce() -> Option<CliUsage>,
+    now: i64,
+) -> CliUsage {
+    match auth {
+        CodexAuth::ApiKey => usage(Cli::Codex, "api_key"),
+        CodexAuth::ChatGpt { token, account_id } => ask(&token, account_id.as_deref())
+            .ok()
+            .and_then(|answer| parse_codex_answer(&answer, now))
+            .or_else(sessions)
+            .unwrap_or_else(|| usage(Cli::Codex, "unknown")),
+        CodexAuth::None => sessions().unwrap_or_else(|| usage(Cli::Codex, "unknown")),
+    }
+}
+
+fn codex_reading() -> CliUsage {
+    codex_reading_from(codex_auth(), codex_answer, codex_from_sessions, now_ms())
+}
+
+/// The crystal's weekly limit from Codex's line (the five hours when no week is known).
+fn codex_glow(reading: &CliUsage) -> Option<Quota> {
+    if reading.status != "ok" {
+        return None;
+    }
+    let w = reading.weekly.as_ref().or(reading.five_hour.as_ref())?;
+    Some(quota("codex", w.used_percent, w.resets_at))
+}
+
 fn codex_quota() -> Option<Quota> {
-    codex_files().iter().find_map(|path| last_codex_quota(path))
+    codex_glow(&cached(&CODEX, codex_reading))
 }
 
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -281,7 +389,7 @@ fn window(used: f64, resets_at: Option<i64>) -> Window {
 pub struct CliUsage {
     pub cli: String,
     pub label: String,
-    /// "ok", "signed_out", "not_installed" or "unknown".
+    /// "ok", "signed_out", "not_installed", "api_key" (Codex billed per use) or "unknown".
     pub status: String,
     pub five_hour: Option<Window>,
     pub weekly: Option<Window>,
@@ -363,20 +471,12 @@ fn codex_usage() -> CliUsage {
     if crate::env::find_on_path(Cli::Codex.command()).is_none() {
         return usage(Cli::Codex, "not_installed");
     }
-    let now = now_ms();
-    codex_files()
-        .iter()
-        .find_map(|path| {
-            let file = std::fs::File::open(path).ok()?;
-            BufReader::new(file).lines().map_while(Result::ok).filter_map(|l| parse_codex_usage(&l, now)).last()
-        })
-        .unwrap_or_else(|| usage(Cli::Codex, "unknown"))
+    cached(&CODEX, codex_reading)
 }
 
-/// Codex's line on the USAGE card and Codex's weekly limit for the crystal, each kept five minutes.
-/// Claude Code's two share one cached answer instead (see `claude_cached`).
-static CODEX_CARD: Mutex<Option<(Instant, CliUsage)>> = Mutex::new(None);
-static CODEX_GLOW: Mutex<Option<(Instant, Option<Quota>)>> = Mutex::new(None);
+/// Codex's one reading, kept five minutes: the USAGE card and the crystal both read it, so the
+/// usage endpoint is asked at most once every five minutes for the two.
+static CODEX: Mutex<Option<(Instant, CliUsage)>> = Mutex::new(None);
 
 /// The five-hour and weekly limits of Claude Code and Codex, in the card's order, asked at most
 /// every five minutes. The card itself is switched on or off in WIDGETS; off, neither CLI is asked.
@@ -386,7 +486,7 @@ pub async fn cli_usage(store: State<'_, SettingsStore>) -> Result<Vec<CliUsage>,
     // the card switched off asks neither CLI
     let wanted = if settings.show_usage_card { vec![Cli::Claude, Cli::Codex] } else { Vec::new() };
     tauri::async_runtime::spawn_blocking(move || {
-        wanted.into_iter().map(|cli| if cli == Cli::Claude { claude_usage() } else { cached(&CODEX_CARD, codex_usage) }).collect::<Vec<_>>()
+        wanted.into_iter().map(|cli| if cli == Cli::Claude { claude_usage() } else { codex_usage() }).collect::<Vec<_>>()
     })
     .await
     .map_err(|_| "Usage check stopped.".to_string())
@@ -398,7 +498,7 @@ pub async fn cli_quota(store: State<'_, SettingsStore>) -> Result<Option<Quota>,
     let cli = store.get().cli;
     let answer = tauri::async_runtime::spawn_blocking(move || match cli {
         Cli::Claude => claude_quota(),
-        Cli::Codex => cached(&CODEX_GLOW, codex_quota),
+        Cli::Codex => codex_quota(),
     })
     .await
     .unwrap_or(None);
@@ -442,12 +542,119 @@ mod tests {
     #[test]
     fn codex_reads_its_weekly_window_from_a_session_line() {
         let line = r#"{"timestamp":"2026-11-09T05:00:00Z","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"primary":{"used_percent":40.0,"window_minutes":300,"resets_in_seconds":600},"secondary":{"used_percent":75.0,"window_minutes":10080,"resets_in_seconds":3600}}}}"#;
-        let q = parse_codex(line, 1_000_000).unwrap();
+        let q = codex_glow(&parse_codex_usage(line, 1_000_000).unwrap()).unwrap();
         assert_eq!(q.left_percent, 25.0);
         assert_eq!(q.resets_at, Some(1_000_000 + 3_600_000));
         let only_primary = r#"{"type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":10.0,"resets_at":1762700000}}}}"#;
-        assert_eq!(parse_codex(only_primary, 0).unwrap().resets_at, Some(1_762_700_000_000));
-        assert!(parse_codex(r#"{"type":"event_msg","payload":{"type":"agent_message","message":"hi"}}"#, 0).is_none());
+        assert_eq!(codex_glow(&parse_codex_usage(only_primary, 0).unwrap()).unwrap().resets_at, Some(1_762_700_000_000));
+        assert!(parse_codex_usage(r#"{"type":"event_msg","payload":{"type":"agent_message","message":"hi"}}"#, 0).is_none());
+        // Codex Desktop writes no limits at all
+        assert!(parse_codex_usage(r#"{"type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":null}}"#, 0).is_none());
+    }
+
+    /// The answer Codex itself reads (openai/codex `RateLimitStatusPayload`).
+    fn codex_answer_with(primary: Value, secondary: Value) -> Value {
+        serde_json::json!({
+            "plan_type": "plus",
+            "rate_limit": { "allowed": true, "limit_reached": false, "primary_window": primary, "secondary_window": secondary },
+            "credits": null,
+        })
+    }
+
+    #[test]
+    fn codex_answer_gives_five_hours_and_the_week() {
+        let answer = codex_answer_with(
+            serde_json::json!({ "used_percent": 12, "limit_window_seconds": 18_000, "reset_after_seconds": 3_000, "reset_at": 1_794_340_621 }),
+            serde_json::json!({ "used_percent": 47, "limit_window_seconds": 604_800, "reset_after_seconds": 400_000, "reset_at": 1_794_683_448 }),
+        );
+        let u = parse_codex_answer(&answer, 7).unwrap();
+        assert_eq!(u.status, "ok");
+        assert_eq!(u.five_hour, Some(Window { used_percent: 12.0, resets_at: Some(1_794_340_621_000) }));
+        assert_eq!(u.weekly, Some(Window { used_percent: 47.0, resets_at: Some(1_794_683_448_000) }));
+        assert_eq!((u.observed_at, u.weekly_model.as_deref()), (Some(7), None));
+        assert_eq!(codex_glow(&u).unwrap().left_percent, 53.0);
+    }
+
+    #[test]
+    fn codex_answer_with_only_a_weekly_window_lands_on_the_week() {
+        // a plan with no five-hour limit sends its week as the primary window
+        let answer = codex_answer_with(serde_json::json!({ "used_percent": 100, "limit_window_seconds": 604_800, "reset_after_seconds": 60, "reset_at": 0 }), Value::Null);
+        let u = parse_codex_answer(&answer, 1_000).unwrap();
+        assert_eq!(u.five_hour, None);
+        assert_eq!(u.weekly, Some(Window { used_percent: 100.0, resets_at: Some(61_000) }));
+        // windows without a length: primary is the five hours, secondary the week
+        let bare = codex_answer_with(serde_json::json!({ "used_percent": 5 }), serde_json::json!({ "used_percent": 9 }));
+        let u = parse_codex_answer(&bare, 0).unwrap();
+        assert_eq!((u.five_hour.unwrap().used_percent, u.weekly.unwrap().used_percent), (5.0, 9.0));
+        // no limits in the answer is no answer
+        assert!(parse_codex_answer(&serde_json::json!({ "plan_type": "plus", "rate_limit": null }), 0).is_none());
+        assert!(parse_codex_answer(&codex_answer_with(Value::Null, Value::Null), 0).is_none());
+        assert!(parse_codex_answer(&serde_json::json!({ "detail": "Unauthorized" }), 0).is_none());
+    }
+
+    #[test]
+    fn codex_auth_json_says_how_codex_is_signed_in() {
+        let chatgpt = r#"{"auth_mode":"chatgpt","OPENAI_API_KEY":null,"tokens":{"id_token":"x","access_token":"tok","refresh_token":"r","account_id":"acc"}}"#;
+        assert_eq!(codex_auth_in(chatgpt), CodexAuth::ChatGpt { token: Secret("tok".into()), account_id: Some("acc".into()) });
+        assert_eq!(codex_auth_in(r#"{"auth_mode":"apikey","OPENAI_API_KEY":"sk-x"}"#), CodexAuth::ApiKey);
+        assert_eq!(codex_auth_in(r#"{"auth_mode":"api_key","OPENAI_API_KEY":"sk-x"}"#), CodexAuth::ApiKey);
+        // an older file without auth_mode
+        assert_eq!(codex_auth_in(r#"{"OPENAI_API_KEY":"sk-x","tokens":null}"#), CodexAuth::ApiKey);
+        assert!(matches!(codex_auth_in(r#"{"tokens":{"access_token":"tok"}}"#), CodexAuth::ChatGpt { account_id: None, .. }));
+        assert_eq!(codex_auth_in(r#"{"auth_mode":"chatgpt","tokens":{"access_token":""}}"#), CodexAuth::None);
+        assert_eq!(codex_auth_in(r#"{"OPENAI_API_KEY":null}"#), CodexAuth::None);
+        assert_eq!(codex_auth_in("not json"), CodexAuth::None);
+    }
+
+    #[test]
+    fn a_codex_login_never_prints() {
+        let auth = codex_auth_in(r#"{"tokens":{"access_token":"very-secret","account_id":"acc"}}"#);
+        let shown = format!("{auth:?}");
+        assert!(!shown.contains("very-secret"), "{shown}");
+        assert!(shown.contains("<hidden>"));
+    }
+
+    fn a_session_reading() -> Option<CliUsage> {
+        parse_codex_usage(r#"{"type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":3.0},"secondary":{"used_percent":4.0}}}}"#, 0)
+    }
+
+    #[test]
+    fn codex_with_an_api_key_is_billed_per_use() {
+        let u = codex_reading_from(CodexAuth::ApiKey, |_, _| panic!("an API key is never asked"), || panic!("nor its sessions"), 0);
+        assert_eq!((u.status.as_str(), &u.five_hour, &u.weekly), ("api_key", &None, &None));
+        assert!(codex_glow(&u).is_none());
+    }
+
+    #[test]
+    fn codex_signed_in_with_chatgpt_asks_the_usage_endpoint() {
+        let auth = codex_auth_in(r#"{"auth_mode":"chatgpt","tokens":{"access_token":"tok","account_id":"acc"}}"#);
+        let answer = codex_answer_with(serde_json::json!({ "used_percent": 20, "limit_window_seconds": 18_000, "reset_at": 100 }), serde_json::json!({ "used_percent": 30, "limit_window_seconds": 604_800, "reset_at": 200 }));
+        let u = codex_reading_from(
+            auth,
+            |token, account| {
+                assert_eq!((token.0.as_str(), account), ("tok", Some("acc")));
+                Ok(answer)
+            },
+            || panic!("the sessions are not needed"),
+            5,
+        );
+        assert_eq!((u.status.as_str(), u.five_hour.unwrap().used_percent, u.weekly.unwrap().used_percent, u.observed_at), ("ok", 20.0, 30.0, Some(5)));
+    }
+
+    #[test]
+    fn a_failed_codex_ask_falls_back_to_the_session_files() {
+        let chatgpt = || codex_auth_in(r#"{"tokens":{"access_token":"tok"}}"#);
+        let u = codex_reading_from(chatgpt(), |_, _| Err("unknown"), a_session_reading, 0);
+        assert_eq!((u.status.as_str(), u.weekly.unwrap().used_percent), ("ok", 4.0));
+        // an answer with no limits in it also falls back
+        let u = codex_reading_from(chatgpt(), |_, _| Ok(serde_json::json!({ "rate_limit": null })), a_session_reading, 0);
+        assert_eq!(u.five_hour.unwrap().used_percent, 3.0);
+        // and with nothing in the sessions either, the card says it has nothing yet
+        let u = codex_reading_from(chatgpt(), |_, _| Err("unknown"), || None, 0);
+        assert_eq!((u.status.as_str(), u.five_hour, u.weekly), ("unknown", None, None));
+        // no auth.json (or a login kept elsewhere): the sessions only
+        assert_eq!(codex_reading_from(CodexAuth::None, |_, _| panic!("no login, no ask"), a_session_reading, 0).status, "ok");
+        assert_eq!(codex_reading_from(CodexAuth::None, |_, _| panic!("no login, no ask"), || None, 0).status, "unknown");
     }
 
     #[test]
@@ -593,6 +800,21 @@ mod tests {
         for u in [claude_usage(), codex_usage()] {
             println!("{} {} 5h {:?} week {:?} model {:?}", u.cli, u.status, u.five_hour.map(|w| w.used_percent), u.weekly.map(|w| w.used_percent), u.weekly_model);
         }
+    }
+
+    /// Live, on demand only: `cargo test live_codex_usage -- --ignored --nocapture`. Asks Codex's
+    /// usage endpoint once (a failed ask falls back to the session files, like the card); prints
+    /// how Codex is signed in, never the login, and the percentages.
+    #[test]
+    #[ignore]
+    fn live_codex_usage() {
+        let how = match codex_auth() {
+            CodexAuth::ChatGpt { .. } => "chatgpt",
+            CodexAuth::ApiKey => "api key",
+            CodexAuth::None => "none",
+        };
+        let u = codex_reading();
+        println!("codex auth {how}; card {} 5h {:?} week {:?}", u.status, u.five_hour.map(|w| (w.used_percent, w.resets_at)), u.weekly.map(|w| (w.used_percent, w.resets_at)));
     }
 
     #[test]

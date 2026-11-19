@@ -33,6 +33,8 @@ export function staleWords(observedAt, now = Date.now()) {
 const STATUS = {
   not_installed: 'Not installed',
   signed_out: 'Sign in to see usage',
+  // Codex with an API key: no weekly limit, OpenAI bills each use
+  api_key: 'API key · billed per use',
   unknown: 'Usage not available yet',
 }
 
