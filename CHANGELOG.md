@@ -4,6 +4,16 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **STUDIO makes pictures with workflows.** A rail of workflows on the left, the chosen one's form in the middle, and your newest picture large on the right with a Made here strip. Castle comes with four: **From a picture** (the AI writes the prompt from a picture you upload, you change it, then make a new one), **Two characters** (both stay themselves in one picture), **Character sheet** and **Poster**.
+
+- **Make your own workflows.** **＋ New workflow** opens a builder: blocks for pictures, characters, text and choices, a prompt with tap-to-insert names, and the pictures to follow. **Duplicate** copies any workflow, and **Export** and **Import** share them as a file. You can also describe one in a sentence and your companion writes it. They are yours alone.
+
+- **The Studio shows what was made there.** Outfit and hair sheets stay in APPEARANCE, and adventure scenes in their world.
+
+- **A picture can follow several pictures.** Up to five reference pictures go to OpenAI together, so two characters keep their own faces.
+
+- **Ready for the Marketplace.** When it opens, a Marketplace tab will let you buy workflows, vote on them, and sell your own through your Stripe account. Until then nothing shows.
+
 ## 0.2.20 - 2026-11-19
 
 - **A new mood every day.** Your companion wakes each morning in a mood of its own, written from three words drawn at random, its traits and today's look. It shows under its portrait as chips and one sentence, colours how it talks (in CHAT too), stays the day, and changes only when something truly moves your companion. Every mood is kept in your memory database. On to begin with; Settings > Companion > Mood turns it off.

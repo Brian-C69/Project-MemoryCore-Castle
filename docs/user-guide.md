@@ -285,11 +285,11 @@ Choose a shelf on the left, search at the top, and press a book to read it on th
 
 ## 9. Studio
 
-Your companion can make pictures, short videos, songs and voice lines. Just ask in Chat - for example *"Draw me a picture of our garden at night"* or *"Write and sing a song about today"*.
+STUDIO is where you make things: pictures through **workflows**, and short videos, songs and voice lines through your companion. Outfit and hair sheets live in APPEARANCE, and adventure scenes stay in their world. The Studio shows what was made here.
 
-### The Make bar
+### The four powers
 
-At the top of **STUDIO**, the **MAKE** bar is one box for what you want and a switch: **Picture**, **Video**, **Song** or **Voice**. Each shows its state in a small pill:
+At the top right, a switch picks **Picture**, **Video**, **Song** or **Voice**. Each shows its state in a small pill:
 
 | Pill | Meaning |
 |-------|---------|
@@ -298,17 +298,61 @@ At the top of **STUDIO**, the **MAKE** bar is one box for what you want and a sw
 | **VoiceStudio** | Voice lines are spoken by VoiceStudio on this computer (below) |
 | **Add a key** | No key yet: the main button becomes **Add the ... key** (see chapter 4, Keys) |
 
-Write what you want and press the main button (or **Ctrl + Enter**):
-- **Create picture** draws it straight away; its progress shows beside **Refresh**, and the picture appears in the gallery.
-- For a **video**, a **song** or a **voice line**, the button is **Ask <your companion>**: the request goes to your companion in Chat, and it tells you the cost and asks before it makes it.
+While a picture is being drawn, the line beside the switch says so (**Stop** ends it). If it could not be drawn, the line says why, with **Retry** and **Dismiss**. A finished picture simply appears.
+
+### Pictures: workflows
+
+With **Picture** chosen, the room has three parts:
+- **Workflows**, on the left: one card per workflow.
+- **The form** in the middle: what the chosen workflow asks for.
+- **The canvas** on the right: your newest picture large, with a **Made here** strip of the last ones under it. Click any picture to see it full size.
+
+A workflow is a recipe for one kind of picture. Castle comes with four:
+- **From a picture** - upload a picture and press **Write prompt from picture**: the AI looks at it and writes the prompt that would make it again. Change anything you like in the prompt, then press **Create picture** for a new one.
+- **Two characters** - give each character a picture (and a name, if you like) and write the scene. Both keep their own face, hair and clothes in one picture.
+- **Character sheet** - one character drawn from the front, the side and the back.
+- **Poster** - a tall poster with your title in clean lettering.
+
+**Write prompt from picture** reads the picture the same way pictures are drawn: with your OpenAI key, or with Codex on your ChatGPT plan. **Create picture** says what is still missing (*"Fill in Scene."*, *"Add a picture to Character A."*) before it starts.
+
+### Make your own workflow
+
+- **＋ New workflow** opens the builder:
+  - Give it a name, an icon and one line about what it makes.
+  - Add blocks from the shelf: **Picture** (an upload), **Character** (a picture and a name), **Text box**, **Choices**, **Write prompt from picture**.
+  - Move blocks up or down, or remove them.
+  - Write the **picture step's prompt**: tap a block's name to put it in (for example *{{scene}}* or *Character A's name*).
+  - Tick the pictures it should follow (at most five), and choose the shape and quality.
+  - Anything that would not work is shown beside the block it belongs to, and **Save** waits until it is right.
+- **Duplicate** makes your own copy of any workflow, Castle's included, and opens it in the builder.
+- **Edit** changes one of yours.
+- **Or describe one for your companion**: type what you want (*"my two cats in different outfits"*) and press **Ask <your companion>**. It writes the workflow, and the new card appears on its own.
+- **Export** saves one of yours as a file, and **Import a workflow file** adds one a friend gave you.
+- **Delete** asks **Delete? Yes / No** right there. Castle's own workflows cannot be deleted; you can simply leave them unused.
+
+Your workflows are yours alone, kept in Castle's settings folder (`workflows`). A workflow is only words: it never runs anything on your computer.
+
+### The Marketplace
+
+When the Marketplace opens, a **Marketplace** tab appears beside **Workflows**. Until then you will not see it, and your workflows stay private.
+
+- **Shop**: search the workflows for sale, open one to see its samples and what it asks for, and **Buy** it. Checkout opens in your browser.
+- **My purchases**: **Install** puts a bought workflow on your rail (**Update** fetches its newest version). Give it a 👍 or 👎. You can change your vote, and only buyers can vote. You may **Duplicate** a bought workflow for your own use, but not export it.
+- **Selling**: **Publish** on one of your workflows sends it for review with one to three sample pictures, a price and a line of words. It reads **Selling opens soon** until selling opens to everyone. **My listings** shows each listing's status, its review note, votes, sales and earnings, with **Withdraw**.
+- **Getting paid**: **Connect Stripe** links your own Stripe account. Buyers pay you directly, and the Marketplace keeps its share of each sale.
+- **Votes keep the shop fair**: once a workflow has at least 10 votes, fewer than 40% thumbs up pauses it. It is never deleted: you see why, fix it, and send it again. Buyers keep what they bought.
+
+### Video, Song and Voice
+
+With **Video**, **Song** or **Voice** chosen, the room shows one **MAKE** box. Write what you want and press the main button (or **Ctrl + Enter**). For a video, a song or a voice line the button is **Ask <your companion>**: the request goes to your companion in Chat, and it tells you the cost and asks before it makes it.
 
 ### Your own voice (optional, for self-hosters)
 
-If you run [VoiceStudio](https://github.com/debpalash/voicestudio) on this PC, you can use it for Voice instead of a key. It is off by default: turn it on in **Settings > Companion > Local voice**. With it on and VoiceStudio running, Voice shows **VoiceStudio**: type a line in the Make bar, press **Speak with VoiceStudio**, and the clip plays and is saved with your other voice lines. Castle uses your first saved VoiceStudio voice (a saved voice also keeps one-word lines from coming out as noise) and checks each clip with VoiceStudio's own transcriber, making it again if it came out as noise. Everything stays on your computer, Castle never installs or starts VoiceStudio, and while the switch is off Castle never contacts it. VoiceStudio's models have their own licences; some are non-commercial.
+If you run [VoiceStudio](https://github.com/debpalash/voicestudio) on this PC, you can use it for Voice instead of a key. It is off by default: turn it on in **Settings > Companion > Local voice**. With it on and VoiceStudio running, Voice shows **VoiceStudio**: type a line in the Make box, press **Speak with VoiceStudio**, and the clip plays and is saved with your other voice lines. Castle uses your first saved VoiceStudio voice (a saved voice also keeps one-word lines from coming out as noise) and checks each clip with VoiceStudio's own transcriber, making it again if it came out as noise. Everything stays on your computer, Castle never installs or starts VoiceStudio, and while the switch is off Castle never contacts it. VoiceStudio's models have their own licences; some are non-commercial.
 
 ### Before anything costs money
 
-Your companion always tells you the estimated cost first and asks before making a picture, video, song or voice line.
+A workflow's picture is drawn when you press **Create picture**. With the key, OpenAI bills that one picture, and Write prompt from picture bills one short reading. On your ChatGPT plan it counts toward the plan. For videos, songs and voice lines, your companion tells you the estimated cost first and asks before making them.
 
 ### When a key is missing
 
@@ -316,18 +360,15 @@ The idea is saved next to where the file would have gone (a `.prompt.md`, `.lyri
 
 ### The gallery
 
-Below the Make bar, everything your companion made fills the room.
+Behind the canvas's tabs, everything made here is kept:
+- **Pictures**: large tiles at their own shape (shown from small copies Castle makes once and keeps in its own settings folder, never in your memory folder). Click one to see it large, and use the arrow keys to move between them.
+- **Videos**, **Songs** and **Voice**: play them right in Castle. Songs are grouped by album.
+- **Saved prompts**: the ideas saved while a key was missing, with **Show file**.
+- **Backups**: the pictures Castle kept before replacing one.
 
-- **Pictures** - large tiles at their own shape (shown from small copies Castle makes once, at start-up, and keeps in its own settings folder - never in your memory folder); click one to see it large and use the arrow keys to move between them.
-- **Videos**, **Songs** and **Voice** - play them right in Castle. Songs are grouped by album.
-- **Saved prompts** - the ideas saved while a key was missing, with **Show file**.
-- **Backups** - the pictures Castle kept before replacing one (when it draws a new standard look or turnaround, or you upload a new picture).
+Every item has a **Delete** (on a picture, the small ✕ in its corner). Castle asks **Delete? Yes / No** right there, and a deleted file goes to the Windows Recycle Bin, so you can restore it.
 
-Every item has a **Delete** (on a picture, the small ✕ in its corner). Castle asks **Delete? Yes / No** right there, and a deleted file goes to the Windows Recycle Bin, so you can restore it. The standard look itself cannot be deleted here; replace it in APPEARANCE.
-
-While a picture is being drawn, the line beside **Refresh** says so (**Stop** ends it). If it could not be drawn, the line says why, with **Retry** and **Dismiss**. A finished picture simply appears.
-
-Everything lives in your MemoryCore folder (`media-generation/`, `music/`, and the story's own folders), so it is part of your memory and your backup.
+Everything lives in your MemoryCore folder (`media-generation/`, `music/`), so it is part of your memory and your backup. The pictures you upload to a workflow are kept beside them in `studio-inputs/`.
 
 ---
 

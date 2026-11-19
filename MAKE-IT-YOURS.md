@@ -208,6 +208,45 @@ Members can create worlds from the WORLD room (see the user guide). To ship a 3D
 2. Put your GLB exports, named by number, in a folder and run `npm run world:lighten -- <id> <folder>` (default folder: `Project Resources/Design/<id>/hd`). The prepared pieces land in `public/worlds/<id>/`; add a `preview.jpg` there for the card. To tune sizes, orbits and the camera by eye, run `npm run vite` and open `http://localhost:5173/?world=3d/<id>&camera=orbit` (dev builds only). A world's `camera` may also set its own `"orbit": { "radius", "height" }` and `"wide": { "radius", "height" }` in metres.
 3. The card turns *ready* when every piece is there. Anything you add here ships with your build, so use models you have the rights to share (Tripo's free plan publishes under CC BY 4.0; a paid plan owns its output).
 
+## 2c. A workflow of your own
+
+The easiest way: **STUDIO > ＋ New workflow**, or describe one for your companion. By hand, a workflow is a folder with one `workflow.json`:
+
+```
+%APPDATA%\com.memorycore.castle\workflows\two-cats\
+  workflow.json
+```
+
+```json
+{
+  "schema": 1,
+  "name": "Two cats",
+  "icon": "heart",
+  "power": "image",
+  "description": "My two cats, together, anywhere",
+  "blocks": [
+    { "id": "a", "type": "character", "label": "First cat" },
+    { "id": "b", "type": "character", "label": "Second cat" },
+    { "id": "scene", "type": "text", "label": "Where they are" },
+    { "id": "style", "type": "chips", "label": "Style", "options": ["Anime", "Painterly", "Photo"] },
+    { "id": "make", "type": "create", "prompt": "{{a.name}} and {{b.name}}: {{scene}}. Style: {{style}}.",
+      "references": ["a", "b"], "size": "1536x1024", "quality": "medium" }
+  ]
+}
+```
+
+**Blocks:**
+- `picture` is an upload.
+- `character` is a picture and a name. `{{id.name}}` puts the name in the prompt.
+- `text` is a text box. `{{id}}` puts its words in.
+- `chips` is one choice from `options`. `{{id}}` puts the choice in.
+- `describe` reads a `picture` block (`from`) and writes a prompt into a `text` block (`into`).
+- Exactly one `create`, last: the `prompt`, up to five `references` to follow (character or picture blocks), a `size` (`1024x1024`, `1024x1536` or `1536x1024`) and a `quality` (`low`, `medium` or `high`).
+
+**Icons:** `picture`, `people`, `person`, `poster`, `star`, `heart`, `spark`, `brush`.
+
+The whole format is written out in [`docs/workflow-schema.json`](docs/workflow-schema.json). Unknown keys are kept and ignored. A broken file stays on the rail with its reason, and a workflow never runs code: Castle only reads the words.
+
 ## 3. Teach the companion something
 
 - Everything your companion is told about Castle lives in `src-tauri/resources/castle-block.md` (written into the memory's `CLAUDE.md` and `AGENTS.md` between `castle` markers).
