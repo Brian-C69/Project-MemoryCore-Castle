@@ -100,22 +100,98 @@ fn listing_form(workflow: &Value, samples: &[String], price_myr: f64, descriptio
         .text("priceMyr", format!("{price_myr:.2}"))
         .text("description", description.trim().chars().take(300).collect::<String>());
     for sample in samples {
-        let path = Path::new(sample);
-        let kind = match path.extension().and_then(|e| e.to_str()).map(str::to_lowercase).as_deref() {
-            Some("png") => "image/png",
-            Some("jpg" | "jpeg") => "image/jpeg",
-            Some("webp") => "image/webp",
-            _ => return Err("Sample pictures must be PNG, JPEG or WebP.".into()),
-        };
-        let size = std::fs::metadata(path).map_err(|_| "A sample picture was not found.".to_string())?.len();
-        if size > MAX_SAMPLE_BYTES {
-            return Err("A sample picture is larger than 5 MB.".into());
-        }
-        let bytes = std::fs::read(path).map_err(|_| "A sample picture could not be read.".to_string())?;
-        let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "sample.png".into());
-        form = form.part("samples", Part::bytes(bytes).file_name(name).mime_str(kind).map_err(|_| "A sample picture could not be sent.".to_string())?);
+        form = form.part("samples", picture_part(sample, "sample")?);
     }
     Ok(form)
+}
+
+/// A picture to send (a sample, the keeper's picture, the backdrop): PNG, JPEG or WebP, 5 MB at most.
+fn picture_part(file: &str, what: &str) -> Result<reqwest::blocking::multipart::Part, String> {
+    let path = Path::new(file);
+    let kind = match path.extension().and_then(|e| e.to_str()).map(str::to_lowercase).as_deref() {
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        _ => return Err(format!("The {what} picture must be PNG, JPEG or WebP.")),
+    };
+    let size = std::fs::metadata(path).map_err(|_| format!("The {what} picture was not found."))?.len();
+    if size > MAX_SAMPLE_BYTES {
+        return Err(format!("The {what} picture is larger than 5 MB."));
+    }
+    let bytes = std::fs::read(path).map_err(|_| format!("The {what} picture could not be read."))?;
+    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| format!("{what}.png"));
+    reqwest::blocking::multipart::Part::bytes(bytes).file_name(name).mime_str(kind).map_err(|_| format!("The {what} picture could not be sent."))
+}
+
+/// What a member's shop is saved with (the Portfolio's E.134 member door).
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ShopFields {
+    pub name: String,
+    pub keeper_name: String,
+    pub greeting: String,
+    pub keeper_card: String,
+    pub open: bool,
+}
+
+/// Checks a shop before it is sent; the Portfolio checks again.
+pub fn shop_problem(f: &ShopFields) -> Option<&'static str> {
+    let count = |s: &str| s.trim().chars().count();
+    if count(&f.name) == 0 || count(&f.name) > 60 {
+        return Some("Give the shop a name (at most 60 letters).");
+    }
+    if count(&f.keeper_name) == 0 || count(&f.keeper_name) > 40 {
+        return Some("Give the keeper a name (at most 40 letters).");
+    }
+    if count(&f.greeting) > 160 {
+        return Some("Keep the greeting under 160 letters.");
+    }
+    if count(&f.keeper_card) > 1200 {
+        return Some("Keep the keeper card under 1200 letters.");
+    }
+    None
+}
+
+fn shop_form(f: &ShopFields, keeper_picture: Option<&str>, backdrop: Option<&str>) -> Result<reqwest::blocking::multipart::Form, String> {
+    if let Some(problem) = shop_problem(f) {
+        return Err(problem.into());
+    }
+    let mut form = reqwest::blocking::multipart::Form::new()
+        .text("name", f.name.trim().to_string())
+        .text("keeperName", f.keeper_name.trim().to_string())
+        .text("greeting", f.greeting.trim().to_string())
+        .text("keeperCard", f.keeper_card.trim().to_string())
+        .text("open", f.open.to_string());
+    if let Some(file) = keeper_picture.filter(|f| !f.is_empty()) {
+        form = form.part("keeperPicture", picture_part(file, "keeper")?);
+    }
+    if let Some(file) = backdrop.filter(|f| !f.is_empty()) {
+        form = form.part("backdrop", picture_part(file, "backdrop")?);
+    }
+    Ok(form)
+}
+
+/// A door whose 404 only means "not there yet" (the shops before E.134, a member with no shop).
+pub fn call_or_none(base: &str, token: &str, path: &str) -> Result<Option<Value>, String> {
+    let response = client(Duration::from_secs(30))?.get(format!("{base}{path}")).bearer_auth(token).send().map_err(|_| "The Portfolio could not be reached. Check the internet connection.".to_string())?;
+    if response.status().as_u16() == 404 {
+        return Ok(None);
+    }
+    answer(Ok(response)).map(Some)
+}
+
+/// The shops' address, searched like the items'.
+pub fn shops_path(query: &str, page: u32) -> String {
+    listings_path(query, page).replace("/api/public/market/listings?", "/api/public/market/shops?").replace("&power=image", "")
+}
+
+/// A shop's slug as the doors take it.
+fn slug(s: &str) -> Result<&str, String> {
+    if !s.is_empty() && s.len() <= 80 && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+        Ok(s)
+    } else {
+        Err("That is not a shop in the town.".into())
+    }
 }
 
 fn send_listing(method: reqwest::Method, path: &str, form: reqwest::blocking::multipart::Form) -> Result<Value, String> {
@@ -228,6 +304,40 @@ pub async fn market_shop_withdraw(listing: String, store: State<'_, SettingsStor
     blocking(move || door(reqwest::Method::DELETE, &format!("/api/member/market/listings/{}", plain(&listing)?), None)).await
 }
 
+/// The town's shops; `{ "items": [], "missing": true }` until the Portfolio's shops door answers.
+#[tauri::command]
+pub async fn market_shop_shops(query: String, page: u32, store: State<'_, SettingsStore>) -> Result<Value, String> {
+    crate::rooms::need(&store, "studio")?;
+    blocking(move || {
+        let found = call_or_none(&crate::signin::portfolio(), &token()?, &shops_path(&query, page))?;
+        Ok(found.unwrap_or_else(|| serde_json::json!({ "items": [], "missing": true })))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn market_shop_shop(slug_name: String, store: State<'_, SettingsStore>) -> Result<Value, String> {
+    crate::rooms::need(&store, "studio")?;
+    blocking(move || door(reqwest::Method::GET, &format!("/api/public/market/shops/{}", slug(&slug_name)?), None)).await
+}
+
+/// The member's own shop, or null when they have none yet.
+#[tauri::command]
+pub async fn market_shop_my_shop(store: State<'_, SettingsStore>) -> Result<Value, String> {
+    crate::rooms::need(&store, "studio")?;
+    blocking(|| Ok(call_or_none(&crate::signin::portfolio(), &token()?, "/api/member/market/shop")?.unwrap_or(Value::Null))).await
+}
+
+#[tauri::command]
+pub async fn market_shop_my_shop_save(fields: ShopFields, keeper_picture: Option<String>, backdrop: Option<String>, store: State<'_, SettingsStore>) -> Result<Value, String> {
+    crate::rooms::need(&store, "studio")?;
+    blocking(move || {
+        let form = shop_form(&fields, keeper_picture.as_deref(), backdrop.as_deref())?;
+        send_listing(reqwest::Method::PUT, "/api/member/market/shop", form)
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -296,6 +406,34 @@ mod tests {
     fn only_plain_listing_ids_reach_a_door() {
         assert!(plain("42").is_ok() && plain("abc-123").is_ok());
         assert!(plain("../admin").is_err() && plain("").is_err() && plain("a?b=c").is_err());
+    }
+
+    #[test]
+    fn a_missing_shops_door_means_not_there_yet() {
+        let (base, handle) = serve_once(404, "");
+        assert_eq!(call_or_none(&base, "member-token", &shops_path("mira", 0)).unwrap(), None);
+        let request = handle.join().unwrap();
+        assert!(request.starts_with("GET /api/public/market/shops?q=mira&page=0&size=24 "), "{request}");
+        assert!(request.to_lowercase().contains("authorization: bearer member-token"));
+        let (base, handle) = serve_once(200, r#"{"items":[{"slug":"miras-atelier"}]}"#);
+        assert_eq!(call_or_none(&base, "member-token", "/api/member/market/shop").unwrap().unwrap()["items"][0]["slug"], "miras-atelier");
+        handle.join().unwrap();
+        let (base, handle) = serve_once(403, r#"{"error":"Shops open with selling."}"#);
+        assert_eq!(call_or_none(&base, "member-token", "/api/member/market/shop").unwrap_err(), "Shops open with selling.");
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn a_shop_is_checked_before_it_is_sent() {
+        let good = ShopFields { name: "Mira's Atelier".into(), keeper_name: "Mira".into(), greeting: "Welcome!".into(), keeper_card: "I paint postcards.".into(), open: true };
+        assert_eq!(shop_problem(&good), None);
+        assert!(shop_problem(&ShopFields { name: " ".into(), ..good.clone() }).unwrap().contains("shop a name"));
+        assert!(shop_problem(&ShopFields { keeper_name: String::new(), ..good.clone() }).unwrap().contains("keeper a name"));
+        assert!(shop_problem(&ShopFields { greeting: "x".repeat(161), ..good.clone() }).unwrap().contains("greeting"));
+        assert!(shop_problem(&ShopFields { keeper_card: "x".repeat(1201), ..good.clone() }).unwrap().contains("keeper card"));
+        assert!(shop_form(&good, Some("C:/nowhere/keeper.gif"), None).unwrap_err().contains("PNG, JPEG or WebP"));
+        assert!(shop_form(&good, None, None).is_ok());
+        assert!(slug("miras-atelier").is_ok() && slug("../admin").is_err() && slug("Mira").is_err());
     }
 
     #[test]

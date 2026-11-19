@@ -205,6 +205,12 @@ export const shopMine = () => invoke('market_shop_mine')
 // listing: null for a new listing, or the listing to send a new version of
 export const shopPublish = (workflow, listing, samples, priceMyr, description) => invoke('market_shop_publish', { workflow, listing, samples, priceMyr, description })
 export const shopWithdraw = (listing) => invoke('market_shop_withdraw', { listing })
+// the town's shops ({ items, missing: true } until the Portfolio's shops door answers), one shop by its slug
+export const townShops = (query = '', page = 0) => invoke('market_shop_shops', { query, page })
+export const townShop = (slug) => invoke('market_shop_shop', { slugName: slug })
+// the member's own shop (null when none yet); save takes { name, keeperName, greeting, keeperCard, open } and optional picture paths
+export const myShop = () => invoke('market_shop_my_shop')
+export const myShopSave = (fields, keeperPicture = null, backdrop = null) => invoke('market_shop_my_shop_save', { fields, keeperPicture, backdrop })
 // Opens a file from the memory folder in its own app, or its folder with the file selected. A file a
 // DEV tab's chat showed (by `room`, or remembered from chatMedia) opens through that tab's door.
 export const chatMediaOpen = (path, folder = false, room = undefined) => {
