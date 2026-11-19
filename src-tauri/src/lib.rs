@@ -41,6 +41,7 @@ mod market;
 mod sentinel;
 mod memory;
 mod gpu;
+mod disks;
 mod weather;
 mod meter_watch;
 mod mirror;
@@ -365,6 +366,7 @@ pub fn run() {
             commands::system_meters,
             gpu::gpu_meters,
             gpu::gpu_gauges_save,
+            disks::disk_drives,
             weather::weather_get,
             weather::weather_search,
             weather::weather_save,

@@ -137,6 +137,8 @@ export const weatherSave = (place, units) => invoke('weather_save', { place, uni
 export const weatherHere = (lat, lon) => invoke('weather_here', { lat, lon })
 export const weatherRead = (force = false) => invoke('weather_read', { force })
 
+// DISKS, HOME's drive-space card. diskDrives -> [{ mount, label, total, free (bytes), removable, media }]; read only.
+export const diskDrives = () => invoke('disk_drives')
 // SWEEP, HOME's cleaner. sweepStatus -> { settings: { look, recycleBin }, lastSwept (unix s or null), deep (Deep clean offered) };
 // sweepMeasure -> [{ id, label, bytes, files, note }] (nothing deleted; the groups offered on this computer);
 // sweepClean(groups) -> [{ id, freed, files, skipped }]; sweepDeep -> { id, freed, files, skipped } or null when refused.

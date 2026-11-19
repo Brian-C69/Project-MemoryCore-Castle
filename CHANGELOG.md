@@ -12,6 +12,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **One themed audio player for voice lines and clips.** The voice lines in CHAT and the Songs and Voice lists in STUDIO used the browser's grey player, which ignored the theme. They now use Castle's own, with a speed button (1x, 1.25x, 1.5x, 2x, 0.75x), mute and a volume slider. The volume is remembered, and starting one clip stops the one that was playing.
 
+- **A DISKS widget on HOME.** Shows every drive of your computer with a bar for how full it is (amber from 85%, red from 95%) and how much is free of its size, with the total across all drives when there is more than one. It only reads the drive list from your computer, sends nothing anywhere and changes nothing; Sweep is still the widget that frees space. It is on by default and can be switched off in Settings > Widgets.
+
 ## 0.2.22 - 2026-11-19
 
 - **The Mac download is back.** 0.2.21 went out for Windows only, because one test meant for Windows ran on the Mac and stopped its build. 0.2.22 brings everything in 0.2.21 to the Mac too: workflows in STUDIO, making your own, and the Marketplace town ready behind its door.
