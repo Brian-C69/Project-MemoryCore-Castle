@@ -218,6 +218,9 @@ pub struct Settings {
     pub room_shelf_on: bool,
     /// The companion wakes in a new mood every day, written by the member's own CLI (mood.rs).
     pub daily_mood_on: bool,
+    /// In the Marketplace town, the shopkeeper explains items and answers questions through one short
+    /// run of the member's own CLI (keeper.rs). Off: the item's own description shows instead.
+    pub keeper_speaks: bool,
     /// Optional local-time clock immediately before the top bar's music controls.
     pub display_clock: bool,
     /// "12h" or "24h".
@@ -391,6 +394,7 @@ impl Default for Settings {
             room_voice_id: None,
             room_shelf_on: false,
             daily_mood_on: true,
+            keeper_speaks: true,
             display_clock: false,
             clock_format: "24h".into(),
             voicestudio_on: false,
@@ -752,6 +756,7 @@ mod tests {
     #[test]
     fn a_new_mood_every_day_starts_on_and_an_older_file_reads_on() {
         assert!(Settings::default().daily_mood_on);
+        assert!(Settings::default().keeper_speaks, "shopkeepers speak until the member turns them off");
         let old: Settings = serde_json::from_str::<Settings>(r#"{"setupDone":true}"#).unwrap().normalized();
         assert!(old.daily_mood_on);
         let off: Settings = serde_json::from_str::<Settings>(r#"{"dailyMoodOn":false}"#).unwrap();
@@ -798,6 +803,7 @@ mod tests {
             room_voice_id: Some("21m00Tcm4TlvDq8ikWAM".into()),
             room_shelf_on: true,
             daily_mood_on: false,
+            keeper_speaks: false,
             display_clock: true,
             clock_format: "12h".into(),
             voicestudio_on: true,

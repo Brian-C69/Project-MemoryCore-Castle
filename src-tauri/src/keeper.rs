@@ -151,6 +151,9 @@ pub async fn keeper_say(explain: bool, shop: ShopFacts, item: ItemFacts, questio
     if !explain && question.trim().is_empty() {
         return Err("Ask the keeper something first.".into());
     }
+    if !store.get().keeper_speaks {
+        return Ok(fallback(&item));
+    }
     let key = cache_key(&item);
     if explain {
         if let Some(said) = EXPLAINED.lock().unwrap().as_ref().and_then(|m| m.get(&key)).cloned() {
