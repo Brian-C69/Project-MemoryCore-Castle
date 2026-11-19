@@ -647,3 +647,240 @@ pub fn workflow_run(id: String, values: HashMap<String, RunValue>, store: State<
         },
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn temp_folder(name: &str) -> PathBuf {
+        let folder = std::env::temp_dir().join(format!("castle-workflows-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&folder);
+        fs::create_dir_all(&folder).unwrap();
+        folder
+    }
+
+    fn two_cats() -> Value {
+        json!({
+            "schema": 1, "name": "Rin's Two Cats", "icon": "heart", "power": "image",
+            "blocks": [
+                { "id": "a", "type": "character", "label": "First cat" },
+                { "id": "b", "type": "character", "label": "Second cat" },
+                { "id": "scene", "type": "text", "label": "Scene" },
+                { "id": "style", "type": "chips", "label": "Style", "options": ["Anime", "Photo"] },
+                { "id": "make", "type": "create", "prompt": "{{a.name}} and {{b}}: {{scene}}. Style: {{style}}.", "references": ["a", "b"], "size": "1536x1024", "quality": "low" }
+            ]
+        })
+    }
+
+    fn messages(w: &Value) -> Vec<String> {
+        validate(w).into_iter().map(|p| p.message).collect()
+    }
+
+    fn picture(folder: &Path, name: &str) -> String {
+        let path = folder.join(name);
+        fs::write(&path, b"png").unwrap();
+        path.display().to_string()
+    }
+
+    #[test]
+    fn castles_own_workflows_are_all_valid() {
+        let root = temp_folder("built-ins");
+        let all = list(&root);
+        assert_eq!(all.len(), BUILT_INS.len());
+        for entry in &all {
+            assert_eq!(entry.source, "built-in");
+            assert!(entry.error.is_none(), "{} has a problem: {:?}", entry.id, entry.error);
+            assert_eq!(entry.workflow.as_ref().map(|w| str_of(w, "id").to_string()).as_deref(), Some(entry.id.as_str()));
+        }
+    }
+
+    #[test]
+    fn a_saved_workflow_comes_back_on_the_rail_under_its_names_id() {
+        let root = temp_folder("round-trip");
+        let id = save(&root, two_cats(), None).unwrap();
+        assert_eq!(id, "rins-two-cats");
+        let mine = list(&root).into_iter().find(|e| e.id == id).unwrap();
+        assert_eq!(mine.source, "yours");
+        assert!(mine.error.is_none());
+        assert_eq!(str_of(mine.workflow.as_ref().unwrap(), "id"), "rins-two-cats");
+        // Edit overwrites the same folder; a second new save takes the next free id
+        let mut edited = two_cats();
+        edited["description"] = json!("now with a garden");
+        assert_eq!(save(&root, edited, Some(&id)).unwrap(), id);
+        assert_eq!(save(&root, two_cats(), None).unwrap(), "rins-two-cats-2");
+    }
+
+    #[test]
+    fn each_kind_of_mistake_is_named() {
+        let mut w = two_cats();
+        w["schema"] = json!(2);
+        assert!(messages(&w)[0].contains("schema"));
+
+        let mut w = two_cats();
+        w["power"] = json!("video");
+        assert!(messages(&w).iter().any(|m| m.contains("Video workflows come later")));
+
+        let mut w = two_cats();
+        w["blocks"][0]["type"] = json!("teleport");
+        assert!(validate(&w).iter().any(|p| p.block.as_deref() == Some("a") && p.message.contains("teleport")));
+
+        let mut w = two_cats();
+        w["blocks"][1]["id"] = json!("a");
+        assert!(messages(&w).iter().any(|m| m.contains("Two blocks are called")));
+
+        let mut w = two_cats();
+        w["blocks"][4]["references"] = json!(["scene"]);
+        assert!(validate(&w).iter().any(|p| p.block.as_deref() == Some("make") && p.message.contains("not a picture or character")));
+
+        let mut w = two_cats();
+        w["blocks"][4]["prompt"] = json!("{{nobody}} in {{scene.name}}");
+        let problems = messages(&w);
+        assert!(problems.iter().any(|m| m.contains("{{nobody}}")));
+        assert!(problems.iter().any(|m| m.contains("{{scene.name}}")));
+
+        let mut w = two_cats();
+        w["blocks"][4]["size"] = json!("4096x4096");
+        assert!(messages(&w).iter().any(|m| m.contains("size")));
+
+        let mut w = two_cats();
+        w["blocks"].as_array_mut().unwrap().pop();
+        assert!(messages(&w).iter().any(|m| m.contains("exactly one picture step")));
+
+        let mut w = two_cats();
+        let again = w["blocks"][4].clone();
+        w["blocks"].as_array_mut().unwrap().push(json!({ "id": "make2", "type": "create", "prompt": again["prompt"] }));
+        assert!(messages(&w).iter().any(|m| m.contains("exactly one picture step")));
+
+        let mut w = two_cats();
+        w["blocks"][3]["options"] = json!([]);
+        assert!(validate(&w).iter().any(|p| p.block.as_deref() == Some("style")));
+
+        let w = json!({ "schema": 1, "name": "Read", "power": "image", "blocks": [
+            { "id": "photo", "type": "text" }, { "id": "read", "type": "describe", "from": "photo", "into": "nowhere" },
+            { "id": "make", "type": "create", "prompt": "x" } ] });
+        let problems = messages(&w);
+        assert!(problems.iter().any(|m| m.contains("read a picture block")));
+        assert!(problems.iter().any(|m| m.contains("write into a text block")));
+
+        assert!(save(&temp_folder("refused"), json!({ "name": "nothing" }), None).is_err());
+    }
+
+    #[test]
+    fn a_picture_follows_at_most_five_references() {
+        let mut blocks: Vec<Value> = (1..=6).map(|n| json!({ "id": format!("c{n}"), "type": "character" })).collect();
+        let refs: Vec<String> = (1..=6).map(|n| format!("c{n}")).collect();
+        blocks.push(json!({ "id": "make", "type": "create", "prompt": "six friends", "references": refs }));
+        let w = json!({ "schema": 1, "name": "Crowd", "power": "image", "blocks": blocks });
+        assert!(messages(&w).iter().any(|m| m.contains("at most 5 reference")));
+    }
+
+    #[test]
+    fn a_duplicate_is_the_members_own_copy_with_the_next_free_name() {
+        let root = temp_folder("duplicate");
+        let first = duplicate(&root, "two-characters").unwrap();
+        let second = duplicate(&root, "two-characters").unwrap();
+        assert_eq!(first, "two-characters-copy");
+        assert_eq!(second, "two-characters-copy-2");
+        let copy = list(&root).into_iter().find(|e| e.id == first).unwrap();
+        assert_eq!(copy.source, "yours");
+        assert_eq!(str_of(copy.workflow.as_ref().unwrap(), "name"), "Two characters (copy)");
+        assert!(duplicate(&root, "not-here").is_err());
+    }
+
+    #[test]
+    fn castles_own_and_bought_workflows_cannot_be_overwritten() {
+        let root = temp_folder("read-only");
+        assert!(save(&root, two_cats(), Some("poster")).is_err());
+        assert!(delete(&root, "poster").is_err());
+        assert!(delete(&root, "../themes").is_err());
+
+        let bought = root.join(FOLDER).join("sunset-duo");
+        fs::create_dir_all(&bought).unwrap();
+        fs::write(bought.join(FILE), serde_json::to_string(&two_cats()).unwrap()).unwrap();
+        fs::write(bought.join(ORIGIN), r#"{"source":"bought","listing":"L42"}"#).unwrap();
+        let entry = list(&root).into_iter().find(|e| e.id == "sunset-duo").unwrap();
+        assert_eq!((entry.source.as_str(), entry.listing.as_deref()), ("bought", Some("L42")));
+        assert!(save(&root, two_cats(), Some("sunset-duo")).is_err());
+        assert!(export_text(&root, "sunset-duo").is_err());
+        assert!(duplicate(&root, "sunset-duo").is_ok(), "a bought workflow may be copied for the member's own use");
+        assert!(delete(&root, "sunset-duo").is_ok());
+    }
+
+    #[test]
+    fn a_broken_folder_is_listed_with_its_reason() {
+        let root = temp_folder("broken");
+        let bad = root.join(FOLDER).join("half-done");
+        fs::create_dir_all(&bad).unwrap();
+        fs::write(bad.join(FILE), "{ nope").unwrap();
+        let entry = list(&root).into_iter().find(|e| e.id == "half-done").unwrap();
+        assert!(entry.workflow.is_none() && entry.error.is_some());
+        assert!(find(&root, "half-done").is_err());
+    }
+
+    #[test]
+    fn an_import_keeps_a_good_file_and_refuses_a_bad_one() {
+        let root = temp_folder("import");
+        let good = root.join("from-a-friend.json");
+        fs::write(&good, serde_json::to_string(&two_cats()).unwrap()).unwrap();
+        assert_eq!(import_file(&root, &good).unwrap(), "rins-two-cats");
+        let bad = root.join("not-a-workflow.json");
+        fs::write(&bad, r#"{"schema":1,"name":"x","power":"image","blocks":[]}"#).unwrap();
+        assert!(import_file(&root, &bad).unwrap_err().contains("cannot be used"));
+        let junk = root.join("junk.json");
+        fs::write(&junk, "hello").unwrap();
+        assert!(import_file(&root, &junk).is_err());
+        let (name, text) = export_text(&root, "rins-two-cats").unwrap();
+        assert_eq!(name, "rins-two-cats.json");
+        assert!(text.contains("Rin's Two Cats"));
+    }
+
+    #[test]
+    fn the_template_is_filled_once_and_a_members_words_stay_as_typed() {
+        let root = temp_folder("fill");
+        let mut values = HashMap::new();
+        values.insert("a".to_string(), RunValue { name: Some("Mochi".into()), picture: Some(picture(&root, "mochi.png")), ..Default::default() });
+        values.insert("b".to_string(), RunValue { picture: Some(picture(&root, "kuro.webp")), ..Default::default() });
+        values.insert("scene".to_string(), RunValue { text: Some("napping on {{a}} and {{style}}".into()), ..Default::default() });
+        let run = prepare(&two_cats(), &values).unwrap();
+        assert!(run.prompt.starts_with("Mochi and Second cat: napping on {{a}} and {{style}}. Style: Anime."), "{}", run.prompt);
+        assert!(run.prompt.contains("Reference pictures, in order: 1 is Mochi; 2 is Second cat."));
+        assert!(run.prompt.ends_with("Size 1536x1024, low quality."));
+        assert_eq!(run.references.len(), 2);
+        assert_eq!((run.size.as_str(), run.quality.as_str(), run.label.as_str()), ("1536x1024", "low", "Workflow: Rin's Two Cats"));
+    }
+
+    #[test]
+    fn a_run_says_what_is_missing() {
+        let root = temp_folder("missing");
+        let mut values = HashMap::new();
+        values.insert("a".to_string(), RunValue { picture: Some(picture(&root, "a.png")), ..Default::default() });
+        values.insert("b".to_string(), RunValue { picture: Some(picture(&root, "b.png")), ..Default::default() });
+        assert_eq!(prepare(&two_cats(), &values).unwrap_err(), "Fill in Scene.");
+        values.insert("scene".to_string(), RunValue { text: Some("a picnic".into()), ..Default::default() });
+        values.insert("style".to_string(), RunValue { text: Some("Watercolour".into()), ..Default::default() });
+        assert!(prepare(&two_cats(), &values).unwrap_err().contains("Choose one of the choices"));
+        values.remove("style");
+        values.insert("b".to_string(), RunValue::default());
+        assert_eq!(prepare(&two_cats(), &values).unwrap_err(), "Add a picture to Second cat.");
+        values.insert("b".to_string(), RunValue { picture: Some(root.join("gone.png").display().to_string()), ..Default::default() });
+        assert!(prepare(&two_cats(), &values).unwrap_err().contains("was not found"));
+        values.insert("b".to_string(), RunValue { picture: Some(picture(&root, "notes.txt")), ..Default::default() });
+        assert!(prepare(&two_cats(), &values).unwrap_err().contains("PNG, JPEG or WebP"));
+    }
+
+    #[test]
+    fn followed_pictures_are_copied_inside_the_memory() {
+        let root = temp_folder("inputs");
+        let memory = root.join("memory");
+        fs::create_dir_all(&memory).unwrap();
+        let a = picture(&root, "a.png");
+        let b = picture(&root, "b.JPG");
+        let copies = keep_inputs(&memory, "run1", &[a, b]).unwrap();
+        assert_eq!(copies.len(), 2);
+        assert!(Path::new(&copies[0]).starts_with(memory.join(INPUTS_FOLDER).join("run1")));
+        assert!(copies[1].ends_with("2.jpg"));
+        assert!(copies.iter().all(|c| Path::new(c).is_file()));
+        assert!(keep_inputs(&memory, "run2", &[]).unwrap().is_empty());
+    }
+}
