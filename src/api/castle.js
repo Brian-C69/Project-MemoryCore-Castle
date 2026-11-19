@@ -153,6 +153,12 @@ export const sentinelStatus = () => invoke('sentinel_status')
 export const sentinelPatrolNow = () => invoke('sentinel_patrol_now')
 export const sentinelSettingsSave = (on, model, patrolMinutes) => invoke('sentinel_settings_save', { on, model, patrolMinutes })
 export const onSentinelChanged = (handler) => listen('sentinel-changed', () => handler())
+// -> [{ id, kind, hint, title, detail, fixMove, fixArg, state, stateWhy, firstSeen, lastSeen, undoable }]
+export const sentinelFindings = (states) => invoke('sentinel_findings', { states })
+// The member's own click on one finding: word is fix, accept or undo. -> the line to show
+export const sentinelClick = (id, word) => invoke('sentinel_click', { id, word })
+export const sentinelLog = () => invoke('sentinel_log')
+export const sentinelAlarmsSeen = () => invoke('sentinel_alarms_seen')
 // while a sweep runs: { group, freed } (bytes freed so far in all)
 export const onSweepProgress = (handler) => listen('castle://sweep', (event) => handler(event.payload))
 export const systemMeters = () => invoke('system_meters')

@@ -570,7 +570,11 @@ pub fn run() {
             db::db_move_out,
             sentinel::sentinel_settings_save,
             sentinel::officer::sentinel_patrol_now,
-            sentinel::commands::sentinel_status
+            sentinel::commands::sentinel_status,
+            sentinel::commands::sentinel_findings,
+            sentinel::commands::sentinel_click,
+            sentinel::commands::sentinel_log,
+            sentinel::commands::sentinel_alarms_seen
         ])
         .setup(|app| {
             let config = match settings::test_override(settings::TEST_CONFIG_VAR) {

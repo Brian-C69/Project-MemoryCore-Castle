@@ -22,6 +22,7 @@ import { prepareWorld } from './composables/useWorld.js'
 import { loaderBegin, loaderDone, loaderEnd, loaderExpect, loaderRemember } from './loader/loader.js'
 import ModalSheet from './components/ModalSheet.vue'
 import BackupPanel from './components/BackupPanel.vue'
+import SentinelSheet from './components/SentinelSheet.vue'
 import AppsView from './views/AppsView.vue'
 import MyProfileView from './views/myprofile/MyProfileView.vue'
 import MemoryRoom from './views/MemoryRoom.vue'
@@ -86,6 +87,8 @@ const offerFacts = ref({ offerSeen: true, hadCastleBefore: false, hasFolder: fal
 const avatar = ref(null)
 const memoryFolder = ref('')
 const backupOpen = ref(false)
+// the Sentinel, opened from its shield on the top bar
+const sentinelOpen = ref(false)
 // the Settings sheet and the section it opens on
 const settingsOpen = ref(false)
 const settingsSection = ref('companion')
@@ -547,6 +550,7 @@ watch(settingsStamp, () => {
       @select="active = $event; marks = marks.filter((m) => m !== $event)"
       @reorder="reorderTabs"
       @settings="openSettings"
+      @sentinel="sentinelOpen = true"
       @hide="hideCastle().catch(() => {})"
     />
     <main class="screen">
@@ -624,6 +628,9 @@ watch(settingsStamp, () => {
       <DatabaseOffer v-if="databaseOffer" :companion="companion" :download-bytes="databaseBytes" :source="databaseSource" @close="closeDatabaseOffer" @changed="loadHome" />
       <ModalSheet v-if="backupOpen" tag="BACKUP" title="Keep the memory safe" @close="backupOpen = false; loadBackup()">
         <BackupPanel :companion="companion" />
+      </ModalSheet>
+      <ModalSheet v-if="sentinelOpen" tag="SENTINEL" title="Keeping watch" @close="sentinelOpen = false">
+        <SentinelSheet @settings="sentinelOpen = false; openSettings('sentinel')" />
       </ModalSheet>
       <NoticeToasts @keys="openKeys" />
       <MeterAlert />
