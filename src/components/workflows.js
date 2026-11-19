@@ -90,3 +90,93 @@ export function runValues(values) {
   }
   return out
 }
+
+// ---------- the builder ----------
+
+export const SIZES = [
+  ['1024x1024', 'Square'],
+  ['1024x1536', 'Tall'],
+  ['1536x1024', 'Wide'],
+]
+export const QUALITIES = ['low', 'medium', 'high']
+/** The shelf of blocks a member can add, in the words the builder shows. */
+export const SHELF = [
+  ['picture', 'Picture'],
+  ['character', 'Character'],
+  ['text', 'Text box'],
+  ['chips', 'Choices'],
+  ['describe', 'Write prompt from picture'],
+]
+
+/** A new workflow to start from: one text box and the picture step that draws it. */
+export function newWorkflow() {
+  return {
+    schema: 1,
+    name: '',
+    icon: 'spark',
+    power: 'image',
+    description: '',
+    blocks: [
+      { id: 'scene', type: 'text', label: 'What to draw' },
+      { id: 'make', type: 'create', prompt: '{{scene}}', references: [], size: '1024x1024', quality: 'medium' },
+    ],
+  }
+}
+
+/** A copy safe to edit in the builder. */
+export const draftOf = (workflow) => JSON.parse(JSON.stringify(workflow ?? newWorkflow()))
+
+function freeId(workflow, base) {
+  const taken = new Set(blocksOf(workflow).map((b) => b.id))
+  let n = 1
+  while (taken.has(`${base}${n}`)) n++
+  return `${base}${n}`
+}
+
+/** Adds a block of a kind just before the picture step; returns its id. */
+export function addBlock(workflow, type) {
+  const id = freeId(workflow, type === 'describe' ? 'read' : type)
+  const label = Object.fromEntries(SHELF)[type] ?? type
+  const block = { id, type, label: type === 'describe' ? 'Write prompt from picture' : label }
+  if (type === 'chips') block.options = ['One', 'Two']
+  if (type === 'describe') {
+    block.from = blocksOf(workflow).find((b) => b.type === 'picture')?.id ?? ''
+    block.into = blocksOf(workflow).find((b) => b.type === 'text')?.id ?? ''
+  }
+  const at = workflow.blocks.findIndex((b) => b.type === 'create')
+  workflow.blocks.splice(at < 0 ? workflow.blocks.length : at, 0, block)
+  return id
+}
+
+/** Takes a block away, and every reference to it from the picture step and the Write-prompt buttons. */
+export function removeBlock(workflow, id) {
+  workflow.blocks = workflow.blocks.filter((b) => b.id !== id || b.type === 'create')
+  for (const b of workflow.blocks) {
+    if (b.type === 'create') b.references = (b.references ?? []).filter((r) => r !== id)
+    if (b.type === 'describe') {
+      if (b.from === id) b.from = ''
+      if (b.into === id) b.into = ''
+    }
+  }
+}
+
+/** Moves a block up (-1) or down (+1); the picture step stays last. */
+export function moveBlock(workflow, id, step) {
+  const i = workflow.blocks.findIndex((b) => b.id === id)
+  const j = i + step
+  if (i < 0 || j < 0 || j >= workflow.blocks.length) return
+  if (workflow.blocks[i].type === 'create' || workflow.blocks[j].type === 'create') return
+  const [b] = workflow.blocks.splice(i, 1)
+  workflow.blocks.splice(j, 0, b)
+}
+
+/** The `{{names}}` the picture step's prompt can use, each with the words a chip shows. */
+export function insertable(workflow) {
+  const out = []
+  for (const b of blocksOf(workflow)) {
+    const label = (b.label ?? '').trim() || b.id
+    if (b.type === 'text' || b.type === 'chips') out.push({ token: `{{${b.id}}}`, label })
+    if (b.type === 'character') out.push({ token: `{{${b.id}.name}}`, label: `${label}'s name` })
+  }
+  return out
+}

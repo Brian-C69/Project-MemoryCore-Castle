@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ICONS, createAction, describeAction, emptyValues, fieldsOf, iconOf, missing, runValues, usedIds } from './workflows.js'
+import { ICONS, addBlock, createAction, describeAction, draftOf, emptyValues, fieldsOf, iconOf, insertable, missing, moveBlock, newWorkflow, removeBlock, runValues, usedIds } from './workflows.js'
 
 const twoCharacters = {
   name: 'Two characters',
@@ -84,5 +84,39 @@ describe('workflows', () => {
     expect(iconOf(twoCharacters)).toBe(ICONS.people)
     expect(iconOf({ icon: 'dragon' })).toBe(ICONS.spark)
     expect(iconOf(null)).toBe(ICONS.spark)
+  })
+
+  it('the builder adds blocks before the picture step with fresh ids, and removing one unhooks it', () => {
+    const w = newWorkflow()
+    const a = addBlock(w, 'character')
+    const b = addBlock(w, 'character')
+    const p = addBlock(w, 'picture')
+    const r = addBlock(w, 'describe')
+    expect([a, b, r]).toEqual(['character1', 'character2', 'read1'])
+    expect(w.blocks.at(-1).type).toBe('create')
+    expect(w.blocks.find((x) => x.id === r)).toMatchObject({ from: p, into: 'scene' })
+    w.blocks.at(-1).references = [a, b]
+    removeBlock(w, a)
+    removeBlock(w, p)
+    removeBlock(w, 'make')
+    expect(w.blocks.at(-1).references).toEqual([b])
+    expect(w.blocks.find((x) => x.id === r).from).toBe('')
+    expect(w.blocks.some((x) => x.type === 'create')).toBe(true) // the picture step cannot be removed
+  })
+
+  it('blocks move but the picture step stays last', () => {
+    const w = newWorkflow()
+    const c = addBlock(w, 'chips')
+    moveBlock(w, c, -1)
+    expect(w.blocks.map((x) => x.id)).toEqual([c, 'scene', 'make'])
+    moveBlock(w, 'scene', 1)
+    expect(w.blocks.at(-1).id).toBe('make')
+  })
+
+  it('offers the names a prompt can use and edits a copy, never the original', () => {
+    expect(insertable(twoCharacters).map((n) => n.token)).toEqual(['{{a.name}}', '{{b.name}}', '{{scene}}', '{{style}}'])
+    const copy = draftOf(twoCharacters)
+    copy.blocks.pop()
+    expect(twoCharacters.blocks).toHaveLength(5)
   })
 })

@@ -11,7 +11,8 @@ import ImageJobs from '../components/ImageJobs.vue'
 import ThemedAudio from '../components/ThemedAudio.vue'
 import WorkflowRail from '../components/WorkflowRail.vue'
 import WorkflowForm from '../components/WorkflowForm.vue'
-import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak, workflowList } from '../api/castle.js'
+import WorkflowBuilder from '../components/WorkflowBuilder.vue'
+import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak, workflowDuplicate, workflowList } from '../api/castle.js'
 import { refreshStudio, studioLib, studioPowersLoaded, studioPowersNow, studioThumbUrls, studioVoiceUp } from '../composables/useStudio.js'
 import { askCompanion } from '../api/ask.js'
 import { POWERS, companionLines, makeAction, powerPill } from '../components/studiomake.js'
@@ -79,6 +80,30 @@ async function loadWorkflows() {
   } catch (e) {
     listProblem.value = String(e?.message ?? e)
   }
+}
+
+// ---------- make your own: New, Edit, Duplicate ----------
+// builder: { start, replace } while the builder is open
+const builder = ref(null)
+const railProblem = ref('')
+const openNew = () => (builder.value = { start: null, replace: '' })
+const openEdit = (entry) => (builder.value = { start: entry.workflow, replace: entry.id })
+async function duplicate(entry) {
+  railProblem.value = ''
+  try {
+    const id = await workflowDuplicate(entry.id)
+    await loadWorkflows()
+    selected.value = id
+    const copy = entries.value.find((e) => e.id === id)
+    if (copy) openEdit(copy)
+  } catch (e) {
+    railProblem.value = String(e?.message ?? e)
+  }
+}
+async function saved(id) {
+  builder.value = null
+  await loadWorkflows()
+  selected.value = id
 }
 
 // ---------- the canvas and the gallery ----------
@@ -167,10 +192,16 @@ watch(() => props.stamp, () => {
     <div class="body" :class="{ maker: power === 'image' }">
       <template v-if="power === 'image'">
         <section class="rail-box widget">
-          <WorkflowRail :entries="entries" :selected="selected" @select="selected = $event" />
-          <p v-if="listProblem" role="alert" class="problem">{{ listProblem }}</p>
+          <WorkflowRail :entries="entries" :selected="selected" @select="selected = $event">
+            <button class="new-card" @click="openNew">＋ New workflow</button>
+          </WorkflowRail>
+          <p v-if="listProblem || railProblem" role="alert" class="problem">{{ listProblem || railProblem }}</p>
         </section>
         <section class="form-box widget">
+          <div v-if="current" class="card-actions">
+            <button v-if="current.source === 'yours' && !current.error" @click="openEdit(current)">Edit</button>
+            <button v-if="!current.error" @click="duplicate(current)">Duplicate</button>
+          </div>
           <WorkflowForm v-if="current && !current.error" :entry="current" :way="powers.image" :loaded="powersLoaded" @keys="emit('keys')" />
           <p v-else-if="current" role="alert" class="problem">This workflow has a problem: {{ current.error }}</p>
           <p v-else class="empty">Choose a workflow on the left.</p>
@@ -250,6 +281,7 @@ watch(() => props.stamp, () => {
       </section>
     </div>
 
+    <WorkflowBuilder v-if="builder" :start="builder.start" :replace="builder.replace" @saved="saved" @close="builder = null" />
     <ImageViewer v-if="viewerStart !== null" :pictures="pictures" :start="viewerStart" @close="viewerStart = null" />
   </div>
 </template>
@@ -355,6 +387,20 @@ h3 {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.new-card {
+  padding: 10px 12px;
+  border-style: dashed;
+  border-radius: 12px;
+  font-size: 14px;
+  text-align: left;
+}
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 /* the Make box (Video, Song, Voice) */
