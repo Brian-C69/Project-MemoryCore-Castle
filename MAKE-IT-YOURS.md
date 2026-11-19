@@ -64,7 +64,9 @@ The look a member picks in Sweep's gear always wins over the theme's. A theme th
 "widgetSkin": "bioluminescent"
 ```
 
-**Living water** - a theme may give its wallpaper gentle motion on HOME with a `motion` block. Every position is a fraction of the picture (`[across, down]`, each 0 to 1), so the effect stays on the water at any window size. Two kinds:
+**A living wallpaper (a built-in theme)** - put a short seamless loop beside the wallpaper and name it: `"motionVideo": "wallpaper-loop.mp4"` (MP4 or WebM, muted, about 4 MB). It plays over the still picture while Moving wallpapers is on, and is never loaded while it is off. A loop whose first and last frames are the wallpaper itself never shows its join: The Star Shore's, The Sunset Shore's and The Emerald River's were made that way with Seedance image-to-video, 8 seconds at 1080p.
+
+**Living water** - a theme may instead give its wallpaper gentle motion drawn by code on HOME with a `motion` block. Every position is a fraction of the picture (`[across, down]`, each 0 to 1), so the effect stays on the water at any window size. Two kinds:
 
 ```json
 "motion": { "kind": "surf", "color": "#5fd8ff", "count": 170,
