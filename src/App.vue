@@ -156,7 +156,7 @@ const savedKeys = ref([])
 // and for a credit widget, its key saved.
 // clock, gauges, Sweep and weather show even when a theme names no place for them (Sweep and weather then take their own)
 const SELF_PLACED = ['clock', 'gauges', 'sweep', 'weather', 'disks', 'sentinel']
-const FALLBACK_PLACES = { sweep: { right: '31%', top: '22%' }, weather: { left: '2%', bottom: '4%' }, disks: { right: '2%', bottom: '4%' }, sentinel: { right: '2%', top: '22%' } }
+const FALLBACK_PLACES = { sweep: { right: '31%', top: '22%' }, weather: { left: '2%', bottom: '4%' }, disks: { right: '2%', bottom: '4%' }, sentinel: { right: '43%', top: '22%' } }
 const shownWidgets = computed(() =>
   WIDGETS.map((w) => w.id).filter(
     (id) => isOn(id, { ...widgetPrefs.value, showUsageCard: usageCard.value }) && (SELF_PLACED.includes(id) || widgets.value[id]) && hasItsKey(id, savedKeys.value),
