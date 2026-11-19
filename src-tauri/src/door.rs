@@ -7,7 +7,9 @@
 //!  castle-memory reminder add --title "Call Rin" [--due 2026-11-12] [--detail "..."]
 //!  castle-memory reminder list | reminder done --id 3
 //!  castle-memory project add|update --name "Portfolio site" [--status ..] [--summary ..] [--file notes.md]
-//!  castle-memory project list | project show --name "Portfolio site"
+//!  castle-memory project list [--deleted] | project show --name "Portfolio site"
+//!  castle-memory project pause --name ".." [--note ".."] | resume | archive | restore --name ".."
+//!  castle-memory project delete --name ".." --confirmed      30 days on Recently deleted, then gone
 //!  castle-memory link send --from main --to story --about "..." [--word "..."] [--no-wake]
 //!  castle-memory link inbox --to main | link read --to main --note <file name> | link here --name main
 //!  castle-memory boot                         the memory to read at the start of a session
@@ -64,7 +66,7 @@ pub struct Ask {
     pub flags: BTreeMap<String, String>,
 }
 
-const BARE_FLAGS: [&str; 3] = ["no-wake", "all", "next"];
+const BARE_FLAGS: [&str; 5] = ["no-wake", "all", "next", "confirmed", "deleted"];
 
 pub fn parse(args: &[String]) -> Result<Ask, String> {
     let mut ask = Ask::default();
@@ -156,8 +158,17 @@ pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> 
         ["reminder", "list"] => reminder_list(conn, ask),
         ["reminder", "done"] => reminder_done(conn, ask),
         ["project", "add"] | ["project", "update"] => project_save(conn, ask),
-        ["project", "list"] => project_list(conn),
+        ["project", "list"] => project_list(conn, ask),
         ["project", "show"] => project_show(conn, ask),
+        ["project", "pause"] => project_move(conn, ask, Shelf::Paused),
+        ["project", "resume"] | ["project", "restore"] => project_move(conn, ask, Shelf::Active),
+        ["project", "archive"] => project_move(conn, ask, Shelf::Archived),
+        ["project", "delete"] => {
+            if ask.get("confirmed").is_none() {
+                return Err("Deleting a project needs the member's yes. Ask them first, naming the project, then run it again with --confirmed.".into());
+            }
+            project_move(conn, ask, Shelf::Deleted)
+        }
         ["link", "send"] => link_send(conn, ask, memory),
         ["link", "inbox"] => link_inbox(ask, memory),
         ["link", "read"] => link_read(conn, ask, memory),
@@ -355,18 +366,35 @@ fn project_save(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
     Ok(format!("PROJECT saved: {name}"))
 }
 
-fn project_list(conn: &mut Conn) -> Result<String, String> {
-    let rows: Vec<(String, Option<String>, String, Option<String>)> = conn
-        .query("SELECT name, status, shelf, last_updated FROM projects ORDER BY shelf, updated_at DESC, id DESC")
+fn project_list(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+    purge_deleted(conn);
+    // Recently deleted only with --deleted; the rest by shelf, active first
+    let deleted = ask.get("deleted").is_some();
+    let rows: Vec<(String, Option<String>, String, Option<String>, Option<String>, Option<i64>)> = conn
+        .query(
+            "SELECT name, status, shelf, last_updated, shelf_note, \
+             CASE WHEN shelf = 'deleted' THEN GREATEST(0, 30 - DATEDIFF(NOW(), shelved_at)) END \
+             FROM projects ORDER BY FIELD(shelf, 'active', 'paused', 'archived', 'deleted'), updated_at DESC, id DESC",
+        )
         .map_err(sql("Reading the projects"))?;
-    if rows.is_empty() {
-        return Ok("PROJECTS none".into());
-    }
-    Ok(rows
+    let lines: Vec<String> = rows
         .into_iter()
-        .map(|(name, status, shelf, updated)| format!("[{shelf}] {name} · {} · {}", status.unwrap_or_else(|| "-".into()), updated.unwrap_or_else(|| "-".into())))
-        .collect::<Vec<_>>()
-        .join("\n"))
+        .filter(|r| (r.2 == "deleted") == deleted)
+        .map(|(name, status, shelf, updated, note, left)| {
+            let mut line = format!("[{shelf}] {name} · {} · {}", status.unwrap_or_else(|| "-".into()), updated.unwrap_or_else(|| "-".into()));
+            if let Some(note) = note.filter(|n| !n.is_empty()) {
+                line.push_str(&format!(" · {note}"));
+            }
+            if let Some(left) = left {
+                line.push_str(&format!(" · removed for good in {left} day(s) unless restored"));
+            }
+            line
+        })
+        .collect();
+    if lines.is_empty() {
+        return Ok(if deleted { "PROJECTS none recently deleted".into() } else { "PROJECTS none".into() });
+    }
+    Ok(lines.join("\n"))
 }
 
 fn project_show(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
@@ -382,6 +410,70 @@ fn project_show(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
         out.push_str(&format!("\n{}\n", body.trim_end()));
     }
     Ok(out)
+}
+
+/// Where a project is: running, resting, put away, or on its way out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Shelf {
+    Active,
+    Paused,
+    Archived,
+    Deleted,
+}
+
+impl Shelf {
+    pub fn word(self) -> &'static str {
+        match self {
+            Shelf::Active => "active",
+            Shelf::Paused => "paused",
+            Shelf::Archived => "archived",
+            Shelf::Deleted => "deleted",
+        }
+    }
+    pub fn named(word: &str) -> Option<Shelf> {
+        [Shelf::Active, Shelf::Paused, Shelf::Archived, Shelf::Deleted].into_iter().find(|s| s.word() == word)
+    }
+}
+
+/// How long a deleted project waits on Recently deleted before it is removed for good.
+pub const KEEP_DELETED_DAYS: u32 = 30;
+
+/// Removes deleted projects older than KEEP_DELETED_DAYS; how many went.
+pub fn purge_deleted(conn: &mut Conn) -> u64 {
+    match conn.exec_drop("DELETE FROM projects WHERE shelf = 'deleted' AND shelved_at < NOW() - INTERVAL ? DAY", (KEEP_DELETED_DAYS,)) {
+        Ok(()) => conn.affected_rows(),
+        Err(_) => 0,
+    }
+}
+
+/// What the move says back, by where the project went.
+pub fn moved_line(name: &str, to: Shelf) -> String {
+    match to {
+        Shelf::Active => format!("PROJECT active: {name}"),
+        Shelf::Paused => format!("PROJECT paused: {name}"),
+        Shelf::Archived => format!("PROJECT archived: {name} (still readable on the Archived shelf)"),
+        Shelf::Deleted => format!("PROJECT deleted: {name} (on Recently deleted for {KEEP_DELETED_DAYS} days; `project restore` brings it back)"),
+    }
+}
+
+/// Moves one project, by its row id, to a shelf. A note is kept for a pause (or any move that gives
+/// one); going back to active clears it.
+pub fn move_project(conn: &mut Conn, id: u64, to: Shelf, note: Option<&str>) -> Result<String, String> {
+    let name: Option<String> = conn.exec_first("SELECT name FROM projects WHERE id = ?", (id,)).map_err(sql("Reading the project"))?;
+    let name = name.ok_or("That project is no longer there.")?;
+    let note = if to == Shelf::Active { None } else { note.map(str::trim).filter(|n| !n.is_empty()).map(|n| n.chars().take(500).collect::<String>()) };
+    conn.exec_drop("UPDATE projects SET shelf = ?, shelf_note = ?, shelved_at = NOW() WHERE id = ?", (to.word(), note, id))
+        .map_err(sql("Moving the project"))?;
+    Ok(moved_line(&name, to))
+}
+
+fn project_move(conn: &mut Conn, ask: &Ask, to: Shelf) -> Result<String, String> {
+    let name = ask.need("name")?;
+    let id: Option<u64> = conn.exec_first("SELECT id FROM projects WHERE name = ?", (name,)).map_err(sql("Reading the project"))?;
+    let id = id.ok_or(format!("No project called {name}."))?;
+    let line = move_project(conn, id, to, ask.get("note"))?;
+    purge_deleted(conn);
+    Ok(line)
 }
 
 // ---------- the Neural Link ----------
@@ -860,6 +952,25 @@ mod tests {
         std::fs::remove_dir_all(&plans).unwrap();
     }
 
+    /// A deleted project older than 30 days is removed; a newer one stays (live server only).
+    fn conn_purge_check(access: &memdb::Access) {
+        let mut conn = memdb::open(access).unwrap();
+        conn.query_drop("INSERT INTO projects (name, shelf, shelved_at) VALUES ('Old gone', 'deleted', NOW() - INTERVAL 31 DAY)").unwrap();
+        assert_eq!(purge_deleted(&mut conn), 1);
+        let left: Option<String> = conn.query_first("SELECT name FROM projects WHERE shelf = 'deleted'").unwrap();
+        assert_eq!(left.as_deref(), Some("Portfolio site"));
+    }
+
+    #[test]
+    fn shelves_have_words_and_moves_say_where_the_project_went() {
+        for shelf in [Shelf::Active, Shelf::Paused, Shelf::Archived, Shelf::Deleted] {
+            assert_eq!(Shelf::named(shelf.word()), Some(shelf));
+        }
+        assert_eq!(Shelf::named("gone"), None);
+        assert!(moved_line("Site", Shelf::Deleted).contains("30 days"));
+        assert_eq!(moved_line("Site", Shelf::Paused), "PROJECT paused: Site");
+    }
+
     /// Against a real server, on demand (CASTLE_TEST_DB="<port>:<admin>:<password>"): every verb
     /// once, then export, dump, wipe, restore, and the same rows are back.
     #[test]
@@ -908,6 +1019,19 @@ mod tests {
         let shown = go(&["project", "show", "--name", "Portfolio site"]).unwrap();
         assert!(shown.contains("Status: live") && shown.contains("Summary: My site"));
         assert!(go(&["project", "list"]).unwrap().starts_with("[active] Portfolio site · live · "));
+        // a project rests, is put away, deleted (kept 30 days) and brought back
+        assert_eq!(go(&["project", "pause", "--name", "Portfolio site", "--note", "waiting on photos"]).unwrap(), "PROJECT paused: Portfolio site");
+        assert!(go(&["project", "list"]).unwrap().starts_with("[paused] Portfolio site · live · ") && go(&["project", "list"]).unwrap().ends_with(" · waiting on photos"));
+        assert_eq!(go(&["project", "resume", "--name", "Portfolio site"]).unwrap(), "PROJECT active: Portfolio site");
+        assert!(!go(&["project", "list"]).unwrap().contains("waiting on photos"), "resuming clears the note");
+        assert!(go(&["project", "archive", "--name", "Portfolio site"]).unwrap().starts_with("PROJECT archived"));
+        assert!(go(&["project", "delete", "--name", "Portfolio site"]).unwrap_err().contains("--confirmed"));
+        assert!(go(&["project", "delete", "--name", "Portfolio site", "--confirmed"]).unwrap().starts_with("PROJECT deleted"));
+        assert_eq!(go(&["project", "list"]).unwrap(), "PROJECTS none");
+        assert!(go(&["project", "list", "--deleted"]).unwrap().ends_with("removed for good in 30 day(s) unless restored"));
+        conn_purge_check(&access);
+        assert_eq!(go(&["project", "restore", "--name", "Portfolio site"]).unwrap(), "PROJECT active: Portfolio site");
+        assert!(go(&["project", "pause", "--name", "Nope"]).unwrap_err().contains("No project called Nope"));
 
         // the link: the note travels as a file (so a knock finds it) and the database records it
         let sent = go(&["link", "send", "--from", "story", "--to", "main", "--about", "the tale paused", "--word", "save it"]).unwrap();

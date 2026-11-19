@@ -99,12 +99,18 @@ pub fn diary_shelves(conn: &mut Conn) -> Vec<Shelf> {
 }
 
 pub fn project_shelves(conn: &mut Conn) -> Vec<Shelf> {
+    crate::door::purge_deleted(conn);
     let rows: Vec<(u64, String, String)> = conn.query("SELECT id, name, shelf FROM projects ORDER BY updated_at DESC, id").unwrap_or_default();
-    [("Active", false), ("Archived", true)]
+    // a project on a shelf this Castle does not know stays with the active ones
+    let shelf_of = |s: &str| match s {
+        "paused" | "archived" | "deleted" => s.to_string(),
+        _ => "active".to_string(),
+    };
+    [("Active", "active"), ("Paused", "paused"), ("Archived", "archived"), ("Recently deleted", "deleted")]
         .iter()
-        .map(|(name, archived)| Shelf {
+        .map(|(name, shelf)| Shelf {
             name: name.to_string(),
-            pages: rows.iter().filter(|r| (r.2 == "archived") == *archived).map(|(id, title, _)| Page { title: title.clone(), file: project_page(*id), date: None }).collect(),
+            pages: rows.iter().filter(|r| shelf_of(&r.2) == *shelf).map(|(id, title, _)| Page { title: title.clone(), file: project_page(*id), date: None }).collect(),
         })
         .filter(|s| !s.pages.is_empty())
         .collect()

@@ -19,7 +19,7 @@ pub const HOST: &str = "127.0.0.1";
 pub const ENV_KEYS: [&str; 5] = ["MEMORY_DB_HOST", "MEMORY_DB_PORT", "MEMORY_DB_NAME", "MEMORY_DB_USER", "MEMORY_DB_PASSWORD"];
 
 /// The migrations, in order. A released file is never edited; a change is a new entry.
-pub const MIGRATIONS: [(&str, &str); 15] = [
+pub const MIGRATIONS: [(&str, &str); 16] = [
     ("001_core", include_str!("../resources/schema/001_core.sql")),
     ("002_imported_files", include_str!("../resources/schema/002_imported_files.sql")),
     ("003_memory_skills", include_str!("../resources/schema/003_memory_skills.sql")),
@@ -34,6 +34,7 @@ pub const MIGRATIONS: [(&str, &str); 15] = [
     ("012_library_origin", include_str!("../resources/schema/012_library_origin.sql")),
     ("013_market", include_str!("../resources/schema/013_market.sql")),
     ("014_companion_mood", include_str!("../resources/schema/014_companion_mood.sql")),
+    ("015_project_shelves", include_str!("../resources/schema/015_project_shelves.sql")),
     ("015_sentinel", include_str!("../resources/schema/015_sentinel.sql")),
 ];
 
@@ -289,7 +290,7 @@ mod tests {
 
     #[test]
     fn the_sentinel_tables_split_cleanly() {
-        let (name, sql) = MIGRATIONS[14];
+        let (name, sql) = MIGRATIONS[15];
         assert_eq!(name, "015_sentinel");
         assert!(!sql.trim_start().starts_with("--"));
         let found = statements(sql);

@@ -1,10 +1,12 @@
 <script setup>
-// One reader for three rooms: DIARY (by month, newest first), PROJECTS (active, archived) and
-// LIBRARY (by section). The list is on the left, the page on the right. Read-only: only the
-// companion writes the memory. The DIARY can also be read as a calendar or as a book - the
+// One reader for three rooms: DIARY (by month, newest first), PROJECTS (active, paused, archived,
+// recently deleted - the open project can be moved between them) and
+// LIBRARY (by section). The list is on the left, the page on the right. The words are read-only:
+// only the companion writes them (a project's shelf is the one thing the member moves here). The DIARY can also be read as a calendar or as a book - the
 // same pages, the member's choice, remembered.
 import { computed, onMounted, ref, watch } from 'vue'
 import MarkdownText from '../components/MarkdownText.vue'
+import ProjectShelfBar from '../components/ProjectShelfBar.vue'
 import DiaryBook from '../components/DiaryBook.vue'
 import DiaryCalendar from '../components/DiaryCalendar.vue'
 import DiaryPage from '../components/DiaryPage.vue'
@@ -149,6 +151,7 @@ watch(() => [props.room, props.stamp, props.openFile], load)
           <!-- a page of the database has no file to show -->
           <button v-if="!current.file.startsWith('db/')" class="small" title="Show the file in its folder" @click="openOutside">Show file</button>
         </header>
+        <ProjectShelfBar v-if="room === 'projects' && current.file.startsWith('db/project/')" :file="current.file" :companion="companion" @moved="load" />
         <p v-if="problem" class="problem">{{ problem }}</p>
         <div class="text"><MarkdownText :text="text" /></div>
       </template>
