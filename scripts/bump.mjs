@@ -30,4 +30,8 @@ const changelog = join(root, 'CHANGELOG.md')
 writes.push([changelog, releaseChangelog(readFileSync(changelog, 'utf8'), version, date)])
 for (const [path, text] of writes) writeFileSync(path, text)
 
+// Settings > About's contributors wall is counted here, once a release (it never stops the bump)
+const { refresh } = await import('./contributors.mjs')
+console.log(await refresh().catch((why) => `Contributors: kept the last counts (${why.message || why})`))
+
 console.log(`Castle ${current} -> ${version}. Next: commit, then "git tag v${version}" and push the tag.`)

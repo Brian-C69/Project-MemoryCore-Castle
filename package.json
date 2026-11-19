@@ -13,6 +13,7 @@
     "check:platform": "node scripts/check-platform.mjs",
     "world:lighten": "node scripts/lighten-world.mjs",
     "bump": "node scripts/bump.mjs",
+    "contributors": "node scripts/contributors.mjs",
     "release:files": "node scripts/latest-json.mjs",
     "tauri": "tauri"
   },
