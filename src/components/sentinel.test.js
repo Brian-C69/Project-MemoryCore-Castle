@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { MAC_LINE, STALE_MINUTES, findingButtons, moveLabel, shieldLook } from './sentinel.js'
+import { MAC_LINE, STALE_MINUTES, findingButtons, moveLabel, patrolAgo, shieldLook, watchAgo } from './sentinel.js'
+
+describe('the card on HOME says the watch is working', () => {
+  it('tells how long ago the last patrol ran', () => {
+    expect(patrolAgo(null)).toBe('No patrol yet.')
+    expect(patrolAgo({ patrol: null })).toBe('No patrol yet.')
+    expect(patrolAgo({ patrol: { minutesAgo: 0 } })).toBe('Last patrol just now.')
+    expect(patrolAgo({ patrol: { minutesAgo: 12 } })).toBe('Last patrol 12 min ago.')
+    expect(patrolAgo({ patrol: { minutesAgo: 190 } })).toBe('Last patrol 3 h ago.')
+  })
+
+  it('tells how long ago the watch ran, and flags it once it has missed its ticks', () => {
+    expect(watchAgo({ watchMinutes: null })).toEqual({ line: 'The watch has not run yet.', late: false })
+    expect(watchAgo(null)).toEqual({ line: 'The watch has not run yet.', late: false })
+    expect(watchAgo({ watchMinutes: 0 })).toEqual({ line: 'The watch ran just now.', late: false })
+    expect(watchAgo({ watchMinutes: 3 })).toEqual({ line: 'The watch ran 3 min ago.', late: false })
+    expect(watchAgo({ watchMinutes: 15 }).late).toBe(false)
+    expect(watchAgo({ watchMinutes: 16 })).toEqual({ line: 'The watch ran 16 min ago.', late: true })
+    expect(watchAgo({ watchMinutes: 300 })).toEqual({ line: 'The watch ran 5 h ago.', late: true })
+  })
+})
 
 const ready = (extra = {}) => ({
   supported: true,

@@ -4,7 +4,7 @@
 // kept as normal or fixed, and the officer's log.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { onSentinelChanged, sentinelAlarmsSeen, sentinelClick, sentinelFindings, sentinelLog, sentinelPatrolNow, sentinelStatus } from '../api/castle.js'
-import { findingButtons, moveLabel, shieldLook } from './sentinel.js'
+import { findingButtons, moveLabel, patrolAgo, shieldLook } from './sentinel.js'
 
 const emit = defineEmits(['settings'])
 const status = ref(null)
@@ -24,13 +24,7 @@ const ready = computed(() => status.value?.supported && status.value?.on && stat
 const alarms = computed(() => open.value.filter((f) => f.hint === 'alarm'))
 const looks = computed(() => open.value.filter((f) => f.hint === 'look'))
 const notes = computed(() => open.value.filter((f) => f.hint === 'note'))
-const lastPatrol = computed(() => {
-  const p = status.value?.patrol
-  if (!p) return 'No patrol yet.'
-  if (p.minutesAgo < 1) return 'Last patrol just now.'
-  if (p.minutesAgo < 120) return `Last patrol ${p.minutesAgo} min ago.`
-  return `Last patrol ${Math.round(p.minutesAgo / 60)} h ago.`
-})
+const lastPatrol = computed(() => patrolAgo(status.value))
 
 async function read() {
   try {

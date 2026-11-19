@@ -7,6 +7,7 @@ export const WIDGETS = [
   { id: 'gauges', name: 'Gauges', about: "Your computer's CPU and memory." },
   { id: 'weather', name: 'Weather', about: 'The weather where you are, and the next days. Uses your location if you allow it, or a city you search.' },
   { id: 'disks', name: 'Disks', about: 'How much room each drive of your computer has left.' },
+  { id: 'sentinel', name: 'Sentinel', about: 'Your companion keeping watch over this computer: the state, the last patrol and whether the watch is running.' },
   { id: 'sweep', name: 'Sweep', about: 'Frees space: temp files, caches and more, after a preview.' },
   { id: 'usage', name: 'Usage', about: 'How much of your Claude Code and Codex limits is used.' },
   { id: 'today', name: 'Today', about: 'Your reminders for today.' },

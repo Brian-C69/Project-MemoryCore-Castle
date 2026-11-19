@@ -334,8 +334,8 @@ pub struct Settings {
 }
 
 /// HOME's widgets, by id (the theme's `widgets` keys).
-pub const WIDGETS: [&str; 14] = [
-    "clock", "gauges", "weather", "usage", "today", "projects", "diary", "growth", "backup", "database",
+pub const WIDGETS: [&str; 17] = [
+    "clock", "gauges", "weather", "disks", "sentinel", "sweep", "usage", "today", "projects", "diary", "growth", "backup", "database",
     // HOME's credit widgets, each shown once its key is saved
     "credit-openai", "credit-seedance", "credit-suno", "credit-elevenlabs",
 ];
@@ -661,6 +661,10 @@ mod tests {
         assert_eq!(s.widgets_off, ["diary"], "USAGE's switch is show_usage_card; unknown ids go");
         let credit: Settings = serde_json::from_str(r#"{"widgetsOff":["credit-suno"]}"#).unwrap();
         assert_eq!(credit.normalized().widgets_off, ["credit-suno"], "a credit widget switched off stays off");
+        let later: Settings = serde_json::from_str(r#"{"widgetsOff":["sentinel","disks","sweep"],"widgetSizes":{"sentinel":"s"}}"#).unwrap();
+        let later = later.normalized();
+        assert_eq!(later.widgets_off, ["disks", "sentinel", "sweep"], "the cards added after WIDGETS was first written stay off too");
+        assert_eq!(later.widget_sizes.get("sentinel").map(String::as_str), Some("s"));
         assert_eq!(s.widget_sizes.into_iter().collect::<Vec<_>>(), [("clock".to_string(), "l".to_string())]);
         assert_eq!(s.widget_places.keys().collect::<Vec<_>>(), ["constellation"]);
         assert_eq!(s.widget_places["constellation"]["clock"], WidgetPlace { left: 100.0, top: 0.0 });

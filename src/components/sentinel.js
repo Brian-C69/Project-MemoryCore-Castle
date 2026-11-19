@@ -3,6 +3,31 @@
 
 export const STALE_MINUTES = 120
 export const MAC_LINE = 'The Sentinel keeps watch on Windows for now.'
+// the watch ticks every five minutes: three missed ticks mean it is not running
+export const WATCH_LATE_MINUTES = 15
+
+// The shield's state in words.
+export const LOOK_WORDS = { quiet: 'All quiet', look: 'Worth a look', alarm: 'Alarm', unset: 'Not set up', away: 'Windows for now' }
+
+// How long ago the companion's last patrol ran.
+export function patrolAgo(status) {
+  const p = status?.patrol
+  if (!p) return 'No patrol yet.'
+  if (p.minutesAgo < 1) return 'Last patrol just now.'
+  if (p.minutesAgo < 120) return `Last patrol ${p.minutesAgo} min ago.`
+  return `Last patrol ${Math.round(p.minutesAgo / 60)} h ago.`
+}
+
+// How long ago the five-minute watch ran, and whether that is late (it is not running).
+// -> { line, late }
+export function watchAgo(status) {
+  const m = status?.watchMinutes
+  if (m === null || m === undefined) return { line: 'The watch has not run yet.', late: false }
+  const late = m > WATCH_LATE_MINUTES
+  if (m < 1) return { line: 'The watch ran just now.', late }
+  if (m < 120) return { line: `The watch ran ${m} min ago.`, late }
+  return { line: `The watch ran ${Math.round(m / 60)} h ago.`, late }
+}
 
 // -> { look: 'away' | 'unset' | 'quiet' | 'look' | 'alarm', line, stale }
 export function shieldLook(status) {
