@@ -8,6 +8,7 @@ import { computed, onMounted, ref } from 'vue'
 import { shopConnect, shopInstall, shopListings, shopMine, shopPurchases, shopVote, shopWithdraw, townShop, townShops } from '../api/castle.js'
 import ShopCard from './ShopCard.vue'
 import ShopScene from './ShopScene.vue'
+import ShopSetup from './ShopSetup.vue'
 import { STATUS_WORDS, installState, installedListings, priceText, shopOf, votesText } from './shop.js'
 
 const props = defineProps({
@@ -16,7 +17,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['installed'])
 
-const view = ref('town') // town | scene | bought | mine
+const view = ref('town') // town | scene | bought | mine | myshop
 const mode = ref('shops') // shops | items
 const query = ref('')
 const cards = ref([])
@@ -97,6 +98,7 @@ onMounted(search)
       <button :class="{ active: view === 'town' || view === 'scene' }" @click="view = 'town'">Town</button>
       <button :class="{ active: view === 'bought' }" @click="loadBought">My purchases</button>
       <button :class="{ active: view === 'mine' }" @click="loadMine">My listings</button>
+      <button :class="{ active: view === 'myshop' }" @click="view = 'myshop'">My shop</button>
       <span class="spacer"></span>
       <span v-if="busy" class="hint">Working…</span>
     </nav>
@@ -130,6 +132,11 @@ onMounted(search)
     </template>
 
     <ShopScene v-else-if="view === 'scene' && scene" :key="(scene.detail?.slug ?? '') + (scene.start?.id ?? '')" class="scene-fill" :detail="scene.detail" :start="scene.start" @leave="view = 'town'" />
+
+    <template v-else-if="view === 'myshop'">
+      <ShopSetup v-if="shop.selling" />
+      <p v-else class="empty">Shops open with selling. Until then, make your workflows for yourself.</p>
+    </template>
 
     <div v-else-if="view === 'bought'" class="rows">
       <div v-for="p in purchases" :key="p.id" class="row">
