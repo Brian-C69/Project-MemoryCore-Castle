@@ -59,6 +59,41 @@ pub fn listeners() -> Vec<(u16, u32)> {
     rows
 }
 
+/// Every listening TCP socket with its local address, port and owning pid, IPv4 and IPv6 (the
+/// Sentinel's look needs the address: who can reach the port). Windows only; empty elsewhere.
+pub fn sockets() -> Vec<(String, u16, u32)> {
+    raw_sockets()
+}
+
+#[cfg(windows)]
+fn raw_sockets() -> Vec<(String, u16, u32)> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        MIB_TCP6ROW_OWNER_PID, MIB_TCPROW_OWNER_PID, TCP_TABLE_OWNER_PID_LISTENER,
+    };
+    use windows_sys::Win32::Networking::WinSock::{AF_INET, AF_INET6};
+
+    let mut out = Vec::new();
+    if let Some(buf) = tcp_table(AF_INET as u32, TCP_TABLE_OWNER_PID_LISTENER) {
+        for row in table_rows::<MIB_TCPROW_OWNER_PID>(&buf) {
+            // the address is kept in network byte order: its bytes in memory are the octets
+            let address = std::net::Ipv4Addr::from(row.dwLocalAddr.to_ne_bytes());
+            out.push((address.to_string(), port_of(row.dwLocalPort), row.dwOwningPid));
+        }
+    }
+    if let Some(buf) = tcp_table(AF_INET6 as u32, TCP_TABLE_OWNER_PID_LISTENER) {
+        for row in table_rows::<MIB_TCP6ROW_OWNER_PID>(&buf) {
+            let address = std::net::Ipv6Addr::from(row.ucLocalAddr);
+            out.push((address.to_string(), port_of(row.dwLocalPort), row.dwOwningPid));
+        }
+    }
+    out
+}
+
+#[cfg(not(windows))]
+fn raw_sockets() -> Vec<(String, u16, u32)> {
+    Vec::new()
+}
+
 #[cfg(windows)]
 fn raw_listeners() -> Vec<(u16, u32)> {
     use windows_sys::Win32::NetworkManagement::IpHelper::{
@@ -152,7 +187,7 @@ fn table_rows<Row: Copy>(buf: &[u32]) -> Vec<Row> {
 }
 
 /// Every running process with its name, parent and working folder.
-fn processes() -> HashMap<u32, Proc> {
+pub fn processes() -> HashMap<u32, Proc> {
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
     let Ok(mut system) = System::new() else {
