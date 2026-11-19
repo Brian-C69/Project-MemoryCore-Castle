@@ -14,6 +14,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **A DISKS widget on HOME.** Shows every drive of your computer with a bar for how full it is (amber from 85%, red from 95%) and how much is free of its size, with the total across all drives when there is more than one. It only reads the drive list from your computer, sends nothing anywhere and changes nothing; Sweep is still the widget that frees space. It is on by default and can be switched off in Settings > Widgets.
 
+- **OneNonly148 in the credits**, for Castle on macOS, the project shelves (pause, archive and delete), the Mac microphone for voice mode and the TODAY card that wraps. Thank you!
+
 ## 0.2.22 - 2026-11-19
 
 - **The Mac download is back.** 0.2.21 went out for Windows only, because one test meant for Windows ran on the Mac and stopped its build. 0.2.22 brings everything in 0.2.21 to the Mac too: workflows in STUDIO, making your own, and the Marketplace town ready behind its door.
