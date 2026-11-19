@@ -3,6 +3,8 @@
 
 const manifests = import.meta.glob('./*/theme.json', { eager: true, import: 'default' })
 const pictures = import.meta.glob('./*/*.{png,jpg,jpeg,webp}', { eager: true, query: '?url', import: 'default' })
+// a theme's living wallpaper loop ("motionVideo"); only its address is bundled, the file loads when played
+const videos = import.meta.glob('./*/*.{mp4,webm}', { eager: true, query: '?url', import: 'default' })
 
 export const DEFAULT_THEME_ID = 'constellation'
 
@@ -36,7 +38,8 @@ export function builtInThemes() {
     // the picture HOME shows under the wallpaper while the week is not yet used (usagereveal.js)
     const usageReveal = theme.usageReveal?.low ? { ...theme.usageReveal, lowUrl: pictures[`./${pictureFolder}/${theme.usageReveal.low}`] ?? null } : theme.usageReveal
     const loaderUrl = theme.loader?.image ? pictures[`./${pictureFolder}/${theme.loader.image}`] ?? null : null
-    return { ...theme, id: theme.id ?? folder, source: 'built-in', wallpaperUrl, usageReveal, loaderUrl }
+    const motionVideoUrl = theme.motionVideo ? videos[`./${pictureFolder}/${theme.motionVideo}`] ?? null : null
+    return { ...theme, id: theme.id ?? folder, source: 'built-in', wallpaperUrl, usageReveal, loaderUrl, motionVideoUrl }
   })
 }
 
