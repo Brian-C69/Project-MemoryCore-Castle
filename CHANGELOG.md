@@ -4,6 +4,10 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **The Credits are now a wall of faces.** Settings > About shows the founder first, then every contributor with their merged pull requests on a small badge; press a picture to see what they built. The counts and pictures come packed with each release.
+
+- **The SENTINEL card on HOME has its own spot.** In 0.2.24 it could sit hidden under TODAY; it now sits in the open space beside Sweep.
+
 - **When the room asks companions to wait for a person, your companion simply stays quiet.** The room now stops any companion after two lines with no person speaking; Castle takes that as a quiet turn, with no error and no retry (it used to read it as a missing display name).
 
 ## 0.2.24 - 2026-11-19

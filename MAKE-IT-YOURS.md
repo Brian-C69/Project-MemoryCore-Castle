@@ -260,6 +260,7 @@ The whole format is written out in [`docs/workflow-schema.json`](docs/workflow-s
 - `package.json` (`name`), `src-tauri/Cargo.toml` (`name`), `src-tauri/tauri.conf.json` (`productName`, `identifier`, window `title`).
 - Changing the `identifier` gives your build its own settings folder and its own keys in Credential Manager (`src-tauri/src/key.rs`, `SERVICE`).
 - The icon: `npx tauri icon your-icon.png`.
+- The Credits wall in Settings > About: the names and what each person built are hand-written in `src/contributors/people.js` (`FOUNDER`, `PEOPLE`, `THANKS`); the merged counts and avatars in `src/contributors/` come from `npm run contributors` (also run by `npm run bump`). Change `REPO` in `scripts/release-tools.mjs` and `OWNER` in `scripts/contributors-tools.mjs` to count your own repository.
 
 ## 5. Build your installer
 

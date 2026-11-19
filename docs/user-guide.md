@@ -66,6 +66,8 @@ If Castle cannot start the session, the panel says why in one sentence and offer
 | Your MemoryCore folder was not found | Press **Settings** and choose the folder again (it may have moved) |
 | Claude Code (or Codex) was not found | Install it, sign in, then press **Wake** again |
 
+**Settings > About** shows your version, **What's new** and **All releases**, and the **Credits** as a wall: the founder Kiyoraka first, with a small crown, then everyone whose pull requests made it into Castle, each with a badge for how many were merged. Press a picture to read what that person built. Help that is not code sits under **Special thanks**. The counts and pictures come packed with each release, so this page never asks GitHub for them.
+
 ---
 
 ## 2. Chat and Log
