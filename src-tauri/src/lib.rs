@@ -248,6 +248,10 @@ pub fn run() {
     if roomalert::wanted_room(args.iter().cloned()).is_some() {
         shell::bring_running_castle_forward();
     }
+    // `--sentinel-tick [--cause alarm]`: the Sentinel's watch, run by the system's scheduler; it ends, no window
+    if args.first().map(String::as_str) == Some(sentinel::watch::TICK_FLAG) {
+        std::process::exit(sentinel::watch::tick_cli(&args[1..]));
+    }
     // `--sweep-deep <result file>`: Sweep's Deep clean, run elevated by Castle itself; it ends, no window
     if args.first().map(String::as_str) == Some(sweep::DEEP_FLAG) {
         std::process::exit(sweep::run_deep_cli(&args[1..]));
@@ -627,6 +631,7 @@ pub fn run() {
             page_reader::start(app.handle());
             market::engine::start(app.handle());
             market::companion::start(app.handle());
+            sentinel::start(app.handle());
             db::start_with_castle(app.handle());
             Ok(())
         })

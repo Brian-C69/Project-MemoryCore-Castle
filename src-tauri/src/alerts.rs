@@ -28,6 +28,7 @@ pub const SOURCES: &[Source] = &[
     Source { id: "chat", label: "Chat room messages", about: "A new line in the Foundation room.", room: "chat", notify: true, sound: false, sound_name: "glass" },
     Source { id: "home_reply", label: "Your companion finished replying", about: "HOME: the reply or the task is complete and waiting for you.", room: "home", notify: true, sound: false, sound_name: "koto" },
     Source { id: "market_round", label: "A MARKET round finished", about: "The companion's automatic trading round has ended. Rounds can be frequent, so this starts off.", room: "market", notify: false, sound: false, sound_name: "woodblock" },
+    Source { id: "sentinel", label: "The Sentinel raised an alarm", about: "Something on this computer needs your eyes: protection or the firewall found off, a detection, a new account.", room: "home", notify: true, sound: true, sound_name: "bell" },
     Source { id: "picture_ready", label: "A picture is ready", about: "A drawing from APPEARANCE or STUDIO has finished, or could not be drawn.", room: "studio", notify: true, sound: false, sound_name: "chord" },
 ];
 

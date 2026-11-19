@@ -51,7 +51,8 @@ impl Asker {
 /// True when this asker may ask for this move at all.
 pub fn allowed(asker: Asker, mv: &str) -> bool {
     match asker {
-        Asker::Reflex => REFLEX.contains(&mv),
+        // the watch also reads the sign-in log, which needs the hand's rights
+        Asker::Reflex => REFLEX.contains(&mv) || mv == "signins",
         Asker::Officer => ALONE.contains(&mv),
         Asker::Member => ALONE.contains(&mv) || CLICK.contains(&mv) || mv == "undo",
     }
@@ -272,6 +273,7 @@ mod tests {
         assert!(!allowed(Asker::Officer, "undo"));
         assert!(allowed(Asker::Reflex, "firewall-on") && allowed(Asker::Reflex, "protection-on"));
         assert!(!allowed(Asker::Reflex, "block-address") && !allowed(Asker::Reflex, "scan-quick"));
+        assert!(allowed(Asker::Reflex, "signins") && !allowed(Asker::Officer, "signins"));
         assert!(!allowed(Asker::Member, "format-disk") && !allowed(Asker::Member, "signins"));
     }
 

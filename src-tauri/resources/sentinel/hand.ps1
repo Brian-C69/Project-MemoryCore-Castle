@@ -232,7 +232,7 @@ function Read-SignIns {
             if ($e.Id -eq 4624 -and $data['LogonType'] -ne '10') { continue }
             $events += [ordered]@{
                 id = $e.Id; at = $e.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss')
-                user = $data['TargetUserName']; address = $data['IpAddress']; member = $data['MemberName']; by = $data['SubjectUserName']
+                user = $data['TargetUserName']; group = $data['TargetSid']; address = $data['IpAddress']; member = $data['MemberName']; by = $data['SubjectUserName']
             }
             if ($events.Count -ge 500) { break }
         }
