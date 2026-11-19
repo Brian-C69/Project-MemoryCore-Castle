@@ -38,6 +38,7 @@ mod key;
 mod link;
 mod memdb;
 mod market;
+mod sentinel;
 mod memory;
 mod gpu;
 mod weather;
