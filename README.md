@@ -26,6 +26,7 @@ A full-screen Windows desktop for your **MemoryCore** companion. Castle opens yo
 - **First run** asks for your companion's name and yours, fills in your MemoryCore, and writes a short block into `CLAUDE.md` and `AGENTS.md` so both CLIs load your memory. If your MemoryCore already has names or keys, Castle finds them instead of asking again.
 - **Keys** (ChatGPT/OpenAI, Seedance, Suno, ElevenLabs) are kept **encrypted by Windows** and only handed to your companion's session. With **Codex**, pictures need no key. **Without a key**, the prompt or lyrics are saved instead and Castle tells you what to add.
 - A guided **private GitHub backup** keeps your memory safe, with **Back up now** and an optional backup after every Save diary.
+- **The Sentinel** - your companion can keep watch over this computer too, with a shield on the top bar (Windows; see the user guide).
 
 ## Requirements
 

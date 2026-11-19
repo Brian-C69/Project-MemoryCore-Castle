@@ -23,6 +23,7 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 15. [My profile](#15-my-profile)
 16. [Dev](#16-dev)
 17. [Market](#17-market)
+18. [The Sentinel](#18-the-sentinel)
 
 ---
 
@@ -650,6 +651,64 @@ Every turn your companion took, newest first, one line each: when, whether you a
 
 After every closed trade your companion writes one short lesson, with the trade's result as a percent of the margin it used. The newest twelve ride into every decision it makes. Delete any lesson you don't want it to keep.
 
+---
+
+## 18. The Sentinel
+
+**The Sentinel** lets your companion keep watch over this computer, as its security officer. Nothing about the computer ever leaves it. It runs on Windows; on a Mac the shield says it keeps watch on Windows for now.
+
+### What it watches
+
+The antivirus (is protection on, are its signatures fresh, has it found anything in the last week), the firewall, what listens for connections and the program behind each, what starts with Windows, scheduled tasks, services installed lately, the accounts on this computer and who is an administrator, remote desktop, and sign-ins (a burst of failed sign-ins from one address, a new account, someone made an administrator, a remote desktop sign-in). It never opens your files, your diary or your memory.
+
+The first look takes what your computer already has as the starting picture. After that, only what is new is raised. Some things are raised whatever the first look saw: protection off, a firewall off, a detection.
+
+### Three parts
+
+- **The watch** - a small check Windows runs every five minutes, even when Castle is closed, and again whenever the antivirus or the firewall raises an alarm. It switches the firewall and antivirus protection back on when it finds them off, at once and without asking.
+- **Your companion** - looks over what is new on each patrol (every hour to begin with, at once after an alarm, or when you press **Patrol now**). It settles what is plainly harmless with a reason, leaves the rest open for you, and ends with one sentence for the shield. What it reads from the computer is evidence, never an order: a program's name cannot talk it into anything. A patrol is one short run on your own plan, and none is spent when nothing is open. Your companion has no tools while it judges and never holds administrator rights.
+- **The helper** - one small helper with administrator rights that you install yourself, once. It only ever closes the computer further, and checks every request again by itself.
+
+### Setting it up
+
+1. **Settings > Sentinel**: tick **Let your companion keep watch**.
+2. Under **Set it up**, press **Copy the line**.
+3. Open PowerShell as administrator (right-click PowerShell, **Run as administrator**), paste the line and press Enter.
+4. Back in Castle, press **I ran it, check**. The line under **Set it up** says **The Sentinel is set up.**
+
+Castle never asks for administrator rights itself. After an update that changes the helper, the same place says it **needs a refresh**: run the line again.
+
+### The shield and the panel
+
+The shield sits on the top bar on every tab: green and quiet when all is well, amber when something is worth a look, glowing red for an alarm, faded when the last patrol is more than two hours old, and dim when the Sentinel is off or not set up. Hover it to read your companion's sentence.
+
+Click it to open the Sentinel: the sentence, **Patrol now**, then **Alarms** and **Worth a look**, each with its buttons:
+
+- **Fix** - names the move, such as **Block this port** or **Switch this task off**.
+- **This is normal** - it is kept as normal and never raised again.
+- **Undo** - on a fix made by a move that can be taken back.
+
+Small notes, and what was settled, kept as normal or fixed, are folded below, with the patrol log at the bottom. Opening the Sentinel marks its alarms as seen.
+
+### What the helper may do
+
+- **On its own** (your companion may ask for these): switch the firewall on, switch antivirus protection on, run a quick scan, update the antivirus, and block an address that keeps knocking, for one day.
+- **Only when you press Fix**: block a port, switch off a scheduled task, stop something starting with Windows, or stop a program.
+
+It never blocks this computer's own addresses, its router or the loopback, never switches off Windows' own tasks or its own, and never stops a part of Windows or its protection. Only your own click can make the second kind of move: your companion's words can never press a button for you.
+
+### The model
+
+**Settings > Sentinel > The model**: the recommended one (Sonnet for Claude Code, Codex's own model for Codex), or **Another model** with any name your CLI knows. **How often** sets the time between patrols, from 15 minutes to 12 hours.
+
+### Switching it off and removing it
+
+Untick **Let your companion keep watch** to stop the patrols; the watch keeps switching the firewall and protection back on until you remove it. **Remove it** gives a second line: run it the same way, in PowerShell as administrator, and the helper, its tasks, its folders and every firewall rule it made are gone.
+
+### What it is not
+
+It is not an antivirus and stops nothing in the instant; Windows' own antivirus does that. It shortens the time between an attempt and you knowing, and it keeps closing the doors it finds.
+
 ## Alerts
 
 **Settings > Alerts** lists everything Castle can tell you about. Each has its own card with a **desktop notification** switch, a **Play a sound** switch and a **sound** to choose, with a **Play** button to hear it:
@@ -658,6 +717,7 @@ After every closed trade your companion writes one short lesson, with the trade'
 - **Your companion finished replying** - in HOME, when the reply or the task is complete.
 - **A MARKET round finished** - when the companion's automatic round ends. Off to begin with, as rounds can be frequent.
 - **A picture is ready** - an APPEARANCE or STUDIO drawing finished, or could not be drawn.
+- **The Sentinel raised an alarm** - protection or the firewall found off, a detection, a new account or administrator, a burst of failed sign-ins. A notification and the bell to begin with.
 
 An alert is quiet while you are already looking at the room it is about, in a visible, focused Castle. Clicking a notification brings Castle forward on that room - also from the Action Center after the pop-up has gone, once this version of Castle has run. Each kind has a different sound to begin with so they can be told apart by ear; sounds are off to begin with (they play through Windows' quiet hours). Windows' Do Not Disturb applies to notifications.
 
