@@ -229,6 +229,12 @@ pub struct ImageJob {
     /// member's notes, so no AI has to. None for a free picture (STUDIO) and in older queues.
     #[serde(default)]
     look: Option<LookSpec>,
+    /// A STUDIO workflow's size and quality for the key way (`--size`, `--quality`); None keeps the
+    /// helper's own (and in older queues).
+    #[serde(default)]
+    size: Option<String>,
+    #[serde(default)]
+    quality: Option<String>,
     /// Drawn by Castle with the OpenAI key: a helper script that never touches the conversation,
     /// so it neither waits for a safe pause nor holds the chat or a provider switch.
     #[serde(default)]
@@ -423,6 +429,24 @@ pub fn image_request(
     store: State<SettingsStore>,
     images: State<Images>,
 ) -> Result<ImageJob, String> {
+    queue_image(&store, &images, ImageAsk { brief, output, references, room, label, look, size: None, quality: None })
+}
+
+/// One picture asked for: what `image_request` takes, plus a STUDIO workflow's size and quality.
+pub(crate) struct ImageAsk {
+    pub brief: String,
+    pub output: Option<String>,
+    pub references: Vec<String>,
+    pub room: String,
+    pub label: Option<String>,
+    pub look: Option<LookSpec>,
+    pub size: Option<String>,
+    pub quality: Option<String>,
+}
+
+/// Puts one picture on the queue (the image worker draws it): every check `image_request` makes.
+pub(crate) fn queue_image(store: &SettingsStore, images: &Images, ask: ImageAsk) -> Result<ImageJob, String> {
+    let ImageAsk { brief, output, references, room, label, look, size, quality } = ask;
     if !matches!(room.as_str(), "appearance" | "studio") {
         return Err("Choose Appearance or Studio.".into());
     }
@@ -507,12 +531,14 @@ pub fn image_request(
         memory,
         prompt,
         look,
+        size,
+        quality,
         by_key: false,
         stop_asked: false,
     };
     let mut jobs = images.0.lock().unwrap();
     jobs.push(job.clone());
-    persist_jobs(&store, &jobs)?;
+    persist_jobs(store, &jobs)?;
     Ok(job)
 }
 
@@ -676,6 +702,8 @@ pub(crate) fn draw_once(brief: &str, folder: &Path, output: &Path, limit: std::t
         memory: folder.to_path_buf(),
         prompt: folder.join("last-picture.prompt.md"),
         look: None,
+        size: None,
+        quality: None,
         by_key: false,
         stop_asked: false,
     };
@@ -952,6 +980,12 @@ fn run_with_key(job: &ImageJob, key: &str, tools: &Path, styles: Option<&Path>, 
             let mut args = vec!["--prompt".into(), brief.display().to_string(), "--out-file".into(), job.output.clone()];
             if let Some(r) = job.references.first() {
                 args.extend(["--reference".into(), r.clone()]);
+            }
+            if let Some(size) = &job.size {
+                args.extend(["--size".into(), size.clone()]);
+            }
+            if let Some(quality) = &job.quality {
+                args.extend(["--quality".into(), quality.clone()]);
             }
             ("castle-image.mjs", args)
         }
@@ -1253,7 +1287,7 @@ mod tests {
 
     #[test]
     fn only_a_codex_drawing_keeps_the_conversation_still() {
-        let job = |phase: &str, by_key: bool| ImageJob { id: "1".into(), label: String::new(), phase: phase.into(), message: String::new(), output: String::new(), brief: String::new(), references: vec![], memory: PathBuf::new(), prompt: PathBuf::new(), look: None, by_key, stop_asked: false };
+        let job = |phase: &str, by_key: bool| ImageJob { id: "1".into(), label: String::new(), phase: phase.into(), message: String::new(), output: String::new(), brief: String::new(), references: vec![], memory: PathBuf::new(), prompt: PathBuf::new(), look: None, size: None, quality: None, by_key, stop_asked: false };
         assert!(job("working", false).holds_session());
         assert!(!job("working", true).holds_session(), "a drawing with the key never holds the chat");
         assert!(!job("queued", false).holds_session());
@@ -1386,6 +1420,8 @@ mod tests {
             memory: root.clone(),
             prompt: root.join("saved.prompt.md"),
             look: None,
+            size: None,
+            quality: None,
             by_key: false,
             stop_asked: false,
         };

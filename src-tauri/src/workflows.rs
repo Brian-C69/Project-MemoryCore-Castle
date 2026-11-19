@@ -3,10 +3,11 @@
 //! the settings folder, one `workflow.json` each, the way themes do. A workflow is never code: this
 //! module reads, checks and runs the file. The schema is written out in `docs/workflow-schema.json`.
 
+use crate::providers::{ImageAsk, ImageJob, Images};
 use crate::settings::SettingsStore;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
@@ -21,6 +22,12 @@ const MAX_BLOCKS: usize = 20;
 const MAX_REFERENCES: usize = 5;
 const MAX_TEMPLATE: usize = 4000;
 const MAX_FILE_BYTES: u64 = 256 * 1024;
+/// What a member types into one block.
+const MAX_VALUE: usize = 4000;
+const MAX_PICTURE_BYTES: u64 = 25 * 1024 * 1024;
+/// Under the memory folder, outside STUDIO's shelves: copies of the pictures a run follows (the image
+/// worker reads references only from inside the memory).
+pub const INPUTS_FOLDER: &str = "studio-inputs";
 pub const SIZES: [&str; 3] = ["1024x1024", "1024x1536", "1536x1024"];
 pub const QUALITIES: [&str; 3] = ["low", "medium", "high"];
 const INPUTS: [&str; 4] = ["picture", "character", "text", "chips"];
@@ -473,4 +480,170 @@ pub async fn workflow_import(app: AppHandle, store: State<'_, SettingsStore>) ->
     })
     .await
     .map_err(|_| "The import stopped before it finished.".to_string())?
+}
+
+/// What the member filled in for one block: a text or a choice, a character's name, a picture's path.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RunValue {
+    pub text: Option<String>,
+    pub name: Option<String>,
+    pub picture: Option<String>,
+}
+
+/// A run ready for the image queue.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Prepared {
+    pub prompt: String,
+    /// the pictures to follow, in the template's order, as the member picked them
+    pub references: Vec<String>,
+    pub size: String,
+    pub quality: String,
+    pub label: String,
+}
+
+fn block_by_id<'a>(blocks: &'a [Value], id: &str) -> Option<&'a Value> {
+    blocks.iter().find(|b| str_of(b, "id") == id)
+}
+
+fn label_of(b: &Value) -> String {
+    let label = str_of(b, "label").trim();
+    if label.is_empty() { str_of(b, "id").to_string() } else { label.to_string() }
+}
+
+/// The text one `{{name}}` stands for. A member's words go in as they are: nothing they type is ever
+/// read as another `{{...}}`.
+fn value_for(blocks: &[Value], values: &HashMap<String, RunValue>, name: &str) -> Result<String, String> {
+    let (id, field) = name.split_once('.').map(|(b, f)| (b, Some(f))).unwrap_or((name, None));
+    let block = block_by_id(blocks, id).ok_or_else(|| format!("The prompt names {id}, which is not a block."))?;
+    let value = values.get(id).cloned().unwrap_or_default();
+    let text = match (str_of(block, "type"), field) {
+        ("text", None) => {
+            let text = value.text.unwrap_or_default().trim().to_string();
+            if text.is_empty() {
+                return Err(format!("Fill in {}.", label_of(block)));
+            }
+            text
+        }
+        ("chips", None) => {
+            let options: Vec<&str> = block.get("options").and_then(Value::as_array).map(|o| o.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+            match value.text.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+                None => options.first().map(|o| o.to_string()).unwrap_or_default(),
+                Some(chosen) if options.contains(&chosen) => chosen.to_string(),
+                Some(_) => return Err(format!("Choose one of the choices in {}.", label_of(block))),
+            }
+        }
+        ("character", None | Some("name")) => value.name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).unwrap_or_else(|| label_of(block)),
+        _ => return Err(format!("The prompt cannot use {{{{{name}}}}}.")),
+    };
+    if text.chars().count() > MAX_VALUE {
+        return Err(format!("Keep {} under {MAX_VALUE} letters.", label_of(block)));
+    }
+    Ok(text)
+}
+
+/// Fills the template once, left to right.
+fn fill(template: &str, blocks: &[Value], values: &HashMap<String, RunValue>) -> Result<String, String> {
+    let mut out = String::new();
+    let mut rest = template;
+    while let Some(start) = rest.find("{{") {
+        let after = &rest[start + 2..];
+        let Some(end) = after.find("}}") else { break };
+        out.push_str(&rest[..start]);
+        out.push_str(&value_for(blocks, values, after[..end].trim())?);
+        rest = &after[end + 2..];
+    }
+    out.push_str(rest);
+    Ok(out)
+}
+
+fn is_picture_file(path: &Path) -> bool {
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    ["png", "jpg", "jpeg", "webp"].contains(&ext.as_str())
+}
+
+/// The workflow and what the member filled in, as one picture to ask for. Pure apart from looking at
+/// the picked pictures' files.
+pub fn prepare(workflow: &Value, values: &HashMap<String, RunValue>) -> Result<Prepared, String> {
+    if let Some(error) = first_problem(workflow) {
+        return Err(format!("This workflow has a problem: {error}"));
+    }
+    let blocks = workflow.get("blocks").and_then(Value::as_array).cloned().unwrap_or_default();
+    let create = blocks.iter().find(|b| str_of(b, "type") == "create").ok_or("This workflow has no picture step.")?;
+    let mut prompt = fill(str_of(create, "prompt"), &blocks, values)?;
+
+    let mut references = Vec::new();
+    let mut map = Vec::new();
+    for id in create.get("references").and_then(Value::as_array).cloned().unwrap_or_default() {
+        let id = id.as_str().unwrap_or("");
+        let block = block_by_id(&blocks, id).ok_or("A reference names a block that is not there.")?;
+        let value = values.get(id).cloned().unwrap_or_default();
+        let picture = value.picture.map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).ok_or_else(|| format!("Add a picture to {}.", label_of(block)))?;
+        let path = Path::new(&picture);
+        if !is_picture_file(path) {
+            return Err(format!("The picture in {} must be a PNG, JPEG or WebP.", label_of(block)));
+        }
+        let size = fs::metadata(path).map_err(|_| format!("The picture in {} was not found.", label_of(block)))?.len();
+        if size > MAX_PICTURE_BYTES {
+            return Err(format!("The picture in {} is larger than 25 MB.", label_of(block)));
+        }
+        references.push(picture);
+        let who = if str_of(block, "type") == "character" { value_for(&blocks, values, id)? } else { label_of(block) };
+        map.push(format!("{} is {who}", references.len()));
+    }
+    if !map.is_empty() {
+        prompt.push_str(&format!("\n\nReference pictures, in order: {}. Keep each one's face, hair and clothes as in its picture.", map.join("; ")));
+    }
+    let size = create.get("size").and_then(Value::as_str).unwrap_or("1024x1024").to_string();
+    let quality = create.get("quality").and_then(Value::as_str).unwrap_or("medium").to_string();
+    prompt.push_str(&format!("\n\nSize {size}, {quality} quality."));
+    let label: String = format!("Workflow: {}", str_of(workflow, "name")).chars().take(120).collect();
+    Ok(Prepared { prompt, references, size, quality, label })
+}
+
+/// Copies the pictures a run follows into `<memory>/studio-inputs/<run>/`, so the image worker (which
+/// reads only from inside the memory) can send them; returns the copies' paths, in order.
+pub fn keep_inputs(memory: &Path, run: &str, pictures: &[String]) -> Result<Vec<String>, String> {
+    if pictures.is_empty() {
+        return Ok(Vec::new());
+    }
+    let folder = memory.join(INPUTS_FOLDER).join(run);
+    fs::create_dir_all(&folder).map_err(|_| "The pictures could not be made ready.".to_string())?;
+    pictures
+        .iter()
+        .enumerate()
+        .map(|(n, picture)| {
+            let source = Path::new(picture);
+            let ext = source.extension().and_then(|e| e.to_str()).unwrap_or("png").to_lowercase();
+            let copy = folder.join(format!("{}.{ext}", n + 1));
+            fs::copy(source, &copy).map_err(|_| "A picture could not be made ready.".to_string())?;
+            Ok(copy.display().to_string())
+        })
+        .collect()
+}
+
+/// Runs a workflow: fills it from what the member gave and puts its picture on the image queue (the
+/// same jobs, progress, Stop and Try again as every STUDIO picture).
+#[tauri::command]
+pub fn workflow_run(id: String, values: HashMap<String, RunValue>, store: State<SettingsStore>, images: State<Images>) -> Result<ImageJob, String> {
+    crate::rooms::need(&store, "studio")?;
+    let (_, workflow) = find(&store.folder(), &id)?;
+    let prepared = prepare(&workflow, &values)?;
+    let memory = store.get().memory_folder.ok_or("Choose a MemoryCore folder first.")?;
+    let run = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos().to_string();
+    let references = keep_inputs(Path::new(&memory), &run, &prepared.references)?;
+    crate::providers::queue_image(
+        &store,
+        &images,
+        ImageAsk {
+            brief: prepared.prompt,
+            output: None,
+            references,
+            room: "studio".into(),
+            label: Some(prepared.label),
+            look: None,
+            size: Some(prepared.size),
+            quality: Some(prepared.quality),
+        },
+    )
 }

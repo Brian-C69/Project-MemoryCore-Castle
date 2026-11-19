@@ -399,6 +399,7 @@ pub fn run() {
             workflows::workflow_folder,
             workflows::workflow_export,
             workflows::workflow_import,
+            workflows::workflow_run,
             studio::studio_library,
             thumbs::studio_thumbs,
             studio::studio_powers,

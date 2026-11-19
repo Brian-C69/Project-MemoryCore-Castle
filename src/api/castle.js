@@ -185,6 +185,8 @@ export const workflowFolder = () => invoke('workflow_folder')
 // both open Windows' own dialog; null when it is closed
 export const workflowExport = (id) => invoke('workflow_export', { id })
 export const workflowImport = () => invoke('workflow_import')
+// values: { <block id>: { text, name, picture } } -> the image job (it shows in Image requests like every STUDIO picture)
+export const workflowRun = (id, values) => invoke('workflow_run', { id, values })
 // Opens a file from the memory folder in its own app, or its folder with the file selected. A file a
 // DEV tab's chat showed (by `room`, or remembered from chatMedia) opens through that tab's door.
 export const chatMediaOpen = (path, folder = false, room = undefined) => {
