@@ -14,7 +14,8 @@ const body = ref(null)
 watch(() => props.bodyKey, () => { if (body.value) body.value.scrollTop = 0 }, { flush: 'post' })
 
 function onKey(event) {
-  if (event.key === 'Escape') {
+  // a field that records a shortcut ([data-takes-keys]) uses Esc itself, to leave without a change
+  if (event.key === 'Escape' && !event.target?.closest?.('[data-takes-keys]')) {
     event.preventDefault()
     event.stopImmediatePropagation()
     emit('close')

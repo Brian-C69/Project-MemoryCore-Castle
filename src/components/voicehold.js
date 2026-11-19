@@ -17,17 +17,99 @@ export const CLEAR_LINE = '\u0015'
 export const SETTLE_LIMIT_MS = 20000
 /** A mic left on stops by itself after this long (Claude Code's own tap mode caps at 2 minutes too). */
 export const MAX_RECORDING_MS = 2 * 60 * 1000
-/** The shortcut, in shortcutLabel's words: ⌘⇧M on a Mac, Ctrl+Shift+M elsewhere. */
-export const MIC_SHORTCUT = 'Ctrl+Shift+M'
+// ---------- The mic's shortcut (Settings > Chat > Mic) ----------
+//
+// Saved as { code, shift, alt }: the key by its KeyboardEvent.code (KeyA..KeyZ, Digit0..Digit9),
+// with ⌘ on a Mac (Ctrl elsewhere) always held, plus Shift and/or Alt as chosen. Nothing saved
+// means ⌘⇧M (Ctrl+Shift+M).
+
+/** The shortcut when the member has not chosen one: ⌘⇧M on a Mac, Ctrl+Shift+M elsewhere. */
+export const DEFAULT_MIC_SHORTCUT = Object.freeze({ code: 'KeyM', shift: true, alt: false })
+
+const KEY_CODE = /^(?:Key[A-Z]|Digit[0-9])$/
+
+/** The key's own character for a code: 'KeyM' -> 'M', 'Digit3' -> '3'. */
+const keyOf = (code) => code.replace(/^(?:Key|Digit)/, '')
+
+/** A saved shortcut made safe to use: an unknown or missing one is the default. */
+export function micShortcutOf(saved) {
+  if (!saved || typeof saved !== 'object' || !KEY_CODE.test(String(saved.code ?? ''))) return { ...DEFAULT_MIC_SHORTCUT }
+  return { code: saved.code, shift: !!saved.shift, alt: !!saved.alt }
+}
+
+/** True when two shortcuts are the same keys. */
+export function sameMicShortcut(a, b) {
+  const x = micShortcutOf(a)
+  const y = micShortcutOf(b)
+  return x.code === y.code && x.shift === y.shift && x.alt === y.alt
+}
+
+/** The shortcut in shortcutLabel's words: 'Ctrl+Shift+M' (shortcutLabel makes it ⌘⇧M on a Mac). */
+export function micShortcutText(shortcut) {
+  const s = micShortcutOf(shortcut)
+  return ['Ctrl', s.alt && 'Alt', s.shift && 'Shift', keyOf(s.code)].filter(Boolean).join('+')
+}
+
+/** The default shortcut's words, as before the shortcut could be changed. */
+export const MIC_SHORTCUT = micShortcutText(DEFAULT_MIC_SHORTCUT)
+
+/** The keys a shortcut must never take, with what they already do there. Keyed 'shift+alt+code'. */
+const TAKEN_MAC = {
+  'KeyC': 'Copy', 'KeyV': 'Paste', 'KeyX': 'Cut', 'KeyA': 'Select all', 'KeyZ': 'Undo',
+  'KeyQ': 'Quit Castle', 'KeyW': 'Close the window', 'KeyH': 'Hide Castle', 'KeyM': 'Minimise',
+  'shift+KeyZ': 'Redo', 'shift+KeyQ': 'Log out of the Mac', 'shift+Digit3': 'a screenshot',
+  'shift+Digit4': 'a screenshot', 'shift+Digit5': 'a screenshot', 'alt+KeyH': 'Hide the other apps',
+  'alt+KeyM': 'Minimise every window',
+}
+const TAKEN_OTHER = {
+  'KeyC': 'Copy', 'KeyV': 'Paste', 'KeyX': 'Cut', 'KeyA': 'Select all', 'KeyZ': 'Undo', 'KeyY': 'Redo',
+  'shift+KeyZ': 'Redo',
+}
+
+/** What a shortcut already does on this computer ('Copy', 'Undo'...), or '' when it is free. */
+export function micShortcutTaken(shortcut, mac) {
+  const s = micShortcutOf(shortcut)
+  const name = [s.shift && 'shift', s.alt && 'alt', s.code].filter(Boolean).join('+')
+  return (mac ? TAKEN_MAC : TAKEN_OTHER)[name] ?? ''
+}
+
+const MODIFIERS = new Set(['Meta', 'Control', 'Shift', 'Alt', 'AltGraph', 'CapsLock', 'Fn', 'OS'])
 
 /**
- * True for the mic's shortcut only: M with Shift and ⌘ on a Mac (Ctrl elsewhere), nothing else
- * held. Every other key (⌘X, ⌘⇧X, Ctrl+M, a plain M) is left alone.
+ * Reads a key press made while Settings waits for a new shortcut. Returns null while only
+ * modifiers are held (the member is still pressing), { cancel: true } for Esc, { problem, keys }
+ * when the keys cannot be the mic's, or { shortcut, keys } for a good one. `label` turns
+ * 'Ctrl+Shift+M' words into this computer's (shortcutLabel).
  */
-export function isMicShortcut(event, mac) {
-  if (!event || event.altKey || !event.shiftKey) return false
-  const code = event.code === 'KeyM'
-  const key = String(event.key ?? '').toLowerCase() === 'm'
+export function readMicShortcut(event, mac, label = (text) => text) {
+  if (!event) return null
+  if (event.key === 'Escape') return { cancel: true }
+  if (MODIFIERS.has(event.key)) return null
+  const mod = mac ? '⌘' : 'Ctrl'
+  const held = mac ? !!event.metaKey : !!event.ctrlKey
+  const other = mac ? !!event.ctrlKey : !!event.metaKey
+  const named = KEY_CODE.test(event.code ?? '') ? keyOf(event.code) : String(event.key ?? '').length === 1 ? String(event.key).toUpperCase() : String(event.key ?? '')
+  const pressed = label([held && 'Ctrl', event.altKey && 'Alt', event.shiftKey && 'Shift', named].filter(Boolean).join('+'))
+  if (!KEY_CODE.test(event.code ?? '')) return { problem: `${pressed} can't be the mic's key. Pick a letter or a digit, with ${mod}.`, keys: pressed }
+  if (other) return { problem: mac ? 'Leave Control out: on a Mac the mic uses ⌘.' : 'Leave the Windows key out: the mic uses Ctrl.', keys: pressed }
+  if (!held) return { problem: `${pressed} would go off while you type. Hold ${mod} with it.`, keys: pressed }
+  const shortcut = { code: event.code, shift: !!event.shiftKey, alt: !!event.altKey }
+  const taken = micShortcutTaken(shortcut, mac)
+  if (taken) return { problem: `${pressed} is already ${taken}. Pick another key, or add ${mac ? '⇧' : 'Shift'}.`, keys: pressed }
+  return { shortcut, keys: pressed }
+}
+
+/**
+ * True for the mic's shortcut only: its key with ⌘ on a Mac (Ctrl elsewhere) and exactly its
+ * Shift and Alt, nothing else held. Every other key (⌘X, ⌘⇧X, Ctrl+M, a plain M) is left alone.
+ * The key counts by its code, or by its letter on a layout that puts the letter elsewhere.
+ */
+export function isMicShortcut(event, mac, shortcut = DEFAULT_MIC_SHORTCUT) {
+  if (!event) return false
+  const s = micShortcutOf(shortcut)
+  if (!!event.shiftKey !== s.shift || !!event.altKey !== s.alt) return false
+  const code = event.code === s.code
+  const key = String(event.key ?? '').toLowerCase() === keyOf(s.code).toLowerCase()
   if (!code && !key) return false
   return mac ? !!event.metaKey && !event.ctrlKey : !!event.ctrlKey && !event.metaKey
 }

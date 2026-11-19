@@ -464,6 +464,7 @@ defineExpose({ wake, screenLines, writeToSession, addPaths })
         :companion="companion"
         :room="chatRoom"
         :cli="activeProvider || cli"
+        :settings-stamp="settingsStamp"
         @show-log="setView('log')"
         @busy="busy = $event; emit('busy', $event)"
         @context="emit('context', $event)"

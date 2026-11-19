@@ -1,8 +1,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { chatHistory, chatPoll, claudeVoice, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
+import { chatHistory, chatPoll, claudeVoice, getSettings, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
 import { localSend, mergeEntries, resetEntries } from './ticks.js'
-import { isMicShortcut, voiceMic } from './voicehold.js'
+import { DEFAULT_MIC_SHORTCUT, isMicShortcut, micShortcutOf, voiceMic } from './voicehold.js'
 import { isMac } from '../platform.js'
 import { readChoices } from './choices.js'
 import { firstHeading } from './markdown.js'
@@ -33,6 +33,8 @@ const props = defineProps({
   companion: { type: String, default: 'Your companion' },
   // 'claude' or 'codex': answer buttons, send-now and the mode pills are Claude Code's; Codex asks in the Log
   cli: { type: String, default: 'claude' },
+  // Bumped when Settings are saved: the mic's shortcut is read again
+  settingsStamp: { type: Number, default: 0 },
 })
 // busy: the companion is working or not (the typing bubble)
 // context: the context window as Castle's status line says it ({ percent, tokens }), when it
@@ -328,6 +330,17 @@ async function readVoice() {
   }
 }
 
+// The mic's shortcut as chosen in Settings > Chat > Mic (⌘⇧M / Ctrl+Shift+M until one is chosen).
+const micShortcut = ref({ ...DEFAULT_MIC_SHORTCUT })
+async function readMicShortcut() {
+  try {
+    micShortcut.value = micShortcutOf((await getSettings())?.settings?.micShortcut)
+  } catch {
+    // keeps the one it has
+  }
+}
+watch(() => props.settingsStamp, readMicShortcut)
+
 // The mic holds Space in this session while it is on, wherever it runs (HOME, STORY or a DEV tab):
 // `write` is the panel's own session, and the words are read back off the same panel's Log screen.
 const micHold = voiceMic({
@@ -340,10 +353,11 @@ const micHold = voiceMic({
 // tell, it shows with a hint to turn voice on first.
 const mic = computed(() => {
   if (!props.running || !isClaude.value || voice.value === undefined) return null
-  if (voice.value === null) return { ready: true, hold: micHold, hint: 'Talk - turn voice on first with /voice in the Log' }
+  const shortcut = micShortcut.value
+  if (voice.value === null) return { ready: true, hold: micHold, shortcut, hint: 'Talk - turn voice on first with /voice in the Log' }
   if (!voice.value.enabled) return null
-  if (voice.value.mode !== 'hold') return { ready: false, hold: micHold, hint: "Chat's mic needs voice in hold mode: type /voice hold in the Log" }
-  return { ready: true, hold: micHold, hint: 'Talk: click to start, click again to stop. Your words come into the box to look over before Send.' }
+  if (voice.value.mode !== 'hold') return { ready: false, hold: micHold, shortcut, hint: "Chat's mic needs voice in hold mode: type /voice hold in the Log" }
+  return { ready: true, hold: micHold, shortcut, hint: 'Talk: click to start, click again to stop. Your words come into the box to look over before Send.' }
 })
 
 watch(
@@ -352,16 +366,18 @@ watch(
     if (shown) {
       poll()
       readVoice()
+      readMicShortcut()
       nextTick(() => composer.value?.focus())
     }
   },
 )
 
-// ⌘⇧M (Ctrl+Shift+M) turns the mic on or off from anywhere in Chat, the message box too; Esc
-// while it is on cancels. Only these keys: every other one goes on as before.
+// The mic's shortcut (⌘⇧M / Ctrl+Shift+M unless changed in Settings) turns the mic on or off from
+// anywhere in Chat, the message box too; Esc while it is on cancels. Only these keys: every other
+// one goes on as before. Keys pressed where Castle records a shortcut ([data-takes-keys]) are left alone.
 function micKeys(event) {
-  if (!props.visible || !mic.value) return
-  if (isMicShortcut(event, isMac)) {
+  if (!props.visible || !mic.value || event.target?.closest?.('[data-takes-keys]')) return
+  if (isMicShortcut(event, isMac, micShortcut.value)) {
     event.preventDefault()
     composer.value?.micToggle()
   } else if (event.key === 'Escape' && composer.value?.micOn()) {
@@ -374,6 +390,7 @@ function micKeys(event) {
 onMounted(() => {
   poll()
   readVoice()
+  readMicShortcut()
   window.addEventListener('keydown', micKeys, true)
   // /voice in the Log turns the mic on or off within a few seconds
   voiceTimer = setInterval(() => props.visible && readVoice(), 5000)

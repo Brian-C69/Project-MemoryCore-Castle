@@ -12,7 +12,8 @@ import DatabasePanel from '../components/DatabasePanel.vue'
 import HelpersStatus from '../components/HelpersStatus.vue'
 import HelpTip from '../components/HelpTip.vue'
 import ContributorsWall from '../components/ContributorsWall.vue'
-import { isMac } from '../platform.js'
+import { isMac, shortcutLabel } from '../platform.js'
+import { DEFAULT_MIC_SHORTCUT, micShortcutOf, micShortcutText, readMicShortcut, sameMicShortcut } from '../components/voicehold.js'
 import { DIARY_LOOKS, lookOf } from '../components/diaryviews.js'
 import { PROFILE_LOOKS, profileLookOf } from './profile/profile.js'
 import {
@@ -328,6 +329,56 @@ async function save(patch, message = 'Saved.') {
   return saved
 }
 
+// ---------- Chat's mic shortcut ----------
+
+// The keys that start and stop Chat's 🎙, shown as key caps. Change waits for the next keys (Esc
+// leaves without a change); a good choice saves at once, a refused one says why and keeps waiting.
+const micShortcut = computed(() => micShortcutOf(settings.value?.micShortcut))
+const micKeyCaps = computed(() => (isMac ? [...shortcutLabel(micShortcutText(micShortcut.value), true)] : micShortcutText(micShortcut.value).split('+')))
+const micIsDefault = computed(() => sameMicShortcut(micShortcut.value, DEFAULT_MIC_SHORTCUT))
+const micDefaultLabel = shortcutLabel(micShortcutText(DEFAULT_MIC_SHORTCUT))
+const micRecording = ref(false)
+const micNote = ref({ text: '', bad: false })
+const micBox = ref(null)
+
+function micChange() {
+  if (micRecording.value) return micLeave()
+  micRecording.value = true
+  micNote.value = { text: '', bad: false }
+  micBox.value?.focus()
+}
+function micLeave(text = `Nothing changed. Still ${shortcutLabel(micShortcutText(micShortcut.value))}.`) {
+  if (!micRecording.value) return
+  micRecording.value = false
+  micNote.value = { text, bad: false }
+}
+async function micKeyDown(event) {
+  if (!micRecording.value) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      micChange()
+    }
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  const read = readMicShortcut(event, isMac, (text) => shortcutLabel(text))
+  if (!read) return
+  if (read.cancel) return micLeave()
+  if (read.problem) {
+    micNote.value = { text: read.problem, bad: true }
+    return
+  }
+  micRecording.value = false
+  const saved = await save({ micShortcut: read.shortcut }, '')
+  micNote.value = saved ? { text: `Saved: ${read.keys}. The 🎙 in Chat answers to it now.`, bad: false } : { text: 'That did not save. Try again.', bad: true }
+}
+async function micReset() {
+  micRecording.value = false
+  const saved = await save({ micShortcut: null }, '')
+  if (saved) micNote.value = { text: `Back to ${micDefaultLabel}.`, bad: false }
+}
+
 // ---------- Companion ----------
 
 async function changeFolder() {
@@ -550,6 +601,30 @@ onMounted(async () => {
         <SentinelSettings :settings="settings" @saved="sentinelChanged" />
       </section>
       <section v-else-if="tab === 'chat'" class="pane">
+        <h3 class="with-tip">Mic <HelpTip :text="`The 🎙 beside Send in the Chat tab of HOME, STORY and DEV. Its keys work anywhere in that Chat, the message box too. Esc cancels while it listens.`" /></h3>
+        <div class="row mic-row">
+          <span>Start and stop the mic</span>
+          <span
+            ref="micBox"
+            class="key-caps"
+            :class="{ recording: micRecording }"
+            tabindex="0"
+            role="button"
+            data-takes-keys
+            :aria-label="micRecording ? 'Press the new keys, or Esc to leave' : `Mic shortcut ${micKeyCaps.join(' ')}. Press Enter to change it.`"
+            @click="micRecording || micChange()"
+            @keydown="micKeyDown"
+            @blur="micLeave()"
+          >
+            <span v-if="micRecording" class="key-wait">Press the new keys… Esc to leave</span>
+            <kbd v-for="(cap, i) in micKeyCaps" v-else :key="i">{{ cap }}</kbd>
+          </span>
+          <button :disabled="!!busy" @mousedown.prevent @click="micChange">{{ micRecording ? 'Leave' : 'Change' }}</button>
+          <button :disabled="!!busy || micIsDefault" @click="micReset">Reset to {{ micDefaultLabel }}</button>
+        </div>
+        <p v-if="micNote.text" class="hint" :class="{ bad: micNote.bad }" aria-live="polite">{{ micNote.text }}</p>
+        <p class="hint">{{ isMac ? '⌘' : 'Ctrl' }} plus a letter or a digit, with {{ isMac ? '⇧ or ⌥' : 'Shift or Alt' }} if you like. Keys that copy, paste, undo or {{ isMac ? 'belong to macOS' : 'belong to Windows' }} are refused.</p>
+
         <p v-if="settings.rooms?.chat === false" class="hint">The CHAT room is switched off in Rooms. These wait for it.</p>
         <h3 class="with-tip">Alerts <HelpTip text="Notifications and sounds for new messages, and for everything else Castle can tell you about, are set on their own page." /></h3>
         <div class="setting-row">
@@ -846,6 +921,38 @@ label.toggle {
   align-items: center;
   gap: 8px;
   font-size: 14px;
+}
+.key-caps {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 110px;
+  min-height: 30px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+}
+.key-caps:focus-visible,
+.key-caps.recording {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.key-caps kbd {
+  min-width: 20px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+}
+.key-wait {
+  font-size: 12px;
+  color: var(--accent);
 }
 .setting-row {
   display: flex;

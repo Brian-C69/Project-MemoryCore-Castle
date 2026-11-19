@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { chatAttach, clipboardPaste } from '../api/castle.js'
 import ImageViewer from './ImageViewer.vue'
 import { isMac, shortcutLabel } from '../platform.js'
-import { MIC_SHORTCUT } from './voicehold.js'
+import { micShortcutText } from './voicehold.js'
 
 // Chat's box: the member's words, the pictures they drop, paste or type as paths (shown above the
 // box, removable, opened in a viewer), Enter to send, Shift+Enter for a new line.
@@ -16,7 +16,7 @@ const props = defineProps({
   loadPath: { type: Function, required: true },
   // (text) -> Promise<boolean>: true when the words went in, and the box empties
   send: { type: Function, required: true },
-  // The mic, while Claude Code's voice is on: { ready, hint, hold: voiceMic(...) }; null for none
+  // The mic, while Claude Code's voice is on: { ready, hint, shortcut, hold: voiceMic(...) }; null for none
   mic: { type: Object, default: null },
   // Chat is the tab showing: switching away stops the mic
   visible: { type: Boolean, default: true },
@@ -182,13 +182,14 @@ onBeforeUnmount(() => {
   micStop()
 })
 
-const micKeys = shortcutLabel(MIC_SHORTCUT)
+// the mic's shortcut in this computer's words (⌘⇧M), as chosen in Settings > Chat > Mic
+const micKeys = computed(() => shortcutLabel(micShortcutText(props.mic?.shortcut)))
 const micStatus = computed(() => {
-  if (listening.value === 'listening') return `🎙 Listening… click or ${micKeys} to stop · Esc to cancel`
+  if (listening.value === 'listening') return `🎙 Listening… click or ${micKeys.value} to stop · Esc to cancel`
   if (listening.value === 'writing') return 'Writing your words down…'
   return micNote.value
 })
-const micTitle = computed(() => (listening.value === 'listening' ? `Stop (${micKeys}) · Esc to cancel` : `${props.mic?.hint ?? ''} (${micKeys})`))
+const micTitle = computed(() => (listening.value === 'listening' ? `Stop (${micKeys.value}) · Esc to cancel` : `${props.mic?.hint ?? ''} (${micKeys.value})`))
 
 defineExpose({
   addPaths,
