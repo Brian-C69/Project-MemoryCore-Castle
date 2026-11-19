@@ -325,6 +325,9 @@ pub struct Settings {
     /// Sweep's gear: the look chosen by hand and whether the Recycle Bin starts ticked. Changed only
     /// by its own command (sweep_settings_save), never by the Settings page.
     pub sweep: crate::sweep::SweepSettings,
+    /// The Sentinel's gear: on, the model, how often it patrols. Changed only by its own command
+    /// (sentinel_settings_save), never by the Settings page.
+    pub sentinel: crate::sentinel::SentinelSettings,
     /// HOME's credit widgets: the OpenAI and Seedance figures, the page readers' last word, Suno's
     /// whole and the Seedance budget. Changed only by the credits commands.
     pub credits: crate::credits::CreditsSaved,
@@ -437,6 +440,7 @@ impl Default for Settings {
             gpu_gauges: crate::gpu::GpuGauges::default(),
             weather: crate::weather::WeatherSettings::default(),
             sweep: crate::sweep::SweepSettings::default(),
+            sentinel: crate::sentinel::SentinelSettings::default(),
             credits: crate::credits::CreditsSaved::default(),
         }
     }
@@ -851,6 +855,7 @@ mod tests {
             gpu_gauges: crate::gpu::GpuGauges { on: false },
             weather: crate::weather::WeatherSettings { place: Some(crate::weather::Place { name: "Ipoh".into(), region: "Perak, Malaysia".into(), lat: 4.6, lon: 101.08 }), units: "imperial".into() },
             sweep: crate::sweep::SweepSettings { look: Some("broom".into()), recycle_bin: true },
+            sentinel: crate::sentinel::SentinelSettings { on: true, model: Some("opus".into()), patrol_minutes: 30 },
             credits: crate::credits::CreditsSaved { seedance_budget: Some(20.0), suno_peak: Some(800.0), ..Default::default() },
         };
         save(&path, &settings).unwrap();

@@ -19,6 +19,30 @@ pub fn write_if_changed(path: &Path, text: &str) {
 /// Runs the CLI once in `folder` with `rules_file` (a file in that folder) as its whole system
 /// prompt, no tools, no MCP servers, no user-level settings; stopped after `limit`.
 pub fn run(cli: Cli, folder: &Path, rules_file: &str, words: &str, limit: Duration) -> Result<String, String> {
+    run_as(cli, folder, rules_file, words, limit, None)
+}
+
+/// A model name the CLI may be given: letters, digits, `.`, `-`, `_` and `:`, never starting with
+/// `-`, at most 64 characters - so it can never carry another flag.
+pub fn clean_model(name: &str) -> Option<String> {
+    let name = name.trim();
+    let fine = !name.is_empty() && name.len() <= 64 && !name.starts_with('-') && name.chars().all(|c| c.is_ascii_alphanumeric() || ".-_:".contains(c));
+    fine.then(|| name.to_string())
+}
+
+/// The model flag for this CLI, when a model is chosen.
+pub fn model_args(cli: Cli, model: Option<&str>) -> Vec<String> {
+    match model.and_then(clean_model) {
+        Some(m) => match cli {
+            Cli::Claude => vec!["--model".into(), m],
+            Cli::Codex => vec!["-m".into(), m],
+        },
+        None => Vec::new(),
+    }
+}
+
+/// `run`, on a chosen model (None: the CLI's own default).
+pub fn run_as(cli: Cli, folder: &Path, rules_file: &str, words: &str, limit: Duration, model: Option<&str>) -> Result<String, String> {
     let program = env::find_on_path(cli.command()).ok_or_else(|| format!("{} is not installed.", cli.label()))?;
     let script = program.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
     // platform: windows-only - a .cmd / .bat launcher exists only on Windows
@@ -31,11 +55,12 @@ pub fn run(cli: Cli, folder: &Path, rules_file: &str, words: &str, limit: Durati
     };
     let answer_file = folder.join("last-answer.txt");
     let _ = std::fs::remove_file(&answer_file);
+    let model = model_args(cli, model);
     match cli {
         // no tools at all, no MCP servers, no user-level settings or memory - only this folder
-        Cli::Claude => command.args(["-p", "--tools", "", "--strict-mcp-config", "--setting-sources", "project", "--output-format", "text", "--system-prompt-file", rules_file]),
+        Cli::Claude => command.args(["-p", "--tools", "", "--strict-mcp-config", "--setting-sources", "project", "--output-format", "text", "--system-prompt-file", rules_file]).args(&model),
         // Codex reads AGENTS.md in this folder as its instructions
-        Cli::Codex => command.args(["exec", "--sandbox", "read-only", "--skip-git-repo-check", "--output-last-message"]).arg(&answer_file).arg("-"),
+        Cli::Codex => command.arg("exec").args(&model).args(["--sandbox", "read-only", "--skip-git-repo-check", "--output-last-message"]).arg(&answer_file).arg("-"),
     };
     command.current_dir(folder).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     for name in NEVER_INHERITED {
@@ -73,4 +98,28 @@ pub fn run(cli: Cli, folder: &Path, rules_file: &str, words: &str, limit: Durati
     }
     let out = reader.join().unwrap_or_default();
     Ok(std::fs::read_to_string(&answer_file).ok().filter(|a| !a.trim().is_empty()).unwrap_or(out))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_model_name_can_never_carry_another_flag() {
+        assert_eq!(clean_model(" sonnet "), Some("sonnet".into()));
+        assert_eq!(clean_model("gpt-5.1-codex"), Some("gpt-5.1-codex".into()));
+        assert_eq!(clean_model("claude-opus-4:latest"), Some("claude-opus-4:latest".into()));
+        let long = "x".repeat(65);
+        for bad in ["", "-p", "--tools x", "sonnet --tools Bash", "a;b", "a\"b", long.as_str()] {
+            assert_eq!(clean_model(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn each_cli_gets_its_own_model_flag() {
+        assert_eq!(model_args(Cli::Claude, Some("sonnet")), vec!["--model", "sonnet"]);
+        assert_eq!(model_args(Cli::Codex, Some("gpt-5")), vec!["-m", "gpt-5"]);
+        assert!(model_args(Cli::Claude, None).is_empty());
+        assert!(model_args(Cli::Codex, Some("--bad")).is_empty());
+    }
 }

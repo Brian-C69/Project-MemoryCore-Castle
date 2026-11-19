@@ -22,6 +22,65 @@ use std::path::Path;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
+/// The Sentinel's gear in Settings. Changed only by its own command (sentinel_settings_save).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SentinelSettings {
+    /// Patrols run only while this is on.
+    pub on: bool,
+    /// The model the companion judges on; None is the recommended one.
+    pub model: Option<String>,
+    /// Minutes between two patrols.
+    pub patrol_minutes: u32,
+}
+
+impl Default for SentinelSettings {
+    fn default() -> Self {
+        SentinelSettings { on: false, model: None, patrol_minutes: 60 }
+    }
+}
+
+pub const PATROL_MINUTES: std::ops::RangeInclusive<u32> = 15..=720;
+
+impl SentinelSettings {
+    pub fn bounded(&self) -> SentinelSettings {
+        SentinelSettings {
+            on: self.on,
+            model: self.model.as_deref().and_then(crate::oneshot::clean_model),
+            patrol_minutes: self.patrol_minutes.clamp(*PATROL_MINUTES.start(), *PATROL_MINUTES.end()),
+        }
+    }
+}
+
+/// The recommended model for each CLI: `sonnet` (Claude Code's alias for the latest Sonnet) for
+/// steady judgment at a fair cost on an hourly patrol; Codex's own configured default (no flag).
+pub fn recommended_model(cli: crate::settings::Cli) -> Option<&'static str> {
+    match cli {
+        crate::settings::Cli::Claude => Some("sonnet"),
+        crate::settings::Cli::Codex => None,
+    }
+}
+
+/// The model a patrol runs on: the member's choice, else the recommended one.
+pub fn model_for(cli: crate::settings::Cli, gear: &SentinelSettings) -> Option<String> {
+    gear.bounded().model.or_else(|| recommended_model(cli).map(str::to_string))
+}
+
+/// Saves the Sentinel's gear. A model name that could carry a flag is refused.
+#[tauri::command]
+pub fn sentinel_settings_save(store: tauri::State<'_, SettingsStore>, on: bool, model: Option<String>, patrol_minutes: u32) -> Result<SentinelSettings, String> {
+    let model = match model.as_deref().map(str::trim).filter(|m| !m.is_empty()) {
+        None => None,
+        Some(m) => Some(crate::oneshot::clean_model(m).ok_or("A model name is letters, digits, dots, dashes, underscores or colons.")?),
+    };
+    let mut next = store.get();
+    next.sentinel = SentinelSettings { on, model, patrol_minutes }.bounded();
+    crate::settings::save(&store.path, &next).map_err(|_| "The Sentinel's settings could not be saved.".to_string())?;
+    let saved = next.sentinel.clone();
+    *store.current.lock().unwrap() = next;
+    Ok(saved)
+}
+
 /// The page listens for this to read the Sentinel again.
 pub const CHANGED: &str = "sentinel-changed";
 
@@ -52,5 +111,29 @@ fn read_journal(app: &AppHandle) {
     }
     if drained.lines > 0 {
         let _ = app.emit(CHANGED, ());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::settings::Cli;
+
+    #[test]
+    fn the_recommended_model_is_sonnet_for_claude_and_codexs_own_for_codex() {
+        let gear = SentinelSettings::default();
+        assert!(!gear.on);
+        assert_eq!(model_for(Cli::Claude, &gear), Some("sonnet".into()));
+        assert_eq!(model_for(Cli::Codex, &gear), None);
+        let chosen = SentinelSettings { model: Some("opus".into()), ..gear.clone() };
+        assert_eq!(model_for(Cli::Claude, &chosen), Some("opus".into()));
+        assert_eq!(model_for(Cli::Codex, &chosen), Some("opus".into()));
+    }
+
+    #[test]
+    fn the_gear_is_kept_in_bounds() {
+        let wild = SentinelSettings { on: true, model: Some("--tools Bash".into()), patrol_minutes: 1 };
+        assert_eq!(wild.bounded(), SentinelSettings { on: true, model: None, patrol_minutes: 15 });
+        assert_eq!(SentinelSettings { patrol_minutes: 99_999, ..SentinelSettings::default() }.bounded().patrol_minutes, 720);
     }
 }

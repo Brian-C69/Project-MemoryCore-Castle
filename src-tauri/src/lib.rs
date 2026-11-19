@@ -176,6 +176,8 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
         settings.weather = current.weather.clone();
         // Sweep's gear is saved only by its own command (sweep_settings_save)
         settings.sweep = current.sweep.clone();
+        // the Sentinel's gear is saved only by its own command (sentinel_settings_save)
+        settings.sentinel = current.sentinel.clone();
         // the credit widgets' figures, states and budget are kept by their own commands
         settings.credits = current.credits.clone();
     }
@@ -565,7 +567,8 @@ pub fn run() {
             market::companion::market_turns,
             market::companion::market_lessons,
             market::companion::market_lesson_delete,
-            db::db_move_out
+            db::db_move_out,
+            sentinel::sentinel_settings_save
         ])
         .setup(|app| {
             let config = match settings::test_override(settings::TEST_CONFIG_VAR) {
