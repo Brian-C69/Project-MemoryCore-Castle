@@ -13,4 +13,5 @@
 #![allow(dead_code)]
 
 pub mod book;
+pub mod hand;
 pub mod look;
