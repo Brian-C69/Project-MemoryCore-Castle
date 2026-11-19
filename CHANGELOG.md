@@ -14,6 +14,12 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **A DISKS widget on HOME.** Shows every drive of your computer with a bar for how full it is (amber from 85%, red from 95%) and how much is free of its size, with the total across all drives when there is more than one. It only reads the drive list from your computer, sends nothing anywhere and changes nothing; Sweep is still the widget that frees space. It is on by default and can be switched off in Settings > Widgets.
 
+- **Projects can rest.** In PROJECTS a project can be paused (with a reason), archived (kept and readable) or deleted, which keeps it on Recently deleted for 30 days before it is gone for good. Your companion can move them too when you ask, and never deletes one without your clear yes. HOME's PROJECTS card still shows the active ones.
+
+- **Voice mode works on the Mac.** macOS now asks once for the microphone, so Claude Code's voice dictation works inside Castle.
+
+- **Long TODAY reminders wrap** to two lines instead of running off the card, with the whole reminder on hover.
+
 - **OneNonly148 in the credits**, for Castle on macOS, the project shelves (pause, archive and delete), the Mac microphone for voice mode and the TODAY card that wraps. Thank you!
 
 ## 0.2.22 - 2026-11-19
