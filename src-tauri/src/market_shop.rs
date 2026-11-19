@@ -227,3 +227,92 @@ pub async fn market_shop_withdraw(listing: String, store: State<'_, SettingsStor
     crate::rooms::need(&store, "studio")?;
     blocking(move || door(reqwest::Method::DELETE, &format!("/api/member/market/listings/{}", plain(&listing)?), None)).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    fn serve_once(status: u16, body: &'static str) -> (String, std::thread::JoinHandle<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+            let mut bytes = Vec::new();
+            loop {
+                let mut buf = [0; 8192];
+                let n = stream.read(&mut buf).unwrap();
+                if n == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buf[..n]);
+                let text = String::from_utf8_lossy(&bytes);
+                if let Some(end) = text.find("\r\n\r\n") {
+                    let length = text[..end].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").and_then(|s| s.trim().parse::<usize>().ok())).unwrap_or(0);
+                    if bytes.len() >= end + 4 + length {
+                        break;
+                    }
+                }
+            }
+            write!(stream, "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            String::from_utf8_lossy(&bytes).to_string()
+        });
+        (base, handle)
+    }
+
+    #[test]
+    fn a_refusal_reads_as_plain_words() {
+        assert_eq!(words_for(401, ""), "Your sign-in has run out. Sign in again in CHAT.");
+        assert_eq!(words_for(403, r#"{"error":"Selling opens soon."}"#), "Selling opens soon.");
+        assert_eq!(words_for(404, ""), "The Marketplace is not open yet.");
+        assert_eq!(words_for(415, "<html>"), "Sample pictures must be PNG, JPEG or WebP.");
+        assert_eq!(words_for(500, "oops"), "The Marketplace could not answer just now.");
+    }
+
+    #[test]
+    fn a_door_is_called_with_the_members_sign_in_and_its_answer_comes_back() {
+        let (base, handle) = serve_once(200, r#"{"items":[{"id":"7","name":"Two cats"}],"page":0,"total":1}"#);
+        let answer = call(&base, "member-token", reqwest::Method::GET, &listings_path("two cats & tea", 0), None).unwrap();
+        let request = handle.join().unwrap();
+        assert_eq!(answer["items"][0]["name"], "Two cats");
+        assert!(request.starts_with("GET /api/public/market/listings?q=two+cats+%26+tea&power=image&page=0&size=24 "));
+        assert!(request.to_lowercase().contains("authorization: bearer member-token"));
+        assert!(request.to_lowercase().contains("user-agent: memorycorecastle/"));
+    }
+
+    #[test]
+    fn a_refused_call_never_carries_the_sign_in_back() {
+        let (base, handle) = serve_once(403, r#"{"error":"Connect Stripe first."}"#);
+        let said = call(&base, "member-token", reqwest::Method::POST, "/api/member/market/listings", Some(json!({}))).unwrap_err();
+        handle.join().unwrap();
+        assert_eq!(said, "Connect Stripe first.");
+        assert!(!said.contains("member-token"));
+    }
+
+    #[test]
+    fn only_plain_listing_ids_reach_a_door() {
+        assert!(plain("42").is_ok() && plain("abc-123").is_ok());
+        assert!(plain("../admin").is_err() && plain("").is_err() && plain("a?b=c").is_err());
+    }
+
+    #[test]
+    fn a_listing_needs_samples_and_a_price() {
+        let root = std::env::temp_dir().join(format!("castle-shop-form-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let png = root.join("sample.png");
+        std::fs::write(&png, b"png").unwrap();
+        let gif = root.join("sample.gif");
+        std::fs::write(&gif, b"gif").unwrap();
+        let w = json!({ "schema": 1 });
+        let one = vec![png.display().to_string()];
+        assert!(listing_form(&w, &[], 5.0, "").unwrap_err().contains("one to three"));
+        assert!(listing_form(&w, &vec![one[0].clone(); 4], 5.0, "").unwrap_err().contains("one to three"));
+        assert!(listing_form(&w, &one, 0.0, "").unwrap_err().contains("price"));
+        assert!(listing_form(&w, &[gif.display().to_string()], 5.0, "").unwrap_err().contains("PNG, JPEG or WebP"));
+        assert!(listing_form(&w, &one, 9.9, "Two cats in the garden").is_ok());
+    }
+}

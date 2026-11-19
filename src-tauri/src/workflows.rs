@@ -928,6 +928,22 @@ mod tests {
     }
 
     #[test]
+    fn a_bought_workflow_lands_on_the_rail_and_a_newer_version_replaces_it() {
+        let root = temp_folder("bought");
+        let id = install_bought(&root, "L42", two_cats()).unwrap();
+        let entry = list(&root).into_iter().find(|e| e.id == id).unwrap();
+        assert_eq!((entry.source.as_str(), entry.listing.as_deref()), ("bought", Some("L42")));
+        assert!(entry.error.is_none());
+        let mut newer = two_cats();
+        newer["description"] = json!("version two");
+        assert_eq!(install_bought(&root, "L42", newer).unwrap(), id, "the same listing keeps its folder");
+        let (_, kept) = find(&root, &id).unwrap();
+        assert_eq!(str_of(&kept, "description"), "version two");
+        assert!(install_bought(&root, "L43", json!({ "schema": 1, "name": "bad" })).unwrap_err().contains("cannot be used"));
+        assert_eq!(list(&root).iter().filter(|e| e.source == "bought").count(), 1);
+    }
+
+    #[test]
     fn followed_pictures_are_copied_inside_the_memory() {
         let root = temp_folder("inputs");
         let memory = root.join("memory");
