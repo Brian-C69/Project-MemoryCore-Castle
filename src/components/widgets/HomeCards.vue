@@ -41,7 +41,7 @@ function due(date) {
 
     <template v-if="kind === 'today'">
       <ul v-if="data?.reminders?.length">
-        <li v-for="r in data.reminders.slice(0, 4)" :key="r.title" :title="r.detail">
+        <li v-for="r in data.reminders.slice(0, 4)" :key="r.title" :title="r.detail || r.title">
           <span class="dot">○</span><span class="text">{{ r.title }}</span><span class="side">{{ due(r.due) }}</span>
         </li>
       </ul>
@@ -127,9 +127,22 @@ li,
 }
 .text {
   flex: 1;
+  min-width: 0; /* a flex item will not shrink below its text without this, so the line ran off the card */
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+/* a reminder is read, not skimmed: up to two lines, then … (the full text is its tooltip) */
+.today .text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+.today li {
+  align-items: flex-start;
 }
 .side {
   font-size: 12px;
