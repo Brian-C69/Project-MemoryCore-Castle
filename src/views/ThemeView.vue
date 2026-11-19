@@ -17,6 +17,7 @@ import {
 } from '../api/castle.js'
 import { loadUserThemes, userThemeFolders } from '../composables/useThemes.js'
 import DiaryPage from '../components/DiaryPage.vue'
+import HelpTip from '../components/HelpTip.vue'
 import { lookOf } from '../components/diaryviews.js'
 import { absPath } from './dev/tree.js'
 import { typeLine } from '../components/typeline.js'
@@ -286,18 +287,17 @@ onMounted(() => load(false))
     </header>
 
     <section v-if="form.open" class="create widget">
-      <h3>Create a theme</h3>
+      <h3 class="with-tip">Create a theme<HelpTip :text="`Castle takes the colours from your picture so the theme works right away; with no picture it makes a soft gradient. Then you can ask ${companion} to polish it, or to paint a picture.`" /></h3>
       <div class="row">
         <label>Name <input v-model="form.name" placeholder="Sakura Night" maxlength="40" /></label>
         <label class="wide">Mood and colours, in your words <input v-model="form.mood" placeholder="soft pink blossoms under a dark blue night, calm" /></label>
       </div>
       <div class="row">
         <button @click="pickPicture">{{ form.picture ? 'Change picture' : 'Upload a picture' }}</button>
-        <span class="hint">{{ form.picture ? pictureName : 'No picture: Castle makes a soft gradient, and you can ask your companion to paint one after.' }}</span>
+        <span class="hint">{{ form.picture ? pictureName : 'No picture' }}</span>
         <span class="spacer"></span>
         <button class="primary" :disabled="!form.name.trim() || !!busy" @click="create">Create</button>
       </div>
-      <p class="hint">Castle takes the colours from your picture so the theme works right away. Then you can ask {{ companion }} to polish it.</p>
     </section>
 
     <div class="showroom-wrap">
@@ -463,6 +463,10 @@ h2 {
   margin: 0 0 10px;
   font-size: 15px;
   font-weight: 500;
+}
+h3.with-tip {
+  display: flex;
+  align-items: center;
 }
 .spacer {
   flex: 1;

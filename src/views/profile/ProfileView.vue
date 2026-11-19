@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { dbTraitActivate, dbTraitRetire, dbTraitSave, dbTraits, emotionPropose, getSettings } from '../../api/castle.js'
 import ModalSheet from '../../components/ModalSheet.vue'
+import HelpTip from '../../components/HelpTip.vue'
 import ProfileCards from './ProfileCards.vue'
 import ProfileConstellation from './ProfileConstellation.vue'
 import { activeTraits, AUDIENCES, audienceOf, profileLookOf, traitNote, waitingItems } from './profile.js'
@@ -216,7 +217,7 @@ onMounted(() => props.shown && load())
         </div>
       </form>
       <p v-if="busy === 'diary'" class="hint">{{ companion }} is reading your recent diary…</p>
-      <p class="hint">Scanning and writing use your own Claude Code or Codex, once per press. Nothing is kept until you press Keep.</p>
+      <p class="hint has-tip">Scan and write<HelpTip block text="Scanning and writing use your own Claude Code or Codex, once per press. Nothing is kept until you press Keep." /></p>
       <p v-if="problem" class="problem" role="alert">{{ problem }}</p>
     </template>
 
@@ -305,6 +306,12 @@ input {
   margin: 0;
   font-size: 12px;
   color: var(--text-dim);
+}
+/* a line with a (?) whose bubble spans the panel (HelpTip block) */
+.has-tip {
+  position: relative;
+  display: flex;
+  align-items: center;
 }
 .problem {
   margin: 0;

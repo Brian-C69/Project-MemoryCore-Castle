@@ -498,8 +498,7 @@ watch(() => props.visible, (on) => {
   <div class="chat-room">
     <section v-if="locked" class="door widget">
       <p class="eyebrow">MEMORYCORE FOUNDATION</p>
-      <h2>The room for MemoryCore Foundation members</h2>
-      <p class="hint">Three steps, and the door opens by itself - nothing to paste.</p>
+      <h2 class="with-tip">The room for MemoryCore Foundation members<HelpTip text="Three steps, and the door opens by itself - nothing to paste." /></h2>
       <ol class="steps">
         <li v-for="st in steps" :key="st.n" :class="st.state">
           <span class="mark">{{ STEP[st.state] || st.n }}</span>
@@ -524,10 +523,10 @@ watch(() => props.visible, (on) => {
       </ol>
       <p v-if="doorProblem || member?.problem" class="problem">{{ doorProblem || member.problem }}</p>
       <p v-if="refused && !['notSetUp', 'locked', 'off'].includes(refused.kind)" class="problem">{{ refused.message }}</p>
-      <div v-if="member?.signedIn" class="row">
-        <span class="hint">Castle looks again by itself every half minute while you are here.</span>
+      <div v-if="member?.signedIn" class="row has-tip">
         <span class="spacer"></span>
         <button @click="checkDoor">Check now</button>
+        <HelpTip block text="Castle looks again by itself every half minute while you are here." />
         <button @click="signOut">Sign out</button>
       </div>
     </section>
@@ -643,7 +642,7 @@ watch(() => props.visible, (on) => {
       </aside>
       <ImageViewer v-if="viewerAt !== null" :pictures="roomPictures" :start="viewerAt" :can-open="false" saveable @close="viewerAt = null" />
       <ModalSheet v-if="logOpen" tag="LOG" :title="`${companion}'s turns in the room`" @close="logOpen = false">
-        <p class="hint">{{ companion }}'s turns in the room, raw: what it was handed, and what it said or chose not to say. It answers from a room-only run that holds just its public card - it cannot open your memory or run anything.</p>
+        <template #head><HelpTip :text="`What ${companion} was handed in the room, and what it said or chose not to say. It answers from a room-only run with just its public card - it cannot open your memory or run anything.`" /></template>
         <pre v-if="turnLog" class="turns">{{ turnLog }}</pre>
         <p v-else class="hint">No turns yet.</p>
       </ModalSheet>
@@ -670,6 +669,7 @@ watch(() => props.visible, (on) => {
 /* labels are columns here (text over its input); a label that carries a (?) keeps the (?) on the same
    line as its words */
 label.has-tip { flex-direction: row; align-items: center; gap: 0; }
+h2.with-tip { display: flex; align-items: center; }
 .participation-select { width: 100%; min-height: 40px; padding: 8px 10px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel-background); font: inherit; font-size: 13px; }
 .participation-select:disabled { opacity: .45; cursor: not-allowed; }
 .room-toggle:focus-visible, .participation-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

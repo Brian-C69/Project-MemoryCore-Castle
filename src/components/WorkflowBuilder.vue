@@ -5,6 +5,7 @@
 import { computed, ref, watch } from 'vue'
 import { workflowCheck, workflowSave } from '../api/castle.js'
 import GlassSelect from './GlassSelect.vue'
+import HelpTip from './HelpTip.vue'
 import { ICONS, QUALITIES, SHELF, SIZES, addBlock, draftOf, insertable, moveBlock, removeBlock } from './workflows.js'
 
 const props = defineProps({
@@ -81,7 +82,7 @@ async function save() {
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Make your own workflow" @keydown.esc="emit('close')">
     <div class="builder widget">
       <header>
-        <h3>{{ replace ? 'EDIT WORKFLOW' : 'NEW WORKFLOW' }}</h3>
+        <h3 class="with-tip">{{ replace ? 'EDIT WORKFLOW' : 'NEW WORKFLOW' }}<HelpTip text="Saved for you alone. Selling opens when the Marketplace does." /></h3>
         <span class="spacer"></span>
         <button @click="emit('close')">Cancel</button>
         <button class="primary" :disabled="saving || problems.length > 0" @click="save">{{ saving ? 'Saving…' : 'Save' }}</button>
@@ -105,7 +106,6 @@ async function save() {
           </div>
           <p v-for="m in general" :key="m" class="problem">{{ m }}</p>
           <p v-if="saveProblem" role="alert" class="problem">{{ saveProblem }}</p>
-          <p class="hint">Saved for you alone. Selling opens when the Marketplace does.</p>
         </section>
 
         <section class="blocks">
@@ -194,6 +194,10 @@ h3 {
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.18em;
+}
+h3.with-tip {
+  display: flex;
+  align-items: center;
 }
 .spacer {
   flex: 1;

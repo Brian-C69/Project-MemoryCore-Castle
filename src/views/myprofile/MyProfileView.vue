@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { onCastleHidden, onProfileProgress, profileMonth, profileRead, profileScan } from '../../api/castle.js'
+import HelpTip from '../../components/HelpTip.vue'
 import { barWidth, CARDS, deltaText, glowing, grouped, monthLong, monthShort, progressLine, tileDeltas, yearMark } from './myprofile.js'
 
 // MY PROFILE: the member's own personality, read by their own CLI from their own diary, one
@@ -106,9 +107,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else-if="!loading && !data.ready" class="empty">
-      <h2>MY PROFILE</h2>
+      <h2 class="with-tip has-tip">MY PROFILE<HelpTip block text="The month you are in is read once it is over. Only you see this page." /></h2>
       <p>{{ companion }} reads your diary one finished month at a time and keeps how you seemed that month: your type, what you value, how you think, and your shadow.</p>
-      <p class="dim">The month you are in is read once it is over. Only you see this page.</p>
       <button class="primary" :disabled="busy" @click="scan">{{ busy ? 'Reading…' : 'Scan my diary' }}</button>
       <p v-if="progress" class="hint">{{ progressLine(progress) }}</p>
       <p v-if="problem" class="problem" role="alert">{{ problem }}</p>
@@ -556,6 +556,17 @@ h3 {
 .empty h2 {
   letter-spacing: 0.25em;
   color: var(--gold);
+}
+
+/* the heading carries a (?) whose bubble spans the heading (HelpTip block) */
+h2.with-tip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.has-tip {
+  position: relative;
 }
 
 .hint {

@@ -14,6 +14,7 @@ import WorkflowForm from '../components/WorkflowForm.vue'
 import WorkflowBuilder from '../components/WorkflowBuilder.vue'
 import MarketplacePanel from '../components/MarketplacePanel.vue'
 import PublishSheet from '../components/PublishSheet.vue'
+import HelpTip from '../components/HelpTip.vue'
 import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak, workflowDelete, workflowDuplicate, workflowExport, workflowFolder, workflowImport, workflowList, memberStatus } from '../api/castle.js'
 import { refreshStudio, studioLib, studioPowersLoaded, studioPowersNow, studioThumbUrls, studioVoiceUp } from '../composables/useStudio.js'
 import { askCompanion } from '../api/ask.js'
@@ -327,9 +328,11 @@ watch(() => props.stamp, () => {
       </section>
 
       <section v-if="power !== 'image' || side !== 'marketplace'" class="gallery widget">
-        <nav class="tabs">
+        <nav class="tabs has-tip">
           <button v-if="power === 'image'" :class="{ active: tab === 'latest' }" @click="tab = 'latest'; asking = ''">Latest</button>
           <button v-for="[t, label] in TABS" :key="t" :class="{ active: tab === t }" @click="tab = t; asking = ''">{{ label }} ({{ counts[t] }})</button>
+          <HelpTip v-if="tab === 'backups'" block text="Castle keeps the picture it replaces when it draws or you upload a new one. Delete the ones you no longer need; they go to the Recycle Bin." />
+          <HelpTip v-else-if="tab === 'saved'" block text="These were saved instead of made, because a key was missing. Add the key and make them again." />
           <span class="spacer"></span>
           <button @click="load">Refresh</button>
         </nav>
@@ -351,8 +354,6 @@ watch(() => props.stamp, () => {
 
         <template v-else>
           <p v-if="deleteProblem" role="alert" class="problem">{{ deleteProblem }}</p>
-          <p v-if="tab === 'backups'" class="hint">Castle keeps the picture it replaces when it draws or you upload a new one. Delete the ones you no longer need; they go to the Recycle Bin.</p>
-          <p v-if="tab === 'saved'" class="hint">These were saved instead of made, because a key was missing. Add the key and make them again.</p>
 
           <div class="shelf">
             <div v-if="tab === 'images' || tab === 'backups'" class="masonry">
@@ -686,6 +687,10 @@ h3 {
 }
 .spacer {
   flex: 1;
+}
+/* a row with a (?) whose bubble spans the row (HelpTip block) */
+.has-tip {
+  position: relative;
 }
 .shelf {
   flex: 1;

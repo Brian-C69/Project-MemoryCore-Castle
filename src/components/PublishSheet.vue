@@ -4,6 +4,7 @@
 import { ref } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { shopPublish, workflowPickPicture } from '../api/castle.js'
+import HelpTip from './HelpTip.vue'
 
 const props = defineProps({ entry: { type: Object, required: true } })
 const emit = defineEmits(['close', 'published'])
@@ -40,14 +41,13 @@ async function publish() {
 <template>
   <div class="sheet" role="dialog" aria-modal="true" :aria-label="`Publish ${entry.workflow?.name}`" @keydown.esc="emit('close')">
     <div class="box widget">
-      <h3>PUBLISH {{ (entry.workflow?.name ?? '').toUpperCase() }}</h3>
+      <h3 class="with-tip">PUBLISH {{ (entry.workflow?.name ?? '').toUpperCase() }}<HelpTip text="Kiyo reviews it before it goes on sale. Buyers pay you through your Stripe; the Marketplace keeps its share." /></h3>
       <div class="samples">
         <img v-for="s in samples" :key="s" :src="convertFileSrc(s)" alt="A sample" />
         <button v-if="samples.length < 3" class="add" @click="addSample">＋ Sample picture</button>
       </div>
       <label><span class="label">Price (RM)</span><input v-model="price" type="number" min="1" step="0.5" /></label>
       <label><span class="label">What it makes</span><textarea v-model="words" rows="3" maxlength="300"></textarea></label>
-      <p class="hint">Kiyo reviews it before it goes on sale. Buyers pay you through your Stripe; the Marketplace keeps its share.</p>
       <p v-if="problem" role="alert" class="problem">{{ problem }}</p>
       <div class="row">
         <span class="spacer"></span>
@@ -84,6 +84,10 @@ h3 {
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.18em;
+}
+h3.with-tip {
+  display: flex;
+  align-items: center;
 }
 .samples {
   display: flex;

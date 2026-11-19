@@ -3,6 +3,7 @@
 // world made of model pieces, a slideshow - with its own camera, switched on or off here. No
 // world is drawn in this room unless the member asks for the preview.
 import GlassSelect from '../components/GlassSelect.vue'
+import HelpTip from '../components/HelpTip.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WorldStage from '../worlds/WorldStage.vue'
 import { absPath } from './dev/tree.js'
@@ -306,7 +307,7 @@ watch(
     <div class="panels">
       <section class="widget screens">
         <div class="bar">
-          <h2>YOUR SCREENS</h2>
+          <h2 class="with-tip">YOUR SCREENS<HelpTip v-if="settings" text="The music switch is at the top right, next to Settings. A screen showing a world plays that world's own music; Castle's music steps aside while one is open." /></h2>
           <span class="spacer"></span>
           <span v-if="saved" class="good">{{ saved }}</span>
           <button @click="refresh({ fresh: true })">Look for screens</button>
@@ -384,19 +385,18 @@ watch(
         <p v-if="!others.length && rows.length" class="hint">Only one screen is connected. Plug in another screen to give it a world, or preview a world here.</p>
         <p v-else-if="others.length" class="hint">Click a screen, then a world on the right to show it there.</p>
         <p v-if="problem" class="problem">{{ problem }}</p>
-        <p v-if="settings" class="hint">The music switch is at the top right, next to Settings. A screen showing a world plays that world's own music; Castle's music steps aside while one is open.</p>
         <p v-if="quotaLine" class="hint">{{ quotaLine }}</p>
       </section>
 
       <section class="widget worlds">
-        <div class="bar">
+        <div class="bar has-tip">
           <h2>WORLDS</h2>
           <span class="spacer"></span>
           <button @click.stop="form.open = !form.open">{{ form.open ? 'Close' : '+ Create world' }}</button>
+          <HelpTip block :text="`Describe a world and ${companion} paints a picture of each piece. You make each picture into a 3D model in Tripo, and Castle prepares them for your screens.`" />
         </div>
 
         <div v-if="form.open" class="create" @click.stop>
-          <p class="hint">Describe a world and {{ companion }} paints a picture of each piece. You make each picture into a 3D model in Tripo, and Castle prepares them for your screens.</p>
           <label class="wide">Name <input v-model="form.name" maxlength="60" placeholder="Star Garden" /></label>
           <label class="wide">What is it like? <textarea v-model="form.description" rows="3" maxlength="600" placeholder="A moonlit garden of glowing flowers on floating rocks, with a silver tree at its heart"></textarea></label>
           <div class="row">
@@ -493,6 +493,14 @@ watch(
 }
 .spacer {
   flex: 1;
+}
+/* a row with a (?) whose bubble spans the row (HelpTip block) */
+.has-tip {
+  position: relative;
+}
+h2.with-tip {
+  display: flex;
+  align-items: center;
 }
 h2 {
   margin: 0;
