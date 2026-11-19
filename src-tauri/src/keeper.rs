@@ -179,3 +179,78 @@ pub async fn keeper_say(explain: bool, shop: ShopFacts, item: ItemFacts, questio
     }
     Ok(said)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn mira() -> ShopFacts {
+        ShopFacts { name: "Mira's Atelier".into(), keeper_name: "Mira".into(), keeper_card: "Mira paints postcards and loves cats.".into(), seller: "Mira".into() }
+    }
+
+    fn postcard_from_the_page() -> ItemFacts {
+        // what the page might send, including a field that must never reach the keeper
+        serde_json::from_value(json!({
+            "id": "42", "name": "Sakura Postcard", "kind": "workflow", "description": "Turns your picture into a sakura postcard.",
+            "priceMyr": 9.9, "votesUp": 12, "votesDown": 1, "updatedAt": "2026-11-19T12:00:00Z",
+            "prompt": "SECRET-RECIPE a sakura postcard of {{photo}}",
+            "blocks": [ { "type": "picture", "label": "Your picture" }, { "type": "describe", "label": "Write prompt" },
+                        { "type": "chips", "label": "Style" }, { "type": "create", "label": "", "prompt": "SECRET-RECIPE" } ]
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn the_keeper_is_handed_public_facts_and_never_a_prompt() {
+        let w = words(true, &mira(), &postcard_from_the_page(), "");
+        assert!(w.contains("Mira paints postcards") && w.contains("Sakura Postcard") && w.contains("RM 9.90") && w.contains("12 up, 1 down"));
+        assert!(w.contains("It asks for: a picture: \"Your picture\"; a choice: \"Style\""), "{w}");
+        assert!(!w.contains("SECRET-RECIPE"), "a prompt the page sends is dropped before the words are built");
+        assert!(!w.contains("Write prompt"), "the steps are how it works, not what it asks for");
+        assert!(w.ends_with("Explain what it makes and what it asks for."));
+    }
+
+    #[test]
+    fn a_question_is_capped() {
+        let long = "q".repeat(1000);
+        let w = words(false, &mira(), &postcard_from_the_page(), &long);
+        let asked = w.rsplit("The visitor asks: ").next().unwrap();
+        assert_eq!(asked.chars().count(), MAX_QUESTION);
+    }
+
+    #[test]
+    fn the_reply_is_plain_and_cut_on_a_word() {
+        assert_eq!(clean("  \"It makes a postcard.\n\n Lovely!\"  "), "It makes a postcard. Lovely!");
+        let long = "word ".repeat(400);
+        let cut = clean(&long);
+        assert!(cut.chars().count() <= MAX_REPLY + 1 && cut.ends_with('…') && !cut.contains("wor…"));
+    }
+
+    #[test]
+    fn a_quiet_keeper_shows_the_description() {
+        assert_eq!(fallback(&postcard_from_the_page()), "Turns your picture into a sakura postcard.");
+        let bare = ItemFacts { name: "Two Cats".into(), ..ItemFacts::default() };
+        assert_eq!(fallback(&bare), "Two Cats - the listing gives no description.");
+    }
+
+    #[test]
+    fn at_most_six_turns_a_minute() {
+        let mut turns = VecDeque::new();
+        let start = Instant::now();
+        for _ in 0..PER_MINUTE {
+            assert!(allow(&mut turns, start));
+        }
+        assert!(!allow(&mut turns, start + Duration::from_secs(30)), "the seventh turn in a minute waits");
+        assert!(allow(&mut turns, start + Duration::from_secs(61)), "a minute later the keeper speaks again");
+    }
+
+    #[test]
+    fn one_explanation_per_item_version() {
+        let a = postcard_from_the_page();
+        let mut b = a.clone();
+        assert_eq!(cache_key(&a), cache_key(&b), "the same item at the same version is explained once");
+        b.updated_at = "2026-11-20T09:00:00Z".into();
+        assert_ne!(cache_key(&a), cache_key(&b), "a new version is explained again");
+    }
+}
