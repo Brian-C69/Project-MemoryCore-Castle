@@ -12,7 +12,7 @@ import ThemedAudio from '../components/ThemedAudio.vue'
 import WorkflowRail from '../components/WorkflowRail.vue'
 import WorkflowForm from '../components/WorkflowForm.vue'
 import WorkflowBuilder from '../components/WorkflowBuilder.vue'
-import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak, workflowDuplicate, workflowFolder, workflowList } from '../api/castle.js'
+import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak, workflowDelete, workflowDuplicate, workflowExport, workflowFolder, workflowImport, workflowList } from '../api/castle.js'
 import { refreshStudio, studioLib, studioPowersLoaded, studioPowersNow, studioThumbUrls, studioVoiceUp } from '../composables/useStudio.js'
 import { askCompanion } from '../api/ask.js'
 import { POWERS, companionLines, makeAction, powerPill } from '../components/studiomake.js'
@@ -134,6 +134,39 @@ async function askForWorkflow() {
 }
 onBeforeUnmount(() => clearInterval(askTimer))
 
+// Export, Import, Delete (Delete asks once, in place)
+const railLine = ref('')
+const askingDelete = ref('')
+async function railAct(work) {
+  railProblem.value = ''
+  railLine.value = ''
+  try {
+    await work()
+  } catch (e) {
+    railProblem.value = String(e?.message ?? e)
+  }
+}
+const exportCurrent = (entry) =>
+  railAct(async () => {
+    const path = await workflowExport(entry.id)
+    if (path) railLine.value = `Saved to ${path}`
+  })
+const importOne = () =>
+  railAct(async () => {
+    const id = await workflowImport()
+    if (!id) return
+    await loadWorkflows()
+    selected.value = id
+    railLine.value = 'Imported. It is yours now.'
+  })
+const deleteCurrent = (entry) =>
+  railAct(async () => {
+    await workflowDelete(entry.id)
+    askingDelete.value = ''
+    selected.value = ''
+    await loadWorkflows()
+  })
+
 async function saved(id) {
   builder.value = null
   await loadWorkflows()
@@ -228,6 +261,7 @@ watch(() => props.stamp, () => {
         <section class="rail-box widget">
           <WorkflowRail :entries="entries" :selected="selected" @select="selected = $event">
             <button class="new-card" @click="openNew">＋ New workflow</button>
+            <button class="import" @click="importOne">Import a workflow file</button>
             <div class="ask">
               <textarea v-model="askWords" rows="2" maxlength="600" :placeholder="`Or describe one for ${companion}…`" aria-label="Describe a workflow for your companion"></textarea>
               <button :disabled="!askWords.trim()" @click="askForWorkflow">Ask {{ companion }}</button>
@@ -235,11 +269,17 @@ watch(() => props.stamp, () => {
             </div>
           </WorkflowRail>
           <p v-if="listProblem || railProblem" role="alert" class="problem">{{ listProblem || railProblem }}</p>
+          <p v-else-if="railLine" class="hint">{{ railLine }}</p>
         </section>
         <section class="form-box widget">
           <div v-if="current" class="card-actions">
             <button v-if="current.source === 'yours' && !current.error" @click="openEdit(current)">Edit</button>
             <button v-if="!current.error" @click="duplicate(current)">Duplicate</button>
+            <button v-if="current.source === 'yours' && !current.error" @click="exportCurrent(current)">Export</button>
+            <template v-if="current.source !== 'built-in'">
+              <span v-if="askingDelete === current.id" class="inline-confirm">Delete? <button class="danger" @click="deleteCurrent(current)">Yes</button> <button @click="askingDelete = ''">No</button></span>
+              <button v-else class="text-delete" @click="askingDelete = current.id">Delete</button>
+            </template>
           </div>
           <WorkflowForm v-if="current && !current.error" :entry="current" :way="powers.image" :loaded="powersLoaded" @keys="emit('keys')" />
           <p v-else-if="current" role="alert" class="problem">This workflow has a problem: {{ current.error }}</p>
@@ -434,6 +474,11 @@ h3 {
   border-radius: 12px;
   font-size: 14px;
   text-align: left;
+}
+.import {
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text-dim);
 }
 .ask {
   display: flex;
