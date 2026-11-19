@@ -480,6 +480,23 @@ try {
     `exit ${r.code}: ${r.out}`,
   );
 
+  // image: two references (a STUDIO workflow with two characters) go out as image[], in order
+  const ref2 = path.join(out, 'mock', 'second.png');
+  fs.writeFileSync(ref2, png);
+  const both = path.join(out, 'mock', 'both.png');
+  r = await mock('castle-image.mjs', ['--prompt', 'the two of them', '--out-file', both, '--reference', ref, '--reference', ref2, '--size', '1536x1024'], { OPENAI_API_KEY: fakeKey });
+  call = seen.findLast((s) => s.path.endsWith('/images/edits'));
+  const form2 = call ? call.body.toString('latin1') : '';
+  const first = form2.indexOf('name="image[]"; filename="portrait.png"');
+  const second = form2.indexOf('name="image[]"; filename="second.png"');
+  report(
+    resultOk(r, both) && first !== -1 && second > first && !/name="image"; /.test(form2) && /name="size"\r\n\r\n1536x1024/.test(form2),
+    'mock image: two references go out as image[] in the order given',
+    `exit ${r.code}: ${r.out}`,
+  );
+  r = await mock('castle-image.mjs', ['--prompt', 'crowd', '--out-file', both, ...Array(6).fill(['--reference', ref]).flat()], { OPENAI_API_KEY: fakeKey });
+  report(r.code === 2 && /at most 5 times/.test(r.out), 'mock image: a sixth reference is refused', `exit ${r.code}: ${r.out}`);
+
   // look -> image in one process, with the key
   const lookPic = path.join(out, 'mock', 'look.png');
   r = await mock('castle-look.mjs', ['-Kind', 'tryon', '-Words', full, '-OutFile', lookPic], { OPENAI_API_KEY: fakeKey });
@@ -521,7 +538,7 @@ try {
   const badVoice = path.join(out, 'mock', 'bad.mp3');
   r = await mock('castle-voice.mjs', ['-Text', 'Hello there.', '-OutFile', badVoice, '-VoiceId', 'bad-voice'], { ELEVENLABS_API_KEY: fakeKey });
   report(r.code === 1 && /Error: the voice request failed: HTTP 422 - voice not found/.test(r.out) && !exists(badVoice), 'mock voice: a refusal exits 1 and leaves no file', `exit ${r.code}: ${r.out}`);
-  report(spendLines('seedance') === 1 && spendLines('suno') === 1 && spendLines('elevenlabs') === 1 && spendLines('openai') === 3, 'mock: one spend line per real render, none for failures');
+  report(spendLines('seedance') === 1 && spendLines('suno') === 1 && spendLines('elevenlabs') === 1 && spendLines('openai') === 4, 'mock: one spend line per real render, none for failures');
 } finally {
   server.close();
 }

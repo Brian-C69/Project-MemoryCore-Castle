@@ -978,7 +978,8 @@ fn run_with_key(job: &ImageJob, key: &str, tools: &Path, styles: Option<&Path>, 
             let brief = job.prompt.with_extension("brief.txt");
             std::fs::write(&brief, &job.brief).map_err(|_| "The picture brief could not be saved.".to_string())?;
             let mut args = vec!["--prompt".into(), brief.display().to_string(), "--out-file".into(), job.output.clone()];
-            if let Some(r) = job.references.first() {
+            // every picture the job follows (at most five, checked when it was queued)
+            for r in &job.references {
                 args.extend(["--reference".into(), r.clone()]);
             }
             if let Some(size) = &job.size {

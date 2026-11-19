@@ -79,7 +79,8 @@ const norm = (s) => s.toLowerCase().replace(/[-_]/g, '');
  * Parses PowerShell-style and GNU-style arguments, names case-insensitive:
  *   -OutFile x   --outfile x   --out-file x   -OutFile:x   --out-file=x   -WhatIfCost   --what-if-cost
  * A unique prefix works as in PowerShell (-Out for -OutFile when nothing else starts so).
- * spec = { params: { Name: { type: 'string'|'int'|'switch', mandatory, set: [...], min, max, default } },
+ * spec = { params: { Name: { type: 'string'|'int'|'switch', mandatory, set: [...], min, max, default, repeat } },
+ *          (repeat: N - the value may be given up to N times and arrives as a list, in order)
  *          positional: ['Name', ...] }   (value parameters that may be given without their name)
  * Bad input prints one "Error: ..." line and exits 2.
  */
@@ -102,6 +103,13 @@ export function parseArgs(argv, spec) {
 
   const setValue = (name, value) => {
     const p = spec.params[name];
+    if (p.repeat) {
+      const list = out[name] || [];
+      if (list.length >= p.repeat) badInput(`${shown(name)} can be given at most ${p.repeat} times.`);
+      seen.add(name);
+      out[name] = [...list, value];
+      return;
+    }
     if (seen.has(name)) badInput(`${shown(name)} was given more than once.`);
     seen.add(name);
     if (p.type === 'switch') {

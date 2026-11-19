@@ -3,7 +3,8 @@
 //   node castle-image.mjs --prompt "<text, or a UTF-8 file holding it>" --out-file <path.png>
 //                         [--size 1024x1024|1024x1536|1536x1024]
 //                         [--quality low|medium|high]
-//                         [--reference <image path>]   # edit / restyle from a picture
+//                         [--reference <image path>]   # edit / restyle from a picture; give it up to
+//                                                      # five times to follow several pictures
 //                         [--transparent]              # a see-through background (PNG)
 //                         [--what-if-cost]             # print the estimate, no request
 //   (the PowerShell names -Prompt, -OutFile, -WhatIfCost ... work too)
@@ -22,7 +23,7 @@ export const SPEC = {
     OutFile: { type: 'string', mandatory: true },
     Size: { type: 'string', set: ['1024x1024', '1024x1536', '1536x1024'], default: '1024x1024' },
     Quality: { type: 'string', set: ['low', 'medium', 'high'], default: 'medium' },
-    Reference: { type: 'string' },
+    Reference: { type: 'string', repeat: 5 },
     Transparent: { type: 'switch' },
     WhatIfCost: { type: 'switch' },
   },
@@ -53,6 +54,8 @@ export async function draw(a) {
   // the prompt itself, or a UTF-8 file holding it (Castle passes a file, so no quote is lost)
   const prompt = c.resolveText(a.Prompt);
   const cost = COST[`${a.Size}_${a.Quality}`];
+  // one picture (castle-look passes a string) or several (--reference given again)
+  const refs = [].concat(a.Reference ?? []).filter(Boolean);
   let fullOut = path.resolve(a.OutFile);
 
   if (process.env.CASTLE_IMAGE === 'codex') {
@@ -61,17 +64,17 @@ export async function draw(a) {
   }
 
   if (a.WhatIfCost) {
-    const mode = a.Reference ? 'edit with a reference picture (input image tokens extra)' : 'new picture';
+    const mode = refs.length ? `edit with ${refs.length === 1 ? 'a reference picture' : refs.length + ' reference pictures'} (input image tokens extra)` : 'new picture';
     c.writeEstimate(cost, MODEL, `${a.Size}, ${a.Quality} quality, ${mode}`);
     c.exit(0);
   }
 
-  if (a.Reference && !c.isFile(a.Reference)) c.badInput(`reference picture not found: ${a.Reference}`);
+  for (const ref of refs) if (!c.isFile(ref)) c.badInput(`reference picture not found: ${ref}`);
 
   const apiKey = c.getCastleKey('OPENAI_API_KEY');
   if (!apiKey) {
     let content = `# Picture prompt\r\n\r\n${prompt}\r\n\r\n- size: ${a.Size}\r\n- quality: ${a.Quality}`;
-    if (a.Reference) content += `\r\n- reference: ${a.Reference}`;
+    for (const ref of refs) content += `\r\n- reference: ${ref}`;
     c.writeFallback('image', fullOut, content, 'no OpenAI key is set for pictures');
   }
 
@@ -79,7 +82,7 @@ export async function draw(a) {
   const start = Date.now();
   let resp;
 
-  if (!a.Reference) {
+  if (!refs.length) {
     // New picture: JSON body. gpt-image models always answer with b64_json, so no
     // response_format is sent (the endpoint rejects it for these models).
     const url = 'https://api.openai.com/v1/images/generations';
@@ -96,14 +99,18 @@ export async function draw(a) {
       c.fail('the picture request', { error });
     }
   } else {
-    // Edit from a reference picture: multipart form.
+    // Edit from reference pictures: multipart form. One picture goes as `image`, as it always did;
+    // several go as `image[]`, in the order given.
     const url = 'https://api.openai.com/v1/images/edits';
     try {
-      const refPath = path.resolve(a.Reference);
-      const mime = MIME[path.extname(refPath).toLowerCase()] || 'image/jpeg';
       const form = new FormData();
       c.assertNetworkAllowed(url);
-      form.append('image', new Blob([fs.readFileSync(refPath)], { type: mime }), path.basename(refPath));
+      const field = refs.length === 1 ? 'image' : 'image[]';
+      for (const ref of refs) {
+        const refPath = path.resolve(ref);
+        const mime = MIME[path.extname(refPath).toLowerCase()] || 'image/jpeg';
+        form.append(field, new Blob([fs.readFileSync(refPath)], { type: mime }), path.basename(refPath));
+      }
       form.append('prompt', prompt);
       form.append('model', MODEL);
       form.append('size', a.Size);
