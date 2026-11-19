@@ -108,6 +108,9 @@ export const chatMedia = (path, room) => {
 }
 // Pictures the member dropped or pasted; returns the ones Chat may show.
 export const chatAttach = (paths) => invoke('chat_attach', { paths })
+// The markup sheet's finished PNG (a data address) saved beside `original` as its marked copy;
+// `previous` is the copy shown for it now, written over when Castle made it. -> the copy's path
+export const chatMarkupSave = (original, picture, previous = null) => invoke('chat_markup_save', { original, picture, previous })
 
 // Which MemoryCore features the member's folder holds. -> { diary, projects, library, saveMemory, ... }
 export const memoryFeatures = () => invoke('memory_features')
