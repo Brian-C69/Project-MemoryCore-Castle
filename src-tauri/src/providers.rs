@@ -963,6 +963,22 @@ fn last_error(output: &str) -> String {
         .unwrap_or_else(|| "the helper gave no reason.".into())
 }
 
+/// castle-image.mjs's arguments for a free picture (STUDIO): the brief file, the output, every
+/// picture the job follows (at most five, checked when it was queued) and a workflow's size and quality.
+fn free_picture_args(job: &ImageJob, brief: &Path) -> Vec<String> {
+    let mut args = vec!["--prompt".into(), brief.display().to_string(), "--out-file".into(), job.output.clone()];
+    for r in &job.references {
+        args.extend(["--reference".into(), r.clone()]);
+    }
+    if let Some(size) = &job.size {
+        args.extend(["--size".into(), size.clone()]);
+    }
+    if let Some(quality) = &job.quality {
+        args.extend(["--quality".into(), quality.clone()]);
+    }
+    args
+}
+
 /// The key way: castle-look.mjs for an APPEARANCE drawing, castle-image.mjs for a free picture;
 /// either draws with gpt-image-2 and the member's key. No AI writes or reads anything.
 fn run_with_key(job: &ImageJob, key: &str, tools: &Path, styles: Option<&Path>, stop_asked: &dyn Fn() -> bool, limit: std::time::Duration) -> Result<(), String> {
@@ -977,18 +993,7 @@ fn run_with_key(job: &ImageJob, key: &str, tools: &Path, styles: Option<&Path>, 
         None => {
             let brief = job.prompt.with_extension("brief.txt");
             std::fs::write(&brief, &job.brief).map_err(|_| "The picture brief could not be saved.".to_string())?;
-            let mut args = vec!["--prompt".into(), brief.display().to_string(), "--out-file".into(), job.output.clone()];
-            // every picture the job follows (at most five, checked when it was queued)
-            for r in &job.references {
-                args.extend(["--reference".into(), r.clone()]);
-            }
-            if let Some(size) = &job.size {
-                args.extend(["--size".into(), size.clone()]);
-            }
-            if let Some(quality) = &job.quality {
-                args.extend(["--quality".into(), quality.clone()]);
-            }
-            ("castle-image.mjs", args)
+            ("castle-image.mjs", free_picture_args(job, &brief))
         }
     };
     let before = keep_previous(job)?;
@@ -1402,6 +1407,15 @@ mod tests {
     }
     #[test]
     #[cfg(windows)]
+    fn a_free_picture_sends_every_reference_and_the_workflows_size() {
+        let job = |references: Vec<String>, size: Option<&str>| ImageJob { id: "1".into(), label: String::new(), phase: "queued".into(), message: String::new(), output: "out.png".into(), brief: String::new(), references, memory: PathBuf::new(), prompt: PathBuf::new(), look: None, size: size.map(str::to_string), quality: size.map(|_| "low".to_string()), by_key: true, stop_asked: false };
+        let two = free_picture_args(&job(vec!["a.png".into(), "b.png".into()], Some("1536x1024")), Path::new("brief.txt"));
+        assert_eq!(two, ["--prompt", "brief.txt", "--out-file", "out.png", "--reference", "a.png", "--reference", "b.png", "--size", "1536x1024", "--quality", "low"]);
+        let plain = free_picture_args(&job(vec![], None), Path::new("brief.txt"));
+        assert_eq!(plain, ["--prompt", "brief.txt", "--out-file", "out.png"], "a picture without a workflow keeps the helper's own size");
+    }
+
+    #[test]
     fn image_worker_accepts_only_a_new_valid_output_without_a_real_provider() {
         let root = temp("fake image cli");
         let source = root.join("source.png");

@@ -185,3 +185,133 @@ pub async fn picture_describe(path: String, store: tauri::State<'_, crate::setti
     .await
     .map_err(|_| "The picture could not be read just now.".to_string())?
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    fn temp(name: &str) -> PathBuf {
+        let folder = std::env::temp_dir().join(format!("castle-describe-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(&folder).unwrap();
+        folder
+    }
+
+    /// One request answered with `status` and `body`; returns the request as text.
+    fn serve_once(status: u16, body: &'static str) -> (String, std::thread::JoinHandle<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+            let mut bytes = Vec::new();
+            loop {
+                let mut buf = [0; 8192];
+                let n = stream.read(&mut buf).unwrap();
+                if n == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buf[..n]);
+                let text = String::from_utf8_lossy(&bytes);
+                if let Some(end) = text.find("\r\n\r\n") {
+                    let length = text[..end].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").and_then(|s| s.trim().parse::<usize>().ok())).unwrap_or(0);
+                    if bytes.len() >= end + 4 + length {
+                        break;
+                    }
+                }
+            }
+            write!(stream, "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            String::from_utf8_lossy(&bytes).to_string()
+        });
+        (base, handle)
+    }
+
+    #[test]
+    fn only_a_png_jpeg_or_webp_within_the_limit_is_read() {
+        let root = temp("types");
+        let png = root.join("cat.PNG");
+        std::fs::write(&png, b"png").unwrap();
+        assert_eq!(data_url(&png).unwrap(), "data:image/png;base64,cG5n");
+        let jpg = root.join("cat.jpeg");
+        std::fs::write(&jpg, b"jpg").unwrap();
+        assert!(data_url(&jpg).unwrap().starts_with("data:image/jpeg;base64,"));
+        let gif = root.join("cat.gif");
+        std::fs::write(&gif, b"gif").unwrap();
+        assert!(data_url(&gif).unwrap_err().contains("PNG, JPEG or WebP"));
+        assert!(data_url(&root.join("gone.webp")).unwrap_err().contains("not found"));
+    }
+
+    #[test]
+    fn the_request_carries_the_instruction_and_the_picture() {
+        let body = request_body("data:image/png;base64,AAAA");
+        assert_eq!(body["model"], VISION_MODEL);
+        let content = &body["input"][0]["content"];
+        assert_eq!(body["input"][0]["role"], "user");
+        assert_eq!(content[0]["type"], "input_text");
+        assert_eq!(content[0]["text"], INSTRUCTION);
+        assert_eq!(content[1]["type"], "input_image");
+        assert_eq!(content[1]["image_url"], "data:image/png;base64,AAAA");
+    }
+
+    #[test]
+    fn the_answers_words_are_read_from_its_message_parts() {
+        let answer = json!({ "output": [
+            { "type": "reasoning", "summary": [] },
+            { "type": "message", "content": [ { "type": "output_text", "text": "  A lantern-lit forest path at dusk, painterly. " } ] }
+        ] });
+        assert_eq!(text_of(&answer).as_deref(), Some("A lantern-lit forest path at dusk, painterly."));
+        assert_eq!(text_of(&json!({ "output": [] })), None);
+        assert_eq!(text_of(&json!({ "nothing": true })), None);
+    }
+
+    #[test]
+    fn the_key_way_posts_to_responses_and_returns_the_prompt() {
+        let (base, handle) = serve_once(200, r#"{"output":[{"type":"message","content":[{"type":"output_text","text":"Two cats asleep on a windowsill, soft morning light."}]}]}"#);
+        let said = ask_openai(&base, "sk-test-key", "data:image/png;base64,AAAA").unwrap();
+        let request = handle.join().unwrap();
+        assert_eq!(said, "Two cats asleep on a windowsill, soft morning light.");
+        assert!(request.starts_with("POST /v1/responses "));
+        assert!(request.to_lowercase().contains("authorization: bearer sk-test-key"));
+        assert!(request.contains("\"input_image\"") && request.contains(VISION_MODEL));
+    }
+
+    #[test]
+    fn the_key_way_says_why_it_was_refused_without_the_key() {
+        let (base, handle) = serve_once(401, r#"{"error":{"message":"Incorrect API key"}}"#);
+        let said = ask_openai(&base, "sk-test-key", "data:image/png;base64,AAAA").unwrap_err();
+        handle.join().unwrap();
+        assert!(said.contains("Settings > Keys") && !said.contains("sk-test-key"));
+
+        let (base, handle) = serve_once(400, r#"{"error":{"message":"This picture cannot be read."}}"#);
+        let said = ask_openai(&base, "sk-test-key", "data:image/png;base64,AAAA").unwrap_err();
+        handle.join().unwrap();
+        assert_eq!(said, "OpenAI said: This picture cannot be read.");
+
+        let (base, handle) = serve_once(200, r#"{"output":[]}"#);
+        assert!(ask_openai(&base, "sk-test-key", "data:image/png;base64,AAAA").unwrap_err().contains("wrote nothing"));
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn the_codex_way_is_read_only_with_the_picture_attached() {
+        let args = codex_args(Path::new("C:/memory/photo.png"), Path::new("C:/settings/describe/prompt.txt"));
+        let at = |flag: &str| args.iter().position(|a| a == flag).map(|i| args[i + 1].clone());
+        assert_eq!(args[0], "exec");
+        assert_eq!(at("--sandbox").as_deref(), Some("read-only"));
+        assert_eq!(at("--image").as_deref(), Some("C:/memory/photo.png"));
+        assert_eq!(at("--output-last-message").as_deref(), Some("C:/settings/describe/prompt.txt"));
+        assert!(args.contains(&"forced_login_method=chatgpt".to_string()));
+        assert_eq!(args.last().map(String::as_str), Some("-"), "the instruction goes on stdin");
+    }
+
+    #[test]
+    fn with_no_way_open_it_says_how_to_open_one() {
+        let root = temp("no-way");
+        let png = root.join("cat.png");
+        std::fs::write(&png, b"png").unwrap();
+        assert_eq!(describe("none", &png, None, root.join("work")).unwrap_err(), NO_WAY);
+        assert_eq!(describe("key", &png, None, root.join("work")).unwrap_err(), NO_WAY);
+    }
+}
