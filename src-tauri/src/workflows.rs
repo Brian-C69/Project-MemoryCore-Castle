@@ -622,6 +622,41 @@ pub fn keep_inputs(memory: &Path, run: &str, pictures: &[String]) -> Result<Vec<
         .collect()
 }
 
+/// Keeps a picked picture at `<memory>/studio-inputs/picked/<stamp>.<ext>`, where the page can show
+/// it and a run can follow it. Returns the copy's path.
+pub fn keep_picked(memory: &Path, source: &Path, stamp: &str) -> Result<String, String> {
+    if !is_picture_file(source) {
+        return Err("Choose a PNG, JPEG or WebP picture.".into());
+    }
+    let size = fs::metadata(source).map_err(|_| "That picture was not found.".to_string())?.len();
+    if size > MAX_PICTURE_BYTES {
+        return Err("That picture is larger than 25 MB.".into());
+    }
+    let folder = memory.join(INPUTS_FOLDER).join("picked");
+    fs::create_dir_all(&folder).map_err(|_| "The picture could not be kept.".to_string())?;
+    let ext = source.extension().and_then(|e| e.to_str()).unwrap_or("png").to_lowercase();
+    let copy = folder.join(format!("{stamp}.{ext}"));
+    fs::copy(source, &copy).map_err(|_| "The picture could not be kept.".to_string())?;
+    Ok(copy.display().to_string())
+}
+
+/// A workflow's upload tile: Windows' own picker, then the picture kept inside the memory. None when
+/// the dialog is closed.
+#[tauri::command]
+pub async fn workflow_pick_picture(app: AppHandle, title: Option<String>, store: State<'_, SettingsStore>) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    crate::rooms::need(&store, "studio")?;
+    let memory = store.get().memory_folder.ok_or("Choose a MemoryCore folder first.")?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let chosen = app.dialog().file().set_title(title.unwrap_or_else(|| "Choose a picture".into())).add_filter("Pictures", &["png", "jpg", "jpeg", "webp"]).blocking_pick_file();
+        let Some(path) = chosen.and_then(|f| f.into_path().ok()) else { return Ok(None) };
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos().to_string();
+        keep_picked(Path::new(&memory), &path, &stamp).map(Some)
+    })
+    .await
+    .map_err(|_| "The picture could not be chosen.".to_string())?
+}
+
 /// Runs a workflow: fills it from what the member gave and puts its picture on the image queue (the
 /// same jobs, progress, Stop and Try again as every STUDIO picture).
 #[tauri::command]

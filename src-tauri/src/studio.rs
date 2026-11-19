@@ -72,13 +72,8 @@ fn made(path: &Path, group: Option<String>) -> Made {
     Made { path: path.display().to_string(), name: path.file_name().unwrap_or_default().to_string_lossy().to_string(), group, at }
 }
 
-/// Everything made in the memory folder: media-generation/ (pictures, videos, voice), music/
-/// (albums and singles), adventures/*/scenes and music, appearance/.
-pub fn library(folder: &Path) -> Library {
-    library_of(folder, &SHELVES)
-}
-
-/// The things made on the named shelves, sorted into pictures, videos, songs, voices, saved prompts
+/// The things made on the named shelves (SHELVES: everything in the memory folder -
+/// media-generation/, music/, adventures/*/scenes and music, appearance/), sorted into pictures, videos, songs, voices, saved prompts
 /// and backups.
 pub fn library_of(folder: &Path, shelves: &[&str]) -> Library {
     let mut files = Vec::new();
@@ -295,7 +290,7 @@ mod tests {
             std::fs::create_dir_all(root.join(dir)).unwrap();
             std::fs::write(root.join(dir).join(file), b"x").unwrap();
         }
-        let lib = library(&root);
+        let lib = library_of(&root, &SHELVES);
         assert_eq!(lib.images.len(), 2);
         assert_eq!(lib.videos.len(), 1);
         assert_eq!(lib.voices.len(), 1);
@@ -323,7 +318,7 @@ mod tests {
             std::fs::create_dir_all(root.join(dir)).unwrap();
             std::fs::write(root.join(dir).join(file), b"x").unwrap();
         }
-        let lib = library(&root);
+        let lib = library_of(&root, &SHELVES);
         assert_eq!(lib.backups.len(), 2);
         assert_eq!(lib.images.len(), 2, "the portrait and the lake, not the copies");
         let studio = library_of(&root, &MADE_HERE);

@@ -175,7 +175,7 @@ mod tests {
         let bytes = std::fs::read(&path).expect("saved clip");
         assert_eq!(&bytes[..4], b"RIFF");
         assert!(bytes.len() > 10_000, "clip too short: {}", bytes.len());
-        let lib = crate::studio::library(&folder);
+        let lib = crate::studio::library_of(&folder, &crate::studio::SHELVES);
         assert!(!lib.voices.is_empty(), "the Voice tab should list the clip");
         println!("saved {path} ({} bytes)", bytes.len());
         let client = reqwest::blocking::Client::new();

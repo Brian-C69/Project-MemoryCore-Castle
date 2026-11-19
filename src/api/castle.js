@@ -189,6 +189,8 @@ export const workflowImport = () => invoke('workflow_import')
 export const workflowRun = (id, values) => invoke('workflow_run', { id, values })
 // "Write prompt from picture": the picture's prompt in words (the key or Codex, as pictures are drawn)
 export const pictureDescribe = (path) => invoke('picture_describe', { path })
+// a workflow's upload tile: the picker, then the picture kept inside the memory (shown and followed from there); null when closed
+export const workflowPickPicture = (title) => invoke('workflow_pick_picture', { title })
 // Opens a file from the memory folder in its own app, or its folder with the file selected. A file a
 // DEV tab's chat showed (by `room`, or remembered from chatMedia) opens through that tab's door.
 export const chatMediaOpen = (path, folder = false, room = undefined) => {

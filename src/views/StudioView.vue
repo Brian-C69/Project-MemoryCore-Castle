@@ -1,14 +1,17 @@
 <script setup>
-// STUDIO (the chosen design, studio-room-1): one Make bar - a prompt box, four powers with their
-// state, and a main button that follows them - over a gallery that fills the room with everything
-// the companion made. A picture goes to the queue (castle-image with the key, or Codex); a video, a
-// song or a voice line is asked of the companion, which runs its own helper and tells the cost.
+// STUDIO (designs studio-3 and studio-workflows-2): the four powers at the top. For Picture, the
+// Workflows rail on the left, the chosen workflow's form in the middle and the canvas on the right
+// (the newest picture large, the Made here strip, and the gallery behind its tabs). A workflow's
+// picture goes to the queue (castle-image with the key, or Codex). Video, Song and Voice keep one
+// Make box: they are asked of the companion, which runs its own helper and tells the cost.
 import { computed, onMounted, ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
 import ThemedAudio from '../components/ThemedAudio.vue'
-import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak } from '../api/castle.js'
+import WorkflowRail from '../components/WorkflowRail.vue'
+import WorkflowForm from '../components/WorkflowForm.vue'
+import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak, workflowList } from '../api/castle.js'
 import { refreshStudio, studioLib, studioPowersLoaded, studioPowersNow, studioThumbUrls, studioVoiceUp } from '../composables/useStudio.js'
 import { askCompanion } from '../api/ask.js'
 import { POWERS, companionLines, makeAction, powerPill } from '../components/studiomake.js'
@@ -63,7 +66,22 @@ async function make() {
   }
 }
 
-// ---------- the gallery ----------
+// ---------- the workflows (Picture) ----------
+const entries = ref([])
+const selected = ref('')
+const current = computed(() => entries.value.find((e) => e.id === selected.value) ?? null)
+const listProblem = ref('')
+async function loadWorkflows() {
+  try {
+    entries.value = await workflowList()
+    listProblem.value = ''
+    if (!entries.value.some((e) => e.id === selected.value)) selected.value = entries.value.find((e) => !e.error)?.id ?? ''
+  } catch (e) {
+    listProblem.value = String(e?.message ?? e)
+  }
+}
+
+// ---------- the canvas and the gallery ----------
 const TABS = [
   ['images', 'Pictures'],
   ['videos', 'Videos'],
@@ -72,12 +90,26 @@ const TABS = [
   ['saved', 'Saved prompts'],
   ['backups', 'Backups'],
 ]
-const tab = ref('images')
+const tab = ref('latest')
+// Latest belongs to Picture's canvas; the other powers open on the shelf of their own kind
+watch(power, (p) => {
+  asking.value = ''
+  if (p === 'image') tab.value = 'latest'
+  else if (tab.value === 'latest') tab.value = { video: 'videos', song: 'songs', voice: 'voices' }[p] ?? 'images'
+})
+const latest = computed(() => lib.value.images?.[0] ?? null)
+const strip = computed(() => (lib.value.images ?? []).slice(0, 12))
 const viewerStart = ref(null)
 const src = (path) => convertFileSrc(path)
 const counts = computed(() => Object.fromEntries(TABS.map(([t]) => [t, lib.value[t]?.length ?? 0])))
 // the viewer walks the shelf in view: Pictures, or the Backups Castle kept
 const shelfPictures = computed(() => (tab.value === 'backups' ? lib.value.backups : lib.value.images))
+const openPicture = (path) => {
+  const i = (lib.value.images ?? []).findIndex((m) => m.path === path)
+  if (i < 0) return
+  if (tab.value === 'backups') tab.value = 'latest'
+  viewerStart.value = i
+}
 const pictures = computed(() => shelfPictures.value.map((m) => ({ path: m.path, name: m.name, url: src(m.path) })))
 
 // Delete asks once, in place ("Delete? Yes / No"), then sends the file to the Recycle Bin.
@@ -101,79 +133,122 @@ function when(at) {
 // what is already read shows at once; this reads again quietly and swaps in anything new
 const load = refreshStudio
 
-onMounted(load)
-watch(() => props.stamp, load)
+onMounted(() => {
+  load()
+  loadWorkflows()
+})
+watch(() => props.stamp, () => {
+  load()
+  loadWorkflows()
+})
 </script>
 
 <template>
   <div class="studio">
-    <section class="make widget">
-      <h3>MAKE</h3>
-      <div class="make-row">
-        <textarea v-model="brief" rows="2" :placeholder="placeholder" aria-label="What to make" :disabled="action.kind === 'key'" @keydown.ctrl.enter="make" @keydown.meta.enter="isMac && make()"></textarea>
-        <div class="switch" role="radiogroup" aria-label="What to make">
-          <button
-            v-for="p in POWERS"
-            :key="p.id"
-            role="radio"
-            :aria-checked="power === p.id"
-            :class="{ on: power === p.id }"
-            @click="power = p.id"
-          >
-            <span class="power-name">{{ p.label }}</span>
-            <span class="pill" :class="powerPill(p.id, powers, voiceUp, powersLoaded).tone">{{ powerPill(p.id, powers, voiceUp, powersLoaded).text }}</span>
+    <header class="top widget">
+      <h3>STUDIO</h3>
+      <span class="spacer"></span>
+      <ImageJobs @finished="load" />
+      <div class="switch" role="radiogroup" aria-label="What to make">
+        <button
+          v-for="p in POWERS"
+          :key="p.id"
+          role="radio"
+          :aria-checked="power === p.id"
+          :class="{ on: power === p.id }"
+          @click="power = p.id"
+        >
+          <span class="power-name">{{ p.label }}</span>
+          <span class="pill" :class="powerPill(p.id, powers, voiceUp, powersLoaded).tone">{{ powerPill(p.id, powers, voiceUp, powersLoaded).text }}</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="body" :class="{ maker: power === 'image' }">
+      <template v-if="power === 'image'">
+        <section class="rail-box widget">
+          <WorkflowRail :entries="entries" :selected="selected" @select="selected = $event" />
+          <p v-if="listProblem" role="alert" class="problem">{{ listProblem }}</p>
+        </section>
+        <section class="form-box widget">
+          <WorkflowForm v-if="current && !current.error" :entry="current" :way="powers.image" :loaded="powersLoaded" @keys="emit('keys')" />
+          <p v-else-if="current" role="alert" class="problem">This workflow has a problem: {{ current.error }}</p>
+          <p v-else class="empty">Choose a workflow on the left.</p>
+        </section>
+      </template>
+
+      <section v-else class="make widget">
+        <h3>MAKE</h3>
+        <div class="make-row">
+          <textarea v-model="brief" rows="2" :placeholder="placeholder" aria-label="What to make" :disabled="action.kind === 'key'" @keydown.ctrl.enter="make" @keydown.meta.enter="isMac && make()"></textarea>
+          <button class="primary create" :disabled="!canMake" @click="make">{{ making ? 'Working…' : action.label }}</button>
+        </div>
+        <p v-if="makeProblem" role="alert" class="problem">{{ makeProblem }}</p>
+        <p v-else-if="makeDone" class="hint">{{ makeDone }}</p>
+        <ThemedAudio v-if="voiceClip && power === 'voice'" :src="voiceClip" />
+      </section>
+
+      <section class="gallery widget">
+        <nav class="tabs">
+          <button v-if="power === 'image'" :class="{ active: tab === 'latest' }" @click="tab = 'latest'; asking = ''">Latest</button>
+          <button v-for="[t, label] in TABS" :key="t" :class="{ active: tab === t }" @click="tab = t; asking = ''">{{ label }} ({{ counts[t] }})</button>
+          <span class="spacer"></span>
+          <button @click="load">Refresh</button>
+        </nav>
+
+        <div v-if="tab === 'latest'" class="latest">
+          <button v-if="latest" class="hero" :title="latest.name" @click="openPicture(latest.path)">
+            <img :src="src(latest.path)" :alt="latest.name" />
           </button>
-        </div>
-        <button class="primary create" :disabled="!canMake" @click="make">{{ making ? 'Working…' : action.label }}</button>
-      </div>
-      <p v-if="makeProblem" role="alert" class="problem">{{ makeProblem }}</p>
-      <p v-else-if="makeDone" class="hint">{{ makeDone }}</p>
-      <ThemedAudio v-if="voiceClip && power === 'voice'" :src="voiceClip" />
-    </section>
-
-    <section class="gallery widget">
-      <nav class="tabs">
-        <button v-for="[t, label] in TABS" :key="t" :class="{ active: tab === t }" @click="tab = t; asking = ''">{{ label }} ({{ counts[t] }})</button>
-        <span class="spacer"></span>
-        <ImageJobs @finished="load" />
-        <button @click="load">Refresh</button>
-      </nav>
-
-      <p v-if="deleteProblem" role="alert" class="problem">{{ deleteProblem }}</p>
-      <p v-if="tab === 'backups'" class="hint">Castle keeps the picture it replaces when it draws or you upload a new one. Delete the ones you no longer need; they go to the Recycle Bin.</p>
-      <p v-if="tab === 'saved'" class="hint">These were saved instead of made, because a key was missing. Add the key and make them again above.</p>
-
-      <div class="shelf">
-        <div v-if="tab === 'images' || tab === 'backups'" class="masonry">
-          <div v-for="(m, i) in shelfPictures" :key="m.path" class="tile">
-            <button class="thumb" :title="m.name" @click="viewerStart = i">
-              <img :src="studioThumbUrls[m.path] ?? src(m.path)" :alt="m.name" loading="lazy" />
-            </button>
-            <div v-if="asking === m.path" class="confirm" role="group" aria-label="Delete this picture">
-              <span>Delete?</span>
-              <button class="danger" @click="remove(m.path)">Yes</button>
-              <button @click="asking = ''">No</button>
+          <p v-else class="empty">Your pictures appear here. Choose a workflow and press Create picture.</p>
+          <div v-if="strip.length" class="strip-box">
+            <h4>Made here</h4>
+            <div class="strip">
+              <button v-for="m in strip" :key="m.path" class="strip-thumb" :class="{ on: latest && m.path === latest.path }" :title="m.name" @click="openPicture(m.path)">
+                <img :src="studioThumbUrls[m.path] ?? src(m.path)" :alt="m.name" loading="lazy" />
+              </button>
             </div>
-            <button v-else class="delete" :title="`Delete ${m.name}`" :aria-label="`Delete ${m.name}`" @click="asking = m.path">✕</button>
           </div>
         </div>
-        <div v-else class="rows">
-          <div v-for="m in lib[tab]" :key="m.path" class="row" :class="tab">
-            <video v-if="tab === 'videos'" :src="src(m.path)" controls preload="metadata"></video>
-            <div class="row-name">
-              <strong>{{ m.name }}</strong>
-              <span v-if="m.group" class="group">{{ m.group }}</span>
-              <span class="group">{{ when(m.at) }}</span>
+
+        <template v-else>
+          <p v-if="deleteProblem" role="alert" class="problem">{{ deleteProblem }}</p>
+          <p v-if="tab === 'backups'" class="hint">Castle keeps the picture it replaces when it draws or you upload a new one. Delete the ones you no longer need; they go to the Recycle Bin.</p>
+          <p v-if="tab === 'saved'" class="hint">These were saved instead of made, because a key was missing. Add the key and make them again.</p>
+
+          <div class="shelf">
+            <div v-if="tab === 'images' || tab === 'backups'" class="masonry">
+              <div v-for="(m, i) in shelfPictures" :key="m.path" class="tile">
+                <button class="thumb" :title="m.name" @click="viewerStart = i">
+                  <img :src="studioThumbUrls[m.path] ?? src(m.path)" :alt="m.name" loading="lazy" />
+                </button>
+                <div v-if="asking === m.path" class="confirm" role="group" aria-label="Delete this picture">
+                  <span>Delete?</span>
+                  <button class="danger" @click="remove(m.path)">Yes</button>
+                  <button @click="asking = ''">No</button>
+                </div>
+                <button v-else class="delete" :title="`Delete ${m.name}`" :aria-label="`Delete ${m.name}`" @click="asking = m.path">✕</button>
+              </div>
             </div>
-            <audio v-if="tab === 'songs' || tab === 'voices'" :src="src(m.path)" controls preload="none"></audio>
-            <button v-if="tab === 'saved'" @click="chatMediaOpen(m.path, true)">Show file</button>
-            <span v-if="asking === m.path" class="inline-confirm">Delete? <button class="danger" @click="remove(m.path)">Yes</button> <button @click="asking = ''">No</button></span>
-            <button v-else class="text-delete" @click="asking = m.path">Delete</button>
+            <div v-else class="rows">
+              <div v-for="m in lib[tab]" :key="m.path" class="row" :class="tab">
+                <video v-if="tab === 'videos'" :src="src(m.path)" controls preload="metadata"></video>
+                <div class="row-name">
+                  <strong>{{ m.name }}</strong>
+                  <span v-if="m.group" class="group">{{ m.group }}</span>
+                  <span class="group">{{ when(m.at) }}</span>
+                </div>
+                <audio v-if="tab === 'songs' || tab === 'voices'" :src="src(m.path)" controls preload="none"></audio>
+                <button v-if="tab === 'saved'" @click="chatMediaOpen(m.path, true)">Show file</button>
+                <span v-if="asking === m.path" class="inline-confirm">Delete? <button class="danger" @click="remove(m.path)">Yes</button> <button @click="asking = ''">No</button></span>
+                <button v-else class="text-delete" @click="asking = m.path">Delete</button>
+              </div>
+            </div>
+            <p v-if="!counts[tab]" class="empty">Nothing here yet.</p>
           </div>
-        </div>
-        <p v-if="!counts[tab]" class="empty">Nothing here yet. Make one above.</p>
-      </div>
-    </section>
+        </template>
+      </section>
+    </div>
 
     <ImageViewer v-if="viewerStart !== null" :pictures="pictures" :start="viewerStart" @close="viewerStart = null" />
   </div>
@@ -200,7 +275,89 @@ h3 {
   letter-spacing: 0.18em;
 }
 
-/* the Make bar */
+/* the top bar: the room's name, the request line and the four powers */
+.top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  flex-shrink: 0;
+}
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+/* Picture: the rail, the form and the canvas side by side */
+.body.maker {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(300px, 380px) 1fr;
+}
+.rail-box,
+.form-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 14px;
+}
+.latest {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.hero {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  cursor: zoom-in;
+}
+.hero img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.strip-box h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+.strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: var(--scrollbar-width);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+.strip-thumb {
+  width: 120px;
+  height: 84px;
+  flex-shrink: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 10px;
+}
+.strip-thumb.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.strip-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* the Make box (Video, Song, Voice) */
 .make {
   display: flex;
   flex-direction: column;

@@ -401,6 +401,7 @@ pub fn run() {
             workflows::workflow_export,
             workflows::workflow_import,
             workflows::workflow_run,
+            workflows::workflow_pick_picture,
             describe::picture_describe,
             studio::studio_library,
             thumbs::studio_thumbs,
