@@ -332,15 +332,34 @@ A workflow is a recipe for one kind of picture. Castle comes with four:
 
 Your workflows are yours alone, kept in Castle's settings folder (`workflows`). A workflow is only words: it never runs anything on your computer.
 
-### The Marketplace
+### The Marketplace: a town of shops
 
 When the Marketplace opens, a **Marketplace** tab appears beside **Workflows**. Until then you will not see it, and your workflows stay private.
 
-- **Shop**: search the workflows for sale, open one to see its samples and what it asks for, and **Buy** it. Checkout opens in your browser.
-- **My purchases**: **Install** puts a bought workflow on your rail (**Update** fetches its newest version). Give it a 👍 or 👎. You can change your vote, and only buyers can vote. You may **Duplicate** a bought workflow for your own use, but not export it.
-- **Selling**: **Publish** on one of your workflows sends it for review with one to three sample pictures, a price and a line of words. It reads **Selling opens soon** until selling opens to everyone. **My listings** shows each listing's status, its review note, votes, sales and earnings, with **Withdraw**.
-- **Getting paid**: **Connect Stripe** links your own Stripe account. Buyers pay you directly, and the Marketplace keeps its share of each sale.
-- **Votes keep the shop fair**: once a workflow has at least 10 votes, fewer than 40% thumbs up pauses it. It is never deleted: you see why, fix it, and send it again. Buyers keep what they bought.
+**The town.** The Marketplace opens on the town. At the top, **Shops | Items** and **Search the town**.
+- **Shops** shows every open shop as a card: its keeper's portrait, the shop's name, the seller, three pictures of what it sells, and **Open**.
+- **Items** shows everything for sale.
+
+**Inside a shop.** **Open** takes you inside. The keeper stands behind her counter and greets you in the words her shop's owner wrote.
+- **Show me your items** puts her workflows on the counter with their prices.
+- Pick one and she holds it up and explains it: what it makes, what it asks for, and its samples.
+- **Ask a question** lets you ask her anything about it.
+- **Buy for RM x** opens checkout in your browser.
+- **See other items** takes you back to her counter, and **Leave** to the town.
+- Clicking an item in the **Items** tab opens its seller's shop with that item already in the keeper's hands.
+
+**The keeper is honest.** Your own companion speaks as the keeper, on your own plan: one short run for each explanation and each question. It is given only the shop's keeper card and the item's public facts (its name, what it asks for, its description, price and votes). A workflow's hidden prompt never reaches your computer. When the listing does not answer something, she says so. She never promises more than the samples show, and never changes a price. Turn keepers off in **Settings > Companion > Let shop keepers speak**; then the box shows the item's own description.
+
+**My purchases.** **Install** puts a bought workflow on your rail (**Update** fetches its newest version). Give it a 👍 or 👎. You can change your vote, and only buyers can vote. You may **Duplicate** a bought workflow for your own use, but not export it.
+
+**Selling.**
+- **Publish** on one of your workflows sends it for review with one to three sample pictures, a price and a line of words. It reads **Selling opens soon** until selling opens to everyone.
+- **My listings** shows each listing's status, its review note, votes, sales and earnings, with **Withdraw**.
+- **Connect Stripe** links your own Stripe account. Buyers pay you directly, and the Marketplace keeps its share of each sale.
+
+**My shop.** Once selling opens, **My shop** sets up your counter: the shop's name, your keeper's name and picture, the greeting, the keeper card (who your keeper is and how they talk, up to 1200 letters), a backdrop, and **Open**. **What visitors see** shows your shop as it will look. A new or changed keeper card is reviewed before visitors see it.
+
+**Votes keep the shop fair.** Once a workflow has at least 10 votes, fewer than 40% thumbs up pauses it. It is never deleted: you see why, fix it, and send it again. Buyers keep what they bought.
 
 ### Video, Song and Voice
 

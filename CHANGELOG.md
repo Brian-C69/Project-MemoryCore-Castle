@@ -12,7 +12,9 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **A picture can follow several pictures.** Up to five reference pictures go to OpenAI together, so two characters keep their own faces.
 
-- **Ready for the Marketplace.** When it opens, a Marketplace tab will let you buy workflows, vote on them, and sell your own through your Stripe account. Until then nothing shows.
+- **Ready for the Marketplace: a town of shops.** When it opens, the Marketplace is a town: every member's shop has a keeper behind the counter who greets you, shows her workflows, explains each one and answers your questions. Your own companion speaks as the keeper, from the listing's public facts only, never promising more than it shows. Buy, vote, and sell your own through your Stripe account, with a shop of your own to dress. Until it opens, nothing shows.
+
+- **Let shop keepers speak** in Settings > Companion: on, a keeper's words are one short run on your own plan; off, the item's description shows instead.
 
 ## 0.2.20 - 2026-11-19
 
