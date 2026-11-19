@@ -8,6 +8,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **Settings > Sentinel**: turn it on, choose the model (the recommended one, or any model your CLI knows), how often it patrols, and the one line you run once in PowerShell as administrator to set it up - Castle never asks for administrator rights itself. A second line removes it all.
 
+- **CHAT's pictures and voice lines show when you open the room, not only after a new message.** Several loaded at once when Castle started, and each one that finished wiped the ones before it (the page saved its list from before the wait), so earlier pictures were left as empty bubbles; a file that failed because the room was not ready yet was never asked for again. Files now load once each, are added as they arrive, and a failed one is asked for again a little later.
+
 ## 0.2.22 - 2026-11-19
 
 - **The Mac download is back.** 0.2.21 went out for Windows only, because one test meant for Windows ran on the Mac and stopped its build. 0.2.22 brings everything in 0.2.21 to the Mac too: workflows in STUDIO, making your own, and the Marketplace town ready behind its door.
