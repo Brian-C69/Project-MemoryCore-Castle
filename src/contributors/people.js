@@ -2,7 +2,19 @@
 // they built, and the thanks for help that is not code. The counts and avatars beside this file
 // come from `npm run contributors` (run by `npm run bump`); this file is never written by a script.
 
-export const MAKER = 'Kiyoraka'
+// The founder: the first circle on the wall, marked Founder instead of a count (he commits straight
+// to main, so he has no merged pull requests). His avatar is packed by the same script.
+export const FOUNDER = {
+  login: 'Kiyoraka',
+  name: 'Kiyoraka',
+  built: [
+    'Created MemoryCore and MemoryCore Castle',
+    'The companion, its memory and its heart',
+    'WORLD, the STORY stage and CHAT',
+    'The DEV tab, MARKET, STUDIO and the Sentinel',
+    'Every release since 0.2.0',
+  ],
+}
 
 export const PEOPLE = {
   'Brian-C69': {

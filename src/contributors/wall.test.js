@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { NO_LIST, contributorsLine, initialsOf, mergedLine, wall } from './wall.js'
-import { PEOPLE } from './people.js'
+import { NO_LIST, contributorsLine, founderEntry, initialsOf, mergedLine, wall } from './wall.js'
+import { FOUNDER, PEOPLE } from './people.js'
 import counts from './counts.json'
 
 describe('the contributors wall', () => {
@@ -32,6 +32,15 @@ describe('the contributors wall', () => {
     expect(contributorsLine(1)).toBe('1 contributor')
     expect(contributorsLine(2)).toBe('2 contributors')
     expect(mergedLine(49)).toBe('49 merged')
+  })
+
+  it('puts the founder first as Founder, never counted among the contributors', () => {
+    const f = founderEntry(FOUNDER)
+    expect([f.login, f.founder, f.merged, f.initials]).toEqual(['Kiyoraka', true, 0, 'K'])
+    expect(f.built[0]).toBe('Created MemoryCore and MemoryCore Castle')
+    expect(founderEntry(null)).toBeNull()
+    expect(founderEntry({ login: 'x' }).built).toEqual([])
+    expect(wall(counts, PEOPLE).people.some((p) => p.login === 'Kiyoraka')).toBe(false)
   })
 
   it('reads the packed counts file', () => {

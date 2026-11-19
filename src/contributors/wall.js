@@ -33,5 +33,12 @@ export function wall(counts, people = {}, { all = false, limit = WALL_LIMIT } = 
   }
 }
 
+// The founder as a wall entry: no count, the Founder mark instead.
+export function founderEntry(founder) {
+  if (!founder?.login) return null
+  const name = founder.name || founder.login
+  return { login: founder.login, name, merged: 0, founder: true, built: founder.built?.length ? founder.built : [], initials: initialsOf(name) }
+}
+
 export const contributorsLine = (n) => `${n} ${n === 1 ? 'contributor' : 'contributors'}`
 export const mergedLine = (n) => `${n} merged`

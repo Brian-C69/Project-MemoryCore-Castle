@@ -5,16 +5,20 @@
 import { computed, ref } from 'vue'
 import { openUrl } from '../api/castle.js'
 import counts from '../contributors/counts.json'
-import { MAKER, PEOPLE, THANKS } from '../contributors/people.js'
-import { contributorsLine, mergedLine, wall } from '../contributors/wall.js'
+import { FOUNDER, PEOPLE, THANKS } from '../contributors/people.js'
+import { contributorsLine, founderEntry, mergedLine, wall } from '../contributors/wall.js'
 
 const files = import.meta.glob('../contributors/avatars/*.png', { eager: true, query: '?url', import: 'default' })
 const avatarOf = (login) => files[`../contributors/avatars/${login}.png`] || null
 
 const all = ref(false)
 const board = computed(() => wall(counts, PEOPLE, { all: all.value }))
+const founder = founderEntry(FOUNDER)
+// the founder's circle first, then the contributors in count order
+const faces = computed(() => (founder ? [founder, ...board.value.people] : board.value.people))
 const chosenLogin = ref(null)
-const chosen = computed(() => board.value.people.find((p) => p.login === chosenLogin.value) || board.value.people[0] || null)
+const chosen = computed(() => faces.value.find((p) => p.login === chosenLogin.value) || faces.value[0] || null)
+const pillOf = (p) => (p.founder ? 'Founder' : mergedLine(p.merged))
 const broken = ref(new Set())
 const pictureOf = (login) => (broken.value.has(login) ? null : avatarOf(login))
 function lost(login) {
@@ -25,23 +29,25 @@ function lost(login) {
 <template>
   <div class="contributors">
     <div class="wall">
-      <p class="maker">Made by {{ MAKER }}</p>
-      <p class="count">{{ contributorsLine(board.total) }}</p>
+      <p class="count">{{ founder ? `Founder ${founder.name} · ` : '' }}{{ contributorsLine(board.total) }}</p>
       <div class="grid" role="list">
         <button
-          v-for="p in board.people"
+          v-for="p in faces"
           :key="p.login"
           class="face"
-          :class="{ chosen: chosen?.login === p.login }"
+          :class="{ chosen: chosen?.login === p.login, founder: p.founder }"
           role="listitem"
           :aria-pressed="chosen?.login === p.login"
-          :aria-label="`${p.name}, ${mergedLine(p.merged)}`"
-          :title="`${p.name} - ${mergedLine(p.merged)}`"
+          :aria-label="`${p.name}, ${pillOf(p)}`"
+          :title="`${p.name} - ${pillOf(p)}`"
           @click="chosenLogin = p.login"
         >
           <img v-if="pictureOf(p.login)" :src="pictureOf(p.login)" alt="" @error="lost(p.login)" />
           <span v-else class="initials">{{ p.initials }}</span>
-          <span class="badge">{{ p.merged }}</span>
+          <span v-if="p.founder" class="badge crown" aria-hidden="true">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M2 12.5h12l1-8-4 3-3-5-3 5-4-3z" /></svg>
+          </span>
+          <span v-else class="badge">{{ p.merged }}</span>
         </button>
       </div>
       <button v-if="board.hidden || all" class="more" @click="all = !all">{{ all ? 'Show fewer' : `Show all (${board.hidden} more)` }}</button>
@@ -61,7 +67,7 @@ function lost(login) {
         <span v-else class="initials">{{ chosen.initials }}</span>
       </div>
       <h4 class="name">{{ chosen.name }}</h4>
-      <span class="pill">{{ mergedLine(chosen.merged) }}</span>
+      <span class="pill" :class="{ founder: chosen.founder }">{{ pillOf(chosen) }}</span>
       <ul>
         <li v-for="item in chosen.built" :key="item">{{ item }}</li>
       </ul>
@@ -85,10 +91,6 @@ button {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
-}
-.maker {
-  margin: 0 0 2px;
-  font-size: 13px;
 }
 .count {
   margin: 0 0 12px;
@@ -148,6 +150,25 @@ button {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 16px;
+}
+.badge.crown {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0;
+  background: #f2c14e;
+}
+.face.founder {
+  border-color: color-mix(in srgb, #f2c14e 70%, var(--line));
+}
+.face.founder.chosen {
+  border-color: #f2c14e;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #f2c14e 30%, transparent);
+}
+.pill.founder {
+  background: color-mix(in srgb, #f2c14e 28%, transparent);
 }
 .more {
   margin-top: 12px;
