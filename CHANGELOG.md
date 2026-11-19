@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Calmer screens: explanations live in a small ?.** Settings, the rooms, HOME's cards and the first run no longer fill the page with grey sentences; point at a ? (or reach it with the keyboard) to read what a setting does, what it costs and what stays private. What is happening right now - progress, counts, problems - still shows on the page.
+
 - **The Credits are now a wall of faces.** Settings > About shows the founder first, then every contributor with their merged pull requests on a small badge; press a picture to see what they built. The counts and pictures come packed with each release.
 
 - **The SENTINEL card on HOME has its own spot.** In 0.2.24 it could sit hidden under TODAY; it now sits in the open space beside Sweep.
