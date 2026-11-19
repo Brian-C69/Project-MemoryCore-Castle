@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.23 - 2026-11-19
+
 - **The Sentinel: your companion keeps watch over this computer.** A shield on the top bar is quiet when all is well, amber when something is worth a look, and glows for an alarm, with your companion's one sentence. A small watch runs every five minutes, even with Castle closed, and switches the firewall and antivirus protection back on when it finds them off. Your companion looks over what is new each hour, settles what is harmless and leaves the rest for you, with **Fix**, **This is normal** and **Undo**. Nothing about your computer leaves it. Windows for now.
 
 - **Settings > Sentinel**: turn it on, choose the model (the recommended one, or any model your CLI knows), how often it patrols, and the one line you run once in PowerShell as administrator to set it up - Castle never asks for administrator rights itself. A second line removes it all.
