@@ -1,9 +1,13 @@
 <script setup>
-// STUDIO > Marketplace: workflows members sell to each other. Browse and search the cards, open one,
-// Buy (Stripe Checkout in the browser), then Install it onto the rail; vote on what you bought; and
-// My listings with Connect Stripe. Everything goes through the core with the member's sign-in.
+// STUDIO > Marketplace: the town of shops (design marketplace-town-2). Shops | Items and a search;
+// a shop opens into its scene (ShopScene: the keeper, her counter, the four steps), and an item opens
+// its seller's shop at the explanation. Then My purchases (Install, votes) and My listings (Connect
+// Stripe). Everything goes through the core with the member's sign-in. Until the Portfolio's shops
+// door answers, the town shows Items only.
 import { computed, onMounted, ref } from 'vue'
-import { shopCheckout, shopConnect, shopInstall, shopListing, shopListings, shopMine, shopPurchases, shopVote, shopWithdraw } from '../api/castle.js'
+import { shopConnect, shopInstall, shopListings, shopMine, shopPurchases, shopVote, shopWithdraw, townShop, townShops } from '../api/castle.js'
+import ShopCard from './ShopCard.vue'
+import ShopScene from './ShopScene.vue'
 import { STATUS_WORDS, installState, installedListings, priceText, shopOf, votesText } from './shop.js'
 
 const props = defineProps({
@@ -12,10 +16,13 @@ const props = defineProps({
 })
 const emit = defineEmits(['installed'])
 
-const view = ref('shop') // shop | listing | bought | mine
+const view = ref('town') // town | scene | bought | mine
+const mode = ref('shops') // shops | items
 const query = ref('')
 const cards = ref([])
-const listing = ref(null)
+const shops = ref([])
+const shopsMissing = ref(false)
+const scene = ref(null) // { detail, start }
 const purchases = ref([])
 const mine = ref([])
 const busy = ref('')
@@ -36,14 +43,23 @@ async function act(what, work) {
     busy.value = ''
   }
 }
-const search = () => act('search', async () => (cards.value = (await shopListings(query.value, 0))?.items ?? []))
-const open = (id) => act('open', async () => {
-  listing.value = await shopListing(id)
-  view.value = 'listing'
+const search = () => act('search', async () => {
+  const [found, items] = await Promise.all([townShops(query.value, 0), shopListings(query.value, 0)])
+  shopsMissing.value = !!found?.missing
+  shops.value = found?.items ?? []
+  cards.value = items?.items ?? []
+  if (shopsMissing.value) mode.value = 'items'
 })
-const buy = (id) => act('buy', async () => {
-  await shopCheckout(id)
-  line.value = 'Checkout opened in your browser. After paying, Install it from My purchases.'
+// a shop from the town opens at its greeting
+const enterShop = (slug) => act('open', async () => {
+  scene.value = { detail: await townShop(slug), start: null }
+  view.value = 'scene'
+})
+// an item opens its seller's shop at the explanation, with that item in the keeper's hands
+const enterWithItem = (card) => act('open', async () => {
+  const detail = card.shop?.slug && !shopsMissing.value ? await townShop(card.shop.slug).catch(() => null) : null
+  scene.value = { detail, start: card }
+  view.value = 'scene'
 })
 const loadBought = () => act('bought', async () => {
   purchases.value = (await shopPurchases()) ?? []
@@ -78,7 +94,7 @@ onMounted(search)
 <template>
   <section class="shop widget" aria-label="Marketplace">
     <nav class="tabs">
-      <button :class="{ active: view === 'shop' || view === 'listing' }" @click="view = 'shop'">Shop</button>
+      <button :class="{ active: view === 'town' || view === 'scene' }" @click="view = 'town'">Town</button>
       <button :class="{ active: view === 'bought' }" @click="loadBought">My purchases</button>
       <button :class="{ active: view === 'mine' }" @click="loadMine">My listings</button>
       <span class="spacer"></span>
@@ -87,35 +103,33 @@ onMounted(search)
     <p v-if="problem" role="alert" class="problem">{{ problem }}</p>
     <p v-else-if="line" class="hint">{{ line }}</p>
 
-    <template v-if="view === 'shop'">
-      <form class="search" @submit.prevent="search">
-        <input v-model="query" type="search" maxlength="80" placeholder="Search workflows" aria-label="Search workflows" />
-        <button type="submit">Search</button>
-      </form>
-      <div class="grid">
-        <button v-for="c in cards" :key="c.id" class="card" @click="open(c.id)">
+    <template v-if="view === 'town'">
+      <div class="town-bar">
+        <div v-if="!shopsMissing" class="modes" role="radiogroup" aria-label="Shops or items">
+          <button role="radio" :aria-checked="mode === 'shops'" :class="{ on: mode === 'shops' }" @click="mode = 'shops'">Shops</button>
+          <button role="radio" :aria-checked="mode === 'items'" :class="{ on: mode === 'items' }" @click="mode = 'items'">Items</button>
+        </div>
+        <form class="search" @submit.prevent="search">
+          <input v-model="query" type="search" maxlength="80" placeholder="Search the town" aria-label="Search the town" />
+          <button type="submit">Search</button>
+        </form>
+      </div>
+      <div v-if="mode === 'shops' && !shopsMissing" class="town-grid">
+        <ShopCard v-for="c in shops" :key="c.slug" :card="c" @open="enterShop" />
+        <p v-if="!shops.length && !busy" class="empty">No shops are open yet.</p>
+      </div>
+      <div v-else class="grid">
+        <button v-for="c in cards" :key="c.id" class="card" @click="enterWithItem(c)">
           <img v-if="c.sample" :src="c.sample" :alt="c.name" loading="lazy" />
           <strong>{{ c.name }}</strong>
-          <span class="hint">{{ c.seller?.name }} · {{ priceText(c.priceMyr) }}</span>
+          <span class="hint">{{ c.shop?.name ?? c.seller?.name }} · {{ priceText(c.priceMyr) }}</span>
           <span class="hint">{{ votesText(c.votes) }}</span>
         </button>
         <p v-if="!cards.length && !busy" class="empty">No workflows for sale yet.</p>
       </div>
     </template>
 
-    <div v-else-if="view === 'listing' && listing" class="listing">
-      <button class="back" @click="view = 'shop'">← Back to the shop</button>
-      <h4>{{ listing.name }}</h4>
-      <p class="hint">{{ listing.seller?.name }} · {{ priceText(listing.priceMyr) }} · {{ votesText(listing.votes) }}</p>
-      <p>{{ listing.description }}</p>
-      <div class="samples">
-        <img v-for="s in listing.samples ?? []" :key="s" :src="s" :alt="listing.name" />
-      </div>
-      <p v-if="listing.blocks?.length" class="hint">It asks for: {{ listing.blocks.map((b) => b.label || b.type).join(', ') }}</p>
-      <button v-if="listing.mine" disabled>This is yours</button>
-      <button v-else-if="listing.bought || installed.has(String(listing.id))" @click="loadBought">You have it - see My purchases</button>
-      <button v-else class="primary" :disabled="!!busy" @click="buy(listing.id)">Buy for {{ priceText(listing.priceMyr) }}</button>
-    </div>
+    <ShopScene v-else-if="view === 'scene' && scene" :key="(scene.detail?.slug ?? '') + (scene.start?.id ?? '')" class="scene-fill" :detail="scene.detail" :start="scene.start" @leave="view = 'town'" />
 
     <div v-else-if="view === 'bought'" class="rows">
       <div v-for="p in purchases" :key="p.id" class="row">
@@ -178,6 +192,39 @@ onMounted(search)
   font-weight: 600;
 }
 .spacer {
+  flex: 1;
+}
+.town-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.modes {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, #e8c26a 45%, var(--line));
+  border-radius: 999px;
+}
+.modes button {
+  border: 0;
+  border-radius: 0;
+  padding: 6px 22px;
+}
+.modes .on {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  color: #07142e;
+  font-weight: 600;
+}
+.town-bar .search {
+  flex: 1;
+}
+.town-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 16px;
+}
+.scene-fill {
   flex: 1;
 }
 .search input {
