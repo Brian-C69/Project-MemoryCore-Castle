@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.afifmaahi-portfolio.com/schemas/castle-workflow-1.json",
+  "title": "MemoryCore Castle workflow, schema 1",
+  "description": "A STUDIO picture recipe made of blocks. Castle checks more than this file can say (exactly one create block, references and {{names}} pointing at the right kinds of block); see src-tauri/src/workflows.rs validate().",
+  "type": "object",
+  "required": ["schema", "name", "power", "blocks"],
+  "properties": {
+    "schema": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "maxLength": 60 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+    "icon": { "enum": ["picture", "people", "person", "poster", "star", "heart", "spark", "brush"] },
+    "power": { "const": "image" },
+    "description": { "type": "string", "maxLength": 300 },
+    "blocks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,30}$" },
+          "type": { "enum": ["picture", "character", "text", "chips", "describe", "create"] },
+          "label": { "type": "string", "maxLength": 60 }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "type": { "const": "chips" } } },
+            "then": { "required": ["options"], "properties": { "options": { "type": "array", "minItems": 1, "maxItems": 12, "items": { "type": "string", "minLength": 1, "maxLength": 30 } } } }
+          },
+          {
+            "if": { "properties": { "type": { "const": "describe" } } },
+            "then": { "required": ["from", "into"], "properties": { "from": { "type": "string" }, "into": { "type": "string" } } }
+          },
+          {
+            "if": { "properties": { "type": { "const": "create" } } },
+            "then": {
+              "required": ["prompt"],
+              "properties": {
+                "prompt": { "type": "string", "minLength": 1, "maxLength": 4000 },
+                "references": { "type": "array", "maxItems": 5, "items": { "type": "string" } },
+                "size": { "enum": ["1024x1024", "1024x1536", "1536x1024"] },
+                "quality": { "enum": ["low", "medium", "high"] }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

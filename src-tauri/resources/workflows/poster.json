@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "poster",
+  "name": "Poster",
+  "icon": "poster",
+  "power": "image",
+  "description": "A tall poster with its title in clean lettering",
+  "blocks": [
+    { "id": "title", "type": "text", "label": "Title" },
+    { "id": "scene", "type": "text", "label": "What the poster shows" },
+    { "id": "style", "type": "chips", "label": "Style", "options": ["Anime", "Painterly", "Photo"] },
+    { "id": "make", "type": "create", "prompt": "A poster showing {{scene}}. The title \"{{title}}\" in clean, bold lettering near the top, spelled exactly, and no other text. Style: {{style}}.", "references": [], "size": "1024x1536", "quality": "medium" }
+  ]
+}

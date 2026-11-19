@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "character-sheet",
+  "name": "Character sheet",
+  "icon": "person",
+  "power": "image",
+  "description": "One character drawn from the front, the side and the back",
+  "blocks": [
+    { "id": "hero", "type": "character", "label": "Character" },
+    { "id": "style", "type": "chips", "label": "Style", "options": ["Anime", "Painterly", "Photo"] },
+    { "id": "make", "type": "create", "prompt": "A character design turnaround sheet of {{hero.name}}: front, side and back views, full body, standing, on a plain light background. The same face, hair and outfit as the reference picture in every view. Style: {{style}}.", "references": ["hero"], "size": "1536x1024", "quality": "medium" }
+  ]
+}

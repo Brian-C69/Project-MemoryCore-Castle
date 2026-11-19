@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "from-a-picture",
+  "name": "From a picture",
+  "icon": "picture",
+  "power": "image",
+  "description": "Upload a picture, let the AI write its prompt, change what you like, then make a new picture",
+  "blocks": [
+    { "id": "photo", "type": "picture", "label": "Upload a picture" },
+    { "id": "read", "type": "describe", "label": "Write prompt from picture", "from": "photo", "into": "prompt" },
+    { "id": "prompt", "type": "text", "label": "Prompt" },
+    { "id": "make", "type": "create", "prompt": "{{prompt}}", "references": [], "size": "1024x1024", "quality": "medium" }
+  ]
+}

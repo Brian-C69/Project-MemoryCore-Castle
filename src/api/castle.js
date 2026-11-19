@@ -173,6 +173,18 @@ export const userThemes = () => invoke('user_themes')
 export const themeCreate = (name, mood, picture) => invoke('theme_create', { name, mood, picture })
 export const themeDelete = (id) => invoke('theme_delete', { id })
 export const themeFolder = (id) => invoke('theme_folder', { id })
+// STUDIO's workflows: Castle's own (read-only) and the member's, each { id, source, listing, workflow, error }.
+export const workflowList = () => invoke('workflow_list')
+// -> [{ block, message }] (empty when the workflow is fine)
+export const workflowCheck = (workflow) => invoke('workflow_check', { workflow })
+// replace: one of the member's own ids to overwrite (Edit); null makes a new one. -> the id, or rejects with problems
+export const workflowSave = (workflow, replace = null) => invoke('workflow_save', { workflow, replace })
+export const workflowDuplicate = (id) => invoke('workflow_duplicate', { id })
+export const workflowDelete = (id) => invoke('workflow_delete', { id })
+export const workflowFolder = () => invoke('workflow_folder')
+// both open Windows' own dialog; null when it is closed
+export const workflowExport = (id) => invoke('workflow_export', { id })
+export const workflowImport = () => invoke('workflow_import')
 // Opens a file from the memory folder in its own app, or its folder with the file selected. A file a
 // DEV tab's chat showed (by `room`, or remembered from chatMedia) opens through that tab's door.
 export const chatMediaOpen = (path, folder = false, room = undefined) => {

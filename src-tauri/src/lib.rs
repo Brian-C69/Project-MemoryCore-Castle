@@ -75,6 +75,7 @@ mod voicestudio;
 mod system;
 mod theme;
 mod themes;
+mod workflows;
 mod traits;
 mod tree;
 mod transcript;
@@ -390,6 +391,14 @@ pub fn run() {
             theme::theme_create,
             theme::theme_delete,
             theme::theme_folder,
+            workflows::workflow_list,
+            workflows::workflow_check,
+            workflows::workflow_save,
+            workflows::workflow_duplicate,
+            workflows::workflow_delete,
+            workflows::workflow_folder,
+            workflows::workflow_export,
+            workflows::workflow_import,
             studio::studio_library,
             thumbs::studio_thumbs,
             studio::studio_powers,

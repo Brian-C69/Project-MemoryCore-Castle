@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "id": "two-characters",
+  "name": "Two characters",
+  "icon": "people",
+  "power": "image",
+  "description": "Two characters who stay themselves in one picture",
+  "blocks": [
+    { "id": "a", "type": "character", "label": "Character A" },
+    { "id": "b", "type": "character", "label": "Character B" },
+    { "id": "scene", "type": "text", "label": "Scene" },
+    { "id": "style", "type": "chips", "label": "Style", "options": ["Anime", "Painterly", "Photo"] },
+    { "id": "make", "type": "create", "prompt": "{{a.name}} and {{b.name}} together: {{scene}}. Both keep their own face, hair and outfit from their reference pictures. Style: {{style}}.", "references": ["a", "b"], "size": "1536x1024", "quality": "medium" }
+  ]
+}
