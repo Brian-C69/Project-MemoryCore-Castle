@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { gpuGaugesSave, gpuMeters, meterTrimNow, meterTrips, meterWatchGet, meterWatchSave, systemMeters } from '../../api/castle.js'
 import { gpuTitle } from '../gpuGauges.js'
 import { DEFAULT_LIMIT, boundLimit, freedLine, isHot, sizeLabel, timeLabel } from '../meterWatch.js'
+import HelpTip from '../HelpTip.vue'
 
 defineProps({ size: { type: String, default: 'm' } })
 // Widgets are handed the whole data bundle; only declared props are used.
@@ -168,7 +169,7 @@ onBeforeUnmount(() => {
           <p class="hint">{{ gpu.found ? `${gpu.found} found.` : 'None found: needs an NVIDIA card with its driver (nvidia-smi).' }}</p>
           <p v-if="gpuNote" class="note">{{ gpuNote }}</p>
         </div>
-        <span class="trips-head section">CPU AND RAM</span>
+        <span class="trips-head section with-tip">CPU AND RAM<HelpTip block text="When CPU or RAM is held at its limit for about 15 seconds, RAM is tidied by itself and the busiest apps are shown. Nothing is closed without you." /></span>
         <label class="toggle">
           <input v-model="watch.on" type="checkbox" @change="save" />
           <span>Watch CPU and RAM</span>
@@ -177,7 +178,6 @@ onBeforeUnmount(() => {
           <label>CPU at <input v-model="watch.cpu" type="number" min="50" max="99" :disabled="!watch.on" @change="save" />%</label>
           <label>RAM at <input v-model="watch.memory" type="number" min="50" max="99" :disabled="!watch.on" @change="save" />%</label>
         </div>
-        <p class="hint">Held there for about 15 seconds, RAM is tidied by itself and the busiest apps are shown. Nothing is closed without you.</p>
         <button class="tidy" type="button" :disabled="tidying" @click="tidyNow">{{ tidying ? 'Tidying…' : 'Tidy RAM now' }}</button>
         <p v-if="tidied" class="hint">{{ tidied }}</p>
         <p v-if="gearNote" class="note">{{ gearNote }}</p>
@@ -385,6 +385,13 @@ circle {
 .section {
   padding-top: 8px;
   border-top: 1px solid var(--line);
+}
+
+/* a section head with its (?): the bubble spans the panel's width under the head */
+.with-tip {
+  position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .trips {

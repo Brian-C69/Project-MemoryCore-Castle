@@ -5,6 +5,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { weatherGet, weatherHere, weatherRead, weatherSave, weatherSearch } from '../../api/castle.js'
 import { dayName, hereMessage, mood, placeLine, tempText, weatherTitle, windText } from './weather.js'
+import HelpTip from '../HelpTip.vue'
 
 defineProps({ size: { type: String, default: 'm' } })
 // Widgets are handed the whole data bundle; only declared props are used.
@@ -291,9 +292,8 @@ function onVisible() {
 
     <Teleport to="body">
       <div v-if="gearOpen" class="weather-panel" role="dialog" aria-label="Weather settings" :style="{ top: `${panelAt.top}px`, left: `${panelAt.left}px` }">
-        <span class="panel-head">LOCATION</span>
+        <span class="panel-head with-tip">LOCATION<HelpTip block text="Windows asks you first. Only a rounded spot (about 1 km) is kept, on this computer, and sent to Open-Meteo to read the weather." /></span>
         <button class="here" type="button" :disabled="locating" @click="useMyLocation">{{ locating ? 'Waiting for Windows…' : 'Use my location' }}</button>
-        <p class="hint">Windows asks you first. Only a rounded spot (about 1 km) is kept, on this computer, and sent to Open-Meteo to read the weather.</p>
         <form class="finder" @submit.prevent="search">
           <input ref="input" v-model="query" type="text" maxlength="80" placeholder="Search a city" aria-label="Search a city" />
           <button type="submit" :disabled="searching || query.trim().length < 2">{{ searching ? '…' : 'Search' }}</button>
@@ -641,6 +641,19 @@ button:disabled {
 
 .weather-panel .panel-head.section {
   margin-top: 4px;
+}
+
+/* a head with its (?): the bubble spans the panel's width under the head */
+.weather-panel .panel-head.with-tip {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* the panel's own button look must not reach the (?) */
+.weather-panel .help-tip .mark,
+.weather-panel .help-tip .mark:hover {
+  background: transparent;
 }
 
 .weather-panel .hint,

@@ -9,6 +9,7 @@ import SweepBar from './SweepBar.vue'
 import SweepBroom from './SweepBroom.vue'
 import SweepRing from './SweepRing.vue'
 import SweepSheet from './SweepSheet.vue'
+import HelpTip from '../HelpTip.vue'
 
 const props = defineProps({
   themeLook: { type: String, default: '' },
@@ -100,12 +101,11 @@ onBeforeUnmount(() => {
           <button v-for="id in LOOKS" :key="id" type="button" class="look" :class="{ on: look === id }" :aria-pressed="look === id" @click="chooseLook(id)">{{ LOOK_NAMES[id] }}</button>
         </div>
         <p class="hint">{{ status.settings.look ? 'Your choice.' : themeLook ? "The theme's choice - pick one to keep it." : 'Pick the look you like.' }}</p>
-        <span class="head">RECYCLE BIN</span>
+        <span class="head with-tip">RECYCLE BIN<HelpTip block text="Emptying it can't be undone, so it starts unticked unless you choose this." /></span>
         <label class="toggle">
           <input type="checkbox" :checked="status.settings.recycleBin" @change="setRecycle" />
           <span>Start with the Recycle Bin ticked</span>
         </label>
-        <p class="hint">Emptying it can't be undone, so it starts unticked unless you choose this.</p>
       </div>
     </Teleport>
 
@@ -181,6 +181,11 @@ onBeforeUnmount(() => {
   font-size: 11px;
   letter-spacing: 0.12em;
   color: var(--text-dim);
+}
+.head.with-tip {
+  position: relative;
+  display: flex;
+  align-items: center;
 }
 .looks {
   display: flex;

@@ -25,6 +25,7 @@ import { isMac } from '../platform.js'
 import BackupPanel from '../components/BackupPanel.vue'
 import DatabasePanel from '../components/DatabasePanel.vue'
 import HelpersStatus from '../components/HelpersStatus.vue'
+import HelpTip from '../components/HelpTip.vue'
 
 const emit = defineEmits(['done', 'close'])
 const props = defineProps({
@@ -77,6 +78,11 @@ const themes = builtInThemes()
 const styleText = computed(() => (form.style === 'custom' ? form.customStyle.trim() : form.style))
 const shownKeys = computed(() =>
   form.keys.filter((k) => KEY_HELP[k.name] && !(k.name === 'openai' && form.cli === 'codex')),
+)
+// the keys step's (?): where the keys are kept and who gets them
+const keysTip = computed(
+  () =>
+    `Keys are ${isMac ? "kept in your Mac's Keychain" : 'kept encrypted by Windows'} and only handed to ${form.companion || 'your companion'}'s session. Without a key, Castle saves the prompt or lyrics instead and tells you.`,
 )
 
 const canNext = computed(() => {
@@ -296,8 +302,7 @@ onMounted(async () => {
           <p v-if="form.folderState?.isMemorycore && !form.created" class="good">✓ {{ form.folder }}</p>
         </div>
         <div class="choice">
-          <h3>I'm new to MemoryCore</h3>
-          <p class="hint">Castle downloads a fresh MemoryCore for you.</p>
+          <h3 class="with-tip">I'm new to MemoryCore <HelpTip text="Castle downloads a fresh MemoryCore for you." /></h3>
           <div class="row">
             <button @click="chooseParent">{{ form.newParent ? 'Change place' : 'Choose where' }}</button>
             <input v-model="form.newName" aria-label="New folder name" />
@@ -355,22 +360,24 @@ onMounted(async () => {
             <span v-else class="crystal">◆</span>
           </div>
           <div>
-            <p class="label">A picture (optional)</p>
+            <p class="label with-tip">A picture (optional) <HelpTip text="Without one, your companion is the glowing crystal. You can draw a look later in APPEARANCE." /></p>
             <button @click="choosePortrait">Choose a picture</button>
-            <p class="hint">Without one, your companion is the glowing crystal. You can draw a look later in APPEARANCE.</p>
           </div>
         </div>
       </div>
 
       <!-- 4. Keys -->
       <div v-else-if="step === 3" class="body">
-        <h2>Extra powers (optional)</h2>
+        <h2 class="with-tip">
+          Extra powers (optional)
+          <HelpTip :text="keysTip" />
+        </h2>
         <div v-if="form.foundKeys.length" class="found">
           <p class="good">✓ Found in your MemoryCore's .env: {{ form.foundKeys.map((k) => `${k.variable} (${k.masked})`).join(', ') }}</p>
           <button class="primary" @click="importFoundKeys">Keep them encrypted in Castle</button>
-          <p class="hint">Your .env stays as it is - you can delete it yourself once Castle keeps the keys.</p>
+          <HelpTip text="Your .env stays as it is - you can delete it yourself once Castle keeps the keys." />
         </div>
-        <p class="hint">Keys are {{ isMac ? "kept in your Mac's Keychain" : 'kept encrypted by Windows' }} and only handed to {{ form.companion || 'your companion' }}'s session. Skip any you don't have - without a key, Castle saves the prompt or lyrics instead and tells you.</p>
+        <p class="hint">Skip any you don't have.</p>
         <div v-for="key in shownKeys" :key="key.name" class="key">
           <div>
             <strong>{{ key.label }}</strong>
@@ -496,6 +503,13 @@ h3 {
 .label {
   margin: 14px 0 6px;
   font-size: 13px;
+}
+/* a heading or label with its (?) beside it */
+h2.with-tip,
+h3.with-tip,
+.label.with-tip {
+  display: flex;
+  align-items: center;
 }
 .choice {
   margin: 12px 0;

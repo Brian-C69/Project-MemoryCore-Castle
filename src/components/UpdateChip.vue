@@ -7,6 +7,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { diaryStamp, terminalState, terminalWrite, updateCheck, updateInstall } from '../api/castle.js'
 import MarkdownText from './MarkdownText.vue'
+import HelpTip from './HelpTip.vue'
 import { typeLine } from './typeline.js'
 
 const emit = defineEmits(['status', 'about'])
@@ -67,6 +68,7 @@ onBeforeUnmount(() => clearInterval(timer))
       <span>Update ready: {{ status.available }}</span>
       <button v-if="status.notes" class="quiet" @click="notesOpen = !notesOpen">What's new</button>
       <button @click="updateNow">Update now</button>
+      <HelpTip block text="The diary is saved first, then Castle restarts on the new version. Your memory, settings and keys stay as they are." />
     </template>
     <template v-else>
       <span>{{ step }}</span>
@@ -74,7 +76,6 @@ onBeforeUnmount(() => clearInterval(timer))
     </template>
     <div v-if="notesOpen && !step" class="notes">
       <MarkdownText :text="status.notes" />
-      <p class="hint">The diary is saved first, then Castle restarts on the new version. Your memory, settings and keys stay as they are.</p>
     </div>
   </div>
   <button v-else-if="status?.available" class="update own" :title="status.message" @click="emit('about')">Castle {{ status.available }} is out</button>
@@ -115,10 +116,6 @@ onBeforeUnmount(() => clearInterval(timer))
   border-radius: 12px;
   background: var(--panel-background);
   -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
-}
-.notes .hint {
-  margin: 10px 0 0;
-  color: var(--text-dim);
 }
 button.quiet {
   background: transparent;
