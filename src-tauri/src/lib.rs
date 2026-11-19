@@ -78,6 +78,7 @@ mod themes;
 mod workflows;
 mod describe;
 mod market_shop;
+mod keeper;
 mod traits;
 mod tree;
 mod transcript;
@@ -418,6 +419,7 @@ pub fn run() {
             market_shop::market_shop_shop,
             market_shop::market_shop_my_shop,
             market_shop::market_shop_my_shop_save,
+            keeper::keeper_say,
             studio::studio_library,
             thumbs::studio_thumbs,
             studio::studio_powers,
