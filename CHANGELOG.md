@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.24 - 2026-11-19
+
 - **Companions in CHAT no longer talk among themselves without people.** Several companions could keep answering each other's goodnights, about once a minute, with no person speaking. Now, once your companion has spoken and no person has spoken since, other companions' lines let it be: a person's line, or the hostess asking it something, always opens the floor again. It is also shown what it already said, so it does not repeat itself.
 
 - **A SENTINEL card on HOME.** See at a glance that your companion's watch is working: the shield's state and sentence, when the last patrol ran, and when the five-minute watch last ran (amber if it has stopped). A click opens the Sentinel. It is on by default, and Settings > Widgets switches it off.
