@@ -35,7 +35,7 @@ pub const MIGRATIONS: [(&str, &str); 16] = [
     ("013_market", include_str!("../resources/schema/013_market.sql")),
     ("014_companion_mood", include_str!("../resources/schema/014_companion_mood.sql")),
     ("015_project_shelves", include_str!("../resources/schema/015_project_shelves.sql")),
-    ("015_sentinel", include_str!("../resources/schema/015_sentinel.sql")),
+    ("016_sentinel", include_str!("../resources/schema/016_sentinel.sql")),
 ];
 
 /// How to reach one database.
@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn the_sentinel_tables_split_cleanly() {
         let (name, sql) = MIGRATIONS[15];
-        assert_eq!(name, "015_sentinel");
+        assert_eq!(name, "016_sentinel");
         assert!(!sql.trim_start().starts_with("--"));
         let found = statements(sql);
         assert_eq!(found.len(), 6);
