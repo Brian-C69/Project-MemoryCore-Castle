@@ -47,7 +47,7 @@ export function refreshStudio() {
   reading = (async () => {
     try {
       // the gallery first: it is what the room shows, and it does not wait on Codex's check
-      studioLib.value = await studioLibrary()
+      studioLib.value = await studioLibrary(true)
       buildThumbs() // the powers below do not wait on it; prepareStudio() does
       studioVoiceUp.value = await voiceStudioStatus().catch(() => false)
       studioPowersNow.value = await studioPowers()

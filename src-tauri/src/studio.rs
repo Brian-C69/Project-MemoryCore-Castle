@@ -37,8 +37,12 @@ pub struct Library {
     pub backups: Vec<Made>,
 }
 
-/// The folders STUDIO shows, and the only ones it may delete from.
+/// The folders the companion's made things live in, and the only ones STUDIO may delete from. The
+/// WORLD screens and the music read all of them.
 pub const SHELVES: [&str; 4] = ["media-generation", "music", "adventures", "appearance"];
+/// What STUDIO's own gallery shows: what was made there. Outfit and hair sheets stay in APPEARANCE,
+/// adventure scenes in their world.
+pub const MADE_HERE: [&str; 2] = ["media-generation", "music"];
 
 /// A copy Castle kept before replacing a picture.
 pub fn is_backup(name: &str) -> bool {
@@ -71,8 +75,14 @@ fn made(path: &Path, group: Option<String>) -> Made {
 /// Everything made in the memory folder: media-generation/ (pictures, videos, voice), music/
 /// (albums and singles), adventures/*/scenes and music, appearance/.
 pub fn library(folder: &Path) -> Library {
+    library_of(folder, &SHELVES)
+}
+
+/// The things made on the named shelves, sorted into pictures, videos, songs, voices, saved prompts
+/// and backups.
+pub fn library_of(folder: &Path, shelves: &[&str]) -> Library {
     let mut files = Vec::new();
-    for dir in SHELVES {
+    for dir in shelves {
         walk(&folder.join(dir), 0, &mut files);
     }
     let mut lib = Library::default();
@@ -161,10 +171,12 @@ pub async fn studio_delete(path: String, store: State<'_, SettingsStore>) -> Res
 
 /// Reading every shelf walks the memory folder and looks at each file, so it runs off the page's
 /// thread: a command that is not async would hold the whole window still while it reads.
+/// `made_here`: only what STUDIO itself shows (its gallery); otherwise every shelf (WORLD, music).
 #[tauri::command]
-pub async fn studio_library(store: State<'_, SettingsStore>) -> Result<Library, String> {
+pub async fn studio_library(made_here: Option<bool>, store: State<'_, SettingsStore>) -> Result<Library, String> {
     let Some(folder) = store.get().memory_folder else { return Ok(Library::default()) };
-    tauri::async_runtime::spawn_blocking(move || library(Path::new(&folder))).await.map_err(|_| "The library could not be read.".to_string())
+    let shelves: &'static [&'static str] = if made_here == Some(true) { &MADE_HERE } else { &SHELVES };
+    tauri::async_runtime::spawn_blocking(move || library_of(Path::new(&folder), shelves)).await.map_err(|_| "The library could not be read.".to_string())
 }
 
 /// The Pictures card's state for a way to draw (`env::picture_way`): the plan is "builtin", the
@@ -291,6 +303,9 @@ mod tests {
         assert_eq!(lib.songs[0].group.as_deref(), Some("sky-songs"));
         assert_eq!(lib.saved.len(), 2);
         assert!(lib.images.iter().any(|m| m.group.as_deref() == Some("celestial")));
+        let studio = library_of(&root, &MADE_HERE);
+        assert_eq!(studio.images.len(), 1, "STUDIO's own gallery leaves the adventure's scene in its world");
+        assert_eq!((studio.songs.len(), studio.videos.len(), studio.voices.len()), (1, 1, 1));
         let _ = std::fs::remove_dir_all(root);
     }
 
@@ -311,6 +326,8 @@ mod tests {
         let lib = library(&root);
         assert_eq!(lib.backups.len(), 2);
         assert_eq!(lib.images.len(), 2, "the portrait and the lake, not the copies");
+        let studio = library_of(&root, &MADE_HERE);
+        assert_eq!((studio.images.len(), studio.backups.len()), (1, 0), "outfit and portrait pictures stay in APPEARANCE");
         let p = |rel: &str| root.join(rel).display().to_string();
         assert!(deletable(&root, &p("appearance/portrait.1794731540694128500-previous.png")).is_ok());
         assert!(deletable(&root, &p("media-generation/image-generation/lake.png")).is_ok());

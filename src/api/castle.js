@@ -348,7 +348,8 @@ export const nodePrepare = () => invoke('node_prepare')
 export const onNodeInstall = on('castle://node-install')
 
 // STUDIO: what the companion made, and each power's state (ready | builtin | prompt).
-export const studioLibrary = () => invoke('studio_library')
+// madeHere: STUDIO's own gallery (media-generation and music only); without it every shelf (WORLD, music)
+export const studioLibrary = (madeHere = false) => invoke('studio_library', { madeHere })
 // small copies of pictures (made once, kept by Castle): -> { thumbs: [{ path, thumb }], pending }
 export const studioThumbs = (paths) => invoke('studio_thumbs', { paths })
 export const studioPowers = () => invoke('studio_powers')
