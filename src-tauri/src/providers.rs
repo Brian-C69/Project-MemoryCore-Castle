@@ -1406,7 +1406,6 @@ mod tests {
         assert!(value.len() < 26_000);
     }
     #[test]
-    #[cfg(windows)]
     fn a_free_picture_sends_every_reference_and_the_workflows_size() {
         let job = |references: Vec<String>, size: Option<&str>| ImageJob { id: "1".into(), label: String::new(), phase: "queued".into(), message: String::new(), output: "out.png".into(), brief: String::new(), references, memory: PathBuf::new(), prompt: PathBuf::new(), look: None, size: size.map(str::to_string), quality: size.map(|_| "low".to_string()), by_key: true, stop_asked: false };
         let two = free_picture_args(&job(vec!["a.png".into(), "b.png".into()], Some("1536x1024")), Path::new("brief.txt"));
@@ -1416,6 +1415,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn image_worker_accepts_only_a_new_valid_output_without_a_real_provider() {
         let root = temp("fake image cli");
         let source = root.join("source.png");
