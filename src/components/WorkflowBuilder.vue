@@ -4,6 +4,7 @@
 // copy (a new one, or theirs when editing); the core's checks show beside the block they belong to.
 import { computed, ref, watch } from 'vue'
 import { workflowCheck, workflowSave } from '../api/castle.js'
+import GlassSelect from './GlassSelect.vue'
 import { ICONS, QUALITIES, SHELF, SIZES, addBlock, draftOf, insertable, moveBlock, removeBlock } from './workflows.js'
 
 const props = defineProps({
@@ -120,10 +121,10 @@ async function save() {
             <label v-if="b.type === 'chips'"><span class="label">Choices, separated by commas</span><input :value="optionsText(b)" @change="setOptions(b, $event.target.value)" /></label>
             <div v-if="b.type === 'describe'" class="pair">
               <label><span class="label">Reads</span>
-                <select v-model="b.from"><option value="">Choose a picture block</option><option v-for="p in pictures" :key="p.id" :value="p.id">{{ p.label || p.id }}</option></select>
+                <GlassSelect v-model="b.from" placeholder="Choose a picture block" :options="pictures.map((p) => ({ value: p.id, label: p.label || p.id }))" aria-label="Reads" />
               </label>
               <label><span class="label">Writes into</span>
-                <select v-model="b.into"><option value="">Choose a text box</option><option v-for="t in texts" :key="t.id" :value="t.id">{{ t.label || t.id }}</option></select>
+                <GlassSelect v-model="b.into" placeholder="Choose a text box" :options="texts.map((t) => ({ value: t.id, label: t.label || t.id }))" aria-label="Writes into" />
               </label>
             </div>
             <p v-for="m in problemsOf(b.id)" :key="m" class="problem">{{ m }}</p>
@@ -147,10 +148,10 @@ async function save() {
             </div>
             <div class="pair">
               <label><span class="label">Shape</span>
-                <select v-model="create.size"><option v-for="[v, w] in SIZES" :key="v" :value="v">{{ w }} ({{ v }})</option></select>
+                <GlassSelect v-model="create.size" :options="SIZES.map(([v, w]) => ({ value: v, label: `${w} (${v})` }))" aria-label="Shape" />
               </label>
               <label><span class="label">Quality</span>
-                <select v-model="create.quality"><option v-for="q in QUALITIES" :key="q" :value="q">{{ q }}</option></select>
+                <GlassSelect v-model="create.quality" :options="QUALITIES" aria-label="Quality" />
               </label>
             </div>
             <p v-for="m in problemsOf(create.id)" :key="m" class="problem">{{ m }}</p>
@@ -220,8 +221,7 @@ h3 {
   color: var(--text-dim);
 }
 input,
-textarea,
-select {
+textarea {
   width: 100%;
   box-sizing: border-box;
   padding: 7px 10px;
