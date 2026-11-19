@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.25 - 2026-11-20
+
 - **Wallpaper sounds.** The Star Shore's surf, The Sunset Shore's waves and The Emerald River's water and birds play quietly on HOME, under any music and at its slider's level. Settings > Rooms > Wallpaper sounds turns them off.
 
 - **Living wallpapers, on from the start.** The Star Shore's glowing surf truly rolls in, The Sunset Shore's waves wash up the sand, and The Emerald River flows past its boat: each is a short seamless loop made from its own picture, in place of the old drawn motion. If HOME feels slow, Settings > Rooms > Moving wallpapers turns it off and the still picture shows, with nothing playing.
