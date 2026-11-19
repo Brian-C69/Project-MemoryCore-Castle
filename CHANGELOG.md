@@ -4,6 +4,10 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.22 - 2026-11-19
+
+- **The Mac download is back.** 0.2.21 went out for Windows only, because one test meant for Windows ran on the Mac and stopped its build. 0.2.22 brings everything in 0.2.21 to the Mac too: workflows in STUDIO, making your own, and the Marketplace town ready behind its door.
+
 ## 0.2.21 - 2026-11-19
 
 - **STUDIO makes pictures with workflows.** A rail of workflows on the left, the chosen one's form in the middle, and your newest picture large on the right with a Made here strip. Castle comes with four: **From a picture** (the AI writes the prompt from a picture you upload, you change it, then make a new one), **Two characters** (both stay themselves in one picture), **Character sheet** and **Poster**.
