@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { installState, installedListings, priceText, publishAction, shopVisible, votesText } from './shop.js'
+import { installState, installedListings, priceText, publishAction, shopForm, shopFormProblem, shopVisible, votesText } from './shop.js'
 
 const signedIn = (marketplace) => ({ signedIn: true, marketplace })
 const yours = { id: 'two-cats', source: 'yours', workflow: { name: 'Two cats' } }
@@ -34,5 +34,21 @@ describe('the Marketplace on the page', () => {
     expect([...installed]).toEqual(['42'])
     expect(installState({ listingId: 42 }, installed)).toBe('installed')
     expect(installState({ listingId: 7 }, installed)).toBe('install')
+  })
+
+  it('My shop starts from what the Portfolio holds, or the companion as keeper', () => {
+    expect(shopForm(null, 'Lyra')).toEqual({ name: '', keeperName: 'Lyra', greeting: '', keeperCard: '', open: true })
+    expect(shopForm({ name: 'Mira', keeperName: 'Mira', greeting: 'Hi', keeperCard: 'c', open: false }).open).toBe(false)
+  })
+
+  it('My shop is checked before it is saved', () => {
+    const good = { name: "Mira's Atelier", keeperName: 'Mira', greeting: 'Welcome!', keeperCard: 'I paint.', open: true }
+    expect(shopFormProblem(good)).toBe('')
+    expect(shopFormProblem({ ...good, name: '  ' })).toContain('shop a name')
+    expect(shopFormProblem({ ...good, keeperName: 'x'.repeat(41) })).toContain('keeper a name')
+    expect(shopFormProblem({ ...good, greeting: 'x'.repeat(161) })).toContain('greeting')
+    expect(shopFormProblem({ ...good, keeperCard: 'x'.repeat(1201) })).toContain('keeper card')
+    expect(shopFormProblem(good, 'C:/m/keeper.gif')).toContain('PNG, JPEG or WebP')
+    expect(shopFormProblem(good, 'C:/m/keeper.PNG', 'C:/m/back.webp')).toBe('')
   })
 })
