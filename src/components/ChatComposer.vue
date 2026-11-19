@@ -2,7 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { chatAttach, clipboardPaste } from '../api/castle.js'
 import ImageViewer from './ImageViewer.vue'
-import { isMac } from '../platform.js'
+import { isMac, shortcutLabel } from '../platform.js'
+import { MIC_SHORTCUT } from './voicehold.js'
 
 // Chat's box: the member's words, the pictures they drop, paste or type as paths (shown above the
 // box, removable, opened in a viewer), Enter to send, Shift+Enter for a new line.
@@ -15,8 +16,10 @@ const props = defineProps({
   loadPath: { type: Function, required: true },
   // (text) -> Promise<boolean>: true when the words went in, and the box empties
   send: { type: Function, required: true },
-  // The mic, while Claude Code's voice is on: { ready, hint, hold: voiceHold(...) }; null for none
+  // The mic, while Claude Code's voice is on: { ready, hint, hold: voiceMic(...) }; null for none
   mic: { type: Object, default: null },
+  // Chat is the tab showing: switching away stops the mic
+  visible: { type: Boolean, default: true },
 })
 
 const draft = ref('')
@@ -113,29 +116,29 @@ function grow() {
   el.style.height = `${Math.min(el.scrollHeight, 160)}px`
 }
 
-// ---------- The mic: hold to talk ----------
+// ---------- The mic: click to talk, click again to stop ----------
 
-// '' | 'listening' (held) | 'writing' (released, Claude Code writes the words down)
+// '' | 'listening' (on) | 'writing' (stopped, Claude Code writes the words down)
 const listening = ref('')
 const micNote = ref('')
-// the mic that was pressed, so the release reaches it even if the button has gone meanwhile
-let holding = null
+// the mic that was started, so the stop reaches it even if the button has gone meanwhile
+let recording = null
 
-function micDown(event) {
-  if (!props.mic?.ready || !props.running || listening.value || event.button > 0) return
-  event.preventDefault()
+function micStart() {
+  if (!props.mic?.ready || !props.running || !props.visible || listening.value) return
   micNote.value = ''
-  holding = props.mic.hold
-  if (holding.start()) listening.value = 'listening'
+  recording = props.mic.hold
+  // the 2-minute cap stops it as usual: the words come to the box
+  if (recording.start({ onCap: micStop })) listening.value = 'listening'
 }
 
-/** Released: the words Claude Code wrote down come into the box, to look over before Send. */
-async function micUp() {
+/** Stopped: the words Claude Code wrote down come into the box, to look over before Send. */
+async function micStop() {
   if (listening.value !== 'listening') return
   listening.value = 'writing'
   let heard
   try {
-    heard = await holding.stop()
+    heard = await recording.stop()
   } catch {
     heard = { text: '', note: 'Your words could not be read - open Log to see them.' }
   }
@@ -151,29 +154,50 @@ async function micUp() {
   el?.setSelectionRange(draft.value.length, draft.value.length)
 }
 
-// Space held on the focused mic button works like holding the button (its repeats are ignored).
-function micKey(event) {
-  if (event.key !== ' ') return
-  event.preventDefault()
-  if (event.type === 'keyup') micUp()
-  else if (!event.repeat) micDown(event)
+/** Esc: Claude Code's prompt is emptied and nothing comes to the box. */
+async function micCancel() {
+  if (listening.value !== 'listening') return
+  listening.value = 'writing'
+  let heard
+  try {
+    heard = await recording.cancel()
+  } catch {
+    heard = { text: '', note: 'Cancelled, but the Log could not be read - open Log to empty its prompt.' }
+  }
+  listening.value = ''
+  micNote.value = heard.note
 }
 
-// Leaving Castle's window, the session ending or voice turned off while held are a release.
-window.addEventListener('blur', micUp)
-watch(() => !!props.mic && props.running, (on) => on || micUp())
+const micToggle = () => (listening.value === 'listening' ? micStop() : micStart())
+
+// Leaving Castle's window, Castle hidden, the Chat tab switched away, the session ending or voice
+// turned off while the mic is on: it stops as usual.
+const whenHidden = () => document.visibilityState === 'hidden' && micStop()
+window.addEventListener('blur', micStop)
+document.addEventListener('visibilitychange', whenHidden)
+watch(() => !!props.mic && props.running && props.visible, (on) => on || micStop())
 onBeforeUnmount(() => {
-  window.removeEventListener('blur', micUp)
-  micUp()
+  window.removeEventListener('blur', micStop)
+  document.removeEventListener('visibilitychange', whenHidden)
+  micStop()
 })
 
+const micKeys = shortcutLabel(MIC_SHORTCUT)
 const micStatus = computed(() => {
-  if (listening.value === 'listening') return '🎙 Listening… (release to stop)'
+  if (listening.value === 'listening') return `🎙 Listening… click or ${micKeys} to stop · Esc to cancel`
   if (listening.value === 'writing') return 'Writing your words down…'
   return micNote.value
 })
+const micTitle = computed(() => (listening.value === 'listening' ? `Stop (${micKeys}) · Esc to cancel` : `${props.mic?.hint ?? ''} (${micKeys})`))
 
-defineExpose({ addPaths, focus: () => box.value?.focus(), hasText: () => !!draft.value.trim() })
+defineExpose({
+  addPaths,
+  focus: () => box.value?.focus(),
+  hasText: () => !!draft.value.trim(),
+  micToggle,
+  micCancel,
+  micOn: () => listening.value === 'listening',
+})
 </script>
 
 <template>
@@ -214,16 +238,11 @@ defineExpose({ addPaths, focus: () => box.value?.focus(), hasText: () => !!draft
       class="mic"
       :class="{ on: listening === 'listening' }"
       :disabled="!running || !mic.ready || listening === 'writing'"
-      :title="mic.hint"
-      aria-label="Hold to talk"
+      :title="micTitle"
+      :aria-label="listening === 'listening' ? 'Stop the mic' : 'Talk'"
+      :aria-keyshortcuts="isMac ? 'Meta+Shift+M' : 'Control+Shift+M'"
       :aria-pressed="listening === 'listening'"
-      @pointerdown="micDown"
-      @pointerup="micUp"
-      @pointerleave="micUp"
-      @pointercancel="micUp"
-      @keydown="micKey"
-      @keyup="micKey"
-      @contextmenu.prevent
+      @click="micToggle"
     >&#127897;</button>
     <button type="submit" class="send" :disabled="!running || !draft.trim()" aria-label="Send">&#10148;</button>
   </form>
@@ -343,14 +362,25 @@ textarea:disabled {
   background: rgba(0, 0, 0, 0.22);
   color: var(--text);
   font-size: 16px;
-  touch-action: none;
-  user-select: none;
 }
 
 .mic.on {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 30%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: #e5484d;
+  background: color-mix(in srgb, #e5484d 38%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, #e5484d 24%, transparent);
+  animation: mic-on 1.4s ease-in-out infinite;
+}
+
+@keyframes mic-on {
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, #e5484d 10%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mic.on {
+    animation: none;
+  }
 }
 
 .mic:disabled {
@@ -365,7 +395,7 @@ textarea:disabled {
 }
 
 .mic-status.live {
-  color: var(--accent);
+  color: #ff6b6f;
 }
 
 .send:disabled {

@@ -1,19 +1,36 @@
-// Chat's mic: hold the button and Claude Code's own voice mode records, as if Space were held in
-// the Log. On release the words Claude Code wrote into its prompt are read off the Log screen,
-// moved into Chat's box for the member to look over, and the prompt is emptied, so the later Send
-// does not type them twice. Pure apart from the timers; tested.
+// Chat's mic: one click (or ⌘⇧M / Ctrl+Shift+M) and Claude Code's own voice mode records, as if
+// Space were held in the Log; a second click stops it. The words Claude Code wrote into its prompt
+// are then read off the Log screen, moved into Chat's box for the member to look over, and the
+// prompt is emptied, so the later Send does not type them twice. Esc cancels: the prompt is emptied
+// and nothing comes to the box. Pure apart from the timers; tested.
 //
 // How Claude Code tells a held Space (2.1.x, hold mode): five Spaces, each within 120 ms of the one
 // before, start the recording (the first two land in the prompt and are taken back); once it
 // records, the recording ends 200 ms after the last Space. A keyboard's auto-repeat does exactly
-// this, and so does writing a Space every 40 ms into the session.
+// this, and so does writing a Space every 40 ms into the session while the mic is on.
 
-/** How often a held button types a Space: well inside Claude Code's 120 ms and 200 ms. */
+/** How often the mic types a Space while on: well inside Claude Code's 120 ms and 200 ms. */
 export const HOLD_EVERY_MS = 40
 /** Claude Code's "delete to the start of the line" (one screen line of the prompt per press). */
 export const CLEAR_LINE = '\u0015'
-/** How long the words may take to arrive after release before Castle stops waiting. */
+/** How long the words may take to arrive after the stop before Castle stops waiting. */
 export const SETTLE_LIMIT_MS = 20000
+/** A mic left on stops by itself after this long (Claude Code's own tap mode caps at 2 minutes too). */
+export const MAX_RECORDING_MS = 2 * 60 * 1000
+/** The shortcut, in shortcutLabel's words: ⌘⇧M on a Mac, Ctrl+Shift+M elsewhere. */
+export const MIC_SHORTCUT = 'Ctrl+Shift+M'
+
+/**
+ * True for the mic's shortcut only: M with Shift and ⌘ on a Mac (Ctrl elsewhere), nothing else
+ * held. Every other key (⌘X, ⌘⇧X, Ctrl+M, a plain M) is left alone.
+ */
+export function isMicShortcut(event, mac) {
+  if (!event || event.altKey || !event.shiftKey) return false
+  const code = event.code === 'KeyM'
+  const key = String(event.key ?? '').toLowerCase() === 'm'
+  if (!code && !key) return false
+  return mac ? !!event.metaKey && !event.ctrlKey : !!event.ctrlKey && !event.metaKey
+}
 
 // Claude Code's prompt box: a rule (or the older rounded box) above and below, the first line
 // starts with its ❯ (or >), the lines after it are indented to line up.
@@ -72,20 +89,46 @@ export function voiceProblem(screen) {
 /**
  * The mic for one session. `write(data)` types into it; `readScreen(count)` gives the last screen
  * lines as shown, `readTyped(count)` the same without dim text (Claude Code's placeholder in an
- * empty prompt is dim, its "listening…" too); `pause` and `every` are the timers (replaced in tests).
- * start() begins typing Spaces; stop() ends it and resolves { text, note } once the words settled:
- * the words for Chat's box ('' for none) and, when something went wrong, a short line about it.
+ * empty prompt is dim, its "listening…" too); `pause`, `every` and `after` are the timers (replaced
+ * in tests).
+ * start({ onCap }) begins typing Spaces; `onCap` is called if it is still on after
+ * MAX_RECORDING_MS (the caller then stops it as usual). stop() ends it and resolves { text, note }
+ * once the words settled: the words for Chat's box ('' for none) and, when something went wrong, a
+ * short line about it. cancel() ends it the same way but empties the prompt and brings no words.
  */
-export function voiceHold({ write, readScreen, readTyped, pause = (ms) => new Promise((done) => setTimeout(done, ms)), every = setInterval, stopEvery = clearInterval }) {
+export function voiceMic({
+  write,
+  readScreen,
+  readTyped,
+  pause = (ms) => new Promise((done) => setTimeout(done, ms)),
+  every = setInterval,
+  stopEvery = clearInterval,
+  after = setTimeout,
+  stopAfter = clearTimeout,
+}) {
   let timer = null
-  let held = false
+  let cap = null
+  let on = false
 
-  function start() {
-    if (held) return false
-    held = true
+  function start({ onCap } = {}) {
+    if (on) return false
+    on = true
     write(' ').catch(() => {})
     timer = every(() => write(' ').catch(() => {}), HOLD_EVERY_MS)
+    cap = after(() => {
+      cap = null
+      if (on) onCap?.()
+    }, MAX_RECORDING_MS)
     return true
+  }
+
+  // No more Spaces: Claude Code ends the recording 200 ms later.
+  function quiet() {
+    on = false
+    stopEvery(timer)
+    timer = null
+    if (cap !== null) stopAfter(cap)
+    cap = null
   }
 
   // Waits until Claude Code is done (no "listening…" / "Transcribing…" and the prompt the same
@@ -117,10 +160,8 @@ export function voiceHold({ write, readScreen, readTyped, pause = (ms) => new Pr
   }
 
   async function stop() {
-    if (!held) return { text: '', note: '' }
-    held = false
-    stopEvery(timer)
-    timer = null
+    if (!on) return { text: '', note: '' }
+    quiet()
     const { prompt, screen } = await settled()
     if (!prompt) return { text: '', note: 'Your words did not come back from the Log - open Log to see them.' }
     if (!prompt.text) {
@@ -137,5 +178,20 @@ export function voiceHold({ write, readScreen, readTyped, pause = (ms) => new Pr
     return { text: prompt.text, note: emptied ? '' : 'The words are still in the Log too - empty its prompt before you send.' }
   }
 
-  return { start, stop, held: () => held }
+  // Esc: Claude Code still writes the words into its prompt, so wait for them, then take them away.
+  async function cancel() {
+    if (!on) return { text: '', note: '' }
+    quiet()
+    const { prompt } = await settled()
+    if (!prompt) return { text: '', note: 'Cancelled, but the Log could not be read - open Log to empty its prompt.' }
+    let emptied = false
+    try {
+      emptied = prompt.text ? await clearPrompt(prompt) : (await write(CLEAR_LINE), true)
+    } catch {
+      emptied = false
+    }
+    return { text: '', note: emptied ? 'Cancelled.' : 'Cancelled, but the words are still in the Log - empty its prompt before you send.' }
+  }
+
+  return { start, stop, cancel, on: () => on }
 }

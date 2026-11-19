@@ -2,7 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { chatHistory, chatPoll, claudeVoice, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
 import { localSend, mergeEntries, resetEntries } from './ticks.js'
-import { voiceHold } from './voicehold.js'
+import { isMicShortcut, voiceMic } from './voicehold.js'
+import { isMac } from '../platform.js'
 import { readChoices } from './choices.js'
 import { firstHeading } from './markdown.js'
 import { MODES, readContext, readMode, SHIFT_TAB } from './modes.js'
@@ -327,22 +328,22 @@ async function readVoice() {
   }
 }
 
-// Holding the mic holds Space in this session, wherever it runs (HOME, STORY or a DEV tab): `write`
-// is the panel's own session, and the words are read back off the same panel's Log screen.
-const micHold = voiceHold({
+// The mic holds Space in this session while it is on, wherever it runs (HOME, STORY or a DEV tab):
+// `write` is the panel's own session, and the words are read back off the same panel's Log screen.
+const micHold = voiceMic({
   write: (data) => props.write(data),
   readScreen: (count) => props.readScreen(count),
   readTyped: (count) => props.readScreen(count, { typed: true }),
 })
 
-// Shown only while Claude Code's voice is on (hold mode records while held). When Castle cannot
+// Shown only while Claude Code's voice is on (hold mode, which records while Space is held). When Castle cannot
 // tell, it shows with a hint to turn voice on first.
 const mic = computed(() => {
   if (!props.running || !isClaude.value || voice.value === undefined) return null
-  if (voice.value === null) return { ready: true, hold: micHold, hint: 'Hold to talk - turn voice on first with /voice in the Log' }
+  if (voice.value === null) return { ready: true, hold: micHold, hint: 'Talk - turn voice on first with /voice in the Log' }
   if (!voice.value.enabled) return null
   if (voice.value.mode !== 'hold') return { ready: false, hold: micHold, hint: "Chat's mic needs voice in hold mode: type /voice hold in the Log" }
-  return { ready: true, hold: micHold, hint: 'Hold to talk (or hold Space on this button). Your words come into the box to look over before Send.' }
+  return { ready: true, hold: micHold, hint: 'Talk: click to start, click again to stop. Your words come into the box to look over before Send.' }
 })
 
 watch(
@@ -356,9 +357,24 @@ watch(
   },
 )
 
+// ⌘⇧M (Ctrl+Shift+M) turns the mic on or off from anywhere in Chat, the message box too; Esc
+// while it is on cancels. Only these keys: every other one goes on as before.
+function micKeys(event) {
+  if (!props.visible || !mic.value) return
+  if (isMicShortcut(event, isMac)) {
+    event.preventDefault()
+    composer.value?.micToggle()
+  } else if (event.key === 'Escape' && composer.value?.micOn()) {
+    event.preventDefault()
+    event.stopPropagation()
+    composer.value.micCancel()
+  }
+}
+
 onMounted(() => {
   poll()
   readVoice()
+  window.addEventListener('keydown', micKeys, true)
   // /voice in the Log turns the mic on or off within a few seconds
   voiceTimer = setInterval(() => props.visible && readVoice(), 5000)
   timer = setInterval(poll, POLL_MS)
@@ -370,6 +386,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearInterval(timer)
   clearInterval(voiceTimer)
+  window.removeEventListener('keydown', micKeys, true)
   clearInterval(menuTimer)
   clearInterval(clockTimer)
   document.removeEventListener('visibilitychange', poll)
@@ -418,7 +435,7 @@ defineExpose({ poll, addPaths })
     <ImageViewer v-if="viewerStart !== null" :pictures="allPictures" :start="viewerStart" @close="viewerStart = null" />
     <PlanViewer v-if="planOpen !== null" :plan="planOpen" @close="planOpen = null" />
 
-    <ChatComposer ref="composer" :running="running" :placeholder="placeholder" :companion="companion" :media="media" :load-path="loadPath" :send="send" :mic="mic" />
+    <ChatComposer ref="composer" :running="running" :placeholder="placeholder" :companion="companion" :media="media" :load-path="loadPath" :send="send" :mic="mic" :visible="visible" />
 
     <div v-if="running && isClaude" class="modes" role="group" aria-label="Claude Code's mode">
       <span class="modes-label">MODE</span>

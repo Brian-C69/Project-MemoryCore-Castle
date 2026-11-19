@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CLEAR_LINE, HOLD_EVERY_MS, readPrompt, voiceHold, voiceProblem, voiceWorking } from './voicehold.js'
+import { CLEAR_LINE, HOLD_EVERY_MS, isMicShortcut, MAX_RECORDING_MS, MIC_SHORTCUT, readPrompt, voiceMic, voiceProblem, voiceWorking } from './voicehold.js'
 
 const rule = '─'.repeat(60)
 // Claude Code 2.1's prompt as the Log shows it (copied from a live 80-column screen)
@@ -53,9 +53,10 @@ function fakeSession(screens) {
   const typed = []
   let read = 0
   let tick = null
+  let capTimer = null
   const next = () => screens[Math.min(read++, screens.length - 1)]
   let cleared = false
-  const mic = voiceHold({
+  const mic = voiceMic({
     write: async (data) => {
       typed.push(data)
       if (data.includes(CLEAR_LINE)) cleared = true
@@ -70,16 +71,28 @@ function fakeSession(screens) {
     stopEvery: () => {
       tick = null
     },
+    after: (fn, ms) => {
+      capTimer = { fn, ms }
+      return 2
+    },
+    stopAfter: () => {
+      capTimer = null
+    },
   })
-  return { mic, typed, tick: () => tick }
+  return { mic, typed, tick: () => tick, cap: () => capTimer }
 }
 
-describe('holding the mic', () => {
-  it('types Spaces at a held key’s pace until release', async () => {
+const words = promptOf('❯ please book the table for', '  seven tonight')
+const speaking = () => [[...promptOf('❯ please book'), '  listening…'], [...promptOf('❯ '), 'Transcribing…'], words, words]
+
+describe('the mic, a click on and a click off', () => {
+  it('types Spaces at a held key’s pace from the first click until the second', async () => {
     const { mic, typed, tick } = fakeSession([promptOf('❯ ')])
+    expect(mic.on()).toBe(false)
     expect(mic.start()).toBe(true)
+    // a second start while on changes nothing (the caller's second click is a stop)
     expect(mic.start()).toBe(false)
-    expect(mic.held()).toBe(true)
+    expect(mic.on()).toBe(true)
     expect(tick().ms).toBe(HOLD_EVERY_MS)
     expect(HOLD_EVERY_MS).toBeLessThan(120)
     tick().fn()
@@ -87,17 +100,11 @@ describe('holding the mic', () => {
     expect(typed).toEqual([' ', ' ', ' '])
     await mic.stop()
     expect(tick()).toBe(null)
-    expect(mic.held()).toBe(false)
+    expect(mic.on()).toBe(false)
   })
 
   it('waits for the words, brings them to Chat and empties the prompt', async () => {
-    const words = promptOf('❯ please book the table for', '  seven tonight')
-    const { mic, typed } = fakeSession([
-      [...promptOf('❯ please book'), '  listening…'],
-      [...promptOf('❯ '), 'Transcribing…'],
-      words,
-      words,
-    ])
+    const { mic, typed } = fakeSession(speaking())
     mic.start()
     const out = await mic.stop()
     expect(out).toEqual({ text: 'please book the table for seven tonight', note: '' })
@@ -109,7 +116,7 @@ describe('holding the mic', () => {
     const { mic, typed } = fakeSession([[...promptOf('❯ '), '  No speech detected.']])
     mic.start()
     expect(await mic.stop()).toEqual({ text: '', note: 'No speech detected.' })
-    // the Spaces a short hold may leave in the prompt are taken away
+    // the Spaces a very short recording may leave in the prompt are taken away
     expect(typed.at(-1)).toBe(CLEAR_LINE)
   })
 
@@ -121,9 +128,81 @@ describe('holding the mic', () => {
     expect(out.note).toMatch(/open Log/)
   })
 
-  it('does nothing on a release without a hold', async () => {
+  it('does nothing on a stop or a cancel while off', async () => {
     const { mic, typed } = fakeSession([promptOf('❯ ')])
     expect(await mic.stop()).toEqual({ text: '', note: '' })
+    expect(await mic.cancel()).toEqual({ text: '', note: '' })
     expect(typed).toEqual([])
+  })
+})
+
+describe('Esc cancels', () => {
+  it('waits for Claude Code, empties its prompt and brings no words', async () => {
+    const { mic, typed, tick, cap } = fakeSession(speaking())
+    mic.start()
+    const out = await mic.cancel()
+    expect(out.text).toBe('')
+    expect(out.note).toBe('Cancelled.')
+    expect(typed.at(-1)).toBe(CLEAR_LINE.repeat(3))
+    expect(tick()).toBe(null)
+    expect(cap()).toBe(null)
+    expect(mic.on()).toBe(false)
+  })
+
+  it('still empties the Spaces when nothing was heard', async () => {
+    const { mic, typed } = fakeSession([promptOf('❯ ')])
+    mic.start()
+    expect((await mic.cancel()).text).toBe('')
+    expect(typed.at(-1)).toBe(CLEAR_LINE)
+  })
+})
+
+describe('the 2-minute cap', () => {
+  it('asks the caller to stop as usual after two minutes', async () => {
+    const { mic, cap } = fakeSession(speaking())
+    let capped = 0
+    mic.start({ onCap: () => (capped += 1) })
+    expect(cap().ms).toBe(MAX_RECORDING_MS)
+    expect(MAX_RECORDING_MS).toBe(120000)
+    cap().fn()
+    expect(capped).toBe(1)
+    // the stop that follows brings the words like a click would
+    expect((await mic.stop()).text).toBe('please book the table for seven tonight')
+  })
+
+  it('is cleared by a stop, and a late cap does nothing once off', async () => {
+    const { mic, cap } = fakeSession([promptOf('❯ ')])
+    let capped = 0
+    mic.start({ onCap: () => (capped += 1) })
+    const late = cap().fn
+    await mic.stop()
+    expect(cap()).toBe(null)
+    late()
+    expect(capped).toBe(0)
+  })
+})
+
+describe('the shortcut', () => {
+  const key = (over) => ({ key: 'M', code: 'KeyM', shiftKey: true, metaKey: false, ctrlKey: false, altKey: false, ...over })
+
+  it('is ⌘⇧M on a Mac and Ctrl+Shift+M elsewhere', () => {
+    expect(isMicShortcut(key({ metaKey: true }), true)).toBe(true)
+    expect(isMicShortcut(key({ ctrlKey: true }), false)).toBe(true)
+    // a layout that gives another letter on that key still counts by its code, and "m" by its letter
+    expect(isMicShortcut(key({ metaKey: true, key: 'µ' }), true)).toBe(true)
+    expect(isMicShortcut(key({ ctrlKey: true, code: 'Semicolon', key: 'm' }), false)).toBe(true)
+    expect(MIC_SHORTCUT).toBe('Ctrl+Shift+M')
+  })
+
+  it('leaves every other key alone: Cut, the other platform’s keys, M without Shift', () => {
+    expect(isMicShortcut(key({ metaKey: true, key: 'x', code: 'KeyX', shiftKey: false }), true)).toBe(false)
+    expect(isMicShortcut(key({ metaKey: true, key: 'X', code: 'KeyX' }), true)).toBe(false)
+    expect(isMicShortcut(key({ ctrlKey: true }), true)).toBe(false)
+    expect(isMicShortcut(key({ metaKey: true }), false)).toBe(false)
+    expect(isMicShortcut(key({ metaKey: true, shiftKey: false, key: 'm' }), true)).toBe(false)
+    expect(isMicShortcut(key({ metaKey: true, altKey: true }), true)).toBe(false)
+    expect(isMicShortcut(key({ metaKey: true, ctrlKey: true }), true)).toBe(false)
+    expect(isMicShortcut(key({}), true)).toBe(false)
+    expect(isMicShortcut(null, true)).toBe(false)
   })
 })
