@@ -1,17 +1,23 @@
 <script setup>
-// Settings > Alerts: every thing Castle can tell you about, one card each - a desktop notification,
-// a sound, and which sound. The sources come from the core (src-tauri/src/alerts.rs), so a source
-// added later shows up here without changing this page. CHAT keeps its older settings fields and
-// its two extra choices (which lines, and reactions); every other source is saved under `alerts`.
-import { computed, onMounted, ref } from 'vue'
+// Settings > Alerts: every thing Castle can tell you about, one group each - a desktop notification,
+// a sound, and which sound, as Settings rows (docs/settings-standard.md). The sources come from the
+// core (src-tauri/src/alerts.rs), so a source added later shows up here without changing this page.
+// CHAT keeps its older settings fields and its two extra choices (which lines, and reactions); every
+// other source is saved under `alerts`.
+import { computed, inject, onMounted, ref } from 'vue'
 import GlassSelect from '../components/GlassSelect.vue'
-import HelpTip from '../components/HelpTip.vue'
+import SettingChoice from '../components/settings/SettingChoice.vue'
+import SettingGroup from '../components/settings/SettingGroup.vue'
+import SettingRow from '../components/settings/SettingRow.vue'
+import SettingSwitch from '../components/settings/SettingSwitch.vue'
+import { ROW_STATUS } from '../components/settings/rowstatus.js'
 import { alertSoundPreview, alertSounds, alertSoundsFolder, alertSources } from '../api/castle.js'
 import { isMac } from '../platform.js'
 
 // where Castle waits when hidden, and the system's quiet mode: Windows' names, or the Mac's
 const hiddenIn = isMac ? 'the menu bar' : 'the tray'
 const quietMode = isMac ? 'macOS Focus' : "Windows' Do Not Disturb"
+const lookingElsewhere = `Castle tells you when something happens while you are looking elsewhere - in another room, or with Castle in ${hiddenIn}. Each alert stays quiet while you are already looking at the room it is about. ${quietMode} and quiet hours apply to notifications.`
 
 const props = defineProps({
   settings: { type: Object, required: true },
@@ -21,9 +27,9 @@ const props = defineProps({
 })
 const emit = defineEmits(['save', 'open-room'])
 
+const status = inject(ROW_STATUS, null)
 const sources = ref([])
 const sounds = ref([{ id: 'glass', label: 'Glass' }])
-const problem = ref('')
 const soundOptions = computed(() => sounds.value.map((s) => ({ value: s.id, label: s.label })))
 
 async function loadSources() {
@@ -41,11 +47,11 @@ async function loadSounds() {
   }
 }
 async function openFolder() {
-  problem.value = ''
+  status?.clear('sounds-folder')
   try {
     await alertSoundsFolder()
   } catch (reason) {
-    problem.value = String(reason?.message ?? reason)
+    status?.failed('sounds-folder', reason, 'Not opened')
   }
 }
 
@@ -61,11 +67,12 @@ function current(source) {
 // One change to one source: becomes a settings patch, and the row refreshes from what was saved.
 async function change(source, field, value) {
   const now = current(source)
+  const row = `${source.id}-${{ notify: 'notify', sound: 'sound', soundName: 'sound-name' }[field]}`
   if (source.id === 'chat') {
     const key = { notify: 'alertNotify', sound: 'alertSound', soundName: 'alertSoundName' }[field]
-    emit('save', { [key]: value })
+    emit('save', { [key]: value }, row)
   } else {
-    emit('save', { alerts: { ...(props.settings.alerts ?? {}), [source.id]: { notify: now.notify, sound: now.sound, soundName: now.soundName, [field]: value } } })
+    emit('save', { alerts: { ...(props.settings.alerts ?? {}), [source.id]: { notify: now.notify, sound: now.sound, soundName: now.soundName, [field]: value } } }, row)
   }
 }
 function row(source) {
@@ -83,102 +90,41 @@ defineExpose({ loadSources })
 </script>
 
 <template>
-  <section class="alerts-pane">
-    <p class="intro">
-      Castle can tell you when something happens while you are looking elsewhere - in another room, or with Castle
-      in {{ hiddenIn }}. Each kind of alert has its own notification, sound and sound choice, and stays quiet while you are
-      already looking at the room it is about. {{ quietMode }} and quiet hours apply to notifications.
-    </p>
+  <SettingGroup v-for="r in rows" :id="`alert-${r.id}`" :key="r.id" :title="r.label" :note="r.about">
+    <template #actions>
+      <button type="button" class="link" :title="`Open ${r.room.toUpperCase()}`" @click="emit('open-room', r.room)">{{ r.room.toUpperCase() }}</button>
+    </template>
+    <SettingRow :id="`${r.id}-notify`" label="Desktop notification" :description="`${quietMode} and quiet hours apply.`" :tip="lookingElsewhere">
+      <SettingSwitch :model-value="r.notify" label="Desktop notification" :disabled="!!busy" @update:model-value="(on) => change(r, 'notify', on)" />
+    </SettingRow>
+    <SettingRow :id="`${r.id}-sound`" label="Play a sound">
+      <SettingSwitch :model-value="r.sound" label="Play a sound" :disabled="!!busy" @update:model-value="(on) => change(r, 'sound', on)" />
+    </SettingRow>
+    <SettingRow :id="`${r.id}-sound-name`" label="Sound" :disabled="!r.sound" :description="r.sound ? '' : 'Turn on Play a sound to choose one.'">
+      <GlassSelect class="sound-select" :model-value="r.soundName" :options="soundOptions" :disabled="!!busy || !r.sound" :aria-label="`Sound for ${r.label}`" @update:model-value="(v) => change(r, 'soundName', v)" />
+      <button type="button" :disabled="!!busy" @click="alertSoundPreview(r.soundName)">Play</button>
+    </SettingRow>
+    <template v-if="r.id === 'chat'">
+      <SettingRow id="chat-when" label="Alert me for" :disabled="nothingOn" :description="nothingOn ? 'Turn on a notification or a sound first.' : ''" :tip="settings.alertWhen === 'named' ? namedTip : ''">
+        <SettingChoice :model-value="settings.alertWhen === 'named' ? 'named' : 'all'" :options="[{ value: 'all', label: 'Every message' }, { value: 'named', label: 'When I am named' }]" label="Alert me for" :disabled="!!busy || nothingOn" @update:model-value="(when) => emit('save', { alertWhen: when }, 'chat-when')" />
+      </SettingRow>
+      <SettingRow id="chat-reactions" label="Reactions to my messages" :disabled="nothingOn" :description="nothingOn ? 'Turn on a notification or a sound first.' : `Also when someone reacts to your message.`">
+        <SettingSwitch :model-value="!!settings.alertReactions" label="Reactions to my messages" :disabled="!!busy || nothingOn" @update:model-value="(on) => emit('save', { alertReactions: on }, 'chat-reactions')" />
+      </SettingRow>
+    </template>
+  </SettingGroup>
 
-    <article v-for="r in rows" :key="r.id" class="alert-card">
-      <header>
-        <h3>{{ r.label }}</h3>
-        <button type="button" class="link" :title="`Open ${r.room.toUpperCase()}`" @click="emit('open-room', r.room)">{{ r.room.toUpperCase() }}</button>
-      </header>
-      <p class="about">{{ r.about }}</p>
-
-      <div class="controls">
-        <label class="toggle"><input type="checkbox" :checked="r.notify" :disabled="!!busy" @change="change(r, 'notify', $event.target.checked)" /> Desktop notification</label>
-        <label class="toggle"><input type="checkbox" :checked="r.sound" :disabled="!!busy" @change="change(r, 'sound', $event.target.checked)" /> Play a sound</label>
-        <div class="sound-pick">
-          <GlassSelect class="sound-select" :model-value="r.soundName" :options="soundOptions" :disabled="!!busy || !r.sound" :aria-label="`Sound for ${r.label}`" @update:model-value="(v) => change(r, 'soundName', v)" />
-          <button type="button" :disabled="!!busy" @click="alertSoundPreview(r.soundName)">Play</button>
-        </div>
-      </div>
-
-      <template v-if="r.id === 'chat'">
-        <fieldset class="alert-when" :disabled="!!busy || nothingOn">
-          <legend>Alert me for</legend>
-          <label class="toggle"><input type="radio" name="alert-when" value="all" :checked="settings.alertWhen !== 'named'" @change="emit('save', { alertWhen: 'all' })" /> Every new message</label>
-          <div class="setting-row">
-            <label class="toggle"><input type="radio" name="alert-when" value="named" :checked="settings.alertWhen === 'named'" @change="emit('save', { alertWhen: 'named' })" /> Only when someone names me or {{ companionLabel }}</label>
-            <HelpTip :text="namedTip" />
-          </div>
-        </fieldset>
-        <label class="toggle"><input type="checkbox" :checked="!!settings.alertReactions" :disabled="!!busy || nothingOn" @change="emit('save', { alertReactions: $event.target.checked })" /> Also when someone reacts to my message</label>
-      </template>
-    </article>
-
-    <article class="alert-card">
-      <header><h3>Your own sounds</h3></header>
-      <p class="about">Put a <code>.wav</code> file in Castle's sounds folder and it joins the list for every alert above. Only .wav files are offered.</p>
-      <div class="controls">
-        <button type="button" @click="openFolder">Open the sounds folder</button>
-        <button type="button" @click="loadSounds">Refresh sounds</button>
-      </div>
-      <p v-if="problem" class="hint">{{ problem }}</p>
-    </article>
-  </section>
+  <SettingGroup id="own-sounds" title="Your own sounds" tip="Put a .wav file in Castle's sounds folder and it joins the list for every alert above. Only .wav files are offered.">
+    <SettingRow id="sounds-folder" label="Sounds folder" description="A .wav file put here joins every list above.">
+      <button type="button" @click="openFolder">Open the folder</button>
+    </SettingRow>
+    <SettingRow id="sounds-refresh" label="Sound list" description="Read the folder again after adding a sound.">
+      <button type="button" @click="loadSounds">Refresh sounds</button>
+    </SettingRow>
+  </SettingGroup>
 </template>
 
 <style scoped>
-.alerts-pane {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.intro {
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 13px;
-  line-height: 1.5;
-}
-.alert-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
-}
-.alert-card header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-.alert-card h3 {
-  margin: 0;
-  font-size: 14px;
-}
-.about {
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 12.5px;
-  line-height: 1.45;
-}
-.controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 18px;
-}
-.sound-pick {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 .sound-select {
   min-width: 190px;
 }
@@ -188,27 +134,18 @@ defineExpose({ loadSources })
   letter-spacing: 0.08em;
   opacity: 0.8;
 }
-.alert-when {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+button {
+  padding: 5px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 8px 12px;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
 }
-.alert-when legend {
-  padding: 0 6px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.setting-row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-.hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-dim);
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 </style>

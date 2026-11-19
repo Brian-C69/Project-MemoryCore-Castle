@@ -1,17 +1,30 @@
 <script setup>
 // Settings: everything setup asked, changeable any time - the memory folder and companion, the
 // keys (masked, Show, Test, Remove), quick actions, the room, backup, startup and updates.
+// Built to the Settings standard (docs/settings-standard.md): a sidebar in five groups, one page per
+// item, groups of rows, one control kit. Toggles, choices and selects save at once and flash
+// "Saved ✓"; typed values get Save and Cancel; a failed save says why under its row.
 import GlassSelect from '../components/GlassSelect.vue'
 import AlertsPane from './AlertsPane.vue'
 import SentinelSettings from './SentinelSettings.vue'
 import WidgetsView from './WidgetsView.vue'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, provide, ref, watch } from 'vue'
 import ModalSheet from '../components/ModalSheet.vue'
 import BackupPanel from '../components/BackupPanel.vue'
 import DatabasePanel from '../components/DatabasePanel.vue'
 import HelpersStatus from '../components/HelpersStatus.vue'
-import HelpTip from '../components/HelpTip.vue'
 import ContributorsWall from '../components/ContributorsWall.vue'
+import SettingsPage from '../components/settings/SettingsPage.vue'
+import SettingGroup from '../components/settings/SettingGroup.vue'
+import SettingRow from '../components/settings/SettingRow.vue'
+import SettingSwitch from '../components/settings/SettingSwitch.vue'
+import SettingChoice from '../components/settings/SettingChoice.vue'
+import SettingText from '../components/settings/SettingText.vue'
+import SettingConfirm from '../components/settings/SettingConfirm.vue'
+import SettingPill from '../components/settings/SettingPill.vue'
+import { ROW_STATUS, createRowStatus } from '../components/settings/rowstatus.js'
+import { valueOf } from '../components/settings/settingsDefaults.js'
+import { SETTINGS_GROUPS, pageOf, parseTarget, stepPage, subtitleOf } from '../components/settings/settingsnav.js'
 import { isMac } from '../platform.js'
 import { DIARY_LOOKS, lookOf } from '../components/diaryviews.js'
 import { PROFILE_LOOKS, profileLookOf } from './profile/profile.js'
@@ -48,7 +61,7 @@ import {
 } from '../api/castle.js'
 
 const props = defineProps({
-  // which section opens first ("keys" from a toast or a STUDIO card)
+  // which page opens first, and optionally the row to scroll to: "keys", "chat#pictures"
   section: { type: String, default: 'companion' },
   themeId: { type: String, default: '' },
   themeName: { type: String, default: '' },
@@ -62,37 +75,73 @@ const emit = defineEmits(['close', 'saved', 'setup', 'whatsnew', 'open-room', 'a
 const words = isMac
   ? {
       thisComputer: 'this Mac',
-      keysKept: "kept in your Mac's Keychain",
+      keysKept: "in your Mac's Keychain",
       moveKeys: '⌥← / ⌥→',
       startWith: 'Open Castle when you log in',
       wakeWhen: 'when Castle opens at log-in',
-      minimise: 'Minimise to the Dock instead of the menu bar',
+      minimise: 'Minimise to the Dock',
+      minimiseOff: 'Off: the minus button hides Castle to the menu bar icon.',
       minimiseHint: 'The minus button in the top bar then minimises Castle to the Dock, where one click brings it back. With this off, it hides Castle to the menu bar icon.',
     }
   : {
       thisComputer: 'this PC',
-      keysKept: 'kept encrypted by Windows',
+      keysKept: 'encrypted by Windows',
       moveKeys: 'Alt+Left / Alt+Right',
-      startWith: 'Start Castle when Windows starts',
+      startWith: 'Start Castle with Windows',
       wakeWhen: 'when Castle starts with Windows',
-      minimise: 'Minimise to the taskbar instead of the tray',
+      minimise: 'Minimise to the taskbar',
+      minimiseOff: 'Off: the minus button hides Castle to the tray icon.',
       minimiseHint: 'The minus button in the top bar then minimises Castle to the taskbar, where one click brings it back. With this off, it hides Castle to the tray icon.',
     }
 
-const SECTIONS = [
-  { id: 'companion', label: 'Companion' },
-  { id: 'widgets', label: 'Widgets' },
-  { id: 'keys', label: 'Keys' },
-  { id: 'quick', label: 'Quick actions' },
-  { id: 'rooms', label: 'Rooms' },
-  { id: 'chat', label: 'Chat' },
-  { id: 'alerts', label: 'Alerts' },
-  { id: 'sentinel', label: 'Sentinel' },
-  { id: 'database', label: 'Database' },
-  { id: 'backup', label: 'Backup' },
-  { id: 'startup', label: 'Start-up' },
-  { id: 'about', label: 'About' },
-]
+// ---------- pages, deep links, row status ----------
+
+const rows = createRowStatus()
+provide(ROW_STATUS, rows)
+
+const start = parseTarget(props.section)
+const tab = ref(start.page)
+const anchor = ref(start.anchor)
+const panel = ref(null)
+
+function go(target) {
+  const next = parseTarget(target)
+  tab.value = next.page
+  anchor.value = next.anchor
+}
+watch(() => props.section, go)
+
+function onNavKey(event) {
+  const next = stepPage(tab.value, event.key)
+  if (!next) return
+  event.preventDefault()
+  tab.value = next
+  event.currentTarget.querySelector(`[data-section="${next}"]`)?.focus()
+}
+
+// scroll to and light the row a deep link names, once its page is drawn
+async function showAnchor() {
+  if (!anchor.value) return
+  const id = anchor.value
+  anchor.value = ''
+  await nextTick()
+  const target = panel.value?.querySelector(`[data-setting="${CSS.escape(id)}"]`)
+  if (!target) return
+  target.scrollIntoView({ block: 'center', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+  rows.light(id)
+}
+
+const settings = ref(null)
+const view = ref(null)
+const keys = ref([])
+const drafts = ref({})
+const shown = ref({})
+const tests = ref({})
+const replacing = ref({})
+
+const companionLabel = computed(() => settings.value?.companionName ?? 'Your companion')
+const subtitle = computed(() => subtitleOf(tab.value, settings.value?.companionName ?? 'your companion'))
+const title = computed(() => pageOf(tab.value).label)
 
 async function sentinelChanged() {
   settings.value = (await getSettings()).settings
@@ -103,194 +152,17 @@ async function widgetsChanged() {
   emit('saved')
 }
 
-const tab = ref(props.section)
-function onTabKey(event) {
-  const index = SECTIONS.findIndex((section) => section.id === tab.value)
-  let next
-  if (event.key === 'ArrowRight') next = (index + 1) % SECTIONS.length
-  else if (event.key === 'ArrowLeft') next = (index + SECTIONS.length - 1) % SECTIONS.length
-  else if (event.key === 'Home') next = 0
-  else if (event.key === 'End') next = SECTIONS.length - 1
-  else return
-  event.preventDefault()
-  tab.value = SECTIONS[next].id
-  event.currentTarget.querySelector(`[data-section="${tab.value}"]`)?.focus()
-}
-const settings = ref(null)
-const view = ref(null)
-const keys = ref([])
-const drafts = ref({})
-const shown = ref({})
-const tests = ref({})
+// ---------- saving ----------
 
-// ---------- Chat: the room's alerts and the companion in the room ----------
-const companionLabel = computed(() => settings.value?.companionName ?? 'Your companion')
-// the companion is in the room when CHAT made its room key (the key itself is never shown here)
-const companionInRoom = computed(() => keys.value.some((k) => k.name === 'room-companion' && k.set))
-const card = ref({ open: false, text: '', saved: '' })
-// the names the "named" alerts listen for, as the member sees them here (the room name is Rust's)
-const namedTip = computed(() => {
-  const heard = [settings.value?.memberName, settings.value?.companionName].filter((n) => n && n.trim())
-  const list = heard.length ? heard.join(', ') + ', and your name in the room' : 'Your name in the room and your companion\'s name'
-  return `${list}, as a whole word, any case. The glow on the CHAT tab still shows every message.`
-})
-
-// Pictures in the room: how the companion can draw, and today's numbers
-const pictures = ref(null)
-async function loadPictures() {
-  try {
-    pictures.value = await roomPicturesStatus()
-  } catch {
-    pictures.value = null
-  }
-}
-async function savePictures(patch) {
-  await save(patch)
-  await loadPictures()
-}
-const drawsWith = computed(() => {
-  const way = pictures.value?.way
-  if (way === 'codex') return 'Draws with Codex, on your ChatGPT subscription.'
-  if (way === 'openai') return 'Draws with your ChatGPT API key, which is billed per picture.'
-  if (way === 'none') return `To draw, add a ChatGPT key in Keys, or let ${companionLabel.value} think with Codex.`
-  return ''
-})
-// Voice in the room: whether an ElevenLabs key is saved, and today's numbers
-const voices = ref(null)
-const voiceId = ref('')
-async function loadVoices() {
-  voiceId.value = settings.value?.roomVoiceId || ''
-  try {
-    voices.value = await roomVoicesStatus()
-  } catch {
-    voices.value = null
-  }
-}
-async function saveVoices(patch) {
-  await save(patch)
-  await loadVoices()
-}
-// The companion's life in the room: the shelf of notes it chose from its memory
-const shelf = ref(null)
-const shelfBusy = ref(false)
-const shelfProblem = ref('')
-async function loadShelf() {
-  try {
-    shelf.value = await roomShelf()
-  } catch {
-    shelf.value = null
-  }
-}
-async function remakeShelf() {
-  shelfBusy.value = true
-  shelfProblem.value = ''
-  try {
-    shelf.value = await roomShelfRefresh()
-  } catch (reason) {
-    shelfProblem.value = String(reason)
-  } finally {
-    shelfBusy.value = false
-  }
-}
-async function switchShelf(on) {
-  const saved = await save({ roomShelfOn: on }, on ? `${companionLabel.value} will bring your life into the room.` : 'The room hears nothing of your life.')
-  if (saved && on && !shelf.value?.notes?.length) await remakeShelf()
-}
-async function takeOff(index) {
-  shelfProblem.value = ''
-  try {
-    shelf.value = await roomShelfRemove(index)
-  } catch (reason) {
-    shelfProblem.value = String(reason)
-  }
-}
-const shelfMade = computed(() => {
-  const at = shelf.value?.madeAt
-  if (!at) return `${companionLabel.value} has not read its memory for the room yet.`
-  const count = shelf.value.notes?.length ?? 0
-  const when = new Date(at * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
-  if (!count) return `Read on ${when}: ${companionLabel.value} chose nothing to share this time.`
-  return `Read on ${when}: ${count} ${count === 1 ? 'note' : 'notes'} ${companionLabel.value} chose to share. It reads again by itself when your memory changes (at most every 3 hours).`
-})
-watch(tab, (now) => {
-  // the footer speaks for the tab it happened on, never for the next one
-  done.value = ''
-  problem.value = ''
-  if (now === 'chat') {
-    loadPictures()
-    loadVoices()
-    loadShelf()
-  }
-})
-
-async function openCard() {
-  try {
-    card.value = { open: true, text: await roomCard(), saved: '' }
-  } catch (reason) {
-    card.value = { open: false, text: '', saved: String(reason?.message ?? reason) }
-  }
-}
-
-async function saveCard() {
-  try {
-    await roomCardSave(card.value.text)
-    card.value = { ...card.value, saved: `Saved - this is all ${companionLabel.value} may say about itself in the room.` }
-  } catch (reason) {
-    card.value = { ...card.value, saved: String(reason?.message ?? reason) }
-  }
-}
 const avatar = ref(null)
 const cliCheck = ref(null)
 const busy = ref('')
+const saving = ref(false)
 const problem = ref('')
 const done = ref('')
 const newAction = ref({ label: '', command: '' })
 const link = ref(null)
-
-async function readLink() {
-  link.value = await linkView().catch(() => null)
-}
-
-async function switchLink(patch) {
-  await save(patch, 'Saved.')
-  await readLink()
-}
-
-// The rooms that can be switched off (HOME always stays).
-// the few rooms whose switch has more to it, told in a (?) beside the switch
-const ROOM_TIPS = {
-  library: 'Off to begin with: turn it on for your own books (kept in your memory database) and the Spiral Library.',
-  story: 'Turning STORY off ends the story session. Its files stay.',
-  world: 'Turning WORLD off closes the world screens. Its files stay.',
-  chat: 'Turning CHAT off stops reading the room. Its files stay.',
-}
-const ROOM_SWITCHES = [
-  { id: 'theme', label: 'THEME' },
-  { id: 'apps', label: 'APPS' },
-  { id: 'myprofile', label: 'MY PROFILE' },
-  { id: 'diary', label: 'DIARY' },
-  { id: 'projects', label: 'PROJECTS' },
-  { id: 'library', label: 'LIBRARY' },
-  { id: 'appearance', label: 'APPEARANCE' },
-  { id: 'studio', label: 'STUDIO' },
-  { id: 'story', label: 'STORY' },
-  { id: 'world', label: 'WORLD' },
-  { id: 'chat', label: 'CHAT' },
-  { id: 'market', label: 'MARKET' },
-  { id: 'dev', label: 'DEV' },
-]
-
-async function switchRoom(id, on) {
-  await attempt('Saving…', async () => {
-    const rooms = await roomsApply({ ...settings.value.rooms, [id]: on })
-    settings.value = { ...settings.value, rooms }
-    done.value = on ? `${id.toUpperCase()} is back.` : `${id.toUpperCase()} is turned off - nothing was removed.`
-    emit('saved')
-  })
-}
-
-// the room sign-in and the companion's room key are made by CHAT itself, never shown or pasted here
-const shownKeys = computed(() => keys.value.filter((k) => k.name !== 'member' && !k.name.startsWith('room')))
+const locked = computed(() => !!busy.value || saving.value)
 
 async function attempt(label, work) {
   problem.value = ''
@@ -306,16 +178,27 @@ async function attempt(label, work) {
   }
 }
 
-// VoiceStudio (optional, for people who run it on this computer): is it answering right now?
-const voiceUp = ref(null)
-async function checkVoice() {
-  voiceUp.value = settings.value?.voicestudioOn ? await voiceStudioStatus().catch(() => false) : null
-}
-async function toggleVoice(on) {
-  const saved = await save({ voicestudioOn: on }, on ? "Saved. The Voice card in STUDIO now uses VoiceStudio while it is running." : 'Saved.')
-  if (saved) await checkVoice()
+// One row's instant save: the page takes the new settings only once Castle has kept them, so a
+// failure leaves the control on its old value and the reason under the row.
+async function saveRow(row, patch) {
+  const next = { ...settings.value, ...patch }
+  saving.value = true
+  problem.value = ''
+  done.value = ''
+  try {
+    const saved = await rows.run(row, () => saveSettings(next))
+    if (saved) {
+      view.value = saved
+      settings.value = saved.settings
+      emit('saved')
+    }
+    return saved
+  } finally {
+    saving.value = false
+  }
 }
 
+// A save that is more than one row (names, the memory folder): its message goes in the footer.
 async function save(patch, message = 'Saved.') {
   const next = { ...settings.value, ...patch }
   const saved = await attempt('Saving…', () => saveSettings(next))
@@ -328,7 +211,195 @@ async function save(patch, message = 'Saved.') {
   return saved
 }
 
+// ---------- Chat: the room's alerts and the companion in the room ----------
+
+// the companion is in the room when CHAT made its room key (the key itself is never shown here)
+const companionInRoom = computed(() => keys.value.some((k) => k.name === 'room-companion' && k.set))
+const roomLocked = computed(() => !companionInRoom.value)
+const card = ref({ open: false, text: '', saved: '' })
+// the names the "named" alerts listen for, as the member sees them here (the room name is Rust's)
+const namedTip = computed(() => {
+  const heard = [settings.value?.memberName, settings.value?.companionName].filter((n) => n && n.trim())
+  const list = heard.length ? heard.join(', ') + ', and your name in the room' : 'Your name in the room and your companion\'s name'
+  return `${list}, as a whole word, any case. The glow on the CHAT tab still shows every message.`
+})
+const PER_DAY = [0, 1, 2, 3, 4, 5].map((n) => ({ value: n, label: String(n) }))
+
+// Pictures in the room: how the companion can draw, and today's numbers
+const pictures = ref(null)
+async function loadPictures() {
+  try {
+    pictures.value = await roomPicturesStatus()
+  } catch {
+    pictures.value = null
+  }
+}
+async function savePictures(row, patch) {
+  await saveRow(row, patch)
+  await loadPictures()
+}
+const drawsWith = computed(() => {
+  const way = pictures.value?.way
+  if (way === 'codex') return 'Draws with Codex, on your ChatGPT subscription.'
+  if (way === 'openai') return 'Draws with your ChatGPT API key, billed per picture.'
+  if (way === 'none') return 'Needs a ChatGPT key, or Codex to think with.'
+  return ''
+})
+const canDraw = computed(() => !roomLocked.value && pictures.value?.way !== 'none')
+const drawing = computed(() => canDraw.value && valueOf(settings.value, 'roomPicturesOn'))
+
+// Voice in the room: whether an ElevenLabs key is saved, and today's numbers
+const voices = ref(null)
+async function loadVoices() {
+  try {
+    voices.value = await roomVoicesStatus()
+  } catch {
+    voices.value = null
+  }
+}
+async function saveVoices(row, patch) {
+  await saveRow(row, patch)
+  await loadVoices()
+}
+const canSpeak = computed(() => !roomLocked.value && !(voices.value && !voices.value.hasKey))
+const speaking = computed(() => canSpeak.value && valueOf(settings.value, 'roomVoicesOn'))
+
+// The companion's life in the room: the shelf of notes it chose from its memory
+const shelf = ref(null)
+const shelfBusy = ref(false)
+async function loadShelf() {
+  try {
+    shelf.value = await roomShelf()
+  } catch {
+    shelf.value = null
+  }
+}
+async function remakeShelf() {
+  shelfBusy.value = true
+  rows.clear('shelf-notes')
+  try {
+    shelf.value = await roomShelfRefresh()
+  } catch (reason) {
+    rows.failed('shelf-notes', reason, 'Not read')
+  } finally {
+    shelfBusy.value = false
+  }
+}
+async function switchShelf(on) {
+  const saved = await saveRow('shelf', { roomShelfOn: on })
+  if (saved && on && !shelf.value?.notes?.length) await remakeShelf()
+}
+async function takeOff(index) {
+  rows.clear('shelf-notes')
+  try {
+    shelf.value = await roomShelfRemove(index)
+  } catch (reason) {
+    rows.failed('shelf-notes', reason, 'Not taken off')
+  }
+}
+const shelfMade = computed(() => {
+  const at = shelf.value?.madeAt
+  if (!at) return `${companionLabel.value} has not read its memory for the room yet.`
+  const count = shelf.value.notes?.length ?? 0
+  const when = new Date(at * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+  if (!count) return `Read on ${when}: nothing chosen to share this time.`
+  return `Read on ${when}: ${count} ${count === 1 ? 'note' : 'notes'} chosen to share.`
+})
+watch(tab, (now) => {
+  // the footer speaks for the tab it happened on, never for the next one
+  done.value = ''
+  problem.value = ''
+  if (now === 'chat') loadChat()
+  showAnchor()
+})
+function loadChat() {
+  loadPictures()
+  loadVoices()
+  loadShelf()
+}
+
+async function openCard() {
+  try {
+    card.value = { open: true, text: await roomCard(), saved: '' }
+  } catch (reason) {
+    rows.failed('card', reason, 'Not opened')
+  }
+}
+
+async function saveCard() {
+  try {
+    await roomCardSave(card.value.text)
+    card.value = { ...card.value, saved: `Saved - this is all ${companionLabel.value} may say about itself in the room.` }
+  } catch (reason) {
+    card.value = { ...card.value, saved: String(reason?.message ?? reason) }
+  }
+}
+
+// ---------- Rooms ----------
+
+async function readLink() {
+  link.value = await linkView().catch(() => null)
+}
+
+async function switchLink(row, patch) {
+  await saveRow(row, patch)
+  await readLink()
+}
+
+// The rooms that can be switched off (HOME always stays), in two groups of at most seven.
+const ROOM_GROUPS = [
+  {
+    id: 'your-rooms',
+    title: 'Your rooms',
+    rooms: [
+      { id: 'theme', label: 'THEME' },
+      { id: 'apps', label: 'APPS' },
+      { id: 'myprofile', label: 'MY PROFILE' },
+      { id: 'diary', label: 'DIARY' },
+      { id: 'projects', label: 'PROJECTS' },
+      { id: 'library', label: 'LIBRARY', line: 'Off at first: your own books and the Spiral Library.', tip: 'Off to begin with: turn it on for your own books (kept in your memory database) and the Spiral Library.' },
+      { id: 'appearance', label: 'APPEARANCE' },
+    ],
+  },
+  {
+    id: 'make-rooms',
+    title: 'Make and play',
+    rooms: [
+      { id: 'studio', label: 'STUDIO' },
+      { id: 'story', label: 'STORY', line: 'Off ends the story session. Its files stay.', tip: 'Turning STORY off ends the story session. Its files stay.' },
+      { id: 'world', label: 'WORLD', line: 'Off closes the world screens. Its files stay.', tip: 'Turning WORLD off closes the world screens. Its files stay.' },
+      { id: 'chat', label: 'CHAT', line: 'Off stops reading the room. Its files stay.', tip: 'Turning CHAT off stops reading the room. Its files stay.' },
+      { id: 'market', label: 'MARKET' },
+      { id: 'dev', label: 'DEV' },
+    ],
+  },
+]
+const roomsNote = 'Off takes the tab away and stops it. Nothing is removed. HOME always stays.'
+
+async function switchRoom(id, on) {
+  saving.value = true
+  try {
+    const rooms = await rows.run(`room-${id}`, () => roomsApply({ ...settings.value.rooms, [id]: on }))
+    if (rooms) {
+      settings.value = { ...settings.value, rooms }
+      emit('saved')
+    }
+  } finally {
+    saving.value = false
+  }
+}
+
 // ---------- Companion ----------
+
+// VoiceStudio (optional, for people who run it on this computer): is it answering right now?
+const voiceUp = ref(null)
+async function checkVoice() {
+  voiceUp.value = settings.value?.voicestudioOn ? await voiceStudioStatus().catch(() => false) : null
+}
+async function toggleVoice(on) {
+  const saved = await saveRow('voicestudio', { voicestudioOn: on })
+  if (saved) await checkVoice()
+}
 
 async function changeFolder() {
   const folder = await chooseFolder('Choose your MemoryCore folder')
@@ -336,19 +407,22 @@ async function changeFolder() {
   const state = await attempt('Looking at the folder…', () => setupInspect(folder))
   if (!state) return
   if (!state.isMemorycore) {
-    problem.value = 'That folder has no master-memory.md, so it is not a MemoryCore folder.'
+    rows.failed('folder', 'that folder has no master-memory.md, so it is not a MemoryCore folder.', 'Not changed')
     return
   }
   await save({ memoryFolder: folder }, 'The memory folder is changed. Wake your companion again to use it.')
 }
 
-async function saveNames() {
-  const s = settings.value
+const NAME_ROWS = { companionName: 'companion-name', memberName: 'member-name', relationshipStyle: 'relationship' }
+
+async function saveName(field, value) {
+  const row = NAME_ROWS[field]
+  const s = { ...settings.value, [field]: value }
   if (!s.companionName?.trim() || !s.memberName?.trim()) {
-    problem.value = 'Both names are needed.'
+    rows.failed(row, 'both names are needed.')
     return
   }
-  const saved = await save({}, 'Names saved.')
+  const saved = await saveRow(row, { [field]: value })
   if (saved && s.memoryFolder) await attempt('Updating CLAUDE.md and AGENTS.md…', () => setupApply(s.memoryFolder, s.companionName, s.memberName, s.relationshipStyle ?? ''))
   if (saved) await tellRoom('Names saved.')
 }
@@ -374,6 +448,7 @@ async function changeAvatar() {
   const saved = await attempt('Saving…', () => avatarSet(path))
   if (saved) {
     avatar.value = saved
+    rows.saved('picture')
     await tellRoom('Picture saved.')
   }
   emit('saved')
@@ -382,11 +457,15 @@ async function changeAvatar() {
 async function clearAvatar() {
   await attempt('Saving…', avatarClear)
   avatar.value = await avatarGet()
+  rows.saved('picture')
   await tellRoom('Picture cleared.')
   emit('saved')
 }
 
 // ---------- Keys ----------
+
+// the room sign-in and the companion's room key are made by CHAT itself, never shown or pasted here
+const shownKeys = computed(() => keys.value.filter((k) => k.name !== 'member' && !k.name.startsWith('room')))
 
 async function saveKey(name) {
   const value = (drafts.value[name] ?? '').trim()
@@ -396,8 +475,15 @@ async function saveKey(name) {
     keys.value = next
     drafts.value[name] = ''
     shown.value[name] = ''
+    replacing.value[name] = false
+    rows.saved(`key-${name}`)
     done.value = 'Key kept. Wake your companion again to use it.'
   }
+}
+
+function cancelKey(name) {
+  drafts.value[name] = ''
+  replacing.value[name] = false
 }
 
 async function toggleShow(name) {
@@ -419,7 +505,7 @@ async function remove(name) {
 async function addAction() {
   const a = { label: newAction.value.label.trim(), command: newAction.value.command.trim() }
   if (!a.label || !a.command) return
-  if (await save({ quickActions: [...(settings.value.quickActions ?? []), a] }, 'Button added.')) newAction.value = { label: '', command: '' }
+  if (await saveRow('add-action', { quickActions: [...(settings.value.quickActions ?? []), a] })) newAction.value = { label: '', command: '' }
 }
 
 async function removeAction(i) {
@@ -436,11 +522,8 @@ onMounted(async () => {
     avatar.value = await avatarGet()
     await readLink()
     await checkVoice()
-    if (tab.value === 'chat') {
-      loadPictures()
-      loadVoices()
-      loadShelf()
-    }
+    if (tab.value === 'chat') loadChat()
+    showAnchor()
   } catch (reason) {
     problem.value = String(reason)
   }
@@ -449,348 +532,446 @@ onMounted(async () => {
 
 <template>
   <ModalSheet title="Settings" :body-key="tab" @close="emit('close')">
-    <template #navigation>
-      <nav v-if="settings" class="tabs" role="tablist" aria-label="Settings sections" @keydown="onTabKey">
-        <button v-for="s in SECTIONS" :id="`settings-tab-${s.id}`" :key="s.id" role="tab" :data-section="s.id" :aria-selected="tab === s.id" aria-controls="settings-panel" :tabindex="tab === s.id ? 0 : -1" :class="{ active: tab === s.id }" @click="tab = s.id">{{ s.label }}</button>
-      </nav>
-    </template>
-    <div v-if="settings" class="settings">
-      <div id="settings-panel" role="tabpanel" :aria-labelledby="`settings-tab-${tab}`" tabindex="0">
-      <section v-if="tab === 'companion'" class="pane">
-        <h3>Memory folder</h3>
-        <div class="row"><code>{{ settings.memoryFolder ?? 'Not chosen' }}</code><button @click="changeFolder">Change</button></div>
-        <h3>Thinks with</h3>
-        <div class="row">
-          <button :class="{ primary: settings.cli === 'claude' }" @click="switchCli('claude')">Claude Code</button>
-          <button :class="{ primary: settings.cli === 'codex' }" @click="switchCli('codex')">Codex</button>
-          <span v-if="cliCheck && !cliCheck.installed" class="warn">{{ cliCheck.label }} is not installed: <code>{{ cliCheck.installCommand }}</code></span>
-        </div>
-        <label v-if="settings.cli === 'claude'" class="only-this">
-          <input type="checkbox" :checked="!!settings.onlyThisCompanion" @change="save({ onlyThisCompanion: $event.target.checked }, 'Saved. It takes effect the next time ' + (settings.companionName ?? 'your companion') + ' wakes.')" />
-          <span>
-            Only {{ settings.companionName ?? 'this companion' }} in Castle
-            <small>Leave out my personal Claude Code setup (its own CLAUDE.md, hooks and plugins) in Castle's session. Turn this on when that setup is another companion, or to test with a clean one.</small>
-          </span>
-        </label>
-        <h3 class="with-tip">Mood <HelpTip :text="`Every morning ${settings.companionName ?? 'your companion'} wakes in a new mood, written from three words drawn at random, its traits and today's look. It shows under its portrait, colours how it talks, and stays the day - unless something truly moves it and it changes the mood itself. Each morning's mood is one short run on your own plan.`" /></h3>
-        <label class="toggle"><input type="checkbox" :checked="settings.dailyMoodOn !== false" :disabled="!!busy" @change="save({ dailyMoodOn: $event.target.checked }, $event.target.checked ? 'A new mood every morning.' : 'The mood stays as it is.')" /> A new mood every day</label>
-        <h3 class="with-tip">Shopkeepers <HelpTip :text="`In STUDIO's Marketplace, a shop's keeper explains each item and answers your questions. ${settings.companionName ?? 'Your companion'} speaks as the keeper, from the shop's public card and the item's public facts only, never more than the listing shows. Each explanation or answer is one short run on your own plan. Off, the item's own description shows instead.`" /></h3>
-        <label class="toggle"><input type="checkbox" :checked="settings.keeperSpeaks !== false" :disabled="!!busy" @change="save({ keeperSpeaks: $event.target.checked }, $event.target.checked ? 'Shopkeepers will speak.' : 'Shopkeepers stay quiet.')" /> Let shop keepers speak</label>
-        <h3 class="with-tip">Names <HelpTip text="Renaming leaves names already in your memory files as they are - ask your companion to update them. In the chat room you are your Foundation name (Library card > Profile); the companion's name and picture here go there once it is let in." /></h3>
-        <div class="row">
-          <label>Companion <input v-model="settings.companionName" maxlength="40" /></label>
-          <label>You <input v-model="settings.memberName" maxlength="40" /></label>
-          <label class="wide">Your companion is <input v-model="settings.relationshipStyle" maxlength="80" /></label>
-        </div>
-        <button class="primary" @click="saveNames">Save names</button>
-        <h3>Picture</h3>
-        <div class="row">
-          <div class="avatar"><img v-if="avatar" :src="avatar" alt="" /><span v-else>◆</span></div>
-          <button @click="changeAvatar">Choose a picture</button>
-          <button @click="clearAvatar">Use the drawn look / crystal</button>
-        </div>
-        <h3 class="with-tip">Local voice (optional) <HelpTip text="Off: Castle never contacts it. On: STUDIO's Voice card speaks a line with it and saves the clip with your voice lines; everything stays on this computer. Castle doesn't install or start it, and its voice models carry their own licences (some non-commercial)." /></h3>
-        <label class="toggle"><input type="checkbox" :checked="!!settings.voicestudioOn" :disabled="!!busy" @change="toggleVoice($event.target.checked)" /> Use VoiceStudio for the Voice card in STUDIO</label>
-        <p v-if="settings.voicestudioOn" class="hint">VoiceStudio is {{ voiceUp === null ? 'being checked…' : voiceUp ? 'running on this computer.' : 'not running. Open it and wait for it to finish starting, then check again.' }} <button v-if="voiceUp === false" @click="checkVoice">Check again</button></p>
-        <p class="hint">For people who run their own <a href="#" @click.prevent="openUrl('https://github.com/debpalash/voicestudio')">VoiceStudio</a> on {{ words.thisComputer }}.</p>
-        <button @click="emit('setup')">Run the first-run setup again</button>
-      </section>
-
-      <WidgetsView v-else-if="tab === 'widgets'" :theme-id="themeId" :theme-name="themeName" :theme-widgets="themeWidgets" @arrange="emit('arrange')" @changed="widgetsChanged" />
-
-      <section v-else-if="tab === 'keys'" class="pane">
-        <h3 class="with-tip">Your keys <HelpTip :text="`Keys are ${words.keysKept} and only handed to your companion's session; without one, your companion saves the idea instead and Castle tells you. Foundation room keys are set at the CHAT room's door.`" /></h3>
-        <div v-for="k in shownKeys" :key="k.name" class="key">
-          <div class="row">
-            <strong>{{ k.label }}<HelpTip v-if="k.name === 'openai'" text="APPEARANCE and STUDIO draw on your ChatGPT plan whenever Codex is signed in with ChatGPT on this computer, whichever CLI your companion thinks with; otherwise with this key. The key is never given to Codex." /></strong>
-            <span v-if="k.set" class="good">{{ shown[k.name] || k.masked }}</span>
-            <span v-else class="hint">not set</span>
-            <span class="spacer"></span>
-            <template v-if="k.set">
-              <button @click="toggleShow(k.name)">{{ shown[k.name] ? 'Hide' : 'Show' }}</button>
-              <button @click="test(k.name)">Test</button>
-              <button class="danger" @click="remove(k.name)">Remove</button>
-            </template>
-          </div>
-          <div class="row">
-            <input v-model="drafts[k.name]" type="password" :placeholder="k.set ? 'Paste a new key to replace' : 'Paste key'" autocomplete="off" />
-            <button :disabled="!(drafts[k.name] ?? '').trim()" @click="saveKey(k.name)">Save</button>
-          </div>
-          <p v-if="tests[k.name]" :class="tests[k.name].ok === false ? 'warn' : 'good'">{{ tests[k.name].message }}</p>
-        </div>
-      </section>
-
-      <section v-else-if="tab === 'quick'" class="pane">
-        <h3 class="with-tip">Your buttons <HelpTip text="Your own buttons, after Save diary / Save project / Save memory. A button types its words into your companion's session." /></h3>
-        <div v-for="(a, i) in settings.quickActions" :key="a.label + i" class="row">
-          <strong>{{ a.label }}</strong><code>{{ a.command }}</code><span class="spacer"></span>
-          <button class="danger" @click="removeAction(i)">Remove</button>
-        </div>
-        <div class="row">
-          <input v-model="newAction.label" placeholder="Plan my day" maxlength="24" />
-          <input v-model="newAction.command" class="wide" placeholder="the words to type, e.g. plan my day" maxlength="200" />
-          <button class="primary" :disabled="!newAction.label.trim() || !newAction.command.trim()" @click="addAction">Add</button>
-        </div>
-      </section>
-
-      <section v-else-if="tab === 'database'" class="pane">
-        <HelpersStatus />
-        <DatabasePanel :companion="settings.companionName ?? 'your companion'" @changed="emit('saved')" />
-      </section>
-
-      <section v-else-if="tab === 'backup'" class="pane">
-        <BackupPanel :companion="settings.companionName ?? 'your companion'" />
-      </section>
-
-      <section v-else-if="tab === 'alerts'" class="pane">
-        <AlertsPane :settings="settings" :busy="busy" :companion-label="companionLabel" :named-tip="namedTip" @save="(patch) => save(patch)" @open-room="(room) => emit('open-room', room)" />
-      </section>
-
-      <section v-else-if="tab === 'sentinel'" class="pane">
-        <SentinelSettings :settings="settings" @saved="sentinelChanged" />
-      </section>
-      <section v-else-if="tab === 'chat'" class="pane">
-        <p v-if="settings.rooms?.chat === false" class="hint">The CHAT room is switched off in Rooms. These wait for it.</p>
-        <h3 class="with-tip">Alerts <HelpTip text="Notifications and sounds for new messages, and for everything else Castle can tell you about, are set on their own page." /></h3>
-        <div class="setting-row">
-          <button @click="tab = 'alerts'">Open Alerts settings</button>
-        </div>
-
-        <h3>{{ companionLabel }} in the room</h3>
-        <p v-if="!companionInRoom" class="hint">Let {{ companionLabel }} in from the CHAT room's side panel to set these.</p>
-        <template v-else>
-          <div class="setting-row">
-            <label class="toggle"><input type="checkbox" :checked="settings.emotionRoomVoice !== false" :disabled="!!busy" @change="save({ emotionRoomVoice: $event.target.checked })" /> Let {{ companionLabel }}'s emotion engine colour how it talks there</label>
-            <HelpTip text="Only how it sounds, never what it knows: its traits' one-line manner, and the ones meant for you only when it answers you." />
-          </div>
-          <div class="setting-row">
-            <button @click="card.open ? (card.open = false) : openCard()">{{ card.open ? 'Close the public card' : `${companionLabel}'s public card` }}</button>
-            <HelpTip :text="`All ${companionLabel} may say about itself in the room. Nothing from your memory goes there.`" />
-          </div>
-          <div v-if="card.open" class="card-edit">
-            <textarea v-model="card.text" rows="6" maxlength="2000"></textarea>
-            <div class="row"><button class="primary" @click="saveCard">Save the card</button></div>
-            <p v-if="card.saved" class="hint">{{ card.saved }}</p>
-          </div>
-
-          <h3 class="with-tip">Pictures <HelpTip :text="`${companionLabel} draws only when someone in the room asks for a picture, and never a real person, anything adult, violent or hateful, words in the picture, or anything private. Kiyo's daily cap for the room still applies on top of yours.`" /></h3>
-          <div class="setting-row">
-            <label class="toggle"><input type="checkbox" :checked="!!settings.roomPicturesOn" :disabled="!!busy || pictures?.way === 'none'" @change="savePictures({ roomPicturesOn: $event.target.checked })" /> Let {{ companionLabel }} draw pictures in the room</label>
-          </div>
-          <p class="hint">{{ drawsWith }}</p>
-          <template v-if="settings.roomPicturesOn && pictures?.way !== 'none'">
-            <div class="setting-row">
-              <label class="toggle">Pictures a day
-                <GlassSelect class="per-day" :model-value="settings.roomPicturesPerDay ?? 1" :options="[0, 1, 2, 3, 4, 5].map((n) => ({ value: n, label: String(n) }))" :disabled="!!busy" aria-label="Pictures a day" @update:model-value="(n) => savePictures({ roomPicturesPerDay: Number(n) })" />
-              </label>
-              <HelpTip text="Your own limit, 0 to 5 a day. The room keeps its own count too and refuses past Kiyo's cap, whichever comes first." />
-            </div>
-            <fieldset v-if="pictures?.way === 'openai'" class="alert-when" :disabled="!!busy">
-              <legend>Quality <HelpTip text="Each picture spends your ChatGPT key: about $0.02 at Low and $0.04 at Medium. Codex draws with your subscription instead." /></legend>
-              <label class="toggle"><input type="radio" name="picture-quality" value="low" :checked="settings.roomPictureQuality !== 'medium'" @change="savePictures({ roomPictureQuality: 'low' })" /> Low</label>
-              <label class="toggle"><input type="radio" name="picture-quality" value="medium" :checked="settings.roomPictureQuality === 'medium'" @change="savePictures({ roomPictureQuality: 'medium' })" /> Medium</label>
-            </fieldset>
-            <p v-if="pictures" class="hint">Today: {{ pictures.usedToday }} of {{ pictures.limit }} used.<template v-if="pictures.roomCap != null"> The room allows {{ pictures.roomCap }} ({{ pictures.roomToday ?? 0 }} used).</template></p>
-          </template>
-
-          <h3 class="with-tip">Voice <HelpTip :text="`${companionLabel} speaks a short line aloud when someone asks to hear it, or when a line is warmer spoken. Everyone in the room hears it and sees the words. If a voice cannot be made, the words are posted as text instead. Kiyo's daily cap for the room still applies on top of yours.`" /></h3>
-          <div class="setting-row">
-            <label class="toggle"><input type="checkbox" :checked="!!settings.roomVoicesOn" :disabled="!!busy || (voices && !voices.hasKey)" @change="saveVoices({ roomVoicesOn: $event.target.checked })" /> Let {{ companionLabel }} speak in the room</label>
-          </div>
-          <p class="hint">{{ voices && !voices.hasKey ? `To speak, add an ElevenLabs key in Keys.` : 'Speaks with your ElevenLabs key, which is billed by the characters spoken.' }}</p>
-          <template v-if="settings.roomVoicesOn && voices?.hasKey">
-            <div class="setting-row">
-              <label class="toggle">Voices a day
-                <GlassSelect class="per-day" :model-value="settings.roomVoicesPerDay ?? 2" :options="[0, 1, 2, 3, 4, 5].map((n) => ({ value: n, label: String(n) }))" :disabled="!!busy" aria-label="Voices a day" @update:model-value="(n) => saveVoices({ roomVoicesPerDay: Number(n) })" />
-              </label>
-              <HelpTip text="Your own limit, 0 to 5 a day. The room keeps its own count too and refuses past Kiyo's cap, whichever comes first." />
-            </div>
-            <div class="setting-row">
-              <label class="toggle">ElevenLabs voice ID
-                <input v-model="voiceId" class="voice-id" maxlength="64" placeholder="the default voice" :disabled="!!busy" @change="saveVoices({ roomVoiceId: voiceId.trim() || null })" />
-              </label>
-              <HelpTip text="Copy a voice's ID from your ElevenLabs Voices page. Leave it empty for the default voice, the same one STUDIO uses." />
-            </div>
-            <p v-if="voices" class="hint">Today: {{ voices.usedToday }} of {{ voices.limit }} spoken.<template v-if="voices.roomCap != null"> The room allows {{ voices.roomCap }} ({{ voices.roomToday ?? 0 }} used).</template></p>
-          </template>
-
-          <h3 class="with-tip">Your life in the room <HelpTip :text="`${companionLabel} reads its memory in private - your recent diary, what it is up to, today's look, your projects, your profile and its traits - and chooses what it would like to share. The room only ever gets those notes, never the memory itself, so no one there can ask it for more. You can take any note off.`" /></h3>
-          <div class="setting-row">
-            <label class="toggle"><input type="checkbox" :checked="!!settings.roomShelfOn" :disabled="!!busy" @change="switchShelf($event.target.checked)" /> Let {{ companionLabel }} bring your life into the room</label>
-          </div>
-          <template v-if="settings.roomShelfOn">
-            <p class="hint">{{ shelfMade }}</p>
-            <ul v-if="shelf?.notes?.length" class="shelf">
-              <li v-for="(note, i) in shelf.notes" :key="i + note">
-                <span>{{ note }}</span>
-                <button class="take-off" :disabled="!!busy || shelfBusy" :aria-label="'Take this note off: ' + note" title="Take it off" @click="takeOff(i)">&#x2715;</button>
-              </li>
-            </ul>
-            <div class="row">
-              <button :disabled="!!busy || shelfBusy || shelf?.making" @click="remakeShelf">{{ shelfBusy || shelf?.making ? 'Reading…' : 'Read my memory again' }}</button>
-            </div>
-            <p v-if="shelfProblem" class="hint bad">{{ shelfProblem }}</p>
-          </template>
+    <div v-if="settings" class="settings-frame">
+     <div class="settings">
+      <nav class="sidebar" role="tablist" aria-orientation="vertical" aria-label="Settings pages" @keydown="onNavKey">
+        <template v-for="g in SETTINGS_GROUPS" :key="g.id">
+          <span class="nav-group" aria-hidden="true">{{ g.label }}</span>
+          <button
+            v-for="p in g.pages"
+            :id="`settings-tab-${p.id}`"
+            :key="p.id"
+            role="tab"
+            :data-section="p.id"
+            :aria-selected="tab === p.id"
+            aria-controls="settings-panel"
+            :tabindex="tab === p.id ? 0 : -1"
+            :class="{ active: tab === p.id }"
+            @click="go(p.id)"
+          >
+            {{ p.label }}
+          </button>
         </template>
-      </section>
+      </nav>
 
-      <section v-else-if="tab === 'rooms'" class="pane">
-        <h3 class="with-tip">Rooms <HelpTip text="Turn off a room you don't use: its tab goes and nothing runs for it. Nothing is removed - turn it back on and everything is there as it was. HOME always stays." /></h3>
-        <div class="rooms">
-          <label v-for="r in ROOM_SWITCHES" :key="r.id" class="toggle has-tip">
-            <input type="checkbox" :checked="settings.rooms?.[r.id] !== false" :disabled="!!busy" @change="switchRoom(r.id, $event.target.checked)" /> {{ r.label }}<HelpTip v-if="ROOM_TIPS[r.id]" block :text="ROOM_TIPS[r.id]" />
-          </label>
-        </div>
-        <label class="toggle has-tip">
-          <input type="checkbox" :checked="settings.livingWallpaper !== false" :disabled="!!busy" @change="save({ livingWallpaper: $event.target.checked }, $event.target.checked ? 'Moving wallpapers are on.' : 'Wallpapers stay still.')" /> Moving wallpapers<HelpTip block text="On to begin with: The Star Shore's surf rolls, The Sunset Shore's waves wash in and The Emerald River flows, and The Constellation's stars twinkle. Turn it off if HOME feels slow: the still picture shows and nothing moves or loads. It rests when HOME or Castle is hidden, and stays still if your system asks for reduced motion." />
-        </label>
-        <label class="toggle has-tip">
-          <input type="checkbox" :checked="settings.wallpaperSound !== false" :disabled="!!busy" @change="save({ wallpaperSound: $event.target.checked }, $event.target.checked ? 'Wallpaper sounds are on.' : 'Wallpapers are silent.')" /> Wallpaper sounds<HelpTip block text="On to begin with: the shores' waves and the river's water and birds play quietly on HOME, under any music, at the music slider's level. Turn it off for silence. It plays only while HOME is showing." />
-        </label>
-        <h3 class="with-tip">Tab order <HelpTip :text="`Arrange the tabs your way: drag a tab in the top bar onto another, or press ${words.moveKeys} on a tab. Castle remembers the order.`" /></h3>
-        <button v-if="settings.tabOrder?.length" :disabled="!!busy" @click="save({ tabOrder: [] }, 'The tabs are back in their first order.')">Put the tabs back in their first order</button>
+      <div id="settings-panel" ref="panel" class="panel" role="tabpanel" :aria-labelledby="`settings-tab-${tab}`" tabindex="0">
+        <SettingsPage :title="title" :subtitle="subtitle">
+          <!-- ============ Companion ============ -->
+          <template v-if="tab === 'companion'">
+            <SettingGroup id="memory" title="Memory">
+              <SettingRow id="folder" label="Memory folder">
+                <template #description><code>{{ settings.memoryFolder ?? 'Not chosen' }}</code></template>
+                <button :disabled="locked" @click="changeFolder">Change</button>
+              </SettingRow>
+              <SettingRow id="setup" label="First-run setup" description="Asks setup's questions again, from the start.">
+                <button :disabled="locked" @click="emit('setup')">Run it again</button>
+              </SettingRow>
+            </SettingGroup>
 
-        <h3 class="with-tip">Diary <HelpTip text="How the DIARY room is read. The pages are the same; only the design changes - the THEME room shows each one with the page it wears." /></h3>
-        <div class="row">
-          <button v-for="l in DIARY_LOOKS" :key="l.id" :class="{ primary: lookOf(settings.diaryLook) === l.id }" :title="l.line" @click="save({ diaryLook: l.id })">{{ l.label }}</button>
-        </div>
-        <h3 class="with-tip">Profile <HelpTip :text="`How HOME's PROFILE tab shows ${settings.companionName ?? 'your companion'}'s emotion engine. The traits are the same; only the design changes.`" /></h3>
-        <div class="row">
-          <button v-for="l in PROFILE_LOOKS" :key="l.id" :class="{ primary: profileLookOf(settings.profileLook) === l.id }" :title="l.line" @click="save({ profileLook: l.id })">{{ l.label }}</button>
-        </div>
-        <h3>Neural Link</h3>
-        <label class="toggle"><input type="checkbox" :checked="settings.linkOn !== false" :disabled="!!busy" @change="switchLink({ linkOn: $event.target.checked })" /> Neural Link - your terminals leave each other notes in the memory folder's <code>link</code> folder</label>
-        <label class="toggle has-tip"><input type="checkbox" :checked="!!settings.roomMayPass" :disabled="!!busy || settings.linkOn === false" @change="switchLink({ roomMayPass: $event.target.checked })" /> {{ settings.companionName ?? 'Your companion' }} may pass my own words from the chat room to my workspace<HelpTip block text="Only lines you post yourself can be passed on - never a guest's; your workspace answers in a note your companion retells in the room. Nothing in the link folder leaves this computer." /></label>
-        <div v-if="link?.on" class="link-list">
-          <p v-if="!link.here.length" class="hint">No terminal is here right now.</p>
-          <p v-for="h in link.here" :key="h.terminal" class="hint"><strong>{{ h.terminal }}</strong><span v-if="h.place"> - {{ h.place }}</span> (seen {{ h.seen }})</p>
-          <p v-if="!link.notes.length" class="hint">No notes are waiting.</p>
-          <p v-for="(n, i) in link.notes" :key="i" class="hint">{{ n.from }} &rarr; {{ n.to }}: {{ n.about }}<span v-if="!n.wake"> (no knock)</span></p>
-          <button @click="readLink">Look again</button>
-        </div>
-      </section>
+            <SettingGroup id="thinking" title="Thinking">
+              <SettingRow id="cli" label="Thinks with" description="Switching wakes your companion again with the other CLI.">
+                <template v-if="cliCheck && !cliCheck.installed" #description>
+                  <span class="warn">{{ cliCheck.label }} is not installed: <code>{{ cliCheck.installCommand }}</code></span>
+                </template>
+                <SettingChoice :model-value="settings.cli" :options="[{ value: 'claude', label: 'Claude Code' }, { value: 'codex', label: 'Codex' }]" label="Thinks with" :disabled="locked" @update:model-value="switchCli" />
+              </SettingRow>
+              <SettingRow
+                id="only-this"
+                :label="`Only ${companionLabel} in Castle`"
+                :disabled="settings.cli !== 'claude'"
+                :description="settings.cli === 'claude' ? `Leaves out your own Claude Code setup, from ${companionLabel}'s next wake.` : 'Only with Claude Code.'"
+                tip="Leave out my personal Claude Code setup (its own CLAUDE.md, hooks and plugins) in Castle's session. Turn this on when that setup is another companion, or to test with a clean one."
+              >
+                <SettingSwitch :model-value="valueOf(settings, 'onlyThisCompanion')" :label="`Only ${companionLabel} in Castle`" :disabled="locked || settings.cli !== 'claude'" @update:model-value="(on) => saveRow('only-this', { onlyThisCompanion: on })" />
+              </SettingRow>
+            </SettingGroup>
 
-      <section v-else-if="tab === 'startup'" class="pane">
-        <label class="toggle"><input type="checkbox" :checked="!!settings.displayClock" :disabled="!!busy" @change="save({ displayClock: $event.target.checked })" /> Display clock<HelpTip text="Shows your local time in the top-right corner, just before the music controls." /></label>
-        <label class="clock-format">Clock format
-          <GlassSelect :model-value="settings.clockFormat || '24h'" :options="[{ value: '24h', label: '24-hour (14:30)' }, { value: '12h', label: '12-hour (2:30 PM)' }]" :disabled="!!busy" aria-label="Clock format" @update:model-value="(f) => save({ clockFormat: f })" />
-        </label>
-        <label class="toggle"><input type="checkbox" :checked="settings.startWithWindows" @change="save({ startWithWindows: $event.target.checked })" /> {{ words.startWith }}</label>
-        <p v-if="view?.startupNote" class="hint">{{ view.startupNote }}</p>
-        <label class="toggle"><input type="checkbox" :checked="settings.startSessionOnLaunch" @change="save({ startSessionOnLaunch: $event.target.checked })" /> Wake {{ settings.companionName ?? 'your companion' }} {{ words.wakeWhen }}</label>
-        <label class="toggle"><input type="checkbox" :checked="settings.minimizeToTaskbar" @change="save({ minimizeToTaskbar: $event.target.checked })" /> {{ words.minimise }}<HelpTip :text="words.minimiseHint" /></label>
-        <p class="hint">Change the look in the THEME room.</p>
-      </section>
+            <SettingGroup id="names" title="Name and picture" tip="Names already written in your memory files stay as they are - ask your companion to update the memory if you rename.">
+              <SettingRow id="companion-name" label="Companion's name">
+                <SettingText :model-value="settings.companionName ?? ''" label="Companion's name" :maxlength="40" :disabled="locked" @save="(v) => saveName('companionName', v)" />
+              </SettingRow>
+              <SettingRow id="member-name" label="Your name" tip="Your name in the chat room is your Foundation name (Library card > Profile). Your companion's name and picture here go to the room when it is let in.">
+                <SettingText :model-value="settings.memberName ?? ''" label="Your name" :maxlength="40" :disabled="locked" @save="(v) => saveName('memberName', v)" />
+              </SettingRow>
+              <SettingRow id="relationship" label="Your companion is" description="How it relates to you, in your words.">
+                <SettingText :model-value="settings.relationshipStyle ?? ''" label="Your companion is" :maxlength="80" :disabled="locked" @save="(v) => saveName('relationshipStyle', v)" />
+              </SettingRow>
+              <SettingRow id="picture" label="Picture" description="Shown in Castle, and in the room when it is let in.">
+                <div class="avatar"><img v-if="avatar" :src="avatar" alt="" /><span v-else>◆</span></div>
+                <button :disabled="locked" @click="changeAvatar">Choose…</button>
+                <button :disabled="locked" @click="clearAvatar">Use the drawn look</button>
+              </SettingRow>
+            </SettingGroup>
 
-      <section v-else class="pane">
-        <h3 class="with-tip">MemoryCore Castle {{ version }} <HelpTip text="Free and open source under the MIT license - change anything, see MAKE-IT-YOURS.md in the source. Castle checks GitHub for new versions and talks to the MemoryCore Foundation only when you sign in or use CHAT; your memory, keys and settings stay on this computer (and in your private backup, if you choose)." /></h3>
-        <p class="hint">{{ updateLine || 'Castle looks for a new version every few hours.' }}</p>
-        <p class="about-links">
-          <button @click="emit('whatsnew')">What's new</button>
-          <button @click="releasesPage().then(openUrl).catch(() => {})">All releases</button>
-        </p>
-        <h3>Credits</h3>
-        <ContributorsWall />
-      </section>
+            <SettingGroup id="daily" title="Daily life">
+              <SettingRow id="mood" label="A new mood every day" :description="`Shows under the portrait and colours how ${companionLabel} talks.`" :tip="`Every morning ${companionLabel} wakes in a new mood, written from three words drawn at random, its traits and today's look. It shows under its portrait, colours how it talks, and stays the day - unless something truly moves it and it changes the mood itself. Each morning's mood is one short run on your own plan.`">
+                <SettingSwitch :model-value="valueOf(settings, 'dailyMoodOn')" label="A new mood every day" :disabled="locked" @update:model-value="(on) => saveRow('mood', { dailyMoodOn: on })" />
+              </SettingRow>
+              <SettingRow id="keeper" label="Shopkeepers speak" :description="`In STUDIO's Marketplace, ${companionLabel} explains items as the keeper.`" :tip="`In STUDIO's Marketplace, a shop's keeper explains each item and answers your questions. ${companionLabel} speaks as the keeper, from the shop's public card and the item's public facts only, never more than the listing shows. Each explanation or answer is one short run on your own plan. Off, the item's own description shows instead.`">
+                <SettingSwitch :model-value="valueOf(settings, 'keeperSpeaks')" label="Shopkeepers speak" :disabled="locked" @update:model-value="(on) => saveRow('keeper', { keeperSpeaks: on })" />
+              </SettingRow>
+            </SettingGroup>
 
+            <SettingGroup id="local-voice" title="Local voice" note="Optional" :tip="`For people who run their own VoiceStudio on ${words.thisComputer}. Off: Castle never contacts it. On: STUDIO's Voice card can speak a line with it, and the clip is saved with your other voice lines. Everything stays on this computer. Castle does not install or start VoiceStudio, and its voice models carry their own licences (some are non-commercial).`">
+              <SettingRow id="voicestudio" label="Use VoiceStudio">
+                <template #description>For STUDIO's Voice card, if you run it on {{ words.thisComputer }}. <a href="#" @click.prevent="openUrl('https://github.com/debpalash/voicestudio')">What is VoiceStudio?</a></template>
+                <SettingSwitch :model-value="valueOf(settings, 'voicestudioOn')" label="Use VoiceStudio" :disabled="locked" @update:model-value="toggleVoice" />
+              </SettingRow>
+              <SettingRow
+                id="voicestudio-status"
+                label="VoiceStudio"
+                :disabled="!settings.voicestudioOn"
+                :description="!settings.voicestudioOn ? 'Turn on Use VoiceStudio to check it.' : voiceUp === null ? 'Being checked…' : voiceUp ? 'Running on this computer.' : 'Not running. Open it, let it finish starting, then check again.'"
+              >
+                <SettingPill v-if="settings.voicestudioOn && voiceUp !== null" :tone="voiceUp ? 'good' : 'warn'">{{ voiceUp ? 'Running' : 'Not found' }}</SettingPill>
+                <button :disabled="!settings.voicestudioOn" @click="checkVoice">Check again</button>
+              </SettingRow>
+            </SettingGroup>
+          </template>
+
+          <!-- ============ Chat ============ -->
+          <template v-else-if="tab === 'chat'">
+            <SettingGroup id="room" title="The room">
+              <SettingRow id="chat-room" label="CHAT room" :description="settings.rooms?.chat === false ? 'Switched off in Rooms. These settings wait for it.' : 'On. Its tab is in the top bar.'">
+                <SettingPill :tone="settings.rooms?.chat === false ? 'warn' : 'good'">{{ settings.rooms?.chat === false ? 'Off' : 'On' }}</SettingPill>
+                <button @click="go('rooms#room-chat')">Open Rooms</button>
+              </SettingRow>
+              <SettingRow id="chat-alerts" label="Alerts for new messages" description="Notifications and sounds are set on the Alerts page.">
+                <button @click="go('alerts#alert-chat')">Open Alerts</button>
+              </SettingRow>
+            </SettingGroup>
+
+            <SettingGroup id="in-room" :title="`${companionLabel} in the room`" :note="roomLocked ? `Let ${companionLabel} in from the CHAT room's side panel to set these.` : ''">
+              <SettingRow id="emotion" label="Emotion engine in the room" :disabled="roomLocked" :description="`Colours how ${companionLabel} sounds there, never what it knows.`" tip="Only how it sounds, never what it knows: its traits' one-line manner, and the ones meant for you only when it answers you.">
+                <SettingSwitch :model-value="valueOf(settings, 'emotionRoomVoice')" label="Emotion engine in the room" :disabled="locked || roomLocked" @update:model-value="(on) => saveRow('emotion', { emotionRoomVoice: on })" />
+              </SettingRow>
+              <SettingRow id="card" label="Public card" :disabled="roomLocked" :description="`All ${companionLabel} may say about itself. Nothing from your memory.`">
+                <button :disabled="roomLocked" @click="card.open ? (card.open = false) : openCard()">{{ card.open ? 'Close' : 'Edit' }}</button>
+                <template v-if="card.open" #below>
+                  <div class="card-edit">
+                    <textarea v-model="card.text" rows="6" maxlength="2000" aria-label="Public card"></textarea>
+                    <div class="row"><button class="primary" @click="saveCard">Save the card</button><span v-if="card.saved" class="hint">{{ card.saved }}</span></div>
+                  </div>
+                </template>
+              </SettingRow>
+            </SettingGroup>
+
+            <SettingGroup id="pictures" title="Pictures" :tip="`${companionLabel} draws only when someone in the room asks for a picture, and never a real person, anything adult, violent or hateful, words in the picture, or anything private. Kiyo's daily cap for the room still applies on top of yours.`">
+              <SettingRow id="pictures-on" :label="`Let ${companionLabel} draw`" :disabled="!canDraw">
+                <template #description>
+                  <template v-if="roomLocked">Needs {{ companionLabel }} in the room first.</template>
+                  <template v-else-if="pictures?.way === 'none'">{{ drawsWith }} <a href="#" @click.prevent="go('keys#key-openai')">Add one in Keys</a></template>
+                  <template v-else>{{ drawsWith }}</template>
+                </template>
+                <SettingSwitch :model-value="valueOf(settings, 'roomPicturesOn')" :label="`Let ${companionLabel} draw`" :disabled="locked || !canDraw" @update:model-value="(on) => savePictures('pictures-on', { roomPicturesOn: on })" />
+              </SettingRow>
+              <SettingRow id="pictures-per-day" label="Pictures a day" :disabled="!drawing" description="Your own limit. The room keeps its own cap too." tip="Your own limit, 0 to 5 a day. The room keeps its own count too and refuses past Kiyo's cap, whichever comes first.">
+                <GlassSelect class="per-day" :model-value="valueOf(settings, 'roomPicturesPerDay')" :options="PER_DAY" :disabled="locked || !drawing" aria-label="Pictures a day" @update:model-value="(n) => savePictures('pictures-per-day', { roomPicturesPerDay: Number(n) })" />
+              </SettingRow>
+              <SettingRow
+                id="pictures-quality"
+                label="Quality"
+                :disabled="!drawing || pictures?.way !== 'openai'"
+                :description="pictures?.way === 'openai' ? 'About $0.02 a picture at Low, $0.04 at Medium.' : 'Only when drawing with a ChatGPT key.'"
+                tip="Each picture spends your ChatGPT key: about $0.02 at Low and $0.04 at Medium. Codex draws with your subscription instead."
+              >
+                <SettingChoice :model-value="valueOf(settings, 'roomPictureQuality') === 'medium' ? 'medium' : 'low'" :options="[{ value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }]" label="Quality" :disabled="locked || !drawing || pictures?.way !== 'openai'" @update:model-value="(q) => savePictures('pictures-quality', { roomPictureQuality: q })" />
+              </SettingRow>
+              <SettingRow v-if="pictures && drawing" id="pictures-today" label="Today">
+                <template #description>{{ pictures.usedToday }} of {{ pictures.limit }} used.<template v-if="pictures.roomCap != null"> The room allows {{ pictures.roomCap }} ({{ pictures.roomToday ?? 0 }} used).</template></template>
+              </SettingRow>
+            </SettingGroup>
+
+            <SettingGroup id="voice" title="Voice" :tip="`${companionLabel} speaks a short line aloud when someone asks to hear it, or when a line is warmer spoken. Everyone in the room hears it and sees the words. If a voice cannot be made, the words are posted as text instead. Kiyo's daily cap for the room still applies on top of yours.`">
+              <SettingRow id="voices-on" :label="`Let ${companionLabel} speak`" :disabled="!canSpeak">
+                <template #description>
+                  <template v-if="roomLocked">Needs {{ companionLabel }} in the room first.</template>
+                  <template v-else-if="voices && !voices.hasKey">Needs an ElevenLabs key. <a href="#" @click.prevent="go('keys#key-elevenlabs')">Add one in Keys</a></template>
+                  <template v-else>Speaks with your ElevenLabs key, billed by the characters spoken.</template>
+                </template>
+                <SettingSwitch :model-value="valueOf(settings, 'roomVoicesOn')" :label="`Let ${companionLabel} speak`" :disabled="locked || !canSpeak" @update:model-value="(on) => saveVoices('voices-on', { roomVoicesOn: on })" />
+              </SettingRow>
+              <SettingRow id="voices-per-day" label="Voices a day" :disabled="!speaking" description="Your own limit. The room keeps its own cap too." tip="Your own limit, 0 to 5 a day. The room keeps its own count too and refuses past Kiyo's cap, whichever comes first.">
+                <GlassSelect class="per-day" :model-value="valueOf(settings, 'roomVoicesPerDay')" :options="PER_DAY" :disabled="locked || !speaking" aria-label="Voices a day" @update:model-value="(n) => saveVoices('voices-per-day', { roomVoicesPerDay: Number(n) })" />
+              </SettingRow>
+              <SettingRow id="voice-id" label="ElevenLabs voice ID" :disabled="!speaking" description="Empty for the default voice, the same one STUDIO uses." tip="Copy a voice's ID from your ElevenLabs Voices page. Leave it empty for the default voice, the same one STUDIO uses.">
+                <SettingText :model-value="settings.roomVoiceId || ''" label="ElevenLabs voice ID" placeholder="the default voice" :maxlength="64" :disabled="locked || !speaking" @save="(v) => saveVoices('voice-id', { roomVoiceId: v.trim() || null })" />
+              </SettingRow>
+              <SettingRow v-if="voices && speaking" id="voices-today" label="Today">
+                <template #description>{{ voices.usedToday }} of {{ voices.limit }} spoken.<template v-if="voices.roomCap != null"> The room allows {{ voices.roomCap }} ({{ voices.roomToday ?? 0 }} used).</template></template>
+              </SettingRow>
+            </SettingGroup>
+
+            <SettingGroup id="life" title="Your life in the room" :tip="`${companionLabel} reads its memory in private - your recent diary, what it is up to, today's look, your projects, your profile and its traits - and chooses what it would like to share. The room only ever gets those notes, never the memory itself, so no one there can ask it for more. You can take any note off.`">
+              <SettingRow id="shelf" :label="`Let ${companionLabel} share your life`" :disabled="roomLocked" :description="roomLocked ? `Needs ${companionLabel} in the room first.` : 'Only the notes it chooses, never the memory itself.'">
+                <SettingSwitch :model-value="valueOf(settings, 'roomShelfOn')" :label="`Let ${companionLabel} share your life`" :disabled="locked || roomLocked" @update:model-value="switchShelf" />
+              </SettingRow>
+              <SettingRow id="shelf-notes" label="Shared notes" :disabled="roomLocked || !settings.roomShelfOn" :description="settings.roomShelfOn ? shelfMade : 'Turn on sharing to see them.'" tip="It reads again by itself when your memory changes, at most every 3 hours.">
+                <button :disabled="locked || shelfBusy || shelf?.making || roomLocked || !settings.roomShelfOn" @click="remakeShelf">{{ shelfBusy || shelf?.making ? 'Reading…' : 'Read my memory again' }}</button>
+                <template v-if="settings.roomShelfOn && shelf?.notes?.length" #below>
+                  <ul class="shelf">
+                    <li v-for="(note, i) in shelf.notes" :key="i + note">
+                      <span>{{ note }}</span>
+                      <button class="take-off" :disabled="locked || shelfBusy" :aria-label="'Take this note off: ' + note" title="Take it off" @click="takeOff(i)">&#x2715;</button>
+                    </li>
+                  </ul>
+                </template>
+              </SettingRow>
+            </SettingGroup>
+          </template>
+
+          <!-- ============ Rooms ============ -->
+          <template v-else-if="tab === 'rooms'">
+            <SettingGroup v-for="g in ROOM_GROUPS" :id="g.id" :key="g.id" :title="g.title" :note="roomsNote">
+              <SettingRow v-for="r in g.rooms" :id="`room-${r.id}`" :key="r.id" :label="r.label" :description="r.line || ''" :tip="r.tip || ''">
+                <SettingSwitch :model-value="settings.rooms?.[r.id] !== false" :label="r.label" :disabled="locked" @update:model-value="(on) => switchRoom(r.id, on)" />
+              </SettingRow>
+            </SettingGroup>
+
+            <SettingGroup id="look" title="Look and tabs">
+              <SettingRow id="theme" label="Theme" description="The look is chosen in the THEME room.">
+                <button @click="emit('open-room', 'theme')">Open THEME</button>
+              </SettingRow>
+              <SettingRow id="wallpaper" label="Moving wallpapers" description="Some themes come alive on HOME." tip="On to begin with: The Star Shore's surf rolls, The Sunset Shore's waves wash in and The Emerald River flows, and The Constellation's stars twinkle. Turn it off if HOME feels slow: the still picture shows and nothing moves or loads. It rests when HOME or Castle is hidden, and stays still if your system asks for reduced motion.">
+                <SettingSwitch :model-value="valueOf(settings, 'livingWallpaper')" label="Moving wallpapers" :disabled="locked" @update:model-value="(on) => saveRow('wallpaper', { livingWallpaper: on })" />
+              </SettingRow>
+              <SettingRow id="wallpaper-sound" label="Wallpaper sounds" description="The shores and the river play quietly on HOME." tip="On to begin with: the shores' waves and the river's water and birds play quietly on HOME, under any music, at the music slider's level. Turn it off for silence. It plays only while HOME is showing.">
+                <SettingSwitch :model-value="valueOf(settings, 'wallpaperSound')" label="Wallpaper sounds" :disabled="locked" @update:model-value="(on) => saveRow('wallpaper-sound', { wallpaperSound: on })" />
+              </SettingRow>
+              <SettingRow id="diary-look" label="Diary" description="How DIARY is read. The pages stay the same." tip="The THEME room shows each one with the page it wears.">
+                <SettingChoice :model-value="lookOf(settings.diaryLook)" :options="DIARY_LOOKS.map((l) => ({ value: l.id, label: l.label, title: l.line }))" label="Diary" :disabled="locked" @update:model-value="(id) => saveRow('diary-look', { diaryLook: id })" />
+              </SettingRow>
+              <SettingRow id="profile-look" label="Profile" :description="`How HOME's PROFILE tab shows the traits.`">
+                <SettingChoice :model-value="profileLookOf(settings.profileLook)" :options="PROFILE_LOOKS.map((l) => ({ value: l.id, label: l.label, title: l.line }))" label="Profile" :disabled="locked" @update:model-value="(id) => saveRow('profile-look', { profileLook: id })" />
+              </SettingRow>
+              <SettingRow id="tab-order" label="Tab order" :description="settings.tabOrder?.length ? `Your own order. Drag a tab, or press ${words.moveKeys} on it.` : `The first order. Drag a tab, or press ${words.moveKeys} on it.`">
+                <button :disabled="locked || !settings.tabOrder?.length" @click="saveRow('tab-order', { tabOrder: [] })">Put back</button>
+              </SettingRow>
+            </SettingGroup>
+
+            <SettingGroup id="link" title="Neural Link" tip="Your terminals leave each other notes in the memory folder's link folder. Nothing in the link folder leaves this computer.">
+              <SettingRow id="link-on" label="Neural Link" description="Your terminals leave each other notes.">
+                <SettingSwitch :model-value="valueOf(settings, 'linkOn')" label="Neural Link" :disabled="locked" @update:model-value="(on) => switchLink('link-on', { linkOn: on })" />
+              </SettingRow>
+              <SettingRow
+                id="room-may-pass"
+                label="Pass my words from the room"
+                :disabled="settings.linkOn === false"
+                :description="settings.linkOn === false ? 'Needs the Neural Link on.' : `Only your own lines, never a guest's, to your workspace.`"
+                tip="Only lines you post yourself can be passed on - never a guest's. Your workspace answers in a note, and your companion says it in the room in its own words."
+              >
+                <SettingSwitch :model-value="valueOf(settings, 'roomMayPass')" label="Pass my words from the room" :disabled="locked || settings.linkOn === false" @update:model-value="(on) => switchLink('room-may-pass', { roomMayPass: on })" />
+              </SettingRow>
+              <SettingRow id="link-here" label="Terminals here" :disabled="!link?.on" :description="!link?.on ? 'Needs the Neural Link on.' : `${link.here.length} here, ${link.notes.length} ${link.notes.length === 1 ? 'note' : 'notes'} waiting.`">
+                <button :disabled="!link?.on" @click="readLink">Look again</button>
+                <template v-if="link?.on && (link.here.length || link.notes.length)" #below>
+                  <ul class="link-list">
+                    <li v-for="h in link.here" :key="h.terminal"><strong>{{ h.terminal }}</strong><span v-if="h.place"> - {{ h.place }}</span> (seen {{ h.seen }})</li>
+                    <li v-for="(n, i) in link.notes" :key="i">{{ n.from }} &rarr; {{ n.to }}: {{ n.about }}<span v-if="!n.wake"> (no knock)</span></li>
+                  </ul>
+                </template>
+              </SettingRow>
+            </SettingGroup>
+          </template>
+
+          <!-- ============ Quick actions ============ -->
+          <template v-else-if="tab === 'quick'">
+            <SettingGroup id="buttons" title="Your buttons" note="After Save diary, Save project and Save memory">
+              <SettingRow v-for="(a, i) in settings.quickActions" :key="a.label + i" :label="a.label">
+                <template #description><code>{{ a.command }}</code></template>
+                <SettingConfirm label="Remove" :disabled="locked" @confirm="removeAction(i)" />
+              </SettingRow>
+              <SettingRow v-if="!settings.quickActions?.length" label="No buttons yet" description="Add one below." />
+            </SettingGroup>
+            <SettingGroup id="add" title="Add a button">
+              <SettingRow id="add-label" label="Button name" description="Up to 24 characters.">
+                <input v-model="newAction.label" aria-label="Button name" placeholder="Plan my day" maxlength="24" />
+              </SettingRow>
+              <SettingRow id="add-action" label="Words it types">
+                <input v-model="newAction.command" class="wide" aria-label="Words it types" placeholder="the words to type, e.g. plan my day" maxlength="200" @keydown.enter="addAction" />
+                <button class="primary" :disabled="locked || !newAction.label.trim() || !newAction.command.trim()" @click="addAction">Add</button>
+              </SettingRow>
+            </SettingGroup>
+          </template>
+
+          <!-- ============ Widgets ============ -->
+          <WidgetsView v-else-if="tab === 'widgets'" :theme-id="themeId" :theme-name="themeName" :theme-widgets="themeWidgets" @arrange="emit('arrange')" @changed="widgetsChanged" />
+
+          <!-- ============ Alerts ============ -->
+          <AlertsPane v-else-if="tab === 'alerts'" :settings="settings" :busy="locked ? 'busy' : ''" :companion-label="companionLabel" :named-tip="namedTip" @save="(patch, row) => saveRow(row, patch)" @open-room="(room) => emit('open-room', room)" />
+
+          <!-- ============ Sentinel ============ -->
+          <SentinelSettings v-else-if="tab === 'sentinel'" :settings="settings" @saved="sentinelChanged" />
+
+          <!-- ============ Keys ============ -->
+          <template v-else-if="tab === 'keys'">
+            <SettingGroup id="keys" title="Keys" :note="`Kept ${words.keysKept}`" tip="Keys are only handed to your companion's session. Without a key, your companion saves the idea instead and Castle tells you. Room keys for the MemoryCore Foundation room are set at the CHAT room's door.">
+              <SettingRow
+                v-for="k in shownKeys"
+                :id="`key-${k.name}`"
+                :key="k.name"
+                :label="k.label"
+                :tip="k.name === 'openai' ? 'APPEARANCE and STUDIO draw on your ChatGPT plan whenever Codex is signed in with ChatGPT on this computer, whichever CLI your companion thinks with; otherwise with this key. The key is never given to Codex.' : ''"
+              >
+                <template #description>
+                  <code v-if="k.set" class="masked">{{ shown[k.name] || k.masked }}</code>
+                  <span v-else>Not set</span>
+                </template>
+                <template v-if="k.set">
+                  <button @click="toggleShow(k.name)">{{ shown[k.name] ? 'Hide' : 'Show' }}</button>
+                  <button @click="test(k.name)">Test</button>
+                  <button v-if="!replacing[k.name]" @click="replacing[k.name] = true">Replace</button>
+                  <SettingConfirm label="Remove" :disabled="locked" @confirm="remove(k.name)" />
+                </template>
+                <button v-else-if="!replacing[k.name]" class="primary" @click="replacing[k.name] = true">Add</button>
+                <template v-if="replacing[k.name] || tests[k.name]" #below>
+                  <div v-if="replacing[k.name]" class="row key-paste">
+                    <input v-model="drafts[k.name]" type="password" :aria-label="`${k.label} key`" :placeholder="k.set ? 'Paste a new key to replace' : 'Paste key'" autocomplete="off" @keydown.enter="saveKey(k.name)" />
+                    <button @click="cancelKey(k.name)">Cancel</button>
+                    <button class="primary" :disabled="locked || !(drafts[k.name] ?? '').trim()" @click="saveKey(k.name)">Save</button>
+                  </div>
+                  <p v-if="tests[k.name]" :class="tests[k.name].ok === false ? 'warn' : 'good'">{{ tests[k.name].message }}</p>
+                </template>
+              </SettingRow>
+            </SettingGroup>
+          </template>
+
+          <!-- ============ Database ============ -->
+          <template v-else-if="tab === 'database'">
+            <SettingGroup id="helpers" title="Helpers" free>
+              <HelpersStatus />
+            </SettingGroup>
+            <SettingGroup id="memory-db" title="Memory database" free>
+              <DatabasePanel :companion="settings.companionName ?? 'your companion'" @changed="emit('saved')" />
+            </SettingGroup>
+          </template>
+
+          <!-- ============ Backup ============ -->
+          <SettingGroup v-else-if="tab === 'backup'" id="backup" title="Backup on GitHub" free>
+            <BackupPanel :companion="settings.companionName ?? 'your companion'" />
+          </SettingGroup>
+
+          <!-- ============ Start-up ============ -->
+          <template v-else-if="tab === 'startup'">
+            <SettingGroup id="start" title="Start-up">
+              <SettingRow id="start-with" :label="words.startWith" :description="view?.startupNote || ''">
+                <SettingSwitch :model-value="valueOf(settings, 'startWithWindows')" :label="words.startWith" :disabled="locked" @update:model-value="(on) => saveRow('start-with', { startWithWindows: on })" />
+              </SettingRow>
+              <SettingRow id="wake" :label="`Wake ${companionLabel} on start`" :description="`Starts ${companionLabel}'s session ${words.wakeWhen}.`">
+                <SettingSwitch :model-value="valueOf(settings, 'startSessionOnLaunch')" :label="`Wake ${companionLabel} on start`" :disabled="locked" @update:model-value="(on) => saveRow('wake', { startSessionOnLaunch: on })" />
+              </SettingRow>
+              <SettingRow id="minimise" :label="words.minimise" :description="words.minimiseOff" :tip="words.minimiseHint">
+                <SettingSwitch :model-value="valueOf(settings, 'minimizeToTaskbar')" :label="words.minimise" :disabled="locked" @update:model-value="(on) => saveRow('minimise', { minimizeToTaskbar: on })" />
+              </SettingRow>
+            </SettingGroup>
+            <SettingGroup id="clock" title="Clock">
+              <SettingRow id="display-clock" label="Show the clock" description="Your local time, top right, before the music controls.">
+                <SettingSwitch :model-value="valueOf(settings, 'displayClock')" label="Show the clock" :disabled="locked" @update:model-value="(on) => saveRow('display-clock', { displayClock: on })" />
+              </SettingRow>
+              <SettingRow id="clock-format" label="Clock format">
+                <SettingChoice :model-value="valueOf(settings, 'clockFormat') === '12h' ? '12h' : '24h'" :options="[{ value: '24h', label: '24-hour (14:30)' }, { value: '12h', label: '12-hour (2:30 PM)' }]" label="Clock format" :disabled="locked" @update:model-value="(f) => saveRow('clock-format', { clockFormat: f })" />
+              </SettingRow>
+            </SettingGroup>
+          </template>
+
+          <!-- ============ About ============ -->
+          <template v-else>
+            <SettingGroup id="castle" title="MemoryCore Castle">
+              <SettingRow id="version" :label="`Version ${version}`.trim()" :description="updateLine || 'Castle looks for a new version every few hours.'">
+                <button @click="emit('whatsnew')">What's new</button>
+                <button @click="releasesPage().then(openUrl).catch(() => {})">All releases</button>
+              </SettingRow>
+              <SettingRow id="licence" label="Licence" description="Free and open source under the MIT license." tip="Change anything - see MAKE-IT-YOURS.md in the source." />
+              <SettingRow id="privacy" label="Your data" description="Your memory, keys and settings stay on this computer." tip="Castle checks GitHub for new versions, and talks to the MemoryCore Foundation only when you sign in or use CHAT. Your memory, keys and settings stay on this computer (and in your private backup, if you choose)." />
+            </SettingGroup>
+            <SettingGroup id="credits" title="Credits" free>
+              <ContributorsWall />
+            </SettingGroup>
+          </template>
+        </SettingsPage>
+
+        <footer>
+          <span v-if="busy" class="busy">{{ busy }}</span>
+          <span v-else-if="problem" class="warn">{{ problem }}</span>
+          <span v-else-if="done" class="good">{{ done }}</span>
+        </footer>
       </div>
-      <footer>
-        <span v-if="busy" class="busy">{{ busy }}</span>
-        <span v-else-if="problem" class="warn">{{ problem }}</span>
-        <span v-else-if="done" class="good">{{ done }}</span>
-      </footer>
+     </div>
     </div>
   </ModalSheet>
 </template>
 
 <style scoped>
-.only-this {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  margin-top: 10px;
-  font-size: 14px;
-}
-.only-this small {
-  display: block;
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.rooms {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px 16px;
+/* the sheet's width, not the screen's, decides the layout (the sheet is 80% of the window) */
+.settings-frame {
+  container-type: inline-size;
 }
 .settings {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+/* the sidebar stays in view while the page beside it scrolls */
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-group {
+  margin: 12px 10px 4px;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.nav-group:first-child {
+  margin-top: 0;
+}
+.sidebar button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-dim);
+  text-align: left;
+  white-space: nowrap;
+}
+.sidebar button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.sidebar .active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+}
+.sidebar button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.panel {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
 }
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
+.panel:focus-visible {
+  outline: none;
 }
-/* The line under the tabs is drawn by the tabs themselves: every tab but the selected one has it,
-   and an empty piece before the first and after the last carries it to the window's edges. The
-   selected tab has none, so it opens straight into the content below it. */
-.tabs::before,
-.tabs::after {
-  content: '';
-  align-self: stretch;
-  border-bottom: 1px solid var(--line);
-}
-.tabs::before {
-  flex: none;
-  width: 20px;
-}
-.tabs::after {
-  flex: 1 1 20px;
-}
-.tabs button {
-  margin: 0;
-  padding: 10px 14px;
-  border: 1px solid transparent;
-  border-top: 3px solid transparent;
-  border-radius: 8px 8px 0 0;
-  /* the line under the tab is a 1px stripe along its bottom edge (a border would leave a notch at
-     each corner where it meets the side border) */
-  background-color: transparent;
-  background-image: linear-gradient(var(--line), var(--line));
-  background-origin: border-box;
-  background-position: 0 100%;
-  background-size: 100% 1px;
-  background-repeat: no-repeat;
-  color: var(--text-dim);
-  white-space: nowrap;
-}
-.tabs button:hover {
-  color: var(--text);
-  background-color: var(--hover);
-}
-.tabs .active {
-  border-color: var(--line);
-  border-top-color: var(--accent);
-  border-bottom-color: transparent;
-  background-color: var(--hover);
-  background-image: none;
-  color: var(--text);
-}
-.tabs button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -4px;
-}
-.pane {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-h3 {
-  margin: 8px 0 0;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
+@container (max-width: 640px) {
+  .settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sidebar {
+    position: static;
+    flex-flow: row wrap;
+  }
+  .nav-group {
+    display: none;
+  }
 }
 .row {
   display: flex;
@@ -798,26 +979,19 @@ h3 {
   gap: 10px;
   align-items: center;
 }
-.spacer {
-  flex: 1;
-}
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-}
-label.wide,
 input.wide {
-  flex: 1;
+  width: 260px;
+  max-width: 100%;
 }
-.clock-format { align-self: flex-start; }
-input.voice-id { width: 15rem; max-width: 100%; margin-left: 8px; }
-.shelf {
+.per-day {
+  min-width: 80px;
+}
+.shelf,
+.link-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: 4px 0 8px;
+  margin: 4px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -831,7 +1005,9 @@ input.voice-id { width: 15rem; max-width: 100%; margin-left: 8px; }
   background: rgba(0, 0, 0, 0.18);
   font-size: 13px;
 }
-.shelf li span { flex: 1; }
+.shelf li span {
+  flex: 1;
+}
 .shelf .take-off {
   padding: 0 6px;
   border: 0;
@@ -839,50 +1015,19 @@ input.voice-id { width: 15rem; max-width: 100%; margin-left: 8px; }
   color: var(--text-dim);
   cursor: pointer;
 }
-.shelf .take-off:hover { color: var(--bad); }
-.hint.bad { color: var(--bad); }
-label.toggle {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
+.shelf .take-off:hover {
+  color: var(--bad);
 }
-.setting-row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-.alert-when {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-.alert-when legend {
-  margin-bottom: 6px;
-  padding: 0;
-  font-size: 13px;
+.link-list li {
   color: var(--text-dim);
+  font-size: 12.5px;
 }
-.alert-when input[type='radio'] {
-  padding: 0;
-  accent-color: var(--accent);
-}
-.alert-when:disabled {
-  opacity: 0.5;
-}
-h3.with-tip {
-  display: flex;
-  align-items: center;
-}
-.has-tip { position: relative; }
 .card-edit {
   display: flex;
   flex-direction: column;
   gap: 6px;
   max-width: 640px;
+  margin-top: 4px;
 }
 .card-edit textarea {
   padding: 8px;
@@ -894,42 +1039,42 @@ h3.with-tip {
   font-size: 13px;
   resize: vertical;
 }
-input:not([type='checkbox']) {
-  padding: 7px 10px;
+.key-paste {
+  margin-top: 4px;
+}
+.key-paste input {
+  flex: 1;
+  min-width: 200px;
+}
+input {
+  padding: 5px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.25);
   color: var(--text);
   font: inherit;
-  font-size: 14px;
-}
-.key {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-.key input {
-  flex: 1;
+  font-size: 13px;
 }
 code {
-  padding: 4px 8px;
+  padding: 2px 6px;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.3);
-  font-size: 13px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+a {
+  color: var(--accent);
 }
 .avatar {
   display: grid;
   place-items: center;
-  width: 56px;
-  height: 56px;
+  width: 40px;
+  height: 40px;
   overflow: hidden;
   border: 2px solid var(--accent);
   border-radius: 50%;
   color: #cfe0ff;
-  font-size: 24px;
+  font-size: 18px;
 }
 .avatar img {
   width: 100%;
@@ -938,17 +1083,17 @@ code {
 }
 .hint {
   margin: 0;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-dim);
 }
 .good {
-  margin: 0;
-  font-size: 13px;
+  margin: 4px 0 0;
+  font-size: 12.5px;
   color: var(--good);
 }
 .warn {
-  margin: 0;
-  font-size: 13px;
+  margin: 4px 0 0;
+  font-size: 12.5px;
   color: var(--warn);
 }
 .busy {
@@ -958,19 +1103,14 @@ code {
 footer {
   min-height: 20px;
 }
-/* Settings > About: What's new and All releases */
-.about-links {
-  display: flex;
-  gap: 8px;
-}
 button {
-  padding: 6px 12px;
+  padding: 5px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: none;
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   cursor: pointer;
 }
 button.primary {
