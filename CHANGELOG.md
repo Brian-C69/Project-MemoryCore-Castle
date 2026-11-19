@@ -10,6 +10,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **CHAT's pictures and voice lines show when you open the room, not only after a new message.** Several loaded at once when Castle started, and each one that finished wiped the ones before it (the page saved its list from before the wait), so earlier pictures were left as empty bubbles; a file that failed because the room was not ready yet was never asked for again. Files now load once each, are added as they arrive, and a failed one is asked for again a little later.
 
+- **One themed audio player for voice lines and clips.** The voice lines in CHAT and the Songs and Voice lists in STUDIO used the browser's grey player, which ignored the theme. They now use Castle's own, with a speed button (1x, 1.25x, 1.5x, 2x, 0.75x), mute and a volume slider. The volume is remembered, and starting one clip stops the one that was playing.
+
 ## 0.2.22 - 2026-11-19
 
 - **The Mac download is back.** 0.2.21 went out for Windows only, because one test meant for Windows ran on the Mac and stopped its build. 0.2.22 brings everything in 0.2.21 to the Mac too: workflows in STUDIO, making your own, and the Marketplace town ready behind its door.

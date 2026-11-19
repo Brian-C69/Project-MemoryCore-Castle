@@ -1,10 +1,16 @@
 <script setup>
 // A small audio player in Castle's own colours (the browser's own is a white bar that ignores the
-// theme): play / pause, a position slider and the time. Used for the voice line STUDIO just made.
-import { onBeforeUnmount, ref, watch } from 'vue'
+// theme): play / pause, a position slider, the time, speed, mute and volume. Used for every voice
+// line and song in the app. One clip plays at a time, and the volume is shared by all players.
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { playerClock } from './playerclock.js'
+import { nextRate, playerPrefs, rateLabel, setVolume, sharedPlayback, toggleMute } from './playerstate.js'
 
-const props = defineProps({ src: { type: String, required: true } })
+const props = defineProps({ src: { type: String, required: true }, compact: { type: Boolean, default: false } })
+
+let uid = 0
+const id = `player-${++uid}-${Math.random().toString(36).slice(2)}`
+const rate = ref(1)
 
 const audio = ref(null)
 const playing = ref(false)
@@ -27,7 +33,27 @@ const onMeta = () => {
 const onEnded = () => {
   playing.value = false
   position.value = 0
+  sharedPlayback.release(id)
 }
+const onPlay = () => {
+  playing.value = true
+  sharedPlayback.claim(id, () => audio.value?.pause())
+}
+const onPause = () => {
+  playing.value = false
+}
+const cycleRate = () => {
+  rate.value = nextRate(rate.value)
+  if (audio.value) audio.value.playbackRate = rate.value
+}
+const applyVolume = () => {
+  if (!audio.value) return
+  audio.value.volume = playerPrefs.volume
+  audio.value.muted = playerPrefs.muted
+}
+const onVolume = (event) => setVolume(Number(event.target.value))
+onMounted(applyVolume)
+watch(() => [playerPrefs.volume, playerPrefs.muted], applyVolume)
 const seek = (event) => {
   position.value = Number(event.target.value)
   if (audio.value) audio.value.currentTime = position.value
@@ -40,9 +66,13 @@ watch(
     position.value = 0
     length.value = 0
     playing.value = false
+    rate.value = 1
   },
 )
-onBeforeUnmount(() => audio.value?.pause())
+onBeforeUnmount(() => {
+  audio.value?.pause()
+  sharedPlayback.release(id)
+})
 </script>
 
 <template>
@@ -54,8 +84,8 @@ onBeforeUnmount(() => audio.value?.pause())
       @timeupdate="onTime"
       @loadedmetadata="onMeta"
       @durationchange="onMeta"
-      @play="playing = true"
-      @pause="playing = false"
+      @play="onPlay"
+      @pause="onPause"
       @ended="onEnded"
     ></audio>
     <button class="play" :aria-label="playing ? 'Pause' : 'Play'" @click="toggle">{{ playing ? '❚❚' : '▶' }}</button>
@@ -73,6 +103,19 @@ onBeforeUnmount(() => audio.value?.pause())
       @input="seek"
     />
     <span class="time">{{ playerClock(position) }} / {{ playerClock(length) }}</span>
+    <button class="rate" :aria-label="`Speed ${rateLabel(rate)}`" title="Speed" @click="cycleRate">{{ rateLabel(rate) }}</button>
+    <button class="mute" :aria-label="playerPrefs.muted ? 'Unmute' : 'Mute'" :title="playerPrefs.muted ? 'Unmute' : 'Mute'" @click="toggleMute">{{ playerPrefs.muted || playerPrefs.volume === 0 ? '🔇' : playerPrefs.volume < 0.5 ? '🔉' : '🔊' }}</button>
+    <input
+      v-if="!compact"
+      class="slider volume"
+      type="range"
+      min="0"
+      max="1"
+      step="0.05"
+      :value="playerPrefs.muted ? 0 : playerPrefs.volume"
+      aria-label="Volume"
+      @input="onVolume"
+    />
   </div>
 </template>
 
@@ -114,6 +157,25 @@ onBeforeUnmount(() => audio.value?.pause())
 .slider:disabled {
   cursor: default;
   opacity: 0.5;
+}
+.volume {
+  flex: 0 0 64px;
+}
+.rate,
+.mute {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+.rate:hover,
+.mute:hover {
+  border-color: var(--line);
+  color: var(--text);
 }
 .time {
   flex-shrink: 0;

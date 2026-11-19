@@ -6,6 +6,7 @@
 import { ref } from 'vue'
 import { REACTIONS, reactionChips, replySnippet } from '../roomchat.js'
 import EmojiPicker from './EmojiPicker.vue'
+import ThemedAudio from '../ThemedAudio.vue'
 
 const props = defineProps({
   line: { type: Object, required: true },
@@ -59,7 +60,7 @@ function picked(emoji) {
       <span class="who" :title="speaker.title" :tabindex="ai ? 0 : undefined" :aria-label="speaker.title ? `${speaker.name}, ${speaker.title}` : undefined">{{ speaker.name }}<span v-if="ai" class="spark"> ✦</span></span>
       <button v-if="quote()" class="quote" :disabled="!quote().loaded" @click="emit('jump', line.replyTo.id)"><strong>{{ quote().name }}</strong> {{ quote().text }}</button>
       <span class="text">{{ line.text }}</span>
-      <audio v-if="line.voice && files[line.voice.fileId]" :src="files[line.voice.fileId]" controls preload="none"></audio>
+      <ThemedAudio v-if="line.voice && files[line.voice.fileId]" class="voice" :src="files[line.voice.fileId]" compact />
       <img
         v-if="line.picture && files[line.picture.fileId]"
         :src="files[line.picture.fileId]"
@@ -153,7 +154,10 @@ function picked(emoji) {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.body audio,
+.body .voice {
+  max-width: 320px;
+  margin-top: 4px;
+}
 .body .picture {
   max-width: 320px;
   border-radius: 8px;
