@@ -1,12 +1,15 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { chatAttach, chatMarkupSave, clipboardPaste } from '../api/castle.js'
+import ImageViewer from './ImageViewer.vue'
 import MarkupSheet from './MarkupSheet.vue'
 import { applyMarked, keepMarks, markupSource, saveMarkedCopy } from './markupsave.js'
+import { viewerIndex } from './pictureviewer.js'
 import { isMac } from '../platform.js'
 
 // Chat's box: the member's words, the pictures they drop, paste or type as paths (shown above the
-// box, removable, opened in the markup sheet to be marked up), Enter to send, Shift+Enter for a new line.
+// box, removable, opened in a viewer to look closer or mark them up), Enter to send, Shift+Enter for
+// a new line.
 const props = defineProps({
   running: { type: Boolean, default: false },
   placeholder: { type: String, default: '' },
@@ -20,6 +23,8 @@ const props = defineProps({
 
 const draft = ref('')
 const box = ref(null)
+// the draft picture the viewer is open on (the markup sheet opens over it)
+const draftViewer = ref(null)
 // the picture the markup sheet is open for: { shown, original, ops, previous }
 const marking = ref(null)
 // marked copy path -> { original, ops }: a copy's marks stay editable until the message is sent
@@ -49,9 +54,22 @@ watch(draftPictures, async (paths) => {
 // a picture sent or taken out of the message forgets its marks
 watch(draftPictures, (paths) => (marks.value = keepMarks(marks.value, paths)))
 
+// the viewer's pictures: each one can be marked up once its original is loaded
+const viewerPictures = computed(() =>
+  draftPictures.value.map((p) => ({
+    path: p,
+    name: fileName(p),
+    url: props.media[p],
+    markable: !!props.media[markupSource(marks.value, p).original],
+    marked: !!marks.value[p],
+  })),
+)
+
 function openMarkup(path) {
   const source = markupSource(marks.value, path)
   if (!props.media[source.original]) return
+  // the viewer stands under the sheet, so Save or Cancel comes back to it
+  draftViewer.value = path
   marking.value = { shown: path, ...source }
 }
 
@@ -64,6 +82,8 @@ async function useMarked(ops, toDataUrl) {
   const next = applyMarked({ draft: draft.value, marks: marks.value }, { shown, original, ops, saved })
   marks.value = next.marks
   draft.value = next.draft
+  // the viewer then shows the marked copy where the picture was
+  draftViewer.value = saved
 }
 
 const quoted = (path) => (/\s/.test(path) ? `"${path}"` : path)
@@ -141,7 +161,7 @@ defineExpose({ addPaths, focus: () => box.value?.focus(), hasText: () => !!draft
 <template>
   <div v-if="draftPictures.length" class="attached" aria-label="Pictures in your message">
     <div v-for="path in draftPictures" :key="path" class="attached-item">
-      <button class="attached-thumb" :title="`${fileName(path)} - click to mark it up`" @click="openMarkup(path)">
+      <button class="attached-thumb" :title="`${fileName(path)} - click to look closer`" @click="draftViewer = path">
         <img v-if="media[path]" :src="media[path]" :alt="fileName(path)" />
         <span v-else class="thumb-wait">{{ fileName(path) }}</span>
       </button>
@@ -156,6 +176,15 @@ defineExpose({ addPaths, focus: () => box.value?.focus(), hasText: () => !!draft
       <button class="attached-remove" aria-label="Remove this picture" @click="removeDraftPicture(path)">&times;</button>
     </div>
   </div>
+  <ImageViewer
+    v-if="draftViewer"
+    :pictures="viewerPictures"
+    :start="viewerIndex(draftPictures, draftViewer)"
+    :can-open="false"
+    :marking="!!marking"
+    @markup="openMarkup"
+    @close="draftViewer = null"
+  />
   <MarkupSheet
     v-if="marking"
     :name="fileName(marking.original)"
@@ -200,7 +229,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.25);
-  cursor: pointer;
+  cursor: zoom-in;
 }
 
 .attached-thumb img {

@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { chatMediaOpen, roomPictureSave } from '../api/castle.js'
 import { isMac } from '../platform.js'
+import { viewerControls } from './pictureviewer.js'
 
 const props = defineProps({
   // [{ path, name, url }] - every picture in this chat, in order
@@ -12,8 +13,11 @@ const props = defineProps({
   // A room's pictures are not files Castle keeps, so this offers to save the one shown to a place the
   // member chooses (the Save dialog); the picture's `url` is its data address.
   saveable: { type: Boolean, default: false },
+  // A draft picture (one with `markable` set) can be marked up: the pen asks for the markup sheet,
+  // and while it is open (`marking`) zoom and next/previous rest until the marks are kept or left.
+  marking: { type: Boolean, default: false },
 })
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'markup'])
 
 const index = ref(props.start)
 const scale = ref(1)
@@ -23,6 +27,9 @@ const note = ref('')
 let dragFrom = null
 
 const picture = computed(() => props.pictures[index.value])
+const controls = computed(() =>
+  viewerControls({ count: props.pictures.length, marking: props.marking, markable: !!picture.value?.markable }),
+)
 
 function reset() {
   scale.value = 1
@@ -32,28 +39,30 @@ function reset() {
 }
 
 function go(step) {
-  if (props.pictures.length < 2) return
+  if (!controls.value.nav.on) return
   index.value = (index.value + step + props.pictures.length) % props.pictures.length
   reset()
 }
 
 function zoomAt(factor) {
+  if (!controls.value.zoom.on) return
   scale.value = Math.min(6, Math.max(1, scale.value * factor))
   if (scale.value === 1) offset.value = { x: 0, y: 0 }
 }
 
 function onWheel(event) {
   event.preventDefault()
+  if (!controls.value.zoom.on) return
   zoomAt(event.deltaY < 0 ? 1.2 : 1 / 1.2)
 }
 
 function onClickImage() {
-  if (dragFrom?.moved) return
+  if (dragFrom?.moved || !controls.value.zoom.on) return
   scale.value > 1 ? reset() : zoomAt(2)
 }
 
 function startDrag(event) {
-  if (scale.value === 1) return
+  if (scale.value === 1 || !controls.value.zoom.on) return
   dragFrom = { x: event.clientX - offset.value.x, y: event.clientY - offset.value.y, moved: false }
   const move = (e) => {
     dragFrom.moved = true
@@ -66,6 +75,10 @@ function startDrag(event) {
   }
   window.addEventListener('pointermove', move)
   window.addEventListener('pointerup', stop)
+}
+
+function markup() {
+  if (controls.value.markup.on) emit('markup', picture.value.path)
 }
 
 async function save() {
@@ -88,8 +101,10 @@ async function openOutside(folder) {
   }
 }
 
-// The viewer holds the keys while it is open, so Esc never reaches the terminal.
+// The viewer holds the keys while it is open, so Esc never reaches the terminal. While the
+// markup sheet is open over it, the keys are the sheet's (its Esc asks about the marks).
 function onKey(event) {
+  if (!controls.value.keys) return
   const handled = { Escape: () => emit('close'), ArrowLeft: () => go(-1), ArrowRight: () => go(1) }[event.key]
   if (handled) {
     event.preventDefault()
@@ -97,6 +112,9 @@ function onKey(event) {
     handled()
   }
 }
+
+// back from the markup sheet, the picture (maybe now its marked copy) shows whole again
+watch(() => props.marking, (on) => on || reset())
 
 watch(() => props.start, (value) => {
   index.value = value
@@ -111,15 +129,31 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
   <Teleport to="body">
     <div class="viewer" role="dialog" aria-modal="true" :aria-label="picture?.name" @click.self="emit('close')">
       <button class="close" aria-label="Close" @click="emit('close')">&times;</button>
-      <button v-if="pictures.length > 1" class="nav prev" aria-label="Previous picture" @click="go(-1)">&#8249;</button>
-      <button v-if="pictures.length > 1" class="nav next" aria-label="Next picture" @click="go(1)">&#8250;</button>
+      <template v-if="controls.nav.shown">
+        <button
+          class="nav prev"
+          aria-label="Previous picture"
+          :aria-disabled="!controls.nav.on"
+          :title="controls.nav.why || 'Previous picture'"
+          @click="go(-1)"
+        >&#8249;</button>
+        <button
+          class="nav next"
+          aria-label="Next picture"
+          :aria-disabled="!controls.nav.on"
+          :title="controls.nav.why || 'Next picture'"
+          @click="go(1)"
+        >&#8250;</button>
+      </template>
 
       <div class="stage" @wheel="onWheel" @click.self="emit('close')">
         <img
           v-if="picture?.url"
           :src="picture.url"
           :alt="picture.name"
-          :class="{ zoomed: scale > 1 }"
+          :title="controls.zoom.why || undefined"
+          :aria-disabled="!controls.zoom.on"
+          :class="{ zoomed: scale > 1, resting: !controls.zoom.on }"
           :style="{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }"
           draggable="false"
           @click="onClickImage"
@@ -130,10 +164,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 
       <footer class="bar">
         <span class="name">{{ picture?.name }}</span>
+        <span v-if="picture?.marked" class="marked">marked</span>
         <span v-if="pictures.length > 1" class="count">{{ index + 1 }} / {{ pictures.length }}</span>
         <span v-if="problem" class="problem">{{ problem }}</span>
         <span v-else-if="note" class="note" :title="note">{{ note }}</span>
         <span class="spacer"></span>
+        <button
+          v-if="controls.markup.shown"
+          :aria-disabled="!controls.markup.on"
+          :title="controls.markup.why || 'Mark up this picture'"
+          @click="markup"
+        >&#9998; Mark up</button>
         <button v-if="saveable" @click="save">Save picture</button>
         <template v-if="canOpen">
           <button @click="openOutside(true)">Open folder</button>
@@ -177,6 +218,28 @@ img {
   cursor: zoom-in;
   transition: transform 0.12s ease-out;
   user-select: none;
+}
+
+img.resting,
+img.zoomed.resting {
+  cursor: default;
+}
+
+button[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+button[aria-disabled='true']:hover {
+  background: rgba(20, 16, 58, 0.7);
+}
+
+.marked {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(127, 224, 176, 0.14);
+  color: #7fe0b0;
+  font-size: 11.5px;
 }
 
 img.zoomed {
