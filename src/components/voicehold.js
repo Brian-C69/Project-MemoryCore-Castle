@@ -100,6 +100,21 @@ export function readMicShortcut(event, mac, label = (text) => text) {
 }
 
 /**
+ * What Chat's 🎙 shows: null for no button, else { ready, hint, shortcut }. Nothing shows until both
+ * Claude Code's voice (`voice`: undefined until read, null when it cannot be read, else
+ * { enabled, mode }) and the member's shortcut (`shortcut`: undefined until read) are known, so the
+ * button never shows ⌘⇧M first and the member's own keys a moment later.
+ */
+export function micOffer({ running, claude, voice, shortcut }) {
+  if (!running || !claude || voice === undefined || shortcut === undefined) return null
+  const keys = micShortcutOf(shortcut)
+  if (voice === null) return { ready: true, shortcut: keys, hint: 'Talk - turn voice on first with /voice in the Log' }
+  if (!voice.enabled) return null
+  if (voice.mode !== 'hold') return { ready: false, shortcut: keys, hint: "Chat's mic needs voice in hold mode: type /voice hold in the Log" }
+  return { ready: true, shortcut: keys, hint: 'Talk: click to start, click again to stop. Your words come into the box to look over before Send.' }
+}
+
+/**
  * True for the mic's shortcut only: its key with ⌘ on a Mac (Ctrl elsewhere) and exactly its
  * Shift and Alt, nothing else held. Every other key (⌘X, ⌘⇧X, Ctrl+M, a plain M) is left alone.
  * The key counts by its code, or by its letter on a layout that puts the letter elsewhere.

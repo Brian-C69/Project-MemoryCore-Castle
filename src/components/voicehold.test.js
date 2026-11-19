@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CLEAR_LINE, DEFAULT_MIC_SHORTCUT, HOLD_EVERY_MS, isMicShortcut, MAX_RECORDING_MS, MIC_SHORTCUT, micShortcutOf, micShortcutTaken, micShortcutText, readMicShortcut, readPrompt, sameMicShortcut, voiceMic, voiceProblem, voiceWorking } from './voicehold.js'
+import { CLEAR_LINE, DEFAULT_MIC_SHORTCUT, HOLD_EVERY_MS, isMicShortcut, MAX_RECORDING_MS, micOffer, MIC_SHORTCUT, micShortcutOf, micShortcutTaken, micShortcutText, readMicShortcut, readPrompt, sameMicShortcut, voiceMic, voiceProblem, voiceWorking } from './voicehold.js'
 import { shortcutLabel } from '../platform.js'
 
 const rule = '─'.repeat(60)
@@ -276,5 +276,26 @@ describe('a shortcut of the member\'s own', () => {
     expect(micShortcutTaken({ code: 'KeyQ' }, false)).toBe('')
     expect(micShortcutTaken({ code: 'KeyM', shift: true }, true)).toBe('')
     expect(readMicShortcut(press({ ctrlKey: true, code: 'KeyV', key: 'v' }), false).problem).toBe('Ctrl+V is already Paste. Pick another key, or add Shift.')
+  })
+})
+
+describe("Chat's 🎙", () => {
+  const on = { enabled: true, mode: 'hold' }
+  const base = { running: true, claude: true, voice: on, shortcut: null }
+
+  it('waits for the shortcut as well as the voice, so it never shows ⌘⇧M first', () => {
+    expect(micOffer({ ...base, shortcut: undefined })).toBeNull()
+    expect(micOffer({ ...base, voice: undefined })).toBeNull()
+    expect(micOffer({ ...base, shortcut: { code: 'KeyK', shift: true } }).shortcut).toEqual({ code: 'KeyK', shift: true, alt: false })
+    expect(micOffer(base).shortcut).toEqual(DEFAULT_MIC_SHORTCUT)
+  })
+
+  it('shows only for a running Claude Code session with voice on', () => {
+    expect(micOffer({ ...base, running: false })).toBeNull()
+    expect(micOffer({ ...base, claude: false })).toBeNull()
+    expect(micOffer({ ...base, voice: { enabled: false } })).toBeNull()
+    expect(micOffer(base).ready).toBe(true)
+    expect(micOffer({ ...base, voice: { enabled: true, mode: 'tap' } })).toMatchObject({ ready: false, hint: expect.stringMatching(/hold mode/) })
+    expect(micOffer({ ...base, voice: null })).toMatchObject({ ready: true, hint: expect.stringMatching(/\/voice/) })
   })
 })

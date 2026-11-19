@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { chatHistory, chatPoll, claudeVoice, getSettings, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
 import { localSend, mergeEntries, resetEntries } from './ticks.js'
-import { DEFAULT_MIC_SHORTCUT, isMicShortcut, micShortcutOf, voiceMic } from './voicehold.js'
+import { isMicShortcut, micOffer, voiceMic } from './voicehold.js'
 import { isMac } from '../platform.js'
 import { readChoices } from './choices.js'
 import { firstHeading } from './markdown.js'
@@ -330,13 +330,15 @@ async function readVoice() {
   }
 }
 
-// The mic's shortcut as chosen in Settings > Chat > Mic (⌘⇧M / Ctrl+Shift+M until one is chosen).
-const micShortcut = ref({ ...DEFAULT_MIC_SHORTCUT })
+// The mic's shortcut as chosen in Settings > Chat > Mic (null = ⌘⇧M / Ctrl+Shift+M); undefined until
+// read, and the 🎙 waits for it, so it never shows the default keys first.
+const micShortcut = ref(undefined)
 async function readMicShortcut() {
   try {
-    micShortcut.value = micShortcutOf((await getSettings())?.settings?.micShortcut)
+    micShortcut.value = (await getSettings())?.settings?.micShortcut ?? null
   } catch {
-    // keeps the one it has
+    // keeps the one it has; the first time, the default
+    if (micShortcut.value === undefined) micShortcut.value = null
   }
 }
 watch(() => props.settingsStamp, readMicShortcut)
@@ -352,12 +354,8 @@ const micHold = voiceMic({
 // Shown only while Claude Code's voice is on (hold mode, which records while Space is held). When Castle cannot
 // tell, it shows with a hint to turn voice on first.
 const mic = computed(() => {
-  if (!props.running || !isClaude.value || voice.value === undefined) return null
-  const shortcut = micShortcut.value
-  if (voice.value === null) return { ready: true, hold: micHold, shortcut, hint: 'Talk - turn voice on first with /voice in the Log' }
-  if (!voice.value.enabled) return null
-  if (voice.value.mode !== 'hold') return { ready: false, hold: micHold, shortcut, hint: "Chat's mic needs voice in hold mode: type /voice hold in the Log" }
-  return { ready: true, hold: micHold, shortcut, hint: 'Talk: click to start, click again to stop. Your words come into the box to look over before Send.' }
+  const offer = micOffer({ running: props.running, claude: isClaude.value, voice: voice.value, shortcut: micShortcut.value })
+  return offer && { ...offer, hold: micHold }
 })
 
 watch(
