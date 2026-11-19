@@ -191,6 +191,20 @@ export const workflowRun = (id, values) => invoke('workflow_run', { id, values }
 export const pictureDescribe = (path) => invoke('picture_describe', { path })
 // a workflow's upload tile: the picker, then the picture kept inside the memory (shown and followed from there); null when closed
 export const workflowPickPicture = (title) => invoke('workflow_pick_picture', { title })
+// STUDIO's Marketplace (the Portfolio's doors, through the core with the member's sign-in; shown only
+// when memberStatus().marketplace.live)
+export const shopListings = (query = '', page = 0) => invoke('market_shop_listings', { query, page })
+export const shopListing = (id) => invoke('market_shop_listing', { id })
+export const shopCheckout = (id) => invoke('market_shop_checkout', { id })
+export const shopPurchases = () => invoke('market_shop_purchases')
+export const shopInstall = (purchase, listing) => invoke('market_shop_install', { purchase, listing })
+// up: true (thumbs up), false (down), null (take the vote back)
+export const shopVote = (listing, up) => invoke('market_shop_vote', { listing, up })
+export const shopConnect = () => invoke('market_shop_connect')
+export const shopMine = () => invoke('market_shop_mine')
+// listing: null for a new listing, or the listing to send a new version of
+export const shopPublish = (workflow, listing, samples, priceMyr, description) => invoke('market_shop_publish', { workflow, listing, samples, priceMyr, description })
+export const shopWithdraw = (listing) => invoke('market_shop_withdraw', { listing })
 // Opens a file from the memory folder in its own app, or its folder with the file selected. A file a
 // DEV tab's chat showed (by `room`, or remembered from chatMedia) opens through that tab's door.
 export const chatMediaOpen = (path, folder = false, room = undefined) => {

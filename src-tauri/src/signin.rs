@@ -206,6 +206,18 @@ pub struct MemberStatus {
     pub expired: bool,
     /// a plain line when something could not be read
     pub problem: Option<String>,
+    /// STUDIO's Marketplace, as /api/member/me says (all false until the Portfolio's doors are live)
+    pub marketplace: Marketplace,
+}
+
+/// What the Marketplace lets this member do: `live` shows the tab, `selling` shows Publish (members
+/// wait until Kiyo opens it), `connected` means Stripe onboarding is finished.
+#[derive(Debug, Clone, Serialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Marketplace {
+    pub live: bool,
+    pub selling: bool,
+    pub connected: bool,
 }
 
 /// What /api/member/me says, as the door's steps (pure, tested).
@@ -222,6 +234,8 @@ pub fn status_from_me(status: u16, body: &str) -> MemberStatus {
                 .filter(|n| !n.trim().is_empty())
                 .or_else(|| v.get("name").and_then(Value::as_str))
                 .map(str::to_string);
+            let flag = |name: &str| v.pointer(&format!("/marketplace/{name}")).and_then(Value::as_bool).unwrap_or(false);
+            s.marketplace = Marketplace { live: flag("live"), selling: flag("live") && flag("selling"), connected: flag("connected") };
         }
         401 => {
             s.signed_in = false;
@@ -319,6 +333,11 @@ mod tests {
         assert!(gone.expired && !gone.signed_in);
         // the email never comes through
         assert!(!format!("{:?}", status_from_me(200, r#"{"name":"Rin","email":"secret@mail"}"#)).contains("secret@mail"));
+        assert_eq!(status_from_me(200, r#"{"name":"Rin"}"#).marketplace, Marketplace::default(), "no Marketplace until the Portfolio says so");
+        let open = status_from_me(200, r#"{"name":"Rin","marketplace":{"live":true,"selling":false,"connected":true}}"#).marketplace;
+        assert_eq!((open.live, open.selling, open.connected), (true, false, true));
+        let closed = status_from_me(200, r#"{"name":"Rin","marketplace":{"live":false,"selling":true}}"#).marketplace;
+        assert!(!closed.selling, "no selling while the Marketplace is not live");
     }
 
     /// A one-request mock Portfolio.

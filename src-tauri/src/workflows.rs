@@ -622,6 +622,29 @@ pub fn keep_inputs(memory: &Path, run: &str, pictures: &[String]) -> Result<Vec<
         .collect()
 }
 
+/// Writes a bought workflow (from the Marketplace) onto the member's rail, with its listing beside it
+/// in origin.json. Buying the same listing again replaces its file (a newer approved version).
+/// Returns the folder id.
+pub fn install_bought(settings_folder: &Path, listing: &str, mut workflow: Value) -> Result<String, String> {
+    if let Some(error) = first_problem(&workflow) {
+        return Err(format!("The bought workflow cannot be used: {error}"));
+    }
+    let root = settings_folder.join(FOLDER);
+    let existing = fs::read_dir(&root).ok().and_then(|entries| {
+        entries.flatten().map(|e| e.path()).find(|p| {
+            fs::read_to_string(p.join(ORIGIN)).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).is_some_and(|o| str_of(&o, "source") == "bought" && str_of(&o, "listing") == listing)
+        })
+    });
+    let id = match existing.as_ref().and_then(|p| p.file_name()).and_then(|n| n.to_str()) {
+        Some(id) => id.to_string(),
+        None => free_id(settings_folder, str_of(&workflow, "name")),
+    };
+    write(settings_folder, &id, &mut workflow)?;
+    let origin = serde_json::json!({ "source": "bought", "listing": listing });
+    fs::write(root.join(&id).join(ORIGIN), origin.to_string()).map_err(|_| "The bought workflow could not be kept.".to_string())?;
+    Ok(id)
+}
+
 /// Keeps a picked picture at `<memory>/studio-inputs/picked/<stamp>.<ext>`, where the page can show
 /// it and a run can follow it. Returns the copy's path.
 pub fn keep_picked(memory: &Path, source: &Path, stamp: &str) -> Result<String, String> {

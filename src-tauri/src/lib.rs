@@ -77,6 +77,7 @@ mod theme;
 mod themes;
 mod workflows;
 mod describe;
+mod market_shop;
 mod traits;
 mod tree;
 mod transcript;
@@ -403,6 +404,16 @@ pub fn run() {
             workflows::workflow_run,
             workflows::workflow_pick_picture,
             describe::picture_describe,
+            market_shop::market_shop_listings,
+            market_shop::market_shop_listing,
+            market_shop::market_shop_checkout,
+            market_shop::market_shop_purchases,
+            market_shop::market_shop_install,
+            market_shop::market_shop_vote,
+            market_shop::market_shop_connect,
+            market_shop::market_shop_mine,
+            market_shop::market_shop_publish,
+            market_shop::market_shop_withdraw,
             studio::studio_library,
             thumbs::studio_thumbs,
             studio::studio_powers,
