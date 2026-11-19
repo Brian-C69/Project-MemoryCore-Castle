@@ -100,6 +100,9 @@ pub struct Project {
     pub file: Option<String>,
     pub updated: Option<String>,
     pub status: Option<String>,
+    /// sub-projects and tasks (done, all), for a project in the database that has any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tree: Option<TreeMark>,
 }
 
 /// The active projects, most recent first (the list's own order: | Pos | Project | Last Updated | Status |).
@@ -136,6 +139,7 @@ pub fn projects(folder: &Path) -> Vec<Project> {
             file,
             updated: cells.get(2).filter(|c| !c.is_empty()).map(|c| c.to_string()),
             status: cells.get(3).filter(|c| !c.is_empty()).map(|c| c.to_string()),
+            tree: None,
         });
     }
     found
@@ -337,6 +341,24 @@ pub struct Page {
     /// relative to the memory folder, forward slashes
     pub file: String,
     pub date: Option<String>,
+    /// a project page's place in the tree (PROJECTS from the database only)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tree: Option<TreeMark>,
+}
+
+/// Where a project page sits among its parent and sub-projects, and how far its tasks are.
+#[derive(Debug, Clone, Serialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TreeMark {
+    /// the parent's page, for a sub-project
+    pub parent: Option<String>,
+    /// how many sub-projects it has (on any shelf)
+    pub kids: u32,
+    /// tasks done and all, a parent's counting its sub-projects'
+    pub done: u32,
+    pub tasks: u32,
+    /// a parent shown on this shelf only for its sub-projects: the shelf it really is on
+    pub elsewhere: Option<String>,
 }
 
 /// A group of pages: a diary month, "Active" / "Archived" projects, a library section.
@@ -376,7 +398,7 @@ pub fn diary_shelves(folder: &Path) -> Vec<Shelf> {
         let text = std::fs::read_to_string(&path).unwrap_or_default();
         let date = date_of(&path);
         let month = date.as_deref().map(|d| d[..7].to_string()).unwrap_or_else(|| "Earlier".into());
-        pages.push((month, Page { title: diary_title(&text).unwrap_or_else(|| page_title(&path)), file: relative(folder, &path), date }));
+        pages.push((month, Page { title: diary_title(&text).unwrap_or_else(|| page_title(&path)), file: relative(folder, &path), date, tree: None }));
     }
     if let Ok(months) = std::fs::read_dir(folder.join("daily-diary").join("archived")) {
         for month in months.flatten().map(|e| e.path()).filter(|p| p.is_dir()) {
@@ -384,7 +406,7 @@ pub fn diary_shelves(folder: &Path) -> Vec<Shelf> {
             for path in md_files(&month) {
                 let text = std::fs::read_to_string(&path).unwrap_or_default();
                 let date = is_dated_md(&path).then(|| path.file_stem().unwrap_or_default().to_string_lossy().to_string());
-                pages.push((name.clone(), Page { title: diary_title(&text).unwrap_or_else(|| page_title(&path)), file: relative(folder, &path), date }));
+                pages.push((name.clone(), Page { title: diary_title(&text).unwrap_or_else(|| page_title(&path)), file: relative(folder, &path), date, tree: None }));
             }
         }
     }
@@ -408,7 +430,7 @@ pub fn project_shelves(folder: &Path) -> Vec<Shelf> {
             name: name.to_string(),
             pages: md_files(&folder.join("projects").join(dir))
                 .iter()
-                .map(|p| Page { title: page_title(p), file: relative(folder, p), date: None })
+                .map(|p| Page { title: page_title(p), file: relative(folder, p), date: None, tree: None })
                 .collect(),
         })
         .filter(|s| !s.pages.is_empty())
@@ -454,13 +476,13 @@ pub fn library_shelves(folder: &Path) -> Vec<Shelf> {
         .iter()
         .map(|dir| Shelf {
             name: dir.file_name().unwrap_or_default().to_string_lossy().replace(['-', '_'], " "),
-            pages: md_files(dir).iter().map(|p| Page { title: page_title(p), file: relative(folder, p), date: None }).collect(),
+            pages: md_files(dir).iter().map(|p| Page { title: page_title(p), file: relative(folder, p), date: None, tree: None }).collect(),
         })
         .filter(|s| !s.pages.is_empty())
         .collect();
     let loose = md_files(&library);
     if !loose.is_empty() {
-        shelves.insert(0, Shelf { name: "General".into(), pages: loose.iter().map(|p| Page { title: page_title(p), file: relative(folder, p), date: None }).collect() });
+        shelves.insert(0, Shelf { name: "General".into(), pages: loose.iter().map(|p| Page { title: page_title(p), file: relative(folder, p), date: None, tree: None }).collect() });
     }
     shelves
 }

@@ -464,6 +464,17 @@ export const marketLessons = () => invoke('market_lessons')
 export const marketLessonDelete = (lessonId) => invoke('market_lesson_delete', { lessonId })
 
 // PROJECTS: where the project behind a reader page (db/project/<id>.md) is, and moving it.
-// -> { name, shelf: active|paused|archived|deleted, note, daysLeft }
+// -> { name, shelf: active|paused|archived|deleted, note, daysLeft, parent, kids, kidsBeside,
+//      canHaveKids, tasks: [{ id, title, done, due }], done, total }
 export const projectState = (file) => invoke('project_state', { file })
-export const projectShelve = (file, to, note = null) => invoke('project_shelve', { file, to, note })
+// withKids: the sub-projects on the same shelf move with it
+export const projectShelve = (file, to, note = null, withKids = false) => invoke('project_shelve', { file, to, note, withKids })
+// a project's tasks (CASTLE-6)
+export const projectTaskAdd = (file, title, due = null) => invoke('project_task_add', { file, title, due })
+export const projectTaskDone = (id, done) => invoke('project_task_done', { id, done })
+export const projectTaskRemove = (id) => invoke('project_task_remove', { id })
+export const projectTaskOrder = (file, ids) => invoke('project_task_order', { file, ids })
+// the one-time split of grouped names ("Castle · X") into sub-projects
+// -> [{ parent, parentExists, items: [{ id, name, newName }] }]
+export const projectSplitProposals = () => invoke('project_split_proposals')
+export const projectSplitApply = (ids) => invoke('project_split_apply', { ids })

@@ -272,10 +272,22 @@ Your Start-menu apps, with the ones you use most at the top. Type to search, the
 These rooms let you read your companion's memory without leaving Castle (they appear once your MemoryCore has the feature):
 
 - **DIARY** - every page, newest first, grouped by month. Older diaries are read too.
-- **PROJECTS** - your active and archived projects.
+- **PROJECTS** - your projects on four shelves: **Active**, **Paused**, **Archived** and **Recently deleted**. See below.
 - **LIBRARY** - see below.
 
-Pick a page on the left to read it on the right; type in **Search** to find one. **Show file** opens the page's folder. The rooms only read - your companion is the one who writes your memory. Clicking a project or the diary on HOME opens it here.
+Pick a page on the left to read it on the right; type in **Search** to find one. **Show file** opens the page's folder (for a memory still kept in files). Your companion writes the pages; clicking a project or the diary on HOME opens it here.
+
+### PROJECTS
+
+Each project sits on a shelf. Above an open project, its chip says where it is and the buttons move it: **Pause** (with an optional reason), **Resume**, **Archive**, **Back to active**, **Delete…** and **Restore**. Delete always asks first; a deleted project waits 30 days on **Recently deleted**, then it is gone for good.
+
+**Sub-projects.** A project can hold sub-projects, one level deep (for example *Castle* with *Update chip* and *Codex usage* under it). In the list a parent shows **▸**: press it, or press the open parent again, to close or open its sub-projects. The small numbers after a name are its sub-projects and its tasks done (`2 · 3/8`). A sub-project keeps its own shelf, so one can rest while its parent runs; a parent shown in *italics* lives on another shelf and is there only to head its sub-projects. When you pause, archive, delete, resume or restore a parent whose sub-projects stand on the same shelf, Castle asks **All of them** or **Only the parent**. An open sub-project shows its parent above it; press the name to go up.
+
+**Tasks.** Every project has a task list under its title, with a progress bar (a parent counts its sub-projects' tasks too). Tick a task when it is done, type a new one and press **Enter** (a due date is optional), drag a task by **⋮⋮** to reorder it (or **Alt+↑ / Alt+↓** on its tick box), and hover a task and press **×** to remove it. Your companion keeps the same list from its side.
+
+**Grouped names.** Projects named like *Castle · Update chip* only look grouped. When there are some, the list shows **Make sub-projects…**: tick the ones to move and press **Make N sub-projects**. Each goes under its parent (made for you when it does not exist yet) with the short name; nothing is renamed without your tick. **Not now** hides it until new grouped names appear.
+
+The HOME **PROJECTS** card lists the active projects at the top of the tree, with their tasks done (`3/8`).
 
 ### LIBRARY
 

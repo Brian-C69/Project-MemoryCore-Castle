@@ -1,24 +1,30 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { projectShelve, projectState } from '../api/castle.js'
-import { MOVES, stateLine } from './projectshelf.js'
+import { MOVES, kidsQuestion, stateLine } from './projectshelf.js'
 
 // Above an open project in the PROJECTS room: where it is (active, paused, archived or recently
 // deleted) and the moves from there. The companion moves projects the same way with
-// `castle-memory project pause | resume | archive | restore | delete`.
+// `castle-memory project pause | resume | archive | restore | delete`. A parent with sub-projects
+// on its shelf asks whether they move with it (`--with-subprojects` for the companion).
 const props = defineProps({
   file: { type: String, required: true }, // db/project/<id>.md
   companion: { type: String, default: '' },
+  // changes when the project may have changed elsewhere (a task ticked, a sub-project moved)
+  stamp: { type: Number, default: 0 },
 })
 const emit = defineEmits(['moved'])
 
 const state = ref(null)
 const problem = ref('')
-const asking = ref('') // 'pause' while the reason is asked, 'delete' while the yes is asked
+const asking = ref('') // 'pause' while the reason is asked, 'delete' while the yes is asked, 'kids' for the sub-projects
+const pending = ref('') // the shelf a 'kids' question is about
 const note = ref('')
 const busy = ref(false)
 
 const moves = computed(() => (state.value ? MOVES[state.value.shelf] ?? [] : []))
+// the sub-projects question for the move being asked about (pause, delete or a plain one)
+const kidsAsk = computed(() => kidsQuestion(state.value, asking.value === 'pause' ? 'paused' : asking.value === 'delete' ? 'deleted' : pending.value))
 
 async function load() {
   problem.value = ''
@@ -31,12 +37,13 @@ async function load() {
   }
 }
 
-async function move(to) {
+async function move(to, withKids = false) {
   busy.value = true
   problem.value = ''
   try {
-    await projectShelve(props.file, to, to === 'paused' ? note.value : null)
+    await projectShelve(props.file, to, to === 'paused' ? note.value : null, withKids)
     asking.value = ''
+    pending.value = ''
     note.value = ''
     await load()
     emit('moved')
@@ -48,10 +55,13 @@ async function move(to) {
 
 function choose(m) {
   if (m.ask) asking.value = m.ask
-  else move(m.to)
+  else if (kidsQuestion(state.value, m.to)) {
+    pending.value = m.to
+    asking.value = 'kids'
+  } else move(m.to)
 }
 
-watch(() => props.file, load, { immediate: true })
+watch(() => [props.file, props.stamp], load, { immediate: true })
 </script>
 
 <template>
@@ -67,16 +77,36 @@ watch(() => props.file, load, { immediate: true })
     <form v-if="asking === 'pause'" class="ask" @submit.prevent="move('paused')">
       <label for="pause-note">Why is it paused? <span class="dim">(optional)</span></label>
       <input id="pause-note" v-model="note" maxlength="500" placeholder="Waiting on the client's photos" />
-      <div class="row">
+      <p v-if="kidsAsk" class="kids-q">{{ kidsAsk.question }}</p>
+      <div v-if="kidsAsk" class="row">
+        <button class="primary" type="button" :disabled="busy" @click="move('paused', true)">{{ kidsAsk.all }}</button>
+        <button type="submit" :disabled="busy">{{ kidsAsk.one }}</button>
+        <button type="button" @click="asking = ''">Cancel</button>
+      </div>
+      <div v-else class="row">
         <button class="primary" type="submit" :disabled="busy">Pause {{ state.name }}</button>
         <button type="button" @click="asking = ''">Cancel</button>
       </div>
     </form>
 
+    <div v-if="asking === 'kids' && kidsAsk" class="ask" role="alertdialog" aria-labelledby="kids-q">
+      <p id="kids-q"><strong>{{ kidsAsk.question }}</strong> They stand on the same shelf as {{ state.name }}.</p>
+      <div class="row">
+        <button class="primary" :disabled="busy" @click="move(pending, true)">{{ kidsAsk.all }}</button>
+        <button :disabled="busy" @click="move(pending)">{{ kidsAsk.one }}</button>
+        <button @click="asking = ''">Cancel</button>
+      </div>
+    </div>
+
     <div v-if="asking === 'delete'" class="ask danger-box" role="alertdialog" aria-labelledby="delete-q">
       <p id="delete-q"><strong>Delete {{ state.name }}?</strong> It moves to Recently deleted for 30 days, where you can restore it. After that it is gone for good.</p>
+      <p v-if="kidsAsk" class="kids-q">{{ kidsAsk.question }}</p>
       <div class="row">
-        <button class="danger" :disabled="busy" @click="move('deleted')">Delete {{ state.name }}</button>
+        <template v-if="kidsAsk">
+          <button class="danger" :disabled="busy" @click="move('deleted', true)">{{ kidsAsk.all }}</button>
+          <button class="danger" :disabled="busy" @click="move('deleted')">{{ kidsAsk.one }}</button>
+        </template>
+        <button v-else class="danger" :disabled="busy" @click="move('deleted')">Delete {{ state.name }}</button>
         <button @click="asking = ''">Keep it</button>
       </div>
     </div>
@@ -194,6 +224,10 @@ input:focus-visible {
 }
 .dim {
   color: var(--text-dim);
+}
+.kids-q {
+  margin: 0;
+  font-weight: 600;
 }
 .problem {
   width: 100%;

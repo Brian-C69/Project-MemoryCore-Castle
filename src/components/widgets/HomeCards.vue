@@ -51,7 +51,9 @@ function due(date) {
     <template v-else-if="kind === 'projects'">
       <ul v-if="data?.projects?.length">
         <li v-for="(p, i) in data.projects.slice(0, 4)" :key="p.name" class="link" @click="$emit('open', p.file)">
-          <span class="num">{{ i + 1 }}</span><span class="text">{{ p.name }}</span><span class="side">›</span>
+          <span class="num">{{ i + 1 }}</span><span class="text">{{ p.name }}</span>
+          <span v-if="p.tree?.kids || p.tree?.tasks" class="side progress-side" :title="`${p.tree.kids ? `${p.tree.kids} sub-project${p.tree.kids === 1 ? '' : 's'}` : ''}${p.tree.kids && p.tree.tasks ? ' · ' : ''}${p.tree.tasks ? `${p.tree.done} of ${p.tree.tasks} tasks done` : ''}`">{{ p.tree.tasks ? `${p.tree.done}/${p.tree.tasks}` : `${p.tree.kids} sub` }} ›</span>
+          <span v-else class="side">›</span>
         </li>
       </ul>
       <p v-else class="empty">No projects yet.</p>
