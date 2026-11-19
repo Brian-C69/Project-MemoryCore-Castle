@@ -5,6 +5,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { backupCreate, backupNow, backupSignIn, backupStatus, getSettings, openUrl, saveSettings } from '../api/castle.js'
 import { isMac } from '../platform.js'
+import HelpTip from './HelpTip.vue'
 
 const props = defineProps({
   companion: { type: String, default: 'your companion' },
@@ -91,7 +92,7 @@ onMounted(async () => {
 
 <template>
   <div class="backup">
-    <p class="hint">Keep {{ companion }}'s memory safe on GitHub, in a <strong>private</strong> repository only you can see. Castle never stores your GitHub password.</p>
+    <h4 class="with-tip">GitHub backup <HelpTip :text="`Keep ${companion}'s memory safe on GitHub, in a private repository only you can see. Castle never stores your GitHub password.`" /></h4>
 
     <ol class="steps">
       <li v-for="step in steps" :key="step.label" :class="{ ok: step.ok }">
@@ -109,7 +110,7 @@ onMounted(async () => {
     </div>
     <div v-else-if="firstOpen === 'signin'" class="row">
       <button class="primary" @click="attempt('Opening GitHub sign-in…', backupSignIn)">Sign in to GitHub</button>
-      <span class="hint">A small window opens: follow it in your browser, then press Check again.</span>
+      <HelpTip text="A small window opens: follow it in your browser, then press Check again." />
     </div>
     <div v-else-if="firstOpen === 'create'" class="row">
       <input v-model="repoName" aria-label="Backup repository name" />
@@ -140,6 +141,15 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+h4.with-tip {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 .hint {
   margin: 0;

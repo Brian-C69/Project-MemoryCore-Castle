@@ -7,6 +7,7 @@ import {
   chooseFolder, dbCreate, dbExport, dbInstall, dbMemory, dbMoveIn, dbMoveOut, dbMovePreview, dbRestore, dbSkills, dbSkillStub, dbStart, dbStatus, dbStop, dbUseExisting,
   getSettings, onDbInstall, saveSettings,
 } from '../api/castle.js'
+import HelpTip from './HelpTip.vue'
 import { installLine, moveLine, nextStep, progressLine, steps as stepsOf, thisComputer } from './database.js'
 
 const here = thisComputer()
@@ -168,10 +169,7 @@ onBeforeUnmount(() => stopListening?.())
 
 <template>
   <div class="database">
-    <p class="hint">
-      Keep {{ companion }}'s memory in a database on this computer instead of in loose files: faster to search, every change kept, nothing to tidy.
-      It is optional, and nothing leaves {{ here }}.
-    </p>
+    <h4 class="with-tip">Memory database <HelpTip :text="`Keep ${companion}'s memory in a database on this computer instead of in loose files: faster to search, every change kept, nothing to tidy. It is optional, and nothing leaves ${here}.`" /></h4>
 
     <ol class="steps">
       <li v-for="step in steps" :key="step.id" :class="{ ok: step.ok }">
@@ -193,7 +191,7 @@ onBeforeUnmount(() => stopListening?.())
     <template v-else-if="next === 'start'">
       <div v-if="own" class="row">
         <button class="primary" :disabled="!!busy" @click="start">Start</button>
-        <span class="hint">It also starts by itself whenever Castle opens.</span>
+        <HelpTip text="It also starts by itself whenever Castle opens." />
       </div>
       <p v-else class="next">The database on {{ here }} (port {{ engine.port }}) is not answering. Start it in its own program, then press Check again.</p>
     </template>
@@ -217,18 +215,14 @@ onBeforeUnmount(() => stopListening?.())
         Left where they are (not plain text): {{ preview.skipped.join(', ') }}
       </p>
       <template v-if="preview?.files">
-        <p class="hint">
-          Castle copies every file into the database, reads each one back to check it, and only then deletes the files.
-          Your skills stay as files too. <strong>Export to markdown</strong> gives everything back whenever you like.
-        </p>
-        <label class="toggle"><input v-model="sure" type="checkbox" /> I understand the files are deleted after they are safely in the database</label>
+        <label class="toggle has-tip"><input v-model="sure" type="checkbox" /> I understand the files are deleted after they are safely in the database<HelpTip block text="Castle copies every file into the database, reads each one back to check it, and only then deletes the files; your skills stay as files too. Export to markdown gives everything back whenever you like." /></label>
         <div class="row">
           <button class="primary" :disabled="!!busy || !sure" @click="moveIn">Move my memory in</button>
         </div>
       </template>
       <div v-if="memory?.canRestore" class="row">
         <button :disabled="!!busy" @click="restore">Restore from my backup</button>
-        <span class="hint">This folder carries a backup of the database. Bring the memory back from it.</span>
+        <HelpTip text="This folder carries a backup of the database. Bring the memory back from it." />
       </div>
     </template>
 
@@ -245,24 +239,15 @@ onBeforeUnmount(() => stopListening?.())
 
       <details class="back">
         <summary>Move my memory back to files</summary>
-        <p class="hint">
-          Castle writes everything out into your memory folder as files again, exactly as it was plus what was added since, then empties the database.
-          Do this while {{ companion }} is asleep.
-        </p>
-        <label class="toggle"><input v-model="sureOut" type="checkbox" /> Yes, put my memory back in files</label>
+        <label class="toggle has-tip"><input v-model="sureOut" type="checkbox" /> Yes, put my memory back in files<HelpTip block :text="`Castle writes everything back into your memory folder as files, exactly as it was plus what was added since, then empties the database. Do this while ${companion} is asleep.`" /></label>
         <div class="row">
           <button :disabled="!!busy || !sureOut" @click="moveOut">Move back to files</button>
         </div>
       </details>
 
-      <h4>Skills</h4>
+      <h4 class="with-tip">Skills <HelpTip v-if="skills.length" :text="`Every skill is kept in the database and stays on disk as a file. Ticked, it is served from the database: its file becomes a short note telling ${companion} how to load it a section at a time (needs the database running); untick to put the whole file back.`" /></h4>
       <p v-if="!skills.length" class="hint">No skills installed yet. Once {{ companion }} installs one, it shows here.</p>
       <template v-else>
-        <p class="hint">
-          Every skill is kept in the database and stays on disk as a file. Tick one to <strong>serve it from the database</strong>:
-          its file becomes a short note that tells {{ companion }} how to load the instructions, a section at a time.
-          It needs the database running; untick to put the whole file back.
-        </p>
         <ul class="skills">
           <li v-for="skill in skills" :key="`${skill.plugin}/${skill.name}`">
             <label class="toggle" :title="skill.description ?? ''">
@@ -328,6 +313,13 @@ onBeforeUnmount(() => stopListening?.())
   margin: 0;
   font-size: 13px;
   color: var(--text-dim);
+}
+h4.with-tip {
+  display: flex;
+  align-items: center;
+}
+.has-tip {
+  position: relative;
 }
 h4 {
   margin: 8px 0 0;

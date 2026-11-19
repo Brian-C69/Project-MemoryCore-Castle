@@ -254,6 +254,13 @@ async function switchLink(patch) {
 }
 
 // The rooms that can be switched off (HOME always stays).
+// the few rooms whose switch has more to it, told in a (?) beside the switch
+const ROOM_TIPS = {
+  library: 'Off to begin with: turn it on for your own books (kept in your memory database) and the Spiral Library.',
+  story: 'Turning STORY off ends the story session. Its files stay.',
+  world: 'Turning WORLD off closes the world screens. Its files stay.',
+  chat: 'Turning CHAT off stops reading the room. Its files stay.',
+}
 const ROOM_SWITCHES = [
   { id: 'theme', label: 'THEME' },
   { id: 'apps', label: 'APPS' },
@@ -466,35 +473,33 @@ onMounted(async () => {
         <label class="toggle"><input type="checkbox" :checked="settings.dailyMoodOn !== false" :disabled="!!busy" @change="save({ dailyMoodOn: $event.target.checked }, $event.target.checked ? 'A new mood every morning.' : 'The mood stays as it is.')" /> A new mood every day</label>
         <h3 class="with-tip">Shopkeepers <HelpTip :text="`In STUDIO's Marketplace, a shop's keeper explains each item and answers your questions. ${settings.companionName ?? 'Your companion'} speaks as the keeper, from the shop's public card and the item's public facts only, never more than the listing shows. Each explanation or answer is one short run on your own plan. Off, the item's own description shows instead.`" /></h3>
         <label class="toggle"><input type="checkbox" :checked="settings.keeperSpeaks !== false" :disabled="!!busy" @change="save({ keeperSpeaks: $event.target.checked }, $event.target.checked ? 'Shopkeepers will speak.' : 'Shopkeepers stay quiet.')" /> Let shop keepers speak</label>
-        <h3>Names</h3>
+        <h3 class="with-tip">Names <HelpTip text="Renaming leaves names already in your memory files as they are - ask your companion to update them. In the chat room you are your Foundation name (Library card > Profile); the companion's name and picture here go there once it is let in." /></h3>
         <div class="row">
           <label>Companion <input v-model="settings.companionName" maxlength="40" /></label>
           <label>You <input v-model="settings.memberName" maxlength="40" /></label>
           <label class="wide">Your companion is <input v-model="settings.relationshipStyle" maxlength="80" /></label>
         </div>
         <button class="primary" @click="saveNames">Save names</button>
-        <p class="hint">Names already written in your memory files stay as they are - ask your companion to update the memory if you rename.</p>
-        <p class="hint">Your name in the chat room is your Foundation name (Library card > Profile). Your companion's name and picture here go to the room when it is let in.</p>
         <h3>Picture</h3>
         <div class="row">
           <div class="avatar"><img v-if="avatar" :src="avatar" alt="" /><span v-else>◆</span></div>
           <button @click="changeAvatar">Choose a picture</button>
           <button @click="clearAvatar">Use the drawn look / crystal</button>
         </div>
-        <h3>Local voice (optional)</h3>
+        <h3 class="with-tip">Local voice (optional) <HelpTip text="Off: Castle never contacts it. On: STUDIO's Voice card speaks a line with it and saves the clip with your voice lines; everything stays on this computer. Castle doesn't install or start it, and its voice models carry their own licences (some non-commercial)." /></h3>
         <label class="toggle"><input type="checkbox" :checked="!!settings.voicestudioOn" :disabled="!!busy" @change="toggleVoice($event.target.checked)" /> Use VoiceStudio for the Voice card in STUDIO</label>
         <p v-if="settings.voicestudioOn" class="hint">VoiceStudio is {{ voiceUp === null ? 'being checked…' : voiceUp ? 'running on this computer.' : 'not running. Open it and wait for it to finish starting, then check again.' }} <button v-if="voiceUp === false" @click="checkVoice">Check again</button></p>
-        <p class="hint">For people who run their own <a href="#" @click.prevent="openUrl('https://github.com/debpalash/voicestudio')">VoiceStudio</a> on {{ words.thisComputer }}. Off: Castle never contacts it. On: STUDIO's Voice card can speak a line with it, and the clip is saved with your other voice lines. Everything stays on this computer. Castle does not install or start VoiceStudio, and its voice models carry their own licences (some are non-commercial).</p>
+        <p class="hint">For people who run their own <a href="#" @click.prevent="openUrl('https://github.com/debpalash/voicestudio')">VoiceStudio</a> on {{ words.thisComputer }}.</p>
         <button @click="emit('setup')">Run the first-run setup again</button>
       </section>
 
       <WidgetsView v-else-if="tab === 'widgets'" :theme-id="themeId" :theme-name="themeName" :theme-widgets="themeWidgets" @arrange="emit('arrange')" @changed="widgetsChanged" />
 
       <section v-else-if="tab === 'keys'" class="pane">
-        <p class="hint">Keys are {{ words.keysKept }} and only handed to your companion's session. Without a key, your companion saves the idea instead and Castle tells you.</p>
+        <h3 class="with-tip">Your keys <HelpTip :text="`Keys are ${words.keysKept} and only handed to your companion's session; without one, your companion saves the idea instead and Castle tells you. Foundation room keys are set at the CHAT room's door.`" /></h3>
         <div v-for="k in shownKeys" :key="k.name" class="key">
           <div class="row">
-            <strong>{{ k.label }}</strong>
+            <strong>{{ k.label }}<HelpTip v-if="k.name === 'openai'" text="APPEARANCE and STUDIO draw on your ChatGPT plan whenever Codex is signed in with ChatGPT on this computer, whichever CLI your companion thinks with; otherwise with this key. The key is never given to Codex." /></strong>
             <span v-if="k.set" class="good">{{ shown[k.name] || k.masked }}</span>
             <span v-else class="hint">not set</span>
             <span class="spacer"></span>
@@ -510,12 +515,10 @@ onMounted(async () => {
           </div>
           <p v-if="tests[k.name]" :class="tests[k.name].ok === false ? 'warn' : 'good'">{{ tests[k.name].message }}</p>
         </div>
-        <p class="hint">APPEARANCE and STUDIO draw on your ChatGPT plan whenever Codex is signed in with ChatGPT on this computer, whichever CLI your companion thinks with; otherwise with this key. The key is never given to Codex.</p>
-        <p class="hint">Room keys for the MemoryCore Foundation room are set at the CHAT room's door.</p>
       </section>
 
       <section v-else-if="tab === 'quick'" class="pane">
-        <p class="hint">Your own buttons, after Save diary / Save project / Save memory. A button types its words into your companion's session.</p>
+        <h3 class="with-tip">Your buttons <HelpTip text="Your own buttons, after Save diary / Save project / Save memory. A button types its words into your companion's session." /></h3>
         <div v-for="(a, i) in settings.quickActions" :key="a.label + i" class="row">
           <strong>{{ a.label }}</strong><code>{{ a.command }}</code><span class="spacer"></span>
           <button class="danger" @click="removeAction(i)">Remove</button>
@@ -629,35 +632,29 @@ onMounted(async () => {
       </section>
 
       <section v-else-if="tab === 'rooms'" class="pane">
-        <p class="hint">Turn off a room you don't use: its tab goes and nothing runs for it. Nothing is removed - turn it back on and everything is there as it was. HOME always stays.</p>
+        <h3 class="with-tip">Rooms <HelpTip text="Turn off a room you don't use: its tab goes and nothing runs for it. Nothing is removed - turn it back on and everything is there as it was. HOME always stays." /></h3>
         <div class="rooms">
-          <label v-for="r in ROOM_SWITCHES" :key="r.id" class="toggle">
-            <input type="checkbox" :checked="settings.rooms?.[r.id] !== false" :disabled="!!busy" @change="switchRoom(r.id, $event.target.checked)" /> {{ r.label }}
+          <label v-for="r in ROOM_SWITCHES" :key="r.id" class="toggle has-tip">
+            <input type="checkbox" :checked="settings.rooms?.[r.id] !== false" :disabled="!!busy" @change="switchRoom(r.id, $event.target.checked)" /> {{ r.label }}<HelpTip v-if="ROOM_TIPS[r.id]" block :text="ROOM_TIPS[r.id]" />
           </label>
         </div>
-        <p class="hint">LIBRARY is off to begin with: turn it on for your own books (kept in your memory database) and the Spiral Library.</p>
-        <label class="toggle">
-          <input type="checkbox" :checked="settings.wallpaperMotion === true" :disabled="!!busy" @change="save({ wallpaperMotion: $event.target.checked }, $event.target.checked ? 'Moving wallpapers are on.' : 'Wallpapers stay still.')" /> Moving wallpapers
+        <label class="toggle has-tip">
+          <input type="checkbox" :checked="settings.wallpaperMotion === true" :disabled="!!busy" @change="save({ wallpaperMotion: $event.target.checked }, $event.target.checked ? 'Moving wallpapers are on.' : 'Wallpapers stay still.')" /> Moving wallpapers<HelpTip block text="Off to begin with. On, some HOME themes come alive (twinkling stars, glowing surf, washing foam, a flowing river); it rests when HOME or Castle is hidden and stays still if Windows or your Mac is set to reduce motion." />
         </label>
-        <p class="hint">Off to begin with. Turn it on and some themes come alive on HOME - The Constellation's stars twinkle, The Star Shore's surf glows along its waves, The Sunset Shore's foam washes in and out, The Emerald River flows. It rests whenever HOME or Castle is hidden, and stays still if Windows or your Mac is set to reduce motion.</p>
-        <p class="hint">Turning STORY off ends the story session; turning WORLD off closes the world screens; CHAT stops reading the room. Their files stay.</p>
-        <p class="hint">Arrange the tabs your way: drag a tab in the top bar onto another, or press {{ words.moveKeys }} on a tab. Castle remembers the order.</p>
+        <h3 class="with-tip">Tab order <HelpTip :text="`Arrange the tabs your way: drag a tab in the top bar onto another, or press ${words.moveKeys} on a tab. Castle remembers the order.`" /></h3>
         <button v-if="settings.tabOrder?.length" :disabled="!!busy" @click="save({ tabOrder: [] }, 'The tabs are back in their first order.')">Put the tabs back in their first order</button>
 
-        <h3>Diary</h3>
-        <p class="hint">How the DIARY room is read. The pages are the same; only the design changes. The THEME room shows each one with the page it wears.</p>
+        <h3 class="with-tip">Diary <HelpTip text="How the DIARY room is read. The pages are the same; only the design changes - the THEME room shows each one with the page it wears." /></h3>
         <div class="row">
           <button v-for="l in DIARY_LOOKS" :key="l.id" :class="{ primary: lookOf(settings.diaryLook) === l.id }" :title="l.line" @click="save({ diaryLook: l.id })">{{ l.label }}</button>
         </div>
-        <h3>Profile</h3>
-        <p class="hint">How HOME's PROFILE tab shows {{ settings.companionName ?? 'your companion' }}'s emotion engine. The traits are the same; only the design changes.</p>
+        <h3 class="with-tip">Profile <HelpTip :text="`How HOME's PROFILE tab shows ${settings.companionName ?? 'your companion'}'s emotion engine. The traits are the same; only the design changes.`" /></h3>
         <div class="row">
           <button v-for="l in PROFILE_LOOKS" :key="l.id" :class="{ primary: profileLookOf(settings.profileLook) === l.id }" :title="l.line" @click="save({ profileLook: l.id })">{{ l.label }}</button>
         </div>
         <h3>Neural Link</h3>
         <label class="toggle"><input type="checkbox" :checked="settings.linkOn !== false" :disabled="!!busy" @change="switchLink({ linkOn: $event.target.checked })" /> Neural Link - your terminals leave each other notes in the memory folder's <code>link</code> folder</label>
-        <label class="toggle"><input type="checkbox" :checked="!!settings.roomMayPass" :disabled="!!busy || settings.linkOn === false" @change="switchLink({ roomMayPass: $event.target.checked })" /> {{ settings.companionName ?? 'Your companion' }} may pass my own words from the chat room to my workspace</label>
-        <p class="hint">Only lines you post yourself can be passed on - never a guest's. Your workspace answers in a note, and your companion says it in the room in its own words. Nothing in the link folder leaves this computer.</p>
+        <label class="toggle has-tip"><input type="checkbox" :checked="!!settings.roomMayPass" :disabled="!!busy || settings.linkOn === false" @change="switchLink({ roomMayPass: $event.target.checked })" /> {{ settings.companionName ?? 'Your companion' }} may pass my own words from the chat room to my workspace<HelpTip block text="Only lines you post yourself can be passed on - never a guest's; your workspace answers in a note your companion retells in the room. Nothing in the link folder leaves this computer." /></label>
         <div v-if="link?.on" class="link-list">
           <p v-if="!link.here.length" class="hint">No terminal is here right now.</p>
           <p v-for="h in link.here" :key="h.terminal" class="hint"><strong>{{ h.terminal }}</strong><span v-if="h.place"> - {{ h.place }}</span> (seen {{ h.seen }})</p>
@@ -668,28 +665,24 @@ onMounted(async () => {
       </section>
 
       <section v-else-if="tab === 'startup'" class="pane">
-        <label class="toggle"><input type="checkbox" :checked="!!settings.displayClock" :disabled="!!busy" @change="save({ displayClock: $event.target.checked })" /> Display clock</label>
+        <label class="toggle"><input type="checkbox" :checked="!!settings.displayClock" :disabled="!!busy" @change="save({ displayClock: $event.target.checked })" /> Display clock<HelpTip text="Shows your local time in the top-right corner, just before the music controls." /></label>
         <label class="clock-format">Clock format
           <GlassSelect :model-value="settings.clockFormat || '24h'" :options="[{ value: '24h', label: '24-hour (14:30)' }, { value: '12h', label: '12-hour (2:30 PM)' }]" :disabled="!!busy" aria-label="Clock format" @update:model-value="(f) => save({ clockFormat: f })" />
         </label>
-        <p class="hint">Shows your local time in the top-right corner, just before the music controls.</p>
         <label class="toggle"><input type="checkbox" :checked="settings.startWithWindows" @change="save({ startWithWindows: $event.target.checked })" /> {{ words.startWith }}</label>
         <p v-if="view?.startupNote" class="hint">{{ view.startupNote }}</p>
         <label class="toggle"><input type="checkbox" :checked="settings.startSessionOnLaunch" @change="save({ startSessionOnLaunch: $event.target.checked })" /> Wake {{ settings.companionName ?? 'your companion' }} {{ words.wakeWhen }}</label>
-        <label class="toggle"><input type="checkbox" :checked="settings.minimizeToTaskbar" @change="save({ minimizeToTaskbar: $event.target.checked })" /> {{ words.minimise }}</label>
-        <p class="hint">{{ words.minimiseHint }}</p>
+        <label class="toggle"><input type="checkbox" :checked="settings.minimizeToTaskbar" @change="save({ minimizeToTaskbar: $event.target.checked })" /> {{ words.minimise }}<HelpTip :text="words.minimiseHint" /></label>
         <p class="hint">Change the look in the THEME room.</p>
       </section>
 
       <section v-else class="pane">
-        <h3>MemoryCore Castle {{ version }}</h3>
+        <h3 class="with-tip">MemoryCore Castle {{ version }} <HelpTip text="Free and open source under the MIT license - change anything, see MAKE-IT-YOURS.md in the source. Castle checks GitHub for new versions and talks to the MemoryCore Foundation only when you sign in or use CHAT; your memory, keys and settings stay on this computer (and in your private backup, if you choose)." /></h3>
         <p class="hint">{{ updateLine || 'Castle looks for a new version every few hours.' }}</p>
         <p class="about-links">
           <button @click="emit('whatsnew')">What's new</button>
           <button @click="releasesPage().then(openUrl).catch(() => {})">All releases</button>
         </p>
-        <p class="hint">Free and open source under the MIT license. Change anything - see MAKE-IT-YOURS.md in the source.</p>
-        <p class="hint">Castle checks GitHub for new versions, and talks to the MemoryCore Foundation only when you sign in or use CHAT. Your memory, keys and settings stay on this computer (and in your private backup, if you choose).</p>
         <h3>Credits</h3>
         <ContributorsWall />
       </section>
@@ -878,6 +871,7 @@ h3.with-tip {
   display: flex;
   align-items: center;
 }
+.has-tip { position: relative; }
 .card-edit {
   display: flex;
   flex-direction: column;

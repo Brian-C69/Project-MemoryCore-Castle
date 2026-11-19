@@ -86,16 +86,15 @@ onMounted(() => read())
         <button :disabled="!!busy || !modelName.trim()" @click="save({ model: modelName }, 'The model is changed.')">Use it</button>
       </div>
 
-      <h3>How often</h3>
+      <h3 class="with-tip">How often <HelpTip text="An alarm always starts a patrol at once." /></h3>
       <label class="toggle">Patrol every
         <GlassSelect :model-value="minutes" :options="PATROLS" :disabled="!!busy" aria-label="Patrol every" @update:model-value="(m) => { minutes = m; save({ patrolMinutes: m }, 'Saved.') }" />
       </label>
-      <p class="hint">An alarm always starts a patrol at once.</p>
 
       <h3 class="with-tip">Set it up <HelpTip text="The line installs a small helper where only an administrator can change it, and three scheduled tasks: the five-minute watch, a second look whenever the antivirus or the firewall raises an alarm, and the helper itself. The helper can only close this computer further - switch the firewall or protection back on, scan, update the antivirus, block an address that keeps knocking for a day - and, only when you press its button, block a port, switch off a task or a startup entry, or stop a program." /></h3>
       <p class="hint">{{ setup?.installed?.line ?? 'Looking…' }}</p>
       <template v-if="setup?.installLine">
-        <p class="hint">Open PowerShell as administrator (right-click it, Run as administrator), paste this line and press Enter. Castle never asks for administrator rights itself.</p>
+        <p class="hint has-tip">Run this line in PowerShell as administrator.<HelpTip block text="Right-click PowerShell, choose Run as administrator, paste this line and press Enter. Castle never asks for administrator rights itself." /></p>
         <div class="line"><code>{{ setup.installLine }}</code></div>
         <div class="row">
           <button @click="copy(setup.installLine)">Copy the line</button>
@@ -103,8 +102,7 @@ onMounted(() => read())
         </div>
       </template>
 
-      <h3>Remove it</h3>
-      <p class="hint">The same way, this line removes the helper, its tasks, its folders and every firewall rule it made.</p>
+      <h3 class="with-tip">Remove it <HelpTip text="The same way, this line removes the helper, its tasks, its folders and every firewall rule it made." /></h3>
       <template v-if="setup?.uninstallLine">
         <div class="line"><code>{{ setup.uninstallLine }}</code></div>
         <div class="row"><button class="quiet" @click="copy(setup.uninstallLine)">Copy the line</button></div>
@@ -122,6 +120,11 @@ onMounted(() => read())
   flex-direction: column;
   gap: 8px;
 }
+h3.with-tip {
+  display: flex;
+  align-items: center;
+}
+.has-tip { position: relative; }
 .row {
   display: flex;
   flex-wrap: wrap;

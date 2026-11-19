@@ -7,6 +7,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { dbSetupAll, getSettings, onDbInstall, onDbSetup, saveSettings } from '../api/castle.js'
 import { megabytes, progressLine, setupStepLabel, thisComputer } from './database.js'
 import DatabasePanel from './DatabasePanel.vue'
+import HelpTip from './HelpTip.vue'
 import ModalSheet from './ModalSheet.vue'
 
 const here = thisComputer()
@@ -85,15 +86,14 @@ onBeforeUnmount(() => stops.forEach((stop) => stop()))
           <li>Nothing leaves {{ here }}, and your backup carries it.</li>
           <li><strong>Export to markdown</strong> gives every file back whenever you like.</li>
         </ul>
-        <p class="hint">
-          <template v-if="source === 'homebrew'">Castle installs the database with Homebrew (no admin needed), starts it</template><template v-else>Castle downloads the database (about {{ megabytes(downloadBytes) }}, no admin needed), starts it</template> and makes {{ companion }}'s own.
-          Then it shows you what would move and waits: nothing is moved or deleted until you say so.
+        <p class="hint has-tip">
+          <template v-if="source === 'homebrew'">Castle installs the database with Homebrew (no admin needed).</template><template v-else>Castle downloads the database (about {{ megabytes(downloadBytes) }}, no admin needed).</template><HelpTip block :text="`It starts the database and makes ${companion}'s own, then shows you what would move and waits: nothing is moved or deleted until you say so.`" />
         </p>
         <div class="row">
           <button class="primary" @click="setUp">Set it up for me</button>
           <button @click="later">Later</button>
+          <HelpTip text="Later is fine: everything keeps working as it does today, and Settings > Database is always there." />
         </div>
-        <p class="hint">Later is fine: everything keeps working as it does today, and Settings &gt; Database is always there.</p>
       </template>
 
       <template v-else-if="phase === 'working'">
@@ -133,6 +133,9 @@ ul {
   gap: 6px;
   margin: 0;
   padding-left: 20px;
+}
+.has-tip {
+  position: relative;
 }
 .hint {
   font-size: 13px;
