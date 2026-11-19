@@ -180,3 +180,18 @@ export function insertable(workflow) {
   }
   return out
 }
+
+// ---------- ask the companion ----------
+
+/** The brief that asks the companion to write one workflow file into the member's folder. */
+export function companionBrief(words, folder) {
+  const sep = folder.includes('\\') ? '\\' : '/'
+  return [
+    `Please make me a Castle STUDIO workflow: ${String(words).trim()}`,
+    `Write it as one new folder inside ${folder} (name it with lowercase letters, digits and dashes) holding one file, workflow.json, for example ${folder}${sep}two-cats${sep}workflow.json. Touch nothing else.`,
+    'The file is JSON: "schema": 1, "name", "icon" (one of picture, people, person, poster, star, heart, spark, brush), "power": "image", "description" (one line), and "blocks" in the order the form shows them.',
+    'Each block has "id" (letters and digits), "type" and "label". Types: picture (an upload), character (a name and a reference picture), text (a text box), chips (with "options": up to 12 short words), describe (with "from": a picture block id and "into": a text block id; it writes a prompt from that picture).',
+    'End with exactly one block of type create: "prompt" (it may use {{a-text-or-chips-id}} and {{a-character-id.name}}), "references" (up to five character or picture ids to follow), "size" (1024x1024, 1024x1536 or 1536x1024) and "quality" (low, medium or high).',
+    'Draw nothing. Tell me when it is written.',
+  ]
+}

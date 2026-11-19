@@ -4,7 +4,7 @@
 // (the newest picture large, the Made here strip, and the gallery behind its tabs). A workflow's
 // picture goes to the queue (castle-image with the key, or Codex). Video, Song and Voice keep one
 // Make box: they are asked of the companion, which runs its own helper and tells the cost.
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import ImageViewer from '../components/ImageViewer.vue'
 import ImageJobs from '../components/ImageJobs.vue'
@@ -12,10 +12,11 @@ import ThemedAudio from '../components/ThemedAudio.vue'
 import WorkflowRail from '../components/WorkflowRail.vue'
 import WorkflowForm from '../components/WorkflowForm.vue'
 import WorkflowBuilder from '../components/WorkflowBuilder.vue'
-import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak, workflowDuplicate, workflowList } from '../api/castle.js'
+import { chatMediaOpen, imageRequest, studioDelete, voiceStudioSpeak, workflowDuplicate, workflowFolder, workflowList } from '../api/castle.js'
 import { refreshStudio, studioLib, studioPowersLoaded, studioPowersNow, studioThumbUrls, studioVoiceUp } from '../composables/useStudio.js'
 import { askCompanion } from '../api/ask.js'
 import { POWERS, companionLines, makeAction, powerPill } from '../components/studiomake.js'
+import { companionBrief } from '../components/workflows.js'
 import { isMac } from '../platform.js'
 
 const props = defineProps({
@@ -100,6 +101,39 @@ async function duplicate(entry) {
     railProblem.value = String(e?.message ?? e)
   }
 }
+// Ask the companion: a brief through the session, then the rail looks for the new file a while
+const askWords = ref('')
+const askLine = ref('')
+let askTimer
+async function askForWorkflow() {
+  railProblem.value = ''
+  askLine.value = ''
+  if (!askWords.value.trim()) return
+  try {
+    const folder = await workflowFolder()
+    await askCompanion(companionBrief(askWords.value, folder), props.companion)
+    askWords.value = ''
+    askLine.value = `Asked ${props.companion}. The new workflow appears here when it is written.`
+    const before = new Set(entries.value.map((e) => e.id))
+    clearInterval(askTimer)
+    const until = Date.now() + 10 * 60 * 1000
+    askTimer = setInterval(async () => {
+      await loadWorkflows()
+      const made = entries.value.find((e) => !before.has(e.id))
+      if (made || Date.now() > until) {
+        clearInterval(askTimer)
+        if (made) {
+          selected.value = made.id
+          askLine.value = made.error ? `${made.workflow?.name ?? made.id} arrived with a problem: ${made.error}` : `${made.workflow?.name ?? made.id} is ready.`
+        }
+      }
+    }, 4000)
+  } catch (e) {
+    railProblem.value = String(e?.message ?? e)
+  }
+}
+onBeforeUnmount(() => clearInterval(askTimer))
+
 async function saved(id) {
   builder.value = null
   await loadWorkflows()
@@ -194,6 +228,11 @@ watch(() => props.stamp, () => {
         <section class="rail-box widget">
           <WorkflowRail :entries="entries" :selected="selected" @select="selected = $event">
             <button class="new-card" @click="openNew">＋ New workflow</button>
+            <div class="ask">
+              <textarea v-model="askWords" rows="2" maxlength="600" :placeholder="`Or describe one for ${companion}…`" aria-label="Describe a workflow for your companion"></textarea>
+              <button :disabled="!askWords.trim()" @click="askForWorkflow">Ask {{ companion }}</button>
+              <p v-if="askLine" class="hint">{{ askLine }}</p>
+            </div>
           </WorkflowRail>
           <p v-if="listProblem || railProblem" role="alert" class="problem">{{ listProblem || railProblem }}</p>
         </section>
@@ -395,6 +434,24 @@ h3 {
   border-radius: 12px;
   font-size: 14px;
   text-align: left;
+}
+.ask {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.ask textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
 }
 .card-actions {
   display: flex;

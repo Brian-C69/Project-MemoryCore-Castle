@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ICONS, addBlock, createAction, describeAction, draftOf, emptyValues, fieldsOf, iconOf, insertable, missing, moveBlock, newWorkflow, removeBlock, runValues, usedIds } from './workflows.js'
+import { ICONS, addBlock, companionBrief, createAction, describeAction, draftOf, emptyValues, fieldsOf, iconOf, insertable, missing, moveBlock, newWorkflow, removeBlock, runValues, usedIds } from './workflows.js'
 
 const twoCharacters = {
   name: 'Two characters',
@@ -118,5 +118,14 @@ describe('workflows', () => {
     const copy = draftOf(twoCharacters)
     copy.blocks.pop()
     expect(twoCharacters.blocks).toHaveLength(5)
+  })
+
+  it('the companion is asked for one new folder in the member’s workflows and to draw nothing', () => {
+    const lines = companionBrief('  two cats in a garden ', 'C:\\Castle\\workflows')
+    expect(lines[0]).toBe('Please make me a Castle STUDIO workflow: two cats in a garden')
+    expect(lines[1]).toContain('C:\\Castle\\workflows\\two-cats\\workflow.json')
+    expect(companionBrief('x', '/home/rin/workflows')[1]).toContain('/home/rin/workflows/two-cats/workflow.json')
+    expect(lines.join(' ')).toContain('exactly one block of type create')
+    expect(lines.at(-1)).toContain('Draw nothing')
   })
 })
