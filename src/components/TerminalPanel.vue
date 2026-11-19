@@ -396,16 +396,29 @@ function writeToSession(data) {
   return session.write(data)
 }
 
-// Chat's answer buttons read the menu on the Log's screen.
-function screenLines(count = 25) {
+// Chat's answer buttons read the menu on the Log's screen. `typed`: dim text left out (Claude Code's
+// placeholder in an empty prompt is dim), for Chat's mic reading the words in the prompt.
+function screenLines(count = 25, { typed = false } = {}) {
   if (!term) return []
   const buffer = term.buffer.active
   const end = buffer.baseY + term.rows
   const lines = []
   for (let y = Math.max(0, end - count); y < end; y += 1) {
-    lines.push(buffer.getLine(y)?.translateToString(true) ?? '')
+    const line = buffer.getLine(y)
+    lines.push(line ? (typed ? typedText(line) : line.translateToString(true)) : '')
   }
   return lines
+}
+
+function typedText(line) {
+  let text = ''
+  for (let x = 0; x < line.length; x += 1) {
+    const cell = line.getCell(x)
+    // the second half of a wide character has no width of its own
+    if (!cell || cell.getWidth() === 0) continue
+    text += cell.isDim() ? ' ' : cell.getChars() || ' '
+  }
+  return text.trimEnd()
 }
 
 // a file put in the chat from outside (the DEV tab's FILES reader), as if dropped in the box

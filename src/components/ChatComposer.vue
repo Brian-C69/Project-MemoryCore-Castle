@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { chatAttach, clipboardPaste } from '../api/castle.js'
 import ImageViewer from './ImageViewer.vue'
 import { isMac } from '../platform.js'
@@ -15,6 +15,8 @@ const props = defineProps({
   loadPath: { type: Function, required: true },
   // (text) -> Promise<boolean>: true when the words went in, and the box empties
   send: { type: Function, required: true },
+  // The mic, while Claude Code's voice is on: { ready, hint, hold: voiceHold(...) }; null for none
+  mic: { type: Object, default: null },
 })
 
 const draft = ref('')
@@ -111,6 +113,66 @@ function grow() {
   el.style.height = `${Math.min(el.scrollHeight, 160)}px`
 }
 
+// ---------- The mic: hold to talk ----------
+
+// '' | 'listening' (held) | 'writing' (released, Claude Code writes the words down)
+const listening = ref('')
+const micNote = ref('')
+// the mic that was pressed, so the release reaches it even if the button has gone meanwhile
+let holding = null
+
+function micDown(event) {
+  if (!props.mic?.ready || !props.running || listening.value || event.button > 0) return
+  event.preventDefault()
+  micNote.value = ''
+  holding = props.mic.hold
+  if (holding.start()) listening.value = 'listening'
+}
+
+/** Released: the words Claude Code wrote down come into the box, to look over before Send. */
+async function micUp() {
+  if (listening.value !== 'listening') return
+  listening.value = 'writing'
+  let heard
+  try {
+    heard = await holding.stop()
+  } catch {
+    heard = { text: '', note: 'Your words could not be read - open Log to see them.' }
+  }
+  listening.value = ''
+  micNote.value = heard.note
+  if (!heard.text) return
+  const before = draft.value.replace(/\s+$/, '')
+  draft.value = (before ? `${before} ` : '') + heard.text
+  await nextTick()
+  grow()
+  const el = box.value
+  el?.focus()
+  el?.setSelectionRange(draft.value.length, draft.value.length)
+}
+
+// Space held on the focused mic button works like holding the button (its repeats are ignored).
+function micKey(event) {
+  if (event.key !== ' ') return
+  event.preventDefault()
+  if (event.type === 'keyup') micUp()
+  else if (!event.repeat) micDown(event)
+}
+
+// Leaving Castle's window, the session ending or voice turned off while held are a release.
+window.addEventListener('blur', micUp)
+watch(() => !!props.mic && props.running, (on) => on || micUp())
+onBeforeUnmount(() => {
+  window.removeEventListener('blur', micUp)
+  micUp()
+})
+
+const micStatus = computed(() => {
+  if (listening.value === 'listening') return '🎙 Listening… (release to stop)'
+  if (listening.value === 'writing') return 'Writing your words down…'
+  return micNote.value
+})
+
 defineExpose({ addPaths, focus: () => box.value?.focus(), hasText: () => !!draft.value.trim() })
 </script>
 
@@ -132,6 +194,8 @@ defineExpose({ addPaths, focus: () => box.value?.focus(), hasText: () => !!draft
     @close="draftViewer = null"
   />
 
+  <p v-if="micStatus" class="mic-status" :class="{ live: listening === 'listening' }" aria-live="polite">{{ micStatus }}</p>
+
   <form class="composer" @submit.prevent="submit">
     <textarea
       ref="box"
@@ -144,6 +208,23 @@ defineExpose({ addPaths, focus: () => box.value?.focus(), hasText: () => !!draft
       @input="grow"
       @paste="onPaste"
     ></textarea>
+    <button
+      v-if="mic"
+      type="button"
+      class="mic"
+      :class="{ on: listening === 'listening' }"
+      :disabled="!running || !mic.ready || listening === 'writing'"
+      :title="mic.hint"
+      aria-label="Hold to talk"
+      :aria-pressed="listening === 'listening'"
+      @pointerdown="micDown"
+      @pointerup="micUp"
+      @pointerleave="micUp"
+      @pointercancel="micUp"
+      @keydown="micKey"
+      @keyup="micKey"
+      @contextmenu.prevent
+    >&#127897;</button>
     <button type="submit" class="send" :disabled="!running || !draft.trim()" aria-label="Send">&#10148;</button>
   </form>
 </template>
@@ -252,6 +333,39 @@ textarea:disabled {
   background: var(--accent);
   color: #160f33;
   font-size: 16px;
+}
+
+.mic {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  font-size: 16px;
+  touch-action: none;
+  user-select: none;
+}
+
+.mic.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.mic:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mic-status {
+  margin: 6px 2px 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.mic-status.live {
+  color: var(--accent);
 }
 
 .send:disabled {

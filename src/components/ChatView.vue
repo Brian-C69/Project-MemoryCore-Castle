@@ -1,7 +1,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { chatHistory, chatPoll, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
+import { chatHistory, chatPoll, claudeVoice, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
 import { localSend, mergeEntries, resetEntries } from './ticks.js'
+import { voiceHold } from './voicehold.js'
 import { readChoices } from './choices.js'
 import { firstHeading } from './markdown.js'
 import { MODES, readContext, readMode, SHIFT_TAB } from './modes.js'
@@ -313,11 +314,43 @@ async function sendNow() {
   }
 }
 
+// ---------- The mic (Claude Code's own voice mode) ----------
+
+// The member's Claude Code voice: { enabled, mode }; undefined until read, null when it cannot be read.
+const voice = ref(undefined)
+let voiceTimer
+async function readVoice() {
+  try {
+    voice.value = await claudeVoice()
+  } catch {
+    voice.value = null
+  }
+}
+
+// Holding the mic holds Space in this session, wherever it runs (HOME, STORY or a DEV tab): `write`
+// is the panel's own session, and the words are read back off the same panel's Log screen.
+const micHold = voiceHold({
+  write: (data) => props.write(data),
+  readScreen: (count) => props.readScreen(count),
+  readTyped: (count) => props.readScreen(count, { typed: true }),
+})
+
+// Shown only while Claude Code's voice is on (hold mode records while held). When Castle cannot
+// tell, it shows with a hint to turn voice on first.
+const mic = computed(() => {
+  if (!props.running || !isClaude.value || voice.value === undefined) return null
+  if (voice.value === null) return { ready: true, hold: micHold, hint: 'Hold to talk - turn voice on first with /voice in the Log' }
+  if (!voice.value.enabled) return null
+  if (voice.value.mode !== 'hold') return { ready: false, hold: micHold, hint: "Chat's mic needs voice in hold mode: type /voice hold in the Log" }
+  return { ready: true, hold: micHold, hint: 'Hold to talk (or hold Space on this button). Your words come into the box to look over before Send.' }
+})
+
 watch(
   () => props.visible,
   (shown) => {
     if (shown) {
       poll()
+      readVoice()
       nextTick(() => composer.value?.focus())
     }
   },
@@ -325,6 +358,9 @@ watch(
 
 onMounted(() => {
   poll()
+  readVoice()
+  // /voice in the Log turns the mic on or off within a few seconds
+  voiceTimer = setInterval(() => props.visible && readVoice(), 5000)
   timer = setInterval(poll, POLL_MS)
   menuTimer = setInterval(readMenu, 700)
   clockTimer = setInterval(() => (now.value = Date.now()), 5000)
@@ -333,6 +369,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearInterval(timer)
+  clearInterval(voiceTimer)
   clearInterval(menuTimer)
   clearInterval(clockTimer)
   document.removeEventListener('visibilitychange', poll)
@@ -381,7 +418,7 @@ defineExpose({ poll, addPaths })
     <ImageViewer v-if="viewerStart !== null" :pictures="allPictures" :start="viewerStart" @close="viewerStart = null" />
     <PlanViewer v-if="planOpen !== null" :plan="planOpen" @close="planOpen = null" />
 
-    <ChatComposer ref="composer" :running="running" :placeholder="placeholder" :companion="companion" :media="media" :load-path="loadPath" :send="send" />
+    <ChatComposer ref="composer" :running="running" :placeholder="placeholder" :companion="companion" :media="media" :load-path="loadPath" :send="send" :mic="mic" />
 
     <div v-if="running && isClaude" class="modes" role="group" aria-label="Claude Code's mode">
       <span class="modes-label">MODE</span>

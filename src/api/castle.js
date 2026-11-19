@@ -57,6 +57,8 @@ export const keyTest = (name) => invoke('key_test', { name })
 // The companion's sessions. room: undefined for the main session, 'story' for the STORY room's.
 // -> { running, status: { ready, message, fix }, snapshot }
 export const terminalState = (room) => invoke('terminal_state', { room })
+// The member's Claude Code voice (/voice), for Chat's mic. -> { enabled, mode: 'hold' | 'tap' }
+export const claudeVoice = () => invoke('claude_voice')
 export const providersList = () => invoke('providers_list')
 export const imageJobs = () => invoke('image_jobs')
 export const imageRetry = (id) => invoke('image_retry', { id })

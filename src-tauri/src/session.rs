@@ -209,9 +209,60 @@ pub fn status_line_command(tools: &Path) -> String {
     format!("\"{}\" \"{}\"", crate::env::node().display(), tools.join(STATUS_LINE_SCRIPT).display())
 }
 
-/// The settings file's text: only the status line.
-pub fn session_settings_text(tools: &Path) -> String {
-    serde_json::json!({ "statusLine": { "type": "command", "command": status_line_command(tools) } }).to_string()
+/// The settings file's text: the status line, and the member's own voice setting when they have one.
+pub fn session_settings_text(tools: &Path, voice: &serde_json::Map<String, serde_json::Value>) -> String {
+    let mut settings = voice.clone();
+    settings.insert("statusLine".to_string(), serde_json::json!({ "type": "command", "command": status_line_command(tools) }));
+    serde_json::Value::Object(settings).to_string()
+}
+
+/// The member's own Claude Code voice setting (`/voice`), from their personal settings file. A
+/// session that is only this companion reads no personal settings (`--setting-sources
+/// project,local`), and then holding Space in the Log or Chat's mic records nothing - tested live
+/// (Nov 19 2026): `/voice` inside such a session says it turned on, yet Space only types spaces.
+/// Castle's own `--settings` file is read whatever the setting sources say, so the voice travels
+/// there: only these two keys, never the rest of the personal setup.
+pub fn personal_voice() -> serde_json::Map<String, serde_json::Value> {
+    let file = env::home_dir().map(|home| home.join(".claude").join("settings.json"));
+    let text = file.and_then(|file| std::fs::read_to_string(file).ok()).unwrap_or_default();
+    voice_of(&text)
+}
+
+/// `voiceEnabled` and `voice` from a Claude Code settings file's text (nothing when it has neither
+/// or cannot be read).
+pub fn voice_of(text: &str) -> serde_json::Map<String, serde_json::Value> {
+    let parsed: serde_json::Value = serde_json::from_str(text).unwrap_or_default();
+    ["voiceEnabled", "voice"]
+        .iter()
+        .filter_map(|key| parsed.get(*key).map(|value| (key.to_string(), value.clone())))
+        .collect()
+}
+
+/// What Chat's mic needs to know: whether Claude Code's voice is on, and its mode.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct VoiceView {
+    pub enabled: bool,
+    /// "hold" (Space held records) or "tap" (one tap starts, another sends)
+    pub mode: String,
+}
+
+/// `voice.enabled` wins over the older `voiceEnabled`; hold is Claude Code's own default mode.
+pub fn voice_view(voice: &serde_json::Map<String, serde_json::Value>) -> VoiceView {
+    let nested = voice.get("voice");
+    let enabled = nested
+        .and_then(|v| v.get("enabled"))
+        .and_then(|v| v.as_bool())
+        .or_else(|| voice.get("voiceEnabled").and_then(|v| v.as_bool()))
+        .unwrap_or(false);
+    let mode = nested.and_then(|v| v.get("mode")).and_then(|v| v.as_str()).unwrap_or("hold").to_string();
+    VoiceView { enabled, mode }
+}
+
+/// Chat's mic button shows only while the member's Claude Code voice is on (read again often, so
+/// `/voice` in the Log shows or hides it).
+#[tauri::command]
+pub fn claude_voice() -> VoiceView {
+    voice_view(&personal_voice())
 }
 
 /// Writes Castle's session settings (again each wake, so a moved install points at its own tools).
@@ -223,7 +274,7 @@ pub fn ensure_session_settings(store: &SettingsStore, tools: &Path) -> Option<Pa
     }
     let file = session_settings_file(store);
     std::fs::create_dir_all(file.parent()?).ok()?;
-    std::fs::write(&file, session_settings_text(tools)).ok()?;
+    std::fs::write(&file, session_settings_text(tools, &personal_voice())).ok()?;
     Some(file)
 }
 
@@ -642,13 +693,46 @@ mod tests {
         let script = tools.join(STATUS_LINE_SCRIPT).display().to_string();
         assert_eq!(written["statusLine"]["type"], "command");
         assert_eq!(written["statusLine"]["command"], format!("\"{}\" \"{script}\"", crate::env::node().display()));
-        assert_eq!(written.as_object().unwrap().len(), 1);
+        // beside it only the member's own voice setting, if they have one on this computer
+        assert!(written.as_object().unwrap().keys().all(|k| ["statusLine", "voiceEnabled", "voice"].contains(&k.as_str())));
 
         // the plain isolation (and the switch off, or Codex) has no status line of Castle's
         let (plain, _) = isolation(&store, Cli::Claude, true).unwrap();
         assert!(!plain.contains(&"--settings".to_string()));
         assert!(isolation_with_status(&store, Cli::Claude, false, &tools).unwrap().0.is_empty());
         assert!(isolation_with_status(&store, Cli::Codex, true, &tools).unwrap().0.is_empty());
+    }
+
+    #[test]
+    fn only_the_members_voice_setting_travels_into_castles_session_settings() {
+        let personal = r#"{"voiceEnabled":true,"voice":{"enabled":true,"mode":"hold"},"hooks":{"Stop":[]},"statusLine":{"type":"command","command":"mine"}}"#;
+        let voice = voice_of(personal);
+        assert_eq!(voice.len(), 2);
+        assert!(voice.contains_key("voiceEnabled") && voice.contains_key("voice"));
+        // none at all, or a file that cannot be read: nothing travels
+        assert!(voice_of("{}").is_empty() && voice_of("not json").is_empty() && voice_of("").is_empty());
+
+        let tools = Path::new("C:/castle/tools");
+        let written: serde_json::Value = serde_json::from_str(&session_settings_text(tools, &voice)).unwrap();
+        assert_eq!(written["voice"]["mode"], "hold");
+        assert_eq!(written["voiceEnabled"], true);
+        // Castle's status line, never the member's own
+        assert_eq!(written["statusLine"]["command"], status_line_command(tools));
+        assert!(written.get("hooks").is_none());
+        let plain: serde_json::Value = serde_json::from_str(&session_settings_text(tools, &voice_of(""))).unwrap();
+        assert_eq!(plain.as_object().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn chats_mic_reads_whether_voice_is_on_and_its_mode() {
+        let on = |text: &str| voice_view(&voice_of(text));
+        assert_eq!(on(r#"{"voiceEnabled":true,"voice":{"enabled":true,"mode":"hold"}}"#), VoiceView { enabled: true, mode: "hold".into() });
+        assert_eq!(on(r#"{"voice":{"enabled":true,"mode":"tap"}}"#), VoiceView { enabled: true, mode: "tap".into() });
+        // the older single switch, and Claude Code's default mode
+        assert_eq!(on(r#"{"voiceEnabled":true}"#), VoiceView { enabled: true, mode: "hold".into() });
+        // the nested switch wins when both are written
+        assert!(!on(r#"{"voiceEnabled":true,"voice":{"enabled":false}}"#).enabled);
+        assert!(!on("{}").enabled && !on("").enabled);
     }
 
     /// Runs the real script with a session's JSON on stdin (through Node, as Claude Code does).
