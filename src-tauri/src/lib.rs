@@ -568,7 +568,8 @@ pub fn run() {
             market::companion::market_lessons,
             market::companion::market_lesson_delete,
             db::db_move_out,
-            sentinel::sentinel_settings_save
+            sentinel::sentinel_settings_save,
+            sentinel::officer::sentinel_patrol_now
         ])
         .setup(|app| {
             let config = match settings::test_override(settings::TEST_CONFIG_VAR) {

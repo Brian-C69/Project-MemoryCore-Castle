@@ -15,6 +15,7 @@
 pub mod book;
 pub mod hand;
 pub mod look;
+pub mod officer;
 pub mod watch;
 
 use crate::settings::SettingsStore;
@@ -84,34 +85,62 @@ pub fn sentinel_settings_save(store: tauri::State<'_, SettingsStore>, on: bool, 
 /// The page listens for this to read the Sentinel again.
 pub const CHANGED: &str = "sentinel-changed";
 
-/// Castle's side of the watch: every minute, the watch's journal (when there is one) is read into
-/// the book; an alarm that opened is told through Alerts and the shield.
+/// Castle's side of the watch and the officer: every minute, the watch's journal (when there is
+/// one) is read into the book, and a patrol runs when one is due - every `patrol_minutes`, or once
+/// for an alarm that just opened - while the Sentinel is on.
 pub fn start(app: &AppHandle) {
     let app = app.clone();
     let _ = std::thread::Builder::new().name("sentinel".into()).spawn(move || {
         std::thread::sleep(Duration::from_secs(5));
         loop {
-            read_journal(&app);
+            let alarmed = read_journal(&app);
+            patrol_when_due(&app, alarmed);
             std::thread::sleep(Duration::from_secs(60));
         }
     });
 }
 
-fn read_journal(app: &AppHandle) {
+/// Reads the journal; true when an alarm opened.
+fn read_journal(app: &AppHandle) -> bool {
     let dir = hand::local_dir();
     if !dir.join("journal.jsonl").exists() && !dir.join("journal.draining").exists() {
-        return;
+        return false;
     }
-    let Some(memory) = app.state::<SettingsStore>().get().memory_folder else { return };
+    let Some(memory) = app.state::<SettingsStore>().get().memory_folder else { return false };
     // the database stopped: the journal waits for the next minute
-    let Ok(mut conn) = book::open(Path::new(&memory)) else { return };
-    let Ok(drained) = watch::drain(&dir, &mut conn) else { return };
+    let Ok(mut conn) = book::open(Path::new(&memory)) else { return false };
+    let Ok(drained) = watch::drain(&dir, &mut conn) else { return false };
     if !drained.alarms.is_empty() {
         crate::alerts::fire(app, "sentinel", "The Sentinel raised an alarm", &drained.alarms.join(" - "));
     }
     if drained.lines > 0 {
         let _ = app.emit(CHANGED, ());
     }
+    !drained.alarms.is_empty()
+}
+
+fn patrol_when_due(app: &AppHandle, alarmed: bool) {
+    let store = app.state::<SettingsStore>();
+    let settings = store.get();
+    let gear = settings.sentinel.bounded();
+    if !gear.on || !cfg!(windows) {
+        return;
+    }
+    let Some(memory) = settings.memory_folder else { return };
+    let Ok(mut conn) = book::open(Path::new(&memory)) else { return };
+    let since = officer::minutes_since_last(&mut conn);
+    drop(conn);
+    if !alarmed && since.is_some_and(|m| m < i64::from(gear.patrol_minutes)) {
+        return;
+    }
+    let cause = if alarmed { "alarm" } else { "hour" };
+    if let Ok(done) = officer::patrol(&store, cause) {
+        // an alarm the journal raised was told already; one only the patrol found is told now
+        if done.status == "alarm" && !alarmed {
+            crate::alerts::fire(app, "sentinel", "The Sentinel raised an alarm", &done.line);
+        }
+    }
+    let _ = app.emit(CHANGED, ());
 }
 
 #[cfg(test)]
