@@ -218,6 +218,47 @@ pub async fn sentinel_alarms_seen(app: AppHandle) -> Result<(), String> {
     .map_err(|_| "The alarms could not be marked seen.".to_string())?
 }
 
+/// What Settings > Sentinel shows: the set-up and remove lines, where it stands, and the
+/// recommended model for the member's CLI.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Setup {
+    pub supported: bool,
+    pub install_line: String,
+    pub uninstall_line: String,
+    pub installed: hand::Installed,
+    pub recommended: Option<String>,
+    pub cli_label: String,
+}
+
+/// Writes the installer and the hand where the member's line points, and gives the lines. The
+/// member runs the line themselves, in a PowerShell opened as administrator; Castle never does.
+#[tauri::command]
+pub async fn sentinel_setup(app: AppHandle) -> Result<Setup, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let settings = app.state::<SettingsStore>().get();
+        let recommended = super::recommended_model(settings.cli).map(str::to_string);
+        let cli_label = settings.cli.label().to_string();
+        if !cfg!(windows) {
+            return Ok(Setup { supported: false, install_line: String::new(), uninstall_line: String::new(), installed: hand::installed(), recommended, cli_label });
+        }
+        let (install, hand_file) = hand::prepare_files(&hand::local_dir())?;
+        let castle = std::env::current_exe().map_err(|_| "Castle could not find its own program.".to_string())?;
+        let setup = Setup {
+            supported: true,
+            install_line: hand::install_line(&install, &hand_file, &castle, &hand::account()),
+            uninstall_line: hand::uninstall_line(&install),
+            installed: hand::installed(),
+            recommended,
+            cli_label,
+        };
+        changed(&app);
+        Ok(setup)
+    })
+    .await
+    .map_err(|_| "The Sentinel's set-up could not be read.".to_string())?
+}
+
 /// Tells the page to read the Sentinel again.
 pub fn changed(app: &AppHandle) {
     use tauri::Emitter;

@@ -159,6 +159,8 @@ export const sentinelFindings = (states) => invoke('sentinel_findings', { states
 export const sentinelClick = (id, word) => invoke('sentinel_click', { id, word })
 export const sentinelLog = () => invoke('sentinel_log')
 export const sentinelAlarmsSeen = () => invoke('sentinel_alarms_seen')
+// -> { supported, installLine, uninstallLine, installed: { installed, current, line }, recommended, cliLabel }
+export const sentinelSetup = () => invoke('sentinel_setup')
 // while a sweep runs: { group, freed } (bytes freed so far in all)
 export const onSweepProgress = (handler) => listen('castle://sweep', (event) => handler(event.payload))
 export const systemMeters = () => invoke('system_meters')

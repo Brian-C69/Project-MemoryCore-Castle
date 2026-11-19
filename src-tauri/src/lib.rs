@@ -574,7 +574,8 @@ pub fn run() {
             sentinel::commands::sentinel_findings,
             sentinel::commands::sentinel_click,
             sentinel::commands::sentinel_log,
-            sentinel::commands::sentinel_alarms_seen
+            sentinel::commands::sentinel_alarms_seen,
+            sentinel::commands::sentinel_setup
         ])
         .setup(|app| {
             let config = match settings::test_override(settings::TEST_CONFIG_VAR) {

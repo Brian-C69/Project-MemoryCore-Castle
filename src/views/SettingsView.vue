@@ -3,6 +3,7 @@
 // keys (masked, Show, Test, Remove), quick actions, the room, backup, startup and updates.
 import GlassSelect from '../components/GlassSelect.vue'
 import AlertsPane from './AlertsPane.vue'
+import SentinelSettings from './SentinelSettings.vue'
 import WidgetsView from './WidgetsView.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import ModalSheet from '../components/ModalSheet.vue'
@@ -85,11 +86,16 @@ const SECTIONS = [
   { id: 'rooms', label: 'Rooms' },
   { id: 'chat', label: 'Chat' },
   { id: 'alerts', label: 'Alerts' },
+  { id: 'sentinel', label: 'Sentinel' },
   { id: 'database', label: 'Database' },
   { id: 'backup', label: 'Backup' },
   { id: 'startup', label: 'Start-up' },
   { id: 'about', label: 'About' },
 ]
+
+async function sentinelChanged() {
+  settings.value = (await getSettings()).settings
+}
 
 async function widgetsChanged() {
   settings.value = (await getSettings()).settings
@@ -533,6 +539,9 @@ onMounted(async () => {
         <AlertsPane :settings="settings" :busy="busy" :companion-label="companionLabel" :named-tip="namedTip" @save="(patch) => save(patch)" @open-room="(room) => emit('open-room', room)" />
       </section>
 
+      <section v-else-if="tab === 'sentinel'" class="pane">
+        <SentinelSettings :settings="settings" @saved="sentinelChanged" />
+      </section>
       <section v-else-if="tab === 'chat'" class="pane">
         <p v-if="settings.rooms?.chat === false" class="hint">The CHAT room is switched off in Rooms. These wait for it.</p>
         <h3 class="with-tip">Alerts <HelpTip text="Notifications and sounds for new messages, and for everything else Castle can tell you about, are set on their own page." /></h3>
