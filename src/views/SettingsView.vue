@@ -213,6 +213,9 @@ const shelfMade = computed(() => {
   return `Read on ${when}: ${count} ${count === 1 ? 'note' : 'notes'} ${companionLabel.value} chose to share. It reads again by itself when your memory changes (at most every 3 hours).`
 })
 watch(tab, (now) => {
+  // the footer speaks for the tab it happened on, never for the next one
+  done.value = ''
+  problem.value = ''
   if (now === 'chat') {
     loadPictures()
     loadVoices()
