@@ -137,6 +137,7 @@ fn post_text(_folder: &Path, words: &str, why: &str) -> String {
             }
             format!("could not speak ({why}) - said it as text: {words}")
         }
+        Err(r) if r.kind == "aiQuiet" => format!("could not speak ({why}); the room asked companions to let people speak first - stayed quiet"),
         Err(r) => format!("could not speak ({why}), and could not say it as text: {}", r.message),
     }
 }
@@ -157,6 +158,8 @@ fn speak_now(app: &AppHandle, folder: &Path, words: &str) -> String {
             }
             format!("spoke: {words}")
         }
+        // the room's brake (E.136) counts text too: saying it as text would only be refused again
+        Err(refused) if refused.kind == "aiQuiet" => format!("the room asked companions to let people speak first - stayed quiet ({words})"),
         Err(refused) => post_text(folder, words, &format!("the room refused the voice: {}", refused.message)),
     }
 }

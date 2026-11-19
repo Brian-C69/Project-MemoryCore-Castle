@@ -17,7 +17,7 @@ const USER_AGENT: &str = concat!("MemoryCoreCastle/", env!("CARGO_PKG_VERSION"))
 #[serde(rename_all = "camelCase")]
 pub struct RoomRefusal {
     /// "locked" (not a member / revoked) | "muted" | "needsName" | "tooLarge" | "wrongType" |
-    /// "slowDown" | "notSetUp" | "offline" | "other"
+    /// "slowDown" | "notSetUp" | "offline" | "aiQuiet" (a member's AI waits for a person, E.136) | "other"
     pub kind: String,
     pub message: String,
 }
@@ -28,8 +28,12 @@ fn refusal(kind: &str, message: impl Into<String>) -> RoomRefusal {
 
 /// Maps a door's status and its {"error": "..."} body to a plain refusal.
 pub fn refusal_for(status: u16, body: &str) -> RoomRefusal {
-    let said = serde_json::from_str::<Value>(body).ok().and_then(|v| v.get("error").and_then(Value::as_str).map(str::to_string));
+    let answer = serde_json::from_str::<Value>(body).ok();
+    let said = answer.as_ref().and_then(|v| v.get("error").and_then(Value::as_str).map(str::to_string));
+    let code = answer.as_ref().and_then(|v| v.get("code").and_then(Value::as_str)).unwrap_or("");
     match status {
+        // the room's AI-only brake (E.136): a member's AI said its lines since a person spoke - stay quiet, never retry
+        409 if code == "WAITING_FOR_A_PERSON" => refusal("aiQuiet", said.unwrap_or_else(|| "The room waits for a person to speak.".into())),
         403 if said.as_deref().is_some_and(|s| s.to_lowercase().contains("muted")) => refusal("muted", said.unwrap_or_default()),
         403 | 401 => refusal("locked", said.unwrap_or_else(|| "This room is for MemoryCore Foundation members".into())),
         409 => refusal("needsName", "Set your Foundation display name on the Portfolio to speak in the room."),
@@ -936,6 +940,15 @@ mod tests {
         assert_eq!(media_voices(&me), Some((10, 3)));
         assert_eq!(media_voices(&serde_json::json!({ "media": { "caps": { "voices": 0 } } })), Some((0, 0)));
         assert_eq!(media_voices(&serde_json::json!({ "name": "Rin" })), None, "a room that gives no count");
+    }
+
+    #[test]
+    fn the_rooms_brake_is_its_own_kind_of_no_and_a_name_is_still_a_name() {
+        let quiet = refusal_for(409, r#"{"error":"Mira has said enough for now - the room waits for a person","code":"WAITING_FOR_A_PERSON"}"#);
+        assert_eq!((quiet.kind.as_str(), quiet.message.as_str()), ("aiQuiet", "Mira has said enough for now - the room waits for a person"));
+        assert_eq!(refusal_for(409, r#"{"code":"WAITING_FOR_A_PERSON"}"#).kind, "aiQuiet");
+        assert_eq!(refusal_for(409, r#"{"error":"Set a name"}"#).kind, "needsName", "a 409 without the code is the name, as before");
+        assert_eq!(refusal_for(409, "").kind, "needsName");
     }
 
     #[test]

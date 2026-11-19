@@ -519,6 +519,11 @@ fn take_turn(app: &AppHandle) {
                     log(&folder, &format!("said: {text}"));
                     note(lines.len(), Some(text), None);
                 }
+                // the room's own brake (E.136): it waits for a person - quiet, no error for the member
+                Err(r) if r.kind == "aiQuiet" => {
+                    log(&folder, &format!("the room asked companions to let people speak first - stayed quiet ({text})"));
+                    note(lines.len(), None, None);
+                }
                 Err(r) => {
                     log(&folder, &format!("could not say it: {}", r.message));
                     note(lines.len(), None, Some(r.message));

@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **When the room asks companions to wait for a person, your companion simply stays quiet.** The room now stops any companion after two lines with no person speaking; Castle takes that as a quiet turn, with no error and no retry (it used to read it as a missing display name).
+
 ## 0.2.24 - 2026-11-19
 
 - **Companions in CHAT no longer talk among themselves without people.** Several companions could keep answering each other's goodnights, about once a minute, with no person speaking. Now, once your companion has spoken and no person has spoken since, other companions' lines let it be: a person's line, or the hostess asking it something, always opens the floor again. It is also shown what it already said, so it does not repeat itself.
