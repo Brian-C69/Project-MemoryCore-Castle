@@ -469,6 +469,90 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    /// Against a real server, on demand (CASTLE_TEST_DB="<port>:<admin>:<password>"): the book's
+    /// starting picture, settling, the member's click (fresh ten minutes, spent once), accepting,
+    /// and the watch's journal read in once.
+    #[test]
+    #[ignore]
+    fn live_the_book_the_click_and_the_journal() {
+        use mysql::prelude::Queryable;
+        let spec = std::env::var("CASTLE_TEST_DB").expect("set CASTLE_TEST_DB");
+        let mut parts = spec.splitn(3, ':');
+        let port: u16 = parts.next().unwrap().parse().unwrap();
+        let (admin, admin_pw) = (parts.next().unwrap().to_string(), parts.next().unwrap_or("").to_string());
+        let access = crate::memdb::provision(port, &admin, &admin_pw, &format!("Sentinel Test {}", std::process::id())).unwrap();
+        let mut conn = crate::memdb::open(&access).unwrap();
+        crate::memdb::migrate(&mut conn).unwrap();
+        let covered: HashSet<String> = ["port", "task", "firewall"].iter().map(|k| k.to_string()).collect();
+
+        // the starting picture, and a state thing that opens anyway
+        let port80 = Thing { kind: "port".into(), parts: vec!["80".into(), "every".into(), "web.exe".into()], hint: LOOK, title: "Port 80".into(), detail: String::new(), fix: Some(("block-port".into(), Some("80".into()))), inventory: true };
+        let mut firewall = state_thing("firewall", "Public", ALARM);
+        firewall.fix = Some(("firewall-on".into(), None));
+        let first = book::collect(&mut conn, &[port80.clone(), firewall.clone()], &covered, true).unwrap();
+        assert_eq!((first.baseline, first.opened.len()), (1, 1));
+        let alarm_id = first.opened[0];
+        // a new task after the picture opens
+        let task = Thing { kind: "task".into(), parts: vec!["\\Stranger".into(), "s.exe".into()], hint: LOOK, title: "Task".into(), detail: String::new(), fix: Some(("disable-task".into(), Some("\\Stranger".into()))), inventory: true };
+        let second = book::collect(&mut conn, &[port80.clone(), firewall.clone(), task.clone()], &covered, true).unwrap();
+        assert_eq!(second.opened.len(), 1);
+        let task_id = second.opened[0];
+
+        // settling: a reason, never an alarm
+        assert!(book::settle(&mut conn, alarm_id, "fine").is_err());
+        book::settle(&mut conn, task_id, "the member's own updater").unwrap();
+        // settled outlives going away and coming back
+        book::collect(&mut conn, &[port80.clone(), firewall.clone()], &covered, true).unwrap();
+        book::collect(&mut conn, &[port80.clone(), firewall.clone(), task.clone()], &covered, true).unwrap();
+        assert_eq!(book::finding(&mut conn, task_id).unwrap().unwrap().state, book::SETTLED);
+
+        // the click: none, fresh, spent once, stale
+        assert!(!book::use_click(&mut conn, alarm_id, "accept").unwrap());
+        assert!(book::accept(&mut conn, alarm_id).is_err(), "accepting needs the member's click");
+        book::click(&mut conn, alarm_id, "fix").unwrap();
+        assert!(book::use_click(&mut conn, alarm_id, "fix").unwrap());
+        assert!(!book::use_click(&mut conn, alarm_id, "fix").unwrap(), "spent once");
+        conn.exec_drop("INSERT INTO sentinel_clicks (finding_id, word, clicked_at) VALUES (?, 'fix', NOW() - INTERVAL 11 MINUTE)", (alarm_id,)).unwrap();
+        assert!(!book::use_click(&mut conn, alarm_id, "fix").unwrap(), "older than ten minutes");
+        assert!(book::click(&mut conn, alarm_id, "format").is_err());
+
+        // the journal: the reflex fixed the firewall while Castle was closed; read in once
+        let dir = std::env::temp_dir().join(format!("castle-sentinel-live-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let domain = {
+            let mut t = state_thing("firewall", "Domain", ALARM);
+            t.fix = Some(("firewall-on".into(), None));
+            t
+        };
+        append(&dir, &[
+            Entry::Thing { at: 1, cause: "tick".into(), thing: Carried::of(&domain) },
+            Entry::Action { at: 2, mv: "firewall-on".into(), ok: true, result: "Every firewall profile is on.".into(), print: Some(domain.fingerprint()) },
+        ]);
+        let drained = drain(&dir, &mut conn).unwrap();
+        assert_eq!((drained.lines, drained.alarms.len()), (2, 1));
+        let fixed: Option<String> = conn.exec_first("SELECT state FROM sentinel_findings WHERE fingerprint = ?", (domain.fingerprint(),)).unwrap();
+        assert_eq!(fixed.as_deref(), Some(book::FIXED));
+        assert_eq!(drain(&dir, &mut conn).unwrap(), Drained::default(), "read once");
+        let reflex: Option<u64> = conn.query_first("SELECT COUNT(*) FROM sentinel_actions WHERE asked_by = 'reflex' AND state = 'done'").unwrap();
+        assert_eq!(reflex, Some(1));
+
+        // accepting with a click makes it known: a later full look never opens it again
+        book::click(&mut conn, task_id, "accept").unwrap();
+        book::accept(&mut conn, task_id).unwrap();
+        let known: Option<String> = conn.exec_first("SELECT accepted_by FROM sentinel_known WHERE fingerprint = ?", (task.fingerprint(),)).unwrap();
+        assert_eq!(known.as_deref(), Some("member"));
+        let again = book::collect(&mut conn, &[port80, firewall, task], &covered, true).unwrap();
+        assert!(again.opened.is_empty());
+
+        let _ = std::fs::remove_dir_all(&dir);
+        conn.query_drop(format!("DROP DATABASE `{}`", access.name)).unwrap();
+        drop(conn);
+        let opts = mysql::OptsBuilder::new().ip_or_hostname(Some(crate::memdb::HOST)).tcp_port(port).user(Some(admin.as_str())).pass(Some(admin_pw.as_str()));
+        let mut root = mysql::Conn::new(opts).unwrap();
+        root.query_drop(format!("DROP USER IF EXISTS '{0}'@'localhost', '{0}'@'127.0.0.1', '{0}'@'%'", access.user)).unwrap();
+    }
+
     #[test]
     fn a_time_reads_as_seconds_and_differences_hold() {
         assert_eq!(seconds_of("1970-01-01 00:00:00"), Some(0));

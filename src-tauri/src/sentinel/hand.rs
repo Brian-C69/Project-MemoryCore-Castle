@@ -322,6 +322,81 @@ mod tests {
         assert!(!b.ok);
     }
 
+    #[cfg(windows)]
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("castle-sentinel-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[cfg(windows)]
+    fn powershell(args: &[&str]) -> String {
+        let out = std::process::Command::new("powershell.exe").args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"]).args(args).output().unwrap();
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn every_script_parses_in_windows_powershell() {
+        let dir = temp_dir("parse");
+        for (name, text) in [("look.ps1", super::super::look::SCRIPT), ("hand.ps1", HAND_SCRIPT), ("install.ps1", INSTALL_SCRIPT)] {
+            let path = dir.join(name);
+            std::fs::write(&path, text).unwrap();
+            let check = format!(
+                "$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile('{}', [ref]$null, [ref]$e); if ($e.Count) {{ $e | ForEach-Object {{ $_.Message }} }} else {{ 'parses' }}",
+                path.display()
+            );
+            assert_eq!(powershell(&["-Command", &check]).trim(), "parses", "{name}");
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The hand in a dry run (nothing on the machine changes): every refusal holds.
+    #[cfg(windows)]
+    #[test]
+    fn the_hand_in_a_dry_run_refuses_what_must_never_be_done() {
+        let dir = temp_dir("hand");
+        let (queue, done) = (dir.join("q"), dir.join("d"));
+        std::fs::create_dir_all(&queue).unwrap();
+        std::fs::create_dir_all(&done).unwrap();
+        let script = dir.join("hand.ps1");
+        std::fs::write(&script, HAND_SCRIPT).unwrap();
+        let lsass = crate::servers::processes().into_values().find(|p| p.name.eq_ignore_ascii_case("lsass.exe")).map(|p| p.pid.to_string()).unwrap_or_else(|| "8".into());
+        // this computer's own address, as the route to an outside address would leave from (no packet is sent)
+        let own = std::net::UdpSocket::bind("0.0.0.0:0").and_then(|s| s.connect("192.0.2.1:9").and_then(|_| s.local_addr())).map(|a| a.ip().to_string()).ok();
+        let mut requests = vec![
+            ("1", "block-address", "127.0.0.1", false),
+            ("2", "disable-task", "\\Microsoft\\Windows\\Defrag\\ScheduledDefrag", false),
+            ("3", "stop-process", lsass.as_str(), false),
+            ("4", "format-disk", "C", false),
+            ("5", "block-port", "99999", false),
+            ("6", "firewall-on", "x; Remove-Item C:\\", false),
+            ("7", "block-address", "224.0.0.1", false),
+            ("8", "disable-task", "\\MemoryCore Castle Sentinel\\Hand", false),
+            ("9", "block-address", "203.0.113.7", true),
+            ("10", "block-port", "8080", true),
+            ("11", "firewall-on", "", true),
+        ];
+        if let Some(own) = own.as_deref().filter(|a| !a.starts_with("169.254.") && a != &"0.0.0.0") {
+            requests.push(("12", "block-address", own, false));
+        }
+        for (id, mv, arg, _) in &requests {
+            std::fs::write(queue.join(format!("{id}.json")), request_text(id, mv, arg)).unwrap();
+        }
+        std::fs::write(queue.join("bad.json"), r#"{"id":"abc","move":"firewall-on","arg":""}"#).unwrap();
+        powershell(&["-File", &script.display().to_string(), "-DryRun", "-Queue", &queue.display().to_string(), "-Done", &done.display().to_string()]);
+        for (id, mv, arg, ok) in &requests {
+            let text = std::fs::read_to_string(done.join(format!("{id}.json"))).unwrap_or_else(|_| panic!("no answer to {id} {mv}"));
+            let answer: Answer = serde_json::from_str(text.trim_start_matches('\u{feff}')).unwrap();
+            assert_eq!(answer.ok, *ok, "{mv} {arg}: {}", answer.result);
+            assert!(answer.dry);
+        }
+        assert!(!done.join("abc.json").exists(), "a request with a bad number gets no answer");
+        assert_eq!(std::fs::read_dir(&queue).unwrap().count(), 0, "the queue is emptied");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn the_shipped_scripts_are_ascii() {
         assert!(HAND_SCRIPT.is_ascii() && INSTALL_SCRIPT.is_ascii());
