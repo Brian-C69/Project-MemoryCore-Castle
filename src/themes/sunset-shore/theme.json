@@ -33,6 +33,7 @@
     "accent": "#ffb36b"
   },
   "motionVideo": "wallpaper-loop.mp4",
+  "motionSound": "wallpaper-sound.mp3",
   "widgets": {
     "sweep": {
       "left": "31%",

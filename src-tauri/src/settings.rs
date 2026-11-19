@@ -235,6 +235,9 @@ pub struct Settings {
     /// default since Nov 20 2026; off, HOME shows the still picture and nothing is loaded. A new
     /// name, so the old `wallpaperMotion: false` every settings file carries never keeps it off.
     pub living_wallpaper: bool,
+    /// A theme's looping sound on HOME (its `motionSound`: the shores' waves, the river): on by
+    /// default since Nov 20 2026, at a share of the music slider's level; off, nothing is fetched.
+    pub wallpaper_sound: bool,
     /// The id of the companion's room key Castle made on the Portfolio (so it can be removed again).
     pub room_companion_key_id: Option<String>,
     /// The name that key carries in the room (a rename in Settings remakes the key).
@@ -404,6 +407,7 @@ impl Default for Settings {
             voicestudio_on: false,
             show_usage_card: true,
             living_wallpaper: true,
+            wallpaper_sound: true,
             room_companion_key_id: None,
             room_companion_name: None,
             world: WorldSettings::default(),
@@ -818,6 +822,7 @@ mod tests {
             voicestudio_on: true,
             show_usage_card: false,
             living_wallpaper: false,
+            wallpaper_sound: false,
             room_companion_key_id: Some("17".into()),
             room_companion_name: Some("Lyra".into()),
             world: WorldSettings {
@@ -901,6 +906,9 @@ mod tests {
         assert!(old.living_wallpaper, "the old switch's saved false never keeps the new one off");
         let off: Settings = serde_json::from_str(r#"{"livingWallpaper":false}"#).unwrap();
         assert!(!off.living_wallpaper, "a member's own off stays off");
+        assert!(settings.wallpaper_sound, "a settings file from before wallpaper sounds starts with them on");
+        let quiet: Settings = serde_json::from_str(r#"{"wallpaperSound":false}"#).unwrap();
+        assert!(!quiet.wallpaper_sound, "a member's own silence stays");
         assert_eq!(settings.world, WorldSettings::default());
     }
 

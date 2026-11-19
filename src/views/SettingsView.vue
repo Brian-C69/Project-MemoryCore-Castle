@@ -644,6 +644,9 @@ onMounted(async () => {
         <label class="toggle has-tip">
           <input type="checkbox" :checked="settings.livingWallpaper !== false" :disabled="!!busy" @change="save({ livingWallpaper: $event.target.checked }, $event.target.checked ? 'Moving wallpapers are on.' : 'Wallpapers stay still.')" /> Moving wallpapers<HelpTip block text="On to begin with: The Star Shore's surf rolls, The Sunset Shore's waves wash in and The Emerald River flows, and The Constellation's stars twinkle. Turn it off if HOME feels slow: the still picture shows and nothing moves or loads. It rests when HOME or Castle is hidden, and stays still if your system asks for reduced motion." />
         </label>
+        <label class="toggle has-tip">
+          <input type="checkbox" :checked="settings.wallpaperSound !== false" :disabled="!!busy" @change="save({ wallpaperSound: $event.target.checked }, $event.target.checked ? 'Wallpaper sounds are on.' : 'Wallpapers are silent.')" /> Wallpaper sounds<HelpTip block text="On to begin with: the shores' waves and the river's water and birds play quietly on HOME, under any music, at the music slider's level. Turn it off for silence. It plays only while HOME is showing." />
+        </label>
         <h3 class="with-tip">Tab order <HelpTip :text="`Arrange the tabs your way: drag a tab in the top bar onto another, or press ${words.moveKeys} on a tab. Castle remembers the order.`" /></h3>
         <button v-if="settings.tabOrder?.length" :disabled="!!busy" @click="save({ tabOrder: [] }, 'The tabs are back in their first order.')">Put the tabs back in their first order</button>
 

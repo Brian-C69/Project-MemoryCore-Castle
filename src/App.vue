@@ -43,6 +43,7 @@ import QuotaGlow from './components/QuotaGlow.vue'
 import UsageReveal from './components/UsageReveal.vue'
 import ThemeMotion from './components/ThemeMotion.vue'
 import ThemeVideo from './components/ThemeVideo.vue'
+import ThemeSound from './components/ThemeSound.vue'
 import WhatsNew from './components/WhatsNew.vue'
 import { sectionFor, unseenSections } from './components/changelog.js'
 import { moveTab, orderTabs } from './components/taborder.js'
@@ -149,6 +150,8 @@ const theme = ref(null)
 // Settings > Rooms > Moving wallpapers (livingWallpaper): a theme's looping video (ThemeVideo) or drawn
 // motion (ThemeMotion), on unless the member turned it off; off, HOME shows the still picture
 const wallpaperMotion = ref(false)
+// Settings > Rooms > Wallpaper sounds (wallpaperSound): a theme's looping sound (ThemeSound), on unless turned off
+const wallpaperSound = ref(false)
 const themeNotice = ref('')
 const activeLabel = computed(() => allTabs.find((t) => t.id === active.value)?.label ?? '')
 const widgets = computed(() => theme.value?.widgets ?? {})
@@ -274,6 +277,7 @@ async function loadSettingsAndTheme() {
     barClock.value = { enabled: !!view.settings.displayClock, format: view.settings.clockFormat ?? '24h' }
     usageCard.value = view.settings.showUsageCard !== false
     wallpaperMotion.value = view.settings.livingWallpaper !== false
+    wallpaperSound.value = view.settings.wallpaperSound !== false
     widgetPrefs.value = { widgetsOff: view.settings.widgetsOff ?? [], widgetsOn: view.settings.widgetsOn ?? [], widgetSizes: view.settings.widgetSizes ?? {}, widgetPlaces: view.settings.widgetPlaces ?? {} }
     tabOrder.value = view.settings.tabOrder ?? []
     try {
@@ -562,6 +566,7 @@ watch(settingsStamp, () => {
         <UsageReveal v-if="theme?.usageReveal" :theme="theme" :visible="active === 'home'" />
         <ThemeMotion v-if="theme?.motion" :theme="theme" :visible="active === 'home'" :enabled="wallpaperMotion" />
         <ThemeVideo v-if="theme?.motionVideoUrl" :theme="theme" :visible="active === 'home'" :enabled="wallpaperMotion" />
+        <ThemeSound v-if="theme?.motionSoundUrl" :theme="theme" :visible="active === 'home'" :enabled="wallpaperSound" />
         <QuotaGlow v-if="theme?.quotaGlow" :theme="theme" :visible="active === 'home'" />
         <TerminalPanel
           :settings-stamp="settingsStamp"

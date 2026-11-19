@@ -5,6 +5,8 @@ const manifests = import.meta.glob('./*/theme.json', { eager: true, import: 'def
 const pictures = import.meta.glob('./*/*.{png,jpg,jpeg,webp}', { eager: true, query: '?url', import: 'default' })
 // a theme's living wallpaper loop ("motionVideo"); only its address is bundled, the file loads when played
 const videos = import.meta.glob('./*/*.{mp4,webm}', { eager: true, query: '?url', import: 'default' })
+// a theme's looping sound ("motionSound"), the same way
+const sounds = import.meta.glob('./*/*.{mp3,ogg}', { eager: true, query: '?url', import: 'default' })
 
 export const DEFAULT_THEME_ID = 'constellation'
 
@@ -39,7 +41,8 @@ export function builtInThemes() {
     const usageReveal = theme.usageReveal?.low ? { ...theme.usageReveal, lowUrl: pictures[`./${pictureFolder}/${theme.usageReveal.low}`] ?? null } : theme.usageReveal
     const loaderUrl = theme.loader?.image ? pictures[`./${pictureFolder}/${theme.loader.image}`] ?? null : null
     const motionVideoUrl = theme.motionVideo ? videos[`./${pictureFolder}/${theme.motionVideo}`] ?? null : null
-    return { ...theme, id: theme.id ?? folder, source: 'built-in', wallpaperUrl, usageReveal, loaderUrl, motionVideoUrl }
+    const motionSoundUrl = theme.motionSound ? sounds[`./${pictureFolder}/${theme.motionSound}`] ?? null : null
+    return { ...theme, id: theme.id ?? folder, source: 'built-in', wallpaperUrl, usageReveal, loaderUrl, motionVideoUrl, motionSoundUrl }
   })
 }
 

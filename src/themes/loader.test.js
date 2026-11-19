@@ -22,8 +22,10 @@ describe('living wallpapers', () => {
     const byId = (id) => themes.find((t) => t.id === id)
     for (const id of ['star-shore', 'green-river', 'sunset-shore']) {
       expect(byId(id).motionVideoUrl).toBeTruthy()
+      expect(byId(id).motionSoundUrl).toBeTruthy()
       expect(byId(id).motion).toBeUndefined()
     }
+    expect(byId('constellation').motionSoundUrl).toBeNull()
     expect(byId('constellation').motion?.kind).toBe('twinkle')
     expect(byId('constellation').motionVideoUrl).toBeNull()
   })
