@@ -1,16 +1,18 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import DevTab from './dev/DevTab.vue'
 import FileTree from './dev/FileTree.vue'
 import FileView from './dev/FileView.vue'
 import NewProject from './dev/NewProject.vue'
 import LiveServers from './dev/LiveServers.vue'
 import { serversOf } from './dev/devprojects.js'
-import { chooseFolder, devForget, devOpen, devServers, devState } from '../api/castle.js'
-import { MAX_TABS, folderName, nextActive, orderTabs, recentProjects, tabForFolder } from './dev/devtabs.js'
+import { chooseFolder, devNewSession, devOpen, devRemoveProject, devServers, devState } from '../api/castle.js'
+import { MAX_TABS, folderName, newSlot, nextActive, orderTabs, recentProjects, removeQuestion, samePath, tabForFolder, tabLabel } from './dev/devtabs.js'
 
-// The DEV room: a session per project folder, up to eight tabs. The projects opened before are
-// listed on the left; each open project has a tab, and a tab keeps working while another shows.
+// The DEV room: the projects on the left, kept until the member removes one; the sessions along
+// the top, up to eight in all, several per project if wanted ("shop · 1", "shop · 2"). A tab keeps
+// working while another shows. Ending a session keeps its project; removing a project asks first,
+// names the sessions that will end, and ends them with it.
 const props = defineProps({
   // the DEV room is the one showing
   visible: { type: Boolean, default: false },
@@ -29,7 +31,7 @@ const problem = ref('')
 const busy = ref(false)
 let timer
 
-const tabs = computed(() => orderTabs(state.value.tabs).map((t) => ({ ...t, name: t.name || folderName(t.folder) })))
+const tabs = computed(() => orderTabs(state.value.tabs).map((t) => ({ ...t, name: t.name || folderName(t.folder), label: tabLabel(t) })))
 const projects = computed(() => recentProjects(state.value.projects, state.value.tabs, state.value.memoryFolder))
 const full = computed(() => tabs.value.length >= MAX_TABS)
 
@@ -49,11 +51,100 @@ function putInChat(path) {
   tabViews[activeSlot.value]?.putInChat(path)
 }
 
-function apply(next, wantedFolder = null) {
+function apply(next, wantedFolder = null, wantedSlot = null) {
   if (!next) return
   state.value = { tabs: next.tabs ?? [], projects: next.projects ?? [], memoryFolder: next.memoryFolder ?? '' }
-  activeSlot.value = nextActive(state.value.tabs, activeSlot.value, wantedFolder)
+  const shown = wantedSlot ?? nextActive(state.value.tabs, activeSlot.value, wantedFolder)
+  activeSlot.value = state.value.tabs.some((t) => t.slot === shown) ? shown : nextActive(state.value.tabs, activeSlot.value)
 }
+
+// A project chosen on the list with no session running shows its own card ("Start a session")
+// instead of a tab; it never opens a terminal by itself.
+const idleFolder = ref(null)
+const idleProject = computed(() => projects.value.find((p) => samePath(p.folder, idleFolder.value)) ?? null)
+watch(activeSlot, (slot, before) => {
+  if (slot !== before && slot !== null) idleFolder.value = null
+})
+watch(projects, (list) => {
+  const p = list.find((x) => samePath(x.folder, idleFolder.value))
+  if (!p || p.count) idleFolder.value = null
+})
+function isSelected(project) {
+  if (idleFolder.value) return samePath(idleFolder.value, project.folder)
+  return !!activeTab.value && samePath(activeTab.value.folder, project.folder)
+}
+function selectProject(project) {
+  problem.value = ''
+  menuFor.value = null
+  if (project.count) {
+    idleFolder.value = null
+    activeSlot.value = project.slot
+  } else {
+    idleFolder.value = project.folder
+  }
+}
+function showTab(slot) {
+  idleFolder.value = null
+  activeSlot.value = slot
+}
+
+// + on a project: one more session there, in the first free tab
+async function startSession(folder) {
+  problem.value = ''
+  menuFor.value = null
+  busy.value = true
+  try {
+    const before = state.value.tabs
+    const next = await devNewSession(folder)
+    idleFolder.value = null
+    apply(next, null, newSlot(before, next?.tabs))
+  } catch (reason) {
+    problem.value = String(reason)
+  } finally {
+    busy.value = false
+  }
+}
+
+// ✕ on a tab: the session ends (asking first only while the companion is working); the project stays
+function endSession(slot) {
+  problem.value = ''
+  tabViews[slot]?.endFromStrip()
+}
+
+// the ⋯ menu of one project, and Remove project… with its question
+const menuFor = ref(null)
+const removing = ref(null)
+const removeAsk = computed(() => (removing.value ? removeQuestion(removing.value, state.value.tabs) : null))
+const keepButton = ref(null)
+function isMenu(project) {
+  return samePath(menuFor.value, project.folder)
+}
+function toggleMenu(folder) {
+  menuFor.value = samePath(menuFor.value, folder) ? null : folder
+}
+async function askRemove(project) {
+  menuFor.value = null
+  removing.value = project
+  await nextTick()
+  keepButton.value?.focus()
+}
+async function confirmRemove() {
+  const project = removing.value
+  removing.value = null
+  if (!project) return
+  problem.value = ''
+  try {
+    apply(await devRemoveProject(project.folder))
+    if (samePath(idleFolder.value, project.folder)) idleFolder.value = null
+  } catch (reason) {
+    problem.value = String(reason)
+  }
+}
+function closeMenus(event) {
+  if (!event.target.closest?.('.row-menu, .row-more')) menuFor.value = null
+}
+onMounted(() => document.addEventListener('click', closeMenus))
+onBeforeUnmount(() => document.removeEventListener('click', closeMenus))
 
 async function refresh() {
   if (document.visibilityState !== 'visible') return
@@ -66,6 +157,7 @@ async function refresh() {
 
 async function openProject(folder) {
   problem.value = ''
+  idleFolder.value = null
   const open = tabForFolder(state.value.tabs, folder)
   if (open) {
     activeSlot.value = open.slot
@@ -114,15 +206,6 @@ watch(
     for (const folder of Object.keys(firstWords.value)) if (!open.includes(folder)) firstSaid(folder)
   },
 )
-
-async function forget(folder) {
-  problem.value = ''
-  try {
-    apply(await devForget(folder))
-  } catch (reason) {
-    problem.value = String(reason)
-  }
-}
 
 // a tab's session started or ended: its dot changes now, before the next read
 function markRunning(slot, on) {
@@ -193,35 +276,47 @@ onBeforeUnmount(() => {
       <p v-if="problem" class="problem" role="alert">{{ problem }}</p>
       <p v-if="!projects.length" class="empty">The project folders you open are kept here.</p>
       <ul class="recent">
-        <li v-for="project in projects" :key="project.folder" :class="{ active: project.slot !== null && project.slot === activeSlot }">
-          <button class="project" :title="project.folder" :disabled="busy" @click="openProject(project.folder)">
+        <li v-for="project in projects" :key="project.folder" :class="{ active: isSelected(project), missing: project.missing }">
+          <button class="project" :title="project.folder" :disabled="busy" @click="selectProject(project)">
             <span class="name">
-              <span v-if="project.slot !== null" class="dot" :class="{ on: tabs.find((t) => t.slot === project.slot)?.running }"></span>
-              {{ project.name }}
+              <span class="dot" :class="{ on: project.slots.some((slot) => tabs.find((t) => t.slot === slot)?.running) }"></span>
+              <span class="pname">{{ project.name }}</span>
+              <span class="sessions" :class="{ live: project.count }" :aria-label="`${project.count} ${project.count === 1 ? 'session' : 'sessions'} open`">{{ project.count }}</span>
             </span>
-            <span class="folder">{{ project.folder }}</span>
+            <span class="folder">{{ project.missing ? 'Folder not found' : project.folder }}</span>
           </button>
-          <button class="forget" title="Take off the list" :aria-label="`Take ${project.name} off the list`" @click="forget(project.folder)">&times;</button>
+          <button
+            class="row-btn"
+            :disabled="busy || full || project.missing"
+            :title="project.missing ? 'The folder is not on this computer' : full ? `All ${MAX_TABS} sessions are in use - end one first` : `Start a session in ${project.name}`"
+            :aria-label="`Start a session in ${project.name}`"
+            @click="startSession(project.folder)"
+          >+</button>
+          <button class="row-btn row-more" aria-haspopup="menu" :aria-expanded="isMenu(project)" :aria-label="`More for ${project.name}`" @click="toggleMenu(project.folder)">⋯</button>
+          <div v-if="isMenu(project)" class="row-menu" role="menu" @keydown.esc.stop="menuFor = null">
+            <button role="menuitem" :disabled="busy || full || project.missing" @click="startSession(project.folder)">New session</button>
+            <button role="menuitem" class="danger" @click="askRemove(project)">Remove project…</button>
+          </div>
         </li>
       </ul>
       </template>
     </aside>
 
     <div class="work">
-      <nav class="tab-strip" role="tablist" aria-label="Open projects">
-        <button
-          v-for="tab in tabs"
-          :key="tab.slot"
-          role="tab"
-          class="strip-tab"
-          :class="{ active: tab.slot === activeSlot }"
-          :aria-selected="tab.slot === activeSlot"
-          :title="tab.folder"
-          @click="activeSlot = tab.slot"
-        >
-          <span class="dot" :class="{ on: tab.running }"></span>
-          <span class="label">{{ tab.name }}</span>
-        </button>
+      <nav class="tab-strip" role="tablist" aria-label="Open sessions">
+        <div v-for="tab in tabs" :key="tab.slot" class="strip-tab" :class="{ active: tab.slot === activeSlot && !idleProject }">
+          <button
+            role="tab"
+            class="strip-open"
+            :aria-selected="tab.slot === activeSlot && !idleProject"
+            :title="tab.folder"
+            @click="showTab(tab.slot)"
+          >
+            <span class="dot" :class="{ on: tab.running }"></span>
+            <span class="label">{{ tab.label }}</span>
+          </button>
+          <button class="strip-close" :aria-label="`End ${tab.label}`" :title="`End ${tab.label}. ${tab.name} stays in your projects.`" @click="endSession(tab.slot)">✕</button>
+        </div>
         <span v-if="tabs.length" class="count">{{ tabs.length }} / {{ MAX_TABS }}</span>
         <button class="servers-btn" :class="{ alone: !tabs.length }" :aria-expanded="serversOpen" title="The developer servers listening on this computer, and which project owns each" @click="serversOpen = !serversOpen">
           SERVERS: {{ servers.length }} live {{ serversOpen ? '▴' : '▾' }}
@@ -230,7 +325,7 @@ onBeforeUnmount(() => {
 
       <DevTab
         v-for="tab in tabs"
-        v-show="tab.slot === activeSlot"
+        v-show="tab.slot === activeSlot && !idleProject"
         :key="`${tab.slot}:${tab.folder}`"
         :ref="(view) => (view ? (tabViews[tab.slot] = view) : delete tabViews[tab.slot])"
         :tab="tab"
@@ -247,15 +342,37 @@ onBeforeUnmount(() => {
         @setup="emit('setup')"
       />
 
-      <FileView v-if="reading && activeTab" :slot="activeTab.slot" :folder="activeTab.folder" :entry="reading" @put="putInChat" @close="reading = null" />
+      <div v-if="idleProject" class="nothing widget">
+        <p class="title">{{ idleProject.name }}</p>
+        <template v-if="idleProject.missing">
+          <p>This folder is no longer on this computer ({{ idleProject.folder }}). Put it back, or take the project off the list.</p>
+          <button class="open-folder" @click="askRemove(idleProject)">Remove project…</button>
+        </template>
+        <template v-else>
+          <p>No session is running here. Start one and {{ companion }} works in {{ idleProject.name }} in a session of its own.</p>
+          <button class="open-folder start" :disabled="busy || full" :title="full ? `All ${MAX_TABS} sessions are in use - end one first` : ''" @click="startSession(idleProject.folder)">Start a session</button>
+        </template>
+      </div>
 
-      <div v-if="!tabs.length" class="nothing widget">
+      <FileView v-if="reading && activeTab && !idleProject" :slot="activeTab.slot" :folder="activeTab.folder" :entry="reading" @put="putInChat" @close="reading = null" />
+
+      <div v-if="!tabs.length && !idleProject" class="nothing widget">
         <p class="title">No project is open.</p>
         <p>Choose one on the left, open a folder, or start a new project, and {{ companion }} works there in a session of its own.</p>
       </div>
     </div>
 
     <LiveServers v-if="serversOpen" :servers="servers" :tabs="tabs" @close="serversOpen = false" />
+    <div v-if="removeAsk" class="remove-sheet" role="dialog" aria-modal="true" aria-labelledby="remove-title" @click.self="removing = null" @keydown.esc.stop="removing = null">
+      <div class="remove-card">
+        <h3 id="remove-title">{{ removeAsk.title }}</h3>
+        <p>{{ removeAsk.text }}</p>
+        <div class="remove-buttons">
+          <button ref="keepButton" class="primary" @click="removing = null">Keep it</button>
+          <button class="danger" @click="confirmRemove">{{ removeAsk.button }}</button>
+        </div>
+      </div>
+    </div>
     <NewProject v-if="making" :companion="companion" @made="made" @close="making = false" />
   </div>
 </template>
@@ -409,21 +526,102 @@ button:disabled {
   white-space: nowrap;
 }
 
-.forget {
+.recent li {
+  position: relative;
+}
+
+.recent li.missing .folder {
+  color: var(--warn);
+}
+
+.project .pname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* how many sessions the project has open: green while any is open */
+.sessions {
   flex: none;
-  width: 28px;
+  min-width: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.sessions.live {
+  border-color: var(--good);
+  color: var(--good);
+}
+
+.row-btn {
+  flex: none;
+  width: 26px;
   border: 0;
   border-radius: 6px;
   background: none;
   color: var(--text-dim);
   font-size: 16px;
-  opacity: 0.6;
+  opacity: 0.7;
+  cursor: pointer;
 }
 
-.forget:hover,
-.forget:focus-visible {
+.row-btn:hover:not(:disabled),
+.row-btn:focus-visible,
+.row-btn[aria-expanded='true'] {
   color: var(--text);
   opacity: 1;
+}
+
+.row-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.row-menu {
+  position: absolute;
+  top: calc(100% - 4px);
+  right: 4px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 170px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-background);
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+.row-menu button {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row-menu button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.row-menu button:disabled {
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+
+.row-menu .danger,
+.remove-buttons .danger {
+  color: var(--warn);
 }
 
 .dot {
@@ -465,10 +663,10 @@ button:disabled {
   display: flex;
   flex: 0 1 auto;
   align-items: center;
-  gap: 7px;
-  min-width: 70px;
-  max-width: 200px;
-  padding: 7px 12px;
+  gap: 2px;
+  min-width: 90px;
+  max-width: 220px;
+  padding: 0 4px 0 0;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 8px 8px 0 0;
@@ -485,6 +683,39 @@ button:disabled {
   color: var(--text);
   border-bottom-color: var(--accent);
   background: var(--panel-background);
+}
+
+.strip-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 4px 7px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.strip-close {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  font-size: 11px;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.strip-close:hover,
+.strip-close:focus-visible {
+  background: var(--hover);
+  opacity: 1;
 }
 
 .strip-tab .label {
@@ -540,6 +771,71 @@ button:disabled {
 .nothing .title {
   color: var(--text);
   font-size: 17px;
+  font-weight: 600;
+}
+
+.nothing .start {
+  justify-self: start;
+}
+
+.remove-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(6, 4, 20, 0.42);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+
+.remove-card {
+  width: min(420px, 100%);
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-background);
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+}
+
+.remove-card h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.remove-card p {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.remove-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.remove-buttons button {
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--hover);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.remove-buttons .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #07142e;
   font-weight: 600;
 }
 </style>

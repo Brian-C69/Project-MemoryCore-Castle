@@ -28,24 +28,65 @@ export function tabForFolder(tabs, folder) {
   return (tabs ?? []).find((t) => samePath(t.folder, folder)) ?? null
 }
 
-// The recent projects, without the memory folder (it has its own session at HOME), each marked
-// with the slot of its open tab (or null).
+// The tabs of one project's sessions, by their number (shop · 1 first).
+export function sessionsOf(tabs, folder) {
+  return (tabs ?? []).filter((t) => samePath(t.folder, folder)).sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
+}
+
+// A tab's name in the strip: its project and its number there, fixed for the session's life.
+export function tabLabel(tab) {
+  if (!tab) return ''
+  const name = tab.name || folderName(tab.folder)
+  return tab.number ? `${name} · ${tab.number}` : name
+}
+
+// The projects on the list, without the memory folder (it has its own session at HOME). Each
+// carries its sessions' slots (by number), how many there are, the newest one's slot (or null)
+// and whether its folder is gone from this computer.
 export function recentProjects(projects, tabs, memoryFolder) {
   return (projects ?? [])
     .filter((p) => p?.folder && !samePath(p.folder, memoryFolder))
     .map((p) => {
-      const tab = tabForFolder(tabs, p.folder)
-      return { folder: p.folder, name: p.name || folderName(p.folder), slot: tab ? tab.slot : null }
+      const slots = sessionsOf(tabs, p.folder).map((t) => t.slot)
+      return {
+        folder: p.folder,
+        name: p.name || folderName(p.folder),
+        missing: !!p.missing,
+        slots,
+        count: slots.length,
+        slot: slots.length ? slots[slots.length - 1] : null,
+      }
     })
 }
 
-// Which tab shows after the tabs changed: the one asked for (by folder), else the current one if it
+// The tab a new session opened in: the slot that is open now and was not before (or null).
+export function newSlot(before, after) {
+  const was = new Set((before ?? []).map((t) => t.slot))
+  return (after ?? []).find((t) => !was.has(t.slot))?.slot ?? null
+}
+
+// What "Remove project…" asks: plain when nothing runs, naming each session that will end otherwise.
+export function removeQuestion(project, tabs) {
+  const ending = sessionsOf(tabs, project.folder)
+  if (!ending.length) {
+    return { title: `Remove ${project.name}?`, text: 'It comes off the list. The folder and its files stay on disk, and you can open it again any time.', button: 'Remove project' }
+  }
+  const names = ending.map(tabLabel).join(', ')
+  const many = ending.length > 1
+  return {
+    title: `Remove ${project.name}?`,
+    text: `Its ${ending.length} ${many ? 'sessions' : 'session'} will end (${names}). The folder stays on disk.`,
+    button: many ? `End all ${ending.length} and remove` : 'End it and remove',
+  }
+}
+
+// Which tab shows after the tabs changed: the one asked for (by folder, its newest session), else the current one if it
 // is still open, else its nearest neighbour (the next slot up, then the one below), else none.
 export function nextActive(tabs, current, wantedFolder = null) {
   const list = orderTabs(tabs)
   if (wantedFolder) {
-    const wanted = tabForFolder(list, wantedFolder)
-    if (wanted) return wanted.slot
+    const wanted = sessionsOf(list, wantedFolder)
+    if (wanted.length) return wanted[wanted.length - 1].slot
   }
   if (!list.length) return null
   if (current === null || current === undefined) return list[0].slot

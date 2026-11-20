@@ -408,15 +408,18 @@ export const onNotice = on('castle-notice')
 // The tray's Wake companion.
 export const onWakeRequest = (handler) => listen('castle-wake', () => handler())
 
-// DEV: a session per project folder, up to 8 tabs (slot 0-7). Each state call answers
-// { tabs: [{ slot, folder, name, running, status: { ready, message, fix } }], projects: [{ folder, name }], memoryFolder }.
+// DEV: projects on a list, and up to 8 sessions in all (slot 0-7), several per project if wanted.
+// Each state call answers { tabs: [{ slot, folder, name, number, running, status: { ready, message, fix } }],
+// projects: [{ folder, name, missing }], memoryFolder }.
 // A refusal comes back as a plain message string.
 export const devState = () => invoke('dev_state')
 export const devOpen = (folder) => invoke('dev_open', { folder })
 export const devCloseTab = (slot) => invoke('dev_close_tab', { slot })
 // the live developer servers -> [{ port, pid, program, folder, slot, startedBy }] (read only, nothing is ever stopped)
 export const devServers = () => invoke('dev_servers')
-export const devForget = (folder) => invoke('dev_forget', { folder })
+// one more session in a project (the first free tab), and taking a project off the list (its sessions end first)
+export const devNewSession = (folder) => invoke('dev_new_session', { folder })
+export const devRemoveProject = (folder) => invoke('dev_remove_project', { folder })
 export const devWake = (slot, cols, rows) => invoke('dev_wake', { slot, cols, rows })
 export const devWrite = (slot, data) => invoke('dev_write', { slot, data })
 export const devResize = (slot, cols, rows) => invoke('dev_resize', { slot, cols, rows })

@@ -284,6 +284,8 @@ pub struct Settings {
     pub db_offer_seen: bool,
     /// The DEV tab's open projects, one folder per tab (at most `dev_tabs::SLOTS`); empty = closed.
     pub dev_tabs: Vec<Option<String>>,
+    /// Each DEV tab's number within its project ("shop · 2"), by slot; 0 or missing = not kept yet.
+    pub dev_tab_numbers: Vec<u32>,
     /// The DEV tab's recent projects, newest first (at most `dev_tabs::RECENT`).
     pub dev_projects: Vec<String>,
     /// Castle's session is only this companion: the member's personal Claude Code setup (its
@@ -429,6 +431,7 @@ impl Default for Settings {
             db_boot_at_wake: true,
             db_offer_seen: false,
             dev_tabs: Vec::new(),
+            dev_tab_numbers: Vec::new(),
             dev_projects: Vec::new(),
             only_this_companion: false,
             diary_look: "list".into(),
@@ -849,6 +852,7 @@ mod tests {
             db_boot_at_wake: false,
             db_offer_seen: true,
             dev_tabs: vec![Some("D:/Projects/shop".into()), None],
+            dev_tab_numbers: vec![1],
             dev_projects: vec!["D:/Projects/shop".into()],
             only_this_companion: true,
             diary_look: "book".into(),

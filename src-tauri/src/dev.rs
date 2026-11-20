@@ -1,5 +1,7 @@
-//! The DEV tab: the companion at work in the member's project folders, up to `dev_tabs::SLOTS` at
-//! once, each its own session shown as a Chat with a Log beside it. She wakes there as the Castle's
+//! The DEV tab: the companion at work in the member's project folders, up to `dev_tabs::SLOTS`
+//! sessions at once (a project may run several), each its own tab shown as a Chat with a Log
+//! beside it. The project list is kept apart from the sessions: ending a session keeps its
+//! project, and removing a project ends its sessions first. She wakes there as the Castle's
 //! companion with her memory (from the database when it is there) and a short work note; the
 //! member's personal Claude Code setup is always left out, so on a PC whose own setup is another
 //! companion a DEV tab is never someone else. Plans she copies live in the member's database and
@@ -27,6 +29,8 @@ pub struct DevTab {
     slot: usize,
     folder: String,
     name: String,
+    /// its number within its project, kept for the session's life ("shop · 2")
+    number: u32,
     running: bool,
     status: SessionStatus,
 }
@@ -36,6 +40,8 @@ pub struct DevTab {
 pub struct DevProject {
     folder: String,
     name: String,
+    /// the folder is no longer on this computer (it stays listed until the member removes it)
+    missing: bool,
 }
 
 #[derive(Serialize)]
@@ -74,6 +80,7 @@ fn tab_status(settings: &Settings, folder: &Path, program: Option<&Path>) -> Ses
 fn state(store: &SettingsStore, hosts: &DevHosts) -> DevState {
     let settings = store.get();
     let program = env::find_on_path(settings.cli.command());
+    let numbers = dev_tabs::numbers(&settings.dev_tabs, &settings.dev_tab_numbers);
     let tabs = settings
         .dev_tabs
         .iter()
@@ -84,6 +91,7 @@ fn state(store: &SettingsStore, hosts: &DevHosts) -> DevState {
                 slot,
                 folder: folder.clone(),
                 name: dev_tabs::name_of(folder),
+                number: numbers.get(slot).copied().unwrap_or(1),
                 running: hosts.0.get(slot).is_some_and(PtyHost::is_running),
                 status: tab_status(&settings, Path::new(folder), program.as_deref()),
             })
@@ -92,7 +100,7 @@ fn state(store: &SettingsStore, hosts: &DevHosts) -> DevState {
     let projects = settings
         .dev_projects
         .iter()
-        .map(|f| DevProject { folder: f.clone(), name: dev_tabs::name_of(f) })
+        .map(|f| DevProject { folder: f.clone(), name: dev_tabs::name_of(f), missing: !Path::new(f).is_dir() })
         .collect();
     DevState { tabs, projects, memory_folder: settings.memory_folder.clone() }
 }
@@ -216,8 +224,33 @@ pub fn dev_open(folder: String, store: State<SettingsStore>, hosts: State<DevHos
     let slot = dev_tabs::slot_for(&settings.dev_tabs, &folder)?;
     save(&store, |s| {
         if s.dev_tabs.get(slot).cloned().flatten().is_none() {
-            s.dev_tabs = dev_tabs::with_tab(&s.dev_tabs, slot, Some(folder.clone()));
+            place(s, slot, &folder);
         }
+        s.dev_projects = dev_tabs::remembered(&s.dev_projects, &folder);
+    })?;
+    Ok(state(&store, &hosts))
+}
+
+/// A new session in `folder` in the tab `slot`, with the lowest number its project has free.
+fn place(s: &mut Settings, slot: usize, folder: &str) {
+    let number = dev_tabs::number_for(&s.dev_tabs, &s.dev_tab_numbers, folder);
+    s.dev_tab_numbers = dev_tabs::numbers(&s.dev_tabs, &s.dev_tab_numbers);
+    s.dev_tabs = dev_tabs::with_tab(&s.dev_tabs, slot, Some(folder.to_string()));
+    s.dev_tab_numbers = dev_tabs::with_number(&s.dev_tab_numbers, s.dev_tabs.len(), slot, number);
+}
+
+/// One more session in a project, even when it already has one: the first free tab (8 in all).
+#[tauri::command]
+pub fn dev_new_session(folder: String, store: State<SettingsStore>, hosts: State<DevHosts>) -> Result<DevState, String> {
+    crate::rooms::need(&store, "dev")?;
+    let settings = store.get();
+    let memory = settings.memory_folder.as_deref().map(PathBuf::from);
+    if let Some(why) = dev_tabs::refusal(Path::new(&folder), memory.as_deref()) {
+        return Err(why);
+    }
+    let slot = dev_tabs::free_slot(&settings.dev_tabs)?;
+    save(&store, |s| {
+        place(s, slot, &folder);
         s.dev_projects = dev_tabs::remembered(&s.dev_projects, &folder);
     })?;
     Ok(state(&store, &hosts))
@@ -237,19 +270,36 @@ pub async fn dev_servers(store: State<'_, SettingsStore>, hosts: State<'_, DevHo
         .map_err(|_| "The servers could not be read.".to_string())
 }
 
-#[tauri::command]
-pub fn dev_close_tab(slot: usize, store: State<SettingsStore>, hosts: State<DevHosts>, chats: State<DevChats>) -> Result<DevState, String> {
-    host(&hosts, slot)?.kill();
+/// Ends the session in `slot` and frees its tab: its project stays on the list.
+fn end_session(s: &mut Settings, slot: usize, hosts: &DevHosts, chats: &DevChats) {
+    if let Some(host) = hosts.0.get(slot) {
+        host.kill();
+    }
     if let Some(chat) = chats.0.get(slot) {
         chat.clear();
     }
-    save(&store, |s| s.dev_tabs = dev_tabs::with_tab(&s.dev_tabs, slot, None))?;
-    Ok(state(&store, &hosts))
+    s.dev_tab_numbers = dev_tabs::numbers(&s.dev_tabs, &s.dev_tab_numbers);
+    s.dev_tabs = dev_tabs::with_tab(&s.dev_tabs, slot, None);
+    s.dev_tab_numbers = dev_tabs::with_number(&s.dev_tab_numbers, s.dev_tabs.len(), slot, 0);
 }
 
 #[tauri::command]
-pub fn dev_forget(folder: String, store: State<SettingsStore>, hosts: State<DevHosts>) -> Result<DevState, String> {
-    save(&store, |s| s.dev_projects = dev_tabs::forgotten(&s.dev_projects, &folder))?;
+pub fn dev_close_tab(slot: usize, store: State<SettingsStore>, hosts: State<DevHosts>, chats: State<DevChats>) -> Result<DevState, String> {
+    host(&hosts, slot)?;
+    save(&store, |s| end_session(s, slot, &hosts, &chats))?;
+    Ok(state(&store, &hosts))
+}
+
+/// Takes a project off the list, after the member confirmed: its sessions end first, so no tab
+/// is ever left without its project. The folder and its files are not touched.
+#[tauri::command]
+pub fn dev_remove_project(folder: String, store: State<SettingsStore>, hosts: State<DevHosts>, chats: State<DevChats>) -> Result<DevState, String> {
+    save(&store, |s| {
+        for slot in dev_tabs::slots_of(&s.dev_tabs, &folder) {
+            end_session(s, slot, &hosts, &chats);
+        }
+        s.dev_projects = dev_tabs::forgotten(&s.dev_projects, &folder);
+    })?;
     Ok(state(&store, &hosts))
 }
 

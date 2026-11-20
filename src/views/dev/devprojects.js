@@ -9,7 +9,8 @@ export function serversOf(servers, slot) {
 /** The PROJECT column: the tab's name, '-' for a known service, '(not a DEV project)' otherwise. */
 export function ownerWords(server, tabs) {
   if (server.slot !== null && server.slot !== undefined) {
-    return (tabs ?? []).find((t) => t.slot === server.slot)?.name ?? `Tab ${server.slot + 1}`
+    const tab = (tabs ?? []).find((t) => t.slot === server.slot)
+    return tab?.label ?? tab?.name ?? `Tab ${server.slot + 1}`
   }
   return /^(mysqld|httpd|nginx|postgres|redis-server|mongod)(\.exe)?$/i.test(server.program ?? '') ? '-' : '(not a DEV project)'
 }

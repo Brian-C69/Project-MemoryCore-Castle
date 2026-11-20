@@ -169,6 +169,7 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
         settings.dev_root = current.dev_root;
         // the DEV tabs and the recent list are kept by the DEV room's own commands, never by the Settings page
         settings.dev_tabs = current.dev_tabs.clone();
+        settings.dev_tab_numbers = current.dev_tab_numbers.clone();
         settings.dev_projects = current.dev_projects.clone();
         // the gauges' gear is saved only by its own command (meter_watch_save)
         settings.meter_watch = current.meter_watch;
@@ -320,7 +321,8 @@ pub fn run() {
             dev::dev_open,
             dev::dev_servers,
             dev::dev_close_tab,
-            dev::dev_forget,
+            dev::dev_new_session,
+            dev::dev_remove_project,
             dev::dev_wake,
             dev::dev_write,
             dev::dev_resize,

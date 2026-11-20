@@ -9,6 +9,7 @@ import { useSaveClose } from './useSaveClose.js'
 import { devCloseTab, memoryFeatures } from '../../api/castle.js'
 import { devOpenLink } from '../../api/devgit.js'
 import { linkOf, programOf } from './devprojects.js'
+import { tabLabel } from './devtabs.js'
 
 // One project's session in the DEV room: its chat in the middle, the Log behind a button, the
 // plan beside it on request. It stays mounted while other tabs show, so the session keeps going.
@@ -51,6 +52,8 @@ watch(() => props.tab.running, () => (liveRunning.value = null))
 
 // Close session: asked first, in the page, when the project has work not yet committed
 const askingClose = ref(false)
+// "shop · 2": the project and this session's number there
+const label = computed(() => tabLabel(props.tab))
 const keepButton = ref(null)
 const closing = ref(false)
 const problem = ref('')
@@ -110,7 +113,22 @@ watch(
 function putInChat(path) {
   panel.value?.addPaths([path])
 }
-defineExpose({ putInChat })
+// ✕ on the tab strip: an idle session ends at once; while the companion is working it asks first.
+// The project stays on the list either way (the header's Close session keeps its save-first way).
+const askingEnd = ref(false)
+const keepRunning = ref(null)
+async function endFromStrip() {
+  problem.value = ''
+  if (!busy.value) return closeNow()
+  askingEnd.value = true
+  await nextTick()
+  keepRunning.value?.focus()
+}
+function endNow() {
+  askingEnd.value = false
+  closeNow()
+}
+defineExpose({ putInChat, endFromStrip })
 
 function wake() {
   problem.value = ''
@@ -137,11 +155,11 @@ async function closeNow() {
 </script>
 
 <template>
-  <section class="dev-tab" :aria-label="tab.name">
+  <section class="dev-tab" :aria-label="label">
     <header class="tab-head">
       <span class="dot" :class="{ on: running }" :title="running ? 'Working' : 'Asleep'"></span>
       <div class="names">
-        <h2 :title="tab.name">{{ tab.name }}</h2>
+        <h2 :title="label">{{ label }}</h2>
         <span class="folder" :title="tab.folder">{{ tab.folder }}</span>
       </div>
       <div class="actions">
@@ -186,6 +204,17 @@ async function closeNow() {
       />
       <SourcePanel v-if="sourceOpen" class="plan-side" :slot="tab.slot" :folder="tab.folder" :companion="companion" :shown="shown && sourceOpen" @ask="say" />
       <PlanPanel v-if="planOpen" class="plan-side" :index="tab.slot" :shown="shown && planOpen" />
+    </div>
+
+    <div v-if="askingEnd" class="close-sheet" role="dialog" aria-modal="true" aria-labelledby="end-sheet-title" @click.self="askingEnd = false" @keydown.esc.stop="askingEnd = false">
+      <div class="close-card">
+        <h3 id="end-sheet-title">End {{ label }}?</h3>
+        <p>{{ companion }} is still working in this session. Ending it stops that work. {{ tab.name }} stays in your projects.</p>
+        <div class="close-buttons">
+          <button ref="keepRunning" class="primary" @click="askingEnd = false">Keep it running</button>
+          <button @click="endNow">End session</button>
+        </div>
+      </div>
     </div>
 
     <div v-if="askingClose" class="close-sheet" role="dialog" aria-modal="true" aria-labelledby="close-sheet-title" @click.self="askingClose = false; saveClose.dismiss()" @keydown.esc.stop="askingClose = false; saveClose.dismiss()">

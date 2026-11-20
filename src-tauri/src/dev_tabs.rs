@@ -1,9 +1,11 @@
-//! The DEV tab's bookkeeping, kept pure so it can be tested: which tab a project opens in, the
-//! recent list, and which folders are never a project (the companion's own memory).
+//! The DEV tab's bookkeeping, kept pure so it can be tested: which tab a session opens in, its
+//! number within its project ("shop · 2"), the project list, and which folders are never a project
+//! (the companion's own memory). The list holds projects; a tab is one session, and a project may
+//! have several.
 
 use std::path::{Path, PathBuf};
 
-/// At most this many projects are open at once, each in its own tab with its own session.
+/// At most this many sessions are open at once (all projects together), each in its own tab.
 pub const SLOTS: usize = 8;
 /// How many recent projects the list keeps.
 pub const RECENT: usize = 20;
@@ -55,6 +57,59 @@ pub fn slot_for(tabs: &[Option<String>], folder: &str) -> Result<usize, String> 
     (0..SLOTS)
         .find(|&slot| tabs.get(slot).is_none_or(|t| t.is_none()))
         .ok_or_else(|| format!("All {SLOTS} DEV tabs are in use. Close one first."))
+}
+
+/// The first free tab, for a new session. Err when all tabs are in use.
+pub fn free_slot(tabs: &[Option<String>]) -> Result<usize, String> {
+    (0..SLOTS)
+        .find(|&slot| tabs.get(slot).is_none_or(|t| t.is_none()))
+        .ok_or_else(|| format!("All {SLOTS} DEV sessions are in use. End one first."))
+}
+
+/// The tabs whose session works in `folder`, in slot order.
+pub fn slots_of(tabs: &[Option<String>], folder: &str) -> Vec<usize> {
+    let key = same_folder_key(folder);
+    tabs.iter()
+        .enumerate()
+        .filter(|(_, t)| t.as_deref().map(same_folder_key).as_deref() == Some(key.as_str()))
+        .map(|(slot, _)| slot)
+        .collect()
+}
+
+/// Each open tab's number within its project, by slot (0 for an empty slot). A kept number stays
+/// for the session's life; a tab without one (a settings file from before numbers) takes the
+/// lowest its project has free, in slot order.
+pub fn numbers(tabs: &[Option<String>], kept: &[u32]) -> Vec<u32> {
+    let mut shown: Vec<u32> = tabs.iter().enumerate().map(|(slot, t)| if t.is_some() { kept.get(slot).copied().unwrap_or(0) } else { 0 }).collect();
+    for slot in 0..tabs.len() {
+        if shown[slot] == 0 {
+            if let Some(folder) = &tabs[slot] {
+                shown[slot] = lowest_free(tabs, &shown, folder);
+            }
+        }
+    }
+    shown
+}
+
+/// The number a new session in `folder` takes: the lowest its project has free.
+pub fn number_for(tabs: &[Option<String>], kept: &[u32], folder: &str) -> u32 {
+    lowest_free(tabs, &numbers(tabs, kept), folder)
+}
+
+fn lowest_free(tabs: &[Option<String>], shown: &[u32], folder: &str) -> u32 {
+    let used: Vec<u32> = slots_of(tabs, folder).into_iter().map(|slot| shown.get(slot).copied().unwrap_or(0)).collect();
+    (1..).find(|n| !used.contains(n)).unwrap_or(1)
+}
+
+/// The kept numbers with `n` at `slot` (0 clears it), as long as the tabs and no longer.
+pub fn with_number(kept: &[u32], tabs_len: usize, slot: usize, n: u32) -> Vec<u32> {
+    let mut next: Vec<u32> = kept.to_vec();
+    if next.len() <= slot {
+        next.resize(slot + 1, 0);
+    }
+    next[slot] = n;
+    next.truncate(tabs_len);
+    next
 }
 
 /// The tabs with `folder` placed in `slot` (the list grows to fit, never past `SLOTS`).
@@ -125,6 +180,36 @@ mod tests {
         }
         let full: Vec<Option<String>> = (0..SLOTS).map(|i| Some(format!("D:\\p{i}"))).collect();
         assert!(slot_for(&full, "D:\\extra").unwrap_err().contains("in use"));
+    }
+
+    #[test]
+    fn a_new_session_takes_the_first_free_tab_even_when_its_project_is_open() {
+        let tabs = vec![Some("D:\\Shop".to_string()), None, Some("D:\\Shop".to_string())];
+        assert_eq!(free_slot(&tabs), Ok(1));
+        assert_eq!(slots_of(&tabs, "D:\\Shop"), vec![0, 2]);
+        assert!(slots_of(&tabs, "D:\\Blog").is_empty());
+        let full: Vec<Option<String>> = (0..SLOTS).map(|_| Some("D:\\Shop".to_string())).collect();
+        assert!(free_slot(&full).unwrap_err().contains("in use"), "eight sessions in all, whatever the projects");
+    }
+
+    #[test]
+    fn a_session_keeps_its_number_and_a_new_one_takes_the_lowest_free() {
+        let shop = || Some("D:\\Shop".to_string());
+        let blog = || Some("D:\\Blog".to_string());
+        // shop 1 and shop 3 open (shop 2 was ended): the next shop session is 2, a blog one is 1
+        let tabs = vec![shop(), blog(), shop()];
+        let kept = vec![1, 1, 3];
+        assert_eq!(numbers(&tabs, &kept), vec![1, 1, 3]);
+        assert_eq!(number_for(&tabs, &kept, "D:\\Shop"), 2);
+        assert_eq!(number_for(&tabs, &kept, "D:\\Blog"), 2);
+        assert_eq!(number_for(&tabs, &kept, "D:\\New"), 1);
+        // a settings file from before numbers: each project counts from 1 in slot order
+        assert_eq!(numbers(&tabs, &[]), vec![1, 1, 2]);
+        assert_eq!(numbers(&[None, shop()], &[]), vec![0, 1]);
+        // a kept number stays when an earlier session of its project ends
+        assert_eq!(numbers(&[None, blog(), shop()], &kept), vec![0, 1, 3]);
+        assert_eq!(with_number(&[1, 1], 3, 2, 2), vec![1, 1, 2]);
+        assert_eq!(with_number(&[1, 1, 2], 2, 2, 0), vec![1, 1], "no longer than the tabs");
     }
 
     #[test]
