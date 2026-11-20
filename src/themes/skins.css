@@ -129,9 +129,10 @@
 .home.glass.skin-windmill-cloud .gauge::before {
   content: '';
   position: absolute;
-  inset: 8px;
-  background: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='%23ffffff' fill-opacity='0.82'%3E%3Cpath d='M50 50C46 34 47 12 50 4C53 12 54 34 50 50Z'/%3E%3Cpath d='M50 50C46 34 47 12 50 4C53 12 54 34 50 50Z' transform='rotate(120 50 50)'/%3E%3Cpath d='M50 50C46 34 47 12 50 4C53 12 54 34 50 50Z' transform='rotate(240 50 50)'/%3E%3C/g%3E%3Ccircle cx='50' cy='50' r='4' fill='%23ffffff'/%3E%3C/svg%3E") center / contain no-repeat;
-  opacity: 0.55;
+  inset: 2px;
+  background: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='%23ffffff' fill-opacity='0.95'%3E%3Cpath d='M50 50C46 34 47 12 50 4C53 12 54 34 50 50Z'/%3E%3Cpath d='M50 50C46 34 47 12 50 4C53 12 54 34 50 50Z' transform='rotate(120 50 50)'/%3E%3Cpath d='M50 50C46 34 47 12 50 4C53 12 54 34 50 50Z' transform='rotate(240 50 50)'/%3E%3C/g%3E%3Ccircle cx='50' cy='50' r='4' fill='%23ffffff'/%3E%3C/svg%3E") center / contain no-repeat;
+  opacity: 0.8;
+  filter: drop-shadow(0 1px 3px rgba(20, 60, 110, 0.45));
   pointer-events: none;
   /* a busier computer turns its windmill faster: 9 s a turn idle, about 2 s at full load */
   animation: windmill-turn calc(9s - var(--load, 0) * 0.07s) linear infinite;
@@ -148,9 +149,7 @@
 .home.glass.skin-windmill-cloud .widget.sweep,
 .home.glass.skin-windmill-cloud .widget.card.today,
 .home.glass.skin-windmill-cloud .widget.card.diary {
-  border-radius: 46% 54% 44% 56% / 52% 46% 54% 48%;
-  padding-left: 22px;
-  padding-right: 22px;
+  border-radius: 40px 48px 42px 46px / 36px 42px 38px 44px;
   box-shadow: 0 10px 14px -6px rgba(40, 80, 30, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.95), inset 0 -10px 18px rgba(170, 200, 230, 0.35);
 }
 
@@ -161,9 +160,9 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: conic-gradient(from 228deg at 90% 13%, transparent 0deg, rgba(255, 232, 160, 0) 2deg, rgba(255, 232, 160, 0.30) 9deg, rgba(255, 240, 190, 0.16) 14deg, rgba(255, 232, 160, 0) 20deg, transparent 24deg);
+  background: conic-gradient(from 236deg at 74% 13%, transparent 0deg, rgba(255, 232, 160, 0) 2deg, rgba(255, 232, 160, 0.42) 9deg, rgba(255, 240, 190, 0.22) 15deg, rgba(255, 232, 160, 0) 22deg, transparent 26deg);
   mix-blend-mode: screen;
-  transform-origin: 90% 13%;
+  transform-origin: 74% 13%;
   animation: lighthouse-sway 14s ease-in-out infinite alternate;
 }
 @keyframes lighthouse-sway {
@@ -193,9 +192,10 @@
   position: relative;
   display: grid;
   place-content: center;
-  min-width: 220px;
-  aspect-ratio: 1 / 1;
-  padding: 18px;
+  width: 158px;
+  height: 158px;
+  box-sizing: border-box;
+  padding: 10px;
   border-radius: 50%;
   border: 3px solid #f2c45a;
   background: radial-gradient(circle at 50% 45%, rgba(255, 252, 236, 0.97) 0 48%, rgba(255, 230, 160, 0.92) 70%, rgba(250, 196, 90, 0.85) 100%);
@@ -214,6 +214,11 @@
 }
 .home.glass.skin-lighthouse-beam .widget.clock .time {
   color: #123d6e;
+  font-size: 40px;
+}
+.home.glass.skin-lighthouse-beam .widget.clock .date {
+  margin-top: 2px;
+  font-size: 11px;
 }
 /* the gauges float as red-and-white buoys */
 .home.glass.skin-lighthouse-beam .widget.gauges {
@@ -254,9 +259,11 @@
 
 /* ---------- still-water (The Lantern Falls): liquid-glass panes standing in the pool, ripples at
    their feet, ripple-ring gauges, the clock and its reflection ---------- */
+.home.glass.skin-still-water .widget {
+  position: relative;
+}
 .home.glass.skin-still-water .widget,
 .home.glass.skin-still-water .terminal-panel {
-  position: relative;
   background: linear-gradient(165deg, rgba(255, 255, 255, 0.16), rgba(255, 190, 210, 0.06) 55%, rgba(255, 170, 110, 0.10));
   border: 1px solid rgba(255, 224, 204, 0.6);
   border-radius: 22px;
@@ -293,7 +300,7 @@
 }
 /* the clock floats with its reflection beneath it */
 .home.glass.skin-still-water .widget.clock {
-  -webkit-box-reflect: below 6px linear-gradient(transparent 52%, rgba(255, 255, 255, 0.32));
+  -webkit-box-reflect: below 4px linear-gradient(transparent 28%, rgba(255, 255, 255, 0.55));
 }
 /* the gauges are rings of ripples */
 .home.glass.skin-still-water .widget.gauges {
@@ -311,7 +318,7 @@
   position: absolute;
   inset: -8px;
   border-radius: 50%;
-  background: repeating-radial-gradient(circle, transparent 0 7px, rgba(255, 226, 206, 0.28) 8px 9px);
+  background: repeating-radial-gradient(circle, transparent 0 7px, rgba(255, 226, 206, 0.42) 8px 9px);
   -webkit-mask: radial-gradient(circle, #000 40%, transparent 72%);
   mask: radial-gradient(circle, #000 40%, transparent 72%);
   pointer-events: none;
