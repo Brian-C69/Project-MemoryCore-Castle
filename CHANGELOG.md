@@ -4,6 +4,14 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Chat answers everything Claude Code asks.** The question card shows the whole question with the words around it, and a description under each choice. It now also covers the "do you trust this folder?" question a new DEV tab used to wait on, questions with several answers (tick, then **Submit** or **Next →**), and *"Type something."*, which you now answer by typing in the message box.
+
+- **The PLAN card is there when you are asked to approve.** Claude Code sometimes asks before the plan reaches the conversation; Chat now reads the plan itself, so you can read it before you answer.
+
+- **No more giant bubble after /compact.** The compact summary stays out of Chat.
+
+- **Films and songs in Chat.** A film your companion makes plays right in the conversation. A song shows its own name, and both have **Open** and **Open folder**.
+
 ## 0.2.25 - 2026-11-20
 
 - **Wallpaper sounds.** The Star Shore's surf, The Sunset Shore's waves and The Emerald River's water and birds play quietly on HOME, under any music and at its slider's level. Settings > Rooms > Wallpaper sounds turns them off.

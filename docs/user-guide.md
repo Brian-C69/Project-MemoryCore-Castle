@@ -85,11 +85,19 @@ Chat shows your conversation as message bubbles, like a messaging app.
 - Type in the box at the bottom and press **Enter** to send. Press **Shift + Enter** for a new line.
 - While your companion is working (reading files, running tools), Chat shows a typing bubble. The detailed steps stay in the Log.
 - Pictures your companion makes appear in Chat; click one to see it large. Voice lines play one at a time, and you can play them again.
+- Films your companion makes play right in Chat. A song shows its own name and its own player, and any sound that is not your companion's voice is called by its file name. **Open** and **Open folder** sit under each. Only one film or sound plays at a time.
 - **Share a picture:** drag it onto Chat, or paste it with **Ctrl + V**. It shows above the box before you send.
-- A plan your companion proposes appears as a **PLAN** card; click it to read the whole plan.
+- A plan your companion proposes appears as a **PLAN** card; click it to read the whole plan. The card is there while Claude Code asks you to approve the plan, even before the plan reaches the conversation.
 - Ticks on your messages: one tick means it is waiting in the queue (your companion reads it after its current step); two ticks mean it was read.
 
-**Claude Code:** when your companion asks you to choose (for example, to allow a command), the choices appear as buttons in Chat.
+**Claude Code:** when your companion asks you to choose (for example, to allow a command), a card shows the whole question with the words around it, and each choice as a button with its description under it.
+
+- **A new folder:** the first time Claude Code opens a folder it asks whether you trust it. The card shows that question too, so a new DEV tab never waits silently in Chat.
+- **Several answers:** when a question takes more than one answer, tick the boxes, then press **Submit**. In a form of several questions, **Next →** moves to the next one, and the form's tabs show a ✓ on each one you have answered.
+- **Your own words:** when a choice is *"Type something."* or *"Tell Claude what to change"*, just type in the message box and press **Enter**. Your words answer the question. A plain **No** stays one click.
+- **Open Log** shows the terminal, for anything the card does not cover.
+
+After a `/compact`, Chat no longer shows the long summary as a message from you.
 
 **Codex:** when Codex asks for your approval, Chat shows *"is asking for your approval"* with an **Answer in Log** button. Answer it in the Log.
 
