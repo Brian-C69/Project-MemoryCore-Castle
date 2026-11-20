@@ -108,18 +108,40 @@ pub fn read_plan_file(path: &str) -> Result<String, String> {
     Ok(text.trim().to_string())
 }
 
-/// The newest record in `folder` written since `since` (a minute's grace for clocks).
+/// The record of the session Castle started at `since`. Castle launches a fresh Claude Code session
+/// each time, so its own record is a file CREATED after that moment; a record the member keeps
+/// writing from a terminal of their own in the same folder is older and must not be taken for it
+/// (it would be followed in Chat and would hold a provider switch waiting for ever). With no file
+/// born since then (the first moments of a session, or a resumed one), the newest record written
+/// since `since` is used, a minute's grace for clocks - but never one over 64 MB: Chat reads a
+/// record on the thread that keeps the window alive, and a terminal's long record read from its
+/// start froze Castle for a minute and a half.
 pub fn newest_record(folder: &Path, since: SystemTime) -> Option<PathBuf> {
-    let floor = since.checked_sub(Duration::from_secs(60)).unwrap_or(since);
-    std::fs::read_dir(folder)
+    let candidates: Vec<Candidate> = std::fs::read_dir(folder)
         .ok()?
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.extension().and_then(|x| x.to_str()) == Some("jsonl"))
-        .filter_map(|p| p.metadata().and_then(|m| m.modified()).ok().map(|t| (t, p)))
-        .filter(|(t, _)| *t >= floor)
-        .max_by_key(|(t, _)| *t)
-        .map(|(_, p)| p)
+        .filter_map(|p| {
+            let meta = p.metadata().ok()?;
+            Some((meta.modified().ok()?, meta.created().ok(), meta.len(), p))
+        })
+        .collect();
+    pick_record(candidates, since)
+}
+
+/// A record file: when written, when created, its size, where it is.
+type Candidate = (SystemTime, Option<SystemTime>, u64, PathBuf);
+
+const FALLBACK_LIMIT: u64 = 64 * 1024 * 1024;
+
+fn pick_record(candidates: Vec<Candidate>, since: SystemTime) -> Option<PathBuf> {
+    let floor = since.checked_sub(Duration::from_secs(60)).unwrap_or(since);
+    let born_floor = since.checked_sub(Duration::from_secs(5)).unwrap_or(since);
+    let recent: Vec<_> = candidates.into_iter().filter(|(modified, _, _, _)| *modified >= floor).collect();
+    let own = recent.iter().filter(|(_, created, _, _)| created.is_some_and(|c| c >= born_floor)).max_by_key(|(modified, _, _, _)| *modified);
+    own.or_else(|| recent.iter().filter(|(_, _, len, _)| *len <= FALLBACK_LIMIT).max_by_key(|(modified, _, _, _)| *modified))
+        .map(|(_, _, _, path)| path.clone())
 }
 
 /// Turns one record line into the chat entries it holds (often none).
@@ -377,6 +399,26 @@ mod tests {
         assert_eq!(plan_file_name("D:\\Work\\plans\\calm-river.md"), None);
         assert_eq!(plan_file_name("calm-river.md"), None);
         assert!(read_plan_file("D:\\secrets\\passwords.md").is_err());
+    }
+
+    #[test]
+    fn a_terminal_session_in_the_same_folder_is_not_taken_for_the_castle_session() {
+        let at = |s: u64| SystemTime::UNIX_EPOCH + Duration::from_secs(s);
+        let started = at(10_000);
+        let terminal = PathBuf::from("terminal.jsonl");
+        let own = PathBuf::from("own.jsonl");
+        let small = 1024;
+        let huge = 110 * 1024 * 1024;
+        // the terminal's file is old but written to right now; Castle's own is born after the start
+        let both = vec![(at(10_900), Some(at(1_000)), huge, terminal.clone()), (at(10_300), Some(at(10_001)), small, own.clone())];
+        assert_eq!(pick_record(both, started), Some(own.clone()));
+        // Castle's own file is not there yet: a huge terminal record is NOT followed (it froze the window)
+        assert_eq!(pick_record(vec![(at(10_900), Some(at(1_000)), huge, terminal.clone())], started), None);
+        // but a small one still is, as before (a resumed session, or no birth time at all)
+        let small_old = vec![(at(10_900), Some(at(1_000)), small, terminal.clone()), (at(10_300), None, small, own.clone())];
+        assert_eq!(pick_record(small_old, started), Some(terminal));
+        // nothing written since the start: nothing
+        assert_eq!(pick_record(vec![(at(100), Some(at(50)), small, own)], started), None);
     }
 
     #[test]
