@@ -49,15 +49,34 @@ pub fn send_and_await(app: &AppHandle, store: &SettingsStore, text: &str, timeou
         host.write(b"\r")?;
     }
     let deadline = Instant::now() + timeout;
+    // A companion often says something first ("let me check...") and works before the real answer,
+    // so the first words are not the reply. It is taken as done once it has been quiet for a while;
+    // the answer is the last thing it said.
+    let mut last_said: Option<String> = None;
+    let mut quiet_since = Instant::now();
     loop {
-        if Instant::now() >= deadline {
-            return Err("Your companion took too long to answer.".into());
-        }
         std::thread::sleep(Duration::from_millis(500));
-        let Ok(entries) = follower.read_new() else { continue };
-        let reply: String = entries.iter().filter(|e| e.role == "companion" && !e.text.trim().is_empty()).map(|e| e.text.trim()).collect::<Vec<_>>().join("\n");
-        if !reply.is_empty() {
-            return Ok(reply);
+        if let Ok(entries) = follower.read_new() {
+            if !entries.is_empty() {
+                quiet_since = Instant::now();
+            }
+            if let Some(said) = entries.iter().rev().find(|e| e.role == "companion" && !e.text.trim().is_empty()) {
+                last_said = Some(said.text.trim().to_string());
+            }
+        }
+        if let Some(said) = &last_said {
+            if quiet_since.elapsed() >= QUIET_AFTER {
+                return Ok(said.clone());
+            }
+        }
+        if Instant::now() >= deadline {
+            return match last_said {
+                Some(said) => Ok(said),
+                None => Err("Your companion took too long to answer.".into()),
+            };
         }
     }
 }
+
+/// How long the companion must stay silent before what it last said counts as its answer.
+const QUIET_AFTER: Duration = Duration::from_secs(12);

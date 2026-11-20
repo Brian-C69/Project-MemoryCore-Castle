@@ -171,6 +171,25 @@ pub fn parse_line(line: &str) -> Vec<ChatEntry> {
                 vec![entry("companion", text)]
             }
         }
+        // Newer Codex writes the words as one `item_completed` item instead of user_message / agent_message.
+        ("event_msg", "item_completed") => {
+            let item = payload.get("item");
+            let kind = item.and_then(|i| i.get("type")).and_then(Value::as_str).unwrap_or("");
+            let text: String = item
+                .and_then(|i| i.get("content"))
+                .and_then(Value::as_array)
+                .map(|parts| parts.iter().filter_map(|p| p.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("\n"))
+                .unwrap_or_default();
+            let text = text.trim();
+            match kind {
+                "UserMessage" if !text.is_empty() && !text.starts_with('<') => vec![entry("member", text.to_string())],
+                "AgentMessage" => {
+                    let text = strip_insight(text);
+                    if text.is_empty() { Vec::new() } else { vec![entry("companion", text)] }
+                }
+                _ => Vec::new(),
+            }
+        }
         ("response_item", _) => work_text(payload).map(|text| vec![entry("work", text)]).unwrap_or_default(),
         _ => Vec::new(),
     }
@@ -228,6 +247,16 @@ mod tests {
         // ids are stable and differ between lines
         assert_eq!(parse_line(member)[0].id, parse_line(member)[0].id);
         assert_ne!(parse_line(member)[0].id, parse_line(companion)[0].id);
+    }
+
+    #[test]
+    fn newer_codex_words_come_from_item_completed() {
+        let member = r#"{"timestamp":"t1","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"type":"text","text":"hello"}]}}}"#;
+        let companion = r#"{"timestamp":"t2","type":"event_msg","payload":{"type":"item_completed","item":{"type":"AgentMessage","content":[{"type":"Text","text":"Hello Bernard."}],"phase":"final_answer"}}}"#;
+        let command = r#"{"timestamp":"t3","type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","command":["x"]}}}"#;
+        assert_eq!((parse_line(member)[0].role.as_str(), parse_line(member)[0].text.as_str()), ("member", "hello"));
+        assert_eq!((parse_line(companion)[0].role.as_str(), parse_line(companion)[0].text.as_str()), ("companion", "Hello Bernard."));
+        assert!(parse_line(command).is_empty());
     }
 
     #[test]

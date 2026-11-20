@@ -309,7 +309,17 @@ onMounted(async () => {
   })
 
   // Listen before anything starts: the console asks this screen a question before it runs.
-  stopListening.push(await session.onOutput((text) => term.write(text)))
+  // A session started from behind the scenes (a phone message waking it) speaks without this screen
+  // having asked: when words arrive while it thinks the companion is asleep, ask once what is true.
+  let checking = false
+  stopListening.push(
+    await session.onOutput((text) => {
+      term.write(text)
+      if (running.value || checking) return
+      checking = true
+      recheck().finally(() => setTimeout(() => (checking = false), 1500))
+    }),
+  )
   stopListening.push(
     await session.onExit(async () => {
       running.value = false
