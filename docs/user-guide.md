@@ -640,6 +640,24 @@ Each theme keeps its own places: change theme and the cards sit where that theme
 
 **SERVERS: N live** in the tab strip lists every developer server listening on this computer: its port, the program, the project it belongs to, and whether your companion started it in a tab or it runs in a project's folder. **open ↗** opens it in your browser. Each tab also shows a **LIVE** line with its own servers. Castle only shows them: it never stops a server, so a port another project uses is always left alone.
 
+### A project's database
+
+**Database** in a project tab opens that project's own MySQL or MariaDB database beside the chat, with two sides: **Local** (the database on this computer, in teal) and **Production** (the live one, in amber).
+
+**Set it up once, in the panel.**
+- **Local** fills itself from the project's `.env` (Laravel's `DB_*`) or `application.properties` (Spring) when it finds one. To use another login, press **Edit connection**.
+- **Production** asks the first time: host, port, database, user, password, and the cluster's **CA certificate** (for DigitalOcean, the `ca-certificate.crt` from the database's page). Press **Save and connect**. Castle connects at once and tells you if the login or the address is refused.
+- If Production does not answer, allow this computer's address in your host's own panel (for DigitalOcean, the database's *Trusted sources*).
+
+**Where it is kept.** Hosts and users live in Castle's settings, and passwords in Windows Credential Manager (the Keychain on a Mac). Nothing is written into the project folder, so nothing reaches git. **Forget** removes one side's login, password and certificate.
+
+**Using it.**
+- Pick a table on the left to see its rows. Write any query in the box and press **Run** (or **Ctrl + Enter**). Double-click a cell to change it.
+- **Export CSV**, **Dump table**, **Dump database** and **Import…** work on files you choose. Name a query you use often with **+ save this**.
+- **Local** allows changes after one yes.
+- **Production** opens in **LOOK**, read only. Press **Change mode** to unlock it. Even then, a change runs held: press **Keep** to make it final or **Undo** to put everything back. Nothing kept within two minutes is undone by itself. A change to a table's shape (ALTER, DROP...) cannot be undone, so it asks twice.
+- Every statement is written to Castle's own log, without any rows.
+
 ---
 
 ## 17. Market
