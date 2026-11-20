@@ -24,6 +24,7 @@ MemoryCore Castle is a full-screen desktop for your MemoryCore companion. It ope
 16. [Dev](#16-dev)
 17. [Market](#17-market)
 18. [The Sentinel](#18-the-sentinel)
+19. [Messaging](#19-messaging)
 
 ---
 
@@ -743,6 +744,49 @@ Untick **Let your companion keep watch** to stop the patrols; the watch keeps sw
 ### What it is not
 
 It is not an antivirus and stops nothing in the instant; Windows' own antivirus does that. It shortens the time between an attempt and you knowing, and it keeps closing the doors it finds.
+
+## 19. Messaging
+
+MemoryCore in your pocket: text your companion from apps you already have on your phone - not a
+separate chatbot, so whatever you text it is part of the one conversation Chat and Log already
+show. Off to begin with, like MARKET; turn it on in **Settings > Rooms** and the **MESSAGING**
+tab appears. Each platform is its own card there, with its own setup right on the card.
+
+### Telegram
+
+1. In Telegram, message **@BotFather** and send `/newbot`; it hands you a token.
+2. In MESSAGING's Telegram card, turn it **On** and paste that token in, then press **Save**.
+3. Message your new bot once from Telegram. The card shows who just messaged it; press
+   **Approve this chat** - this is what stops a stranger who finds your bot from reaching your
+   companion.
+4. From then on, anything you text it goes to your companion's real session (waking it first if
+   it was asleep) and the answer comes back on Telegram. It never posts into the shared chat room.
+
+Only one chat can be approved at a time; **Forget this chat** on the card lets a different one
+pair instead.
+
+### Discord
+
+1. Make a bot in Discord's **Developer Portal**, and under its Bot page switch on **Message
+   Content Intent** - without it, Discord sends every message with its text stripped out.
+2. In MESSAGING's Discord card, turn it **On** and paste the bot's token in, then press **Save**.
+3. Invite the bot to a server you're in, or DM it directly once it's online, and send it a
+   message. The card shows who just messaged it; press **Approve this chat**.
+4. From then on, DMing that bot reaches your companion's real session, same as Telegram.
+
+### WhatsApp
+
+**Unofficial - read this before pairing.** WhatsApp has no public API for a personal bridge like
+this one; it works the same way OpenClaw and Hermes both do, through Baileys (a WhatsApp Web
+client). Pair it with a **secondary number**, never your main one - WhatsApp can restrict or ban
+a number it notices behaving like this.
+
+1. Turn on MESSAGING's WhatsApp card. No token - it shows a **QR code** once it's ready.
+2. On the secondary phone, open WhatsApp > **Linked Devices** > **Link a Device**, and scan it.
+3. Message that WhatsApp number once. The card shows who just messaged it; press **Approve this
+   chat**.
+4. From then on, texting that number reaches your companion's real session. The pairing itself
+   survives a Castle restart - no QR a second time, unless you're logged out on the phone.
 
 ## Alerts
 

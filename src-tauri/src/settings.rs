@@ -47,10 +47,10 @@ pub struct QuickAction {
 
 /// The rooms the member may switch off in Settings (HOME is always on). Off = not available:
 /// the tab is gone and nothing runs for it, but nothing is removed.
-pub const ROOMS: [&str; 14] = ["widgets", "theme", "apps", "myprofile", "diary", "projects", "library", "appearance", "studio", "story", "world", "chat", "dev", "market"];
+pub const ROOMS: [&str; 15] = ["widgets", "theme", "apps", "myprofile", "diary", "projects", "library", "appearance", "studio", "story", "world", "chat", "dev", "market", "messaging"];
 /// Rooms that wait for the member's own switch in Settings > Rooms, for a new Castle and for one
 /// that never stored a choice for them.
-const ROOMS_OFF_AT_FIRST: [&str; 2] = ["library", "market"];
+const ROOMS_OFF_AT_FIRST: [&str; 3] = ["library", "market", "messaging"];
 
 pub const DEFAULT_WORLD: &str = "3d/floating-isles";
 pub const CAMERAS: [&str; 4] = ["director", "follow", "wide", "orbit"];
@@ -228,6 +228,22 @@ pub struct Settings {
     /// Use VoiceStudio, a text-to-speech app the member runs on this same computer, as STUDIO's Voice
     /// power. Off until the member turns it on: Castle then never talks to it.
     pub voicestudio_on: bool,
+    /// MemoryCore in your pocket: let the member text their own companion's real session from
+    /// Telegram. Off until switched on; the bot token lives in Windows Credential Manager.
+    pub telegram_bridge_on: bool,
+    /// The one chat id (as text) the bridge answers, set by telegram_bridge_approve once the
+    /// member approves whoever first messaged the bot. None: nothing is answered yet.
+    pub telegram_bridge_chat_id: Option<String>,
+    /// MemoryCore in your pocket, Discord: same idea as the Telegram switch, but a Gateway
+    /// WebSocket DM instead of long-polling.
+    pub discord_bridge_on: bool,
+    /// The one DM channel id the bridge answers, set by discord_bridge_approve.
+    pub discord_bridge_channel_id: Option<String>,
+    /// MemoryCore in your pocket, WhatsApp: no token here - the "credential" is the QR-paired
+    /// session itself, kept in the settings folder's whatsapp-auth. Unofficial, ban risk.
+    pub whatsapp_bridge_on: bool,
+    /// The one chat id (a WhatsApp JID) the bridge answers, set by whatsapp_bridge_approve.
+    pub whatsapp_bridge_chat_id: Option<String>,
     /// Whether HOME shows the USAGE card at all. On by default; off hides the whole card and Castle
     /// asks neither CLI.
     pub show_usage_card: bool,
@@ -408,6 +424,12 @@ impl Default for Settings {
             display_clock: false,
             clock_format: "24h".into(),
             voicestudio_on: false,
+            telegram_bridge_on: false,
+            telegram_bridge_chat_id: None,
+            discord_bridge_on: false,
+            discord_bridge_channel_id: None,
+            whatsapp_bridge_on: false,
+            whatsapp_bridge_chat_id: None,
             show_usage_card: true,
             living_wallpaper: true,
             wallpaper_sound: true,
@@ -486,6 +508,9 @@ impl Settings {
         self.theme = clean(self.theme);
         self.room_companion_key_id = clean(self.room_companion_key_id);
         self.room_companion_name = clean(self.room_companion_name);
+        self.telegram_bridge_chat_id = clean(self.telegram_bridge_chat_id);
+        self.discord_bridge_channel_id = clean(self.discord_bridge_channel_id);
+        self.whatsapp_bridge_chat_id = clean(self.whatsapp_bridge_chat_id);
         self.last_seen_version = clean(self.last_seen_version);
         self.dev_root = clean(self.dev_root);
         // the tab order: plain ids only, each once
@@ -855,6 +880,12 @@ mod tests {
             display_clock: true,
             clock_format: "12h".into(),
             voicestudio_on: true,
+            telegram_bridge_on: true,
+            telegram_bridge_chat_id: Some("123456789".into()),
+            discord_bridge_on: true,
+            discord_bridge_channel_id: Some("987654321".into()),
+            whatsapp_bridge_on: true,
+            whatsapp_bridge_chat_id: Some("6591234567@s.whatsapp.net".into()),
             show_usage_card: false,
             living_wallpaper: false,
             wallpaper_sound: false,

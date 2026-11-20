@@ -8,7 +8,7 @@ use serde::Serialize;
 const SERVICE: &str = "com.memorycore.castle";
 
 /// Every key Castle can keep: (account, label shown in Settings).
-pub const KEYS: [(&str, &str); 6] = [
+pub const KEYS: [(&str, &str); 8] = [
     ("openai", "ChatGPT (OpenAI)"),
     ("seedance", "Seedance"),
     ("suno", "Suno"),
@@ -17,6 +17,10 @@ pub const KEYS: [(&str, &str); 6] = [
     ("member", "MemoryCore sign-in"),
     // the companion's own room key (made by Castle with the member's sign-in, never shown)
     ("room-companion", "Companion room key"),
+    // the member's own Telegram bot, for MemoryCore in your pocket (MESSAGING)
+    ("telegram-bridge", "Telegram bot token"),
+    // the member's own Discord bot, for MemoryCore in your pocket (MESSAGING)
+    ("discord-bridge", "Discord bot token"),
 ];
 
 fn known(account: &str) -> Result<(), String> {
@@ -238,6 +242,6 @@ mod tests {
         assert!(save("not-a-key", "x").is_err());
         assert!(load("not-a-key").is_none());
         assert!(save("openai", "   ").is_err());
-        assert_eq!(statuses().len(), 6);
+        assert_eq!(statuses().len(), 8);
     }
 }

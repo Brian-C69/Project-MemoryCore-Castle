@@ -44,6 +44,8 @@ sha2 = "0.10"
 getrandom = "0.3"
 mysql = { version = "28.0.4", default-features = false, features = ["minimal-rust", "rustls-tls-ring"] }
 trash = "5"
+# the Discord bridge's Gateway connection (its REST calls stay on reqwest, same as every other bridge)
+tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 
 [target.'cfg(windows)'.dependencies]
 # the chat alert's toast is built here (not through the notification plugin) so a click on it can

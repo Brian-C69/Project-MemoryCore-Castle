@@ -414,6 +414,18 @@ export const studioDelete = (path) => invoke('studio_delete', { path })
 export const pictureWay = () => invoke('picture_way')
 export const voiceStudioStatus = () => invoke('voicestudio_status')
 export const voiceStudioSpeak = (text) => invoke('voicestudio_speak', { text })
+// MemoryCore in your pocket, Telegram: { on, connected, hasToken, paired, pending: { chatId, name } | null, problem }
+export const telegramBridgeStatus = () => invoke('telegram_bridge_status')
+export const telegramBridgeApprove = () => invoke('telegram_bridge_approve')
+export const telegramBridgeForget = () => invoke('telegram_bridge_forget')
+// MemoryCore in your pocket, Discord: { on, connected, hasToken, paired, pending: { channelId, name } | null, problem }
+export const discordBridgeStatus = () => invoke('discord_bridge_status')
+export const discordBridgeApprove = () => invoke('discord_bridge_approve')
+export const discordBridgeForget = () => invoke('discord_bridge_forget')
+// MemoryCore in your pocket, WhatsApp: { on, connected, paired, qr: string | null, pending: { chatId, name } | null, problem }
+export const whatsappBridgeStatus = () => invoke('whatsapp_bridge_status')
+export const whatsappBridgeApprove = () => invoke('whatsapp_bridge_approve')
+export const whatsappBridgeForget = () => invoke('whatsapp_bridge_forget')
 // A helper's notice (a key was missing): { at, kind, file, reason, settings }
 export const onNotice = on('castle-notice')
 // The tray's Wake companion.

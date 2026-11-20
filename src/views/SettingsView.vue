@@ -263,6 +263,7 @@ const ROOM_TIPS = {
   story: 'Turning STORY off ends the story session. Its files stay.',
   world: 'Turning WORLD off closes the world screens. Its files stay.',
   chat: 'Turning CHAT off stops reading the room. Its files stay.',
+  messaging: 'Off to begin with: MESSAGING lets you text your companion from Telegram and other platforms as they are added.',
 }
 const ROOM_SWITCHES = [
   { id: 'theme', label: 'THEME' },
@@ -278,6 +279,7 @@ const ROOM_SWITCHES = [
   { id: 'chat', label: 'CHAT' },
   { id: 'market', label: 'MARKET' },
   { id: 'dev', label: 'DEV' },
+  { id: 'messaging', label: 'MESSAGING' },
 ]
 
 async function switchRoom(id, on) {
