@@ -161,6 +161,15 @@ pub fn chat_history(room: Option<String>, store: State<SettingsStore>) -> Vec<Ch
     crate::providers::history(&store, Room::named(room.as_deref()))
 }
 
+/// The plan Claude Code is asking about, read from its plan file when the record has not carried
+/// it yet. Only a plain `.md` in this user's own plans folder is ever read.
+#[tauri::command]
+pub async fn chat_plan_file(path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || claude::read_plan_file(&path))
+        .await
+        .map_err(|_| "The plan file could not be read.".to_string())?
+}
+
 /// A picture or voice file Chat already showed (the companion's this session, or one the member
 /// shared), as a data URL - never any other path.
 #[tauri::command]

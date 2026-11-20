@@ -1,9 +1,9 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { chatHistory, chatPoll, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
+import { chatHistory, chatPlanFile, chatPoll, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
 import { localSend, mergeEntries, resetEntries } from './ticks.js'
 import { isOwnAnswer, readChoices, tellOf } from './choices.js'
-import { firstHeading } from './markdown.js'
+import { buildItems, isMarker, openPlanFile } from './chatItems.js'
 import { MODES, readContext, readMode, SHIFT_TAB } from './modes.js'
 import { useChatMedia } from './useChatMedia.js'
 import { typeLine } from './typeline.js'
@@ -199,29 +199,15 @@ watch(
 // ---------- The conversation ----------
 
 // A conversation between two people: the companion's tool steps stay in Log, and while it works Chat shows
-// only a typing bubble. Pictures made one after another sit side by side.
-const items = computed(() => {
-  const out = []
-  const plansSeen = new Set()
-  for (const entry of entries.value) {
-    const last = out[out.length - 1]
-    if (entry.role === 'work') continue
-    if (entry.role === 'plan') {
-      // The same plan asked, then approved, is one card.
-      if (!plansSeen.has(entry.text)) out.push({ kind: 'plan', id: entry.id, entry, ...planFace(entry.text) })
-      plansSeen.add(entry.text)
-    } else if (entry.role === 'picture' && last?.kind === 'pictures') last.list.push(entry)
-    else if (entry.role === 'picture') out.push({ kind: 'pictures', id: entry.id, list: [entry] })
-    else if (entry.role === 'voice') out.push({ kind: 'voice', id: entry.id, entry })
-    else out.push({ kind: 'message', id: entry.id, entry })
-  }
-  return out
-})
+// only a typing bubble. Pictures made one after another sit side by side; the same plan asked, then
+// approved, is one card; the plan read from its file while the record is late sits at the bottom
+// only while that plan is open (chatItems.js).
+const items = computed(() => buildItems(entries.value, waitingPlan.value))
 
 // The companion is typing while its newest entry is a tool step: it is working toward its next words.
 const typing = computed(() => {
   if (!props.running) return false
-  const newest = entries.value[entries.value.length - 1]
+  const newest = entries.value.findLast((entry) => !isMarker(entry))
   if (newest?.role !== 'work') return false
   const at = Date.parse(newest.at ?? '')
   return Number.isNaN(at) || now.value - at < TYPING_FOR_MS
@@ -240,14 +226,25 @@ watch(
 )
 watch(() => props.running, (on) => { if (signalsWorld()) worldSignals.asleep = !on }, { immediate: true })
 
-// A plan card shows only its title and how many phases; the reader holds the whole plan.
-function planFace(text) {
-  const title = firstHeading(text) || 'Plan'
-  const phases = (text.match(/^#{2,3}\s+Phase\b/gim) || []).length
-  return { title, phases }
-}
-
 const planOpen = ref(null)
+
+// Claude Code may write the "present the plan" step into its record only after the member has
+// answered, so the approve question can be on screen with no plan card to read. The record does name
+// the plan file earlier; when a plan question is up and no plan has come since, Chat reads that file.
+const PLAN_QUESTION = /auto mode|manually approve|keep planning/i
+const planAsked = computed(() => !!menu.value?.options.some((option) => PLAN_QUESTION.test(option.label)))
+// The newest plan file, unless a plan card or the end of plan mode already followed it.
+const planFile = computed(() => openPlanFile(entries.value))
+const waitingPlan = ref(null)
+watch([planAsked, planFile], async ([asked, path]) => {
+  if (!asked || !path) return
+  try {
+    const text = await chatPlanFile(path)
+    if (text) waitingPlan.value = { path, text, at: new Date().toISOString() }
+  } catch {
+    // No card rather than a wrong one; the Log still shows the plan.
+  }
+})
 
 // ---------- Pictures in the viewer ----------
 

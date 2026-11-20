@@ -106,6 +106,9 @@ export const chatMedia = (path, room) => {
   devMediaSlots.set(path, slot)
   return invoke('dev_chat_media', { slot, path })
 }
+// The plan Claude Code is asking about, read from its plan file (a plain .md in the user's own
+// plans folder) while the session record has not carried it yet.
+export const chatPlanFile = (path) => invoke('chat_plan_file', { path })
 // Pictures the member dropped or pasted; returns the ones Chat may show.
 export const chatAttach = (paths) => invoke('chat_attach', { paths })
 

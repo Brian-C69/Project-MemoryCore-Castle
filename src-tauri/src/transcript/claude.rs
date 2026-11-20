@@ -79,6 +79,35 @@ pub fn projects_root() -> Option<PathBuf> {
     crate::env::home_dir().map(|home| home.join(".claude").join("projects"))
 }
 
+/// Where Claude Code keeps every session's plan files.
+pub fn plans_root() -> Option<PathBuf> {
+    crate::env::home_dir().map(|home| home.join(".claude").join("plans"))
+}
+
+/// A path that is a plan file: `<anything>/.claude/plans/<name>.md` (either slash, any case), the
+/// name plain letters, digits, dashes and underscores. Returns the file's name.
+pub fn plan_file_name(path: &str) -> Option<&str> {
+    let (folder, name) = path.rsplit_once(['\\', '/'])?;
+    let stem = name.strip_suffix(".md")?;
+    let plain = !stem.is_empty() && stem.len() <= 120 && stem.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    let folder = folder.replace('\\', "/").to_lowercase();
+    (plain && folder.ends_with("/.claude/plans")).then_some(name)
+}
+
+/// The text of a plan file. Only a plain `.md` name is taken from `path`, and it is read from this
+/// user's own plans folder, whatever folder the path claims.
+pub fn read_plan_file(path: &str) -> Result<String, String> {
+    const LIMIT: u64 = 512 * 1024;
+    let name = plan_file_name(path).ok_or("That is not a plan file.")?;
+    let file = plans_root().ok_or("The plans folder could not be found.")?.join(name);
+    let size = std::fs::metadata(&file).map_err(|_| "The plan file is not there.".to_string())?.len();
+    if size > LIMIT {
+        return Err("That is too large to be a plan.".into());
+    }
+    let text = std::fs::read_to_string(&file).map_err(|_| "The plan file could not be read.".to_string())?;
+    Ok(text.trim().to_string())
+}
+
 /// The newest record in `folder` written since `since` (a minute's grace for clocks).
 pub fn newest_record(folder: &Path, since: SystemTime) -> Option<PathBuf> {
     let floor = since.checked_sub(Duration::from_secs(60)).unwrap_or(since);
@@ -99,9 +128,10 @@ pub fn parse_line(line: &str) -> Vec<ChatEntry> {
         return Vec::new();
     };
     let kind = record.get("type").and_then(Value::as_str).unwrap_or("");
-    if record.get("isMeta").and_then(Value::as_bool) == Some(true)
-        || record.get("isSidechain").and_then(Value::as_bool) == Some(true)
-    {
+    // isCompactSummary / isVisibleInTranscriptOnly: the summary a /compact writes as a user record,
+    // which is not the member's words.
+    let flag = |name: &str| record.get(name).and_then(Value::as_bool) == Some(true);
+    if flag("isMeta") || flag("isSidechain") || flag("isCompactSummary") || flag("isVisibleInTranscriptOnly") {
         return Vec::new();
     }
     let id = record.get("uuid").and_then(Value::as_str).unwrap_or("").to_string();
@@ -116,6 +146,40 @@ pub fn parse_line(line: &str) -> Vec<ChatEntry> {
         pictures: Vec::new(),
         state: None,
     };
+    let marker = |role: &str, path: &str| {
+        let stamp = at.clone().unwrap_or_default();
+        vec![ChatEntry {
+            id: format!("{role}-{stamp}-{id}"),
+            role: role.to_string(),
+            text: path.to_string(),
+            at: at.clone(),
+            path: None,
+            pictures: Vec::new(),
+            state: None,
+        }]
+    };
+
+    // Where the plan is being written: the record names the plan file when plan mode starts and each
+    // time the file is written - before the "present the plan" step, which Claude Code may write only
+    // after the member has answered. Chat reads the file itself when the question is already on
+    // screen and no plan card came. Leaving plan mode is the plan's end, never a new write.
+    let attachment = record.get("attachment");
+    let attachment_type = attachment.and_then(|a| a.get("type")).and_then(Value::as_str);
+    let attachment_plan = attachment
+        .and_then(|a| a.get("planFilePath"))
+        .and_then(Value::as_str)
+        .filter(|p| plan_file_name(p).is_some());
+    if kind == "attachment" && attachment_type == Some("plan_mode_exit") {
+        return attachment_plan.map(|path| marker("plan-end", path)).unwrap_or_default();
+    }
+    let plan_file = match kind {
+        "attachment" if attachment_type.is_some_and(|t| t.starts_with("plan_mode")) => attachment_plan,
+        "file-history-delta" => record.get("trackingPath").and_then(Value::as_str).filter(|p| plan_file_name(p).is_some()),
+        _ => None,
+    };
+    if let Some(path) = plan_file {
+        return marker("plan-file", path);
+    }
 
     match kind {
         // A message sent while the companion was busy: it waits in the queue, then leaves it (taken in
@@ -241,6 +305,10 @@ mod tests {
         assert!(parse_line(tool_result).is_empty());
         let meta = r#"{"type":"user","uuid":"u3","isMeta":true,"message":{"role":"user","content":"caveat"}}"#;
         assert!(parse_line(meta).is_empty());
+        let summary = r#"{"type":"user","uuid":"u5","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued from a previous conversation that ran out of context."}}"#;
+        assert!(parse_line(summary).is_empty());
+        let boundary = r#"{"type":"system","subtype":"compact_boundary","uuid":"u6","content":"Conversation compacted"}"#;
+        assert!(parse_line(boundary).is_empty());
         let command = r#"{"type":"user","uuid":"u4","message":{"role":"user","content":"<command-name>/clear</command-name>"}}"#;
         assert!(parse_line(command).is_empty());
         assert!(parse_line(r#"{"type":"attachment","uuid":"x"}"#).is_empty());
@@ -272,6 +340,43 @@ mod tests {
 
         assert_eq!(newest_record(&folder, SystemTime::now()), Some(path));
         assert_eq!(newest_record(&folder, SystemTime::now() + Duration::from_secs(3600)), None);
+    }
+
+    #[test]
+    fn the_record_names_the_plan_file_before_the_plan_is_presented() {
+        let entered = r#"{"type":"attachment","uuid":"a1","timestamp":"2026-11-10T10:03:19.989Z","isSidechain":false,"attachment":{"type":"plan_mode","reminderType":"full","planFilePath":"C:\\Users\\Lyra\\.claude\\plans\\synchronous-cooking-magpie.md"}}"#;
+        let wrote = r#"{"type":"file-history-delta","messageId":"m","trackingPath":"C:\\Users\\Lyra\\.claude\\plans\\synchronous-cooking-magpie.md","timestamp":"2026-11-10T10:13:35.198Z"}"#;
+        for line in [entered, wrote] {
+            let entries = parse_line(line);
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].role, "plan-file");
+            assert_eq!(entries[0].text, "C:\\Users\\Lyra\\.claude\\plans\\synchronous-cooking-magpie.md");
+        }
+        assert_ne!(parse_line(entered)[0].id, parse_line(wrote)[0].id);
+        // coming back into plan mode is a plan file too; leaving it is the plan's end
+        let reentry = r#"{"type":"attachment","uuid":"a2","timestamp":"t","attachment":{"type":"plan_mode_reentry","planFilePath":"/Users/lyra/.claude/plans/synchronous-cooking-magpie.md"}}"#;
+        assert_eq!(parse_line(reentry)[0].role, "plan-file");
+        let exit = r#"{"type":"attachment","uuid":"a3","timestamp":"2026-11-11T15:35:43.961Z","attachment":{"type":"plan_mode_exit","planFilePath":"C:\\Users\\Lyra\\.claude\\plans\\synchronous-cooking-magpie.md"}}"#;
+        let ended = parse_line(exit);
+        assert_eq!(ended.len(), 1);
+        assert_eq!(ended[0].role, "plan-end");
+        assert!(parse_line(r#"{"type":"attachment","uuid":"a4","attachment":{"type":"plan_mode_exit","planFilePath":"D:\\Work\\notes.md"}}"#).is_empty());
+        // another file being edited, and another attachment, are not plan files
+        assert!(parse_line(r#"{"type":"file-history-delta","trackingPath":"D:\\Work\\src\\main.rs","timestamp":"t"}"#).is_empty());
+        assert!(parse_line(r#"{"type":"attachment","uuid":"x","attachment":{"type":"todo","planFilePath":"C:\\Users\\Lyra\\.claude\\plans\\a.md"}}"#).is_empty());
+    }
+
+    #[test]
+    fn only_a_plain_md_in_the_plans_folder_is_a_plan_file() {
+        assert_eq!(plan_file_name("C:\\Users\\Lyra\\.claude\\plans\\calm-river.md"), Some("calm-river.md"));
+        assert_eq!(plan_file_name("C:/Users/Lyra/.claude/plans/calm-river.md"), Some("calm-river.md"));
+        assert_eq!(plan_file_name("/Users/lyra/.claude/Plans/calm_river.md"), Some("calm_river.md"));
+        assert_eq!(plan_file_name("C:\\Users\\Lyra\\.claude\\plans\\..\\settings.md"), None);
+        assert_eq!(plan_file_name("C:\\Users\\Lyra\\.claude\\plans\\notes.txt"), None);
+        assert_eq!(plan_file_name("C:\\Users\\Lyra\\.claude\\settings.md"), None);
+        assert_eq!(plan_file_name("D:\\Work\\plans\\calm-river.md"), None);
+        assert_eq!(plan_file_name("calm-river.md"), None);
+        assert!(read_plan_file("D:\\secrets\\passwords.md").is_err());
     }
 
     #[test]

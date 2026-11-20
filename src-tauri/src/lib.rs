@@ -525,6 +525,7 @@ pub fn run() {
             chat::chat_poll,
             chat::chat_media,
             chat::chat_attach,
+            chat::chat_plan_file,
             db::db_status,
             node_runtime::node_status,
             node_runtime::node_prepare,
