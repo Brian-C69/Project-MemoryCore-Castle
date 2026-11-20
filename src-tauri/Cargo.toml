@@ -42,7 +42,7 @@ tauri-plugin-updater = { version = "2", optional = true }
 # the browser sign-in (PKCE): a random secret and its SHA-256 fingerprint
 sha2 = "0.10"
 getrandom = "0.3"
-mysql = { version = "28.0.4", default-features = false, features = ["minimal-rust"] }
+mysql = { version = "28.0.4", default-features = false, features = ["minimal-rust", "rustls-tls-ring"] }
 trash = "5"
 
 [target.'cfg(windows)'.dependencies]

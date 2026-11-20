@@ -48,6 +48,7 @@ mod mirror;
 mod plans;
 mod project_room;
 mod profile;
+mod projectdb;
 mod pty;
 mod providers;
 mod messages;
