@@ -26,79 +26,42 @@
     "width": "31%"
   },
   "sweep": {
-    "look": "ring"
+    "look": "broom"
   },
   "loader": {
     "accent": "#ffc24a"
   },
   "widgets": {
-    "sweep": {
-      "right": "31%",
-      "top": "22%"
-    },
     "clock": {
-      "right": "21%",
-      "top": "4%",
+      "right": "7%",
+      "top": "7%",
       "size": "l"
     },
     "gauges": {
-      "right": "2%",
-      "top": "4%"
-    },
-    "usage": {
-      "right": "31%",
-      "bottom": "calc(4% + 150px)",
-      "width": "33%"
+      "left": "35%",
+      "top": "12%"
     },
     "today": {
-      "right": "2%",
-      "top": "22%",
-      "width": "28%"
-    },
-    "projects": {
-      "right": "2%",
-      "top": "calc(22% + 190px)",
-      "width": "28%"
+      "left": "35%",
+      "top": "42%",
+      "width": "25%"
     },
     "diary": {
+      "left": "35%",
+      "top": "60%",
+      "width": "25%"
+    },
+    "sweep": {
+      "left": "62%",
+      "top": "42%"
+    },
+    "sentinel": {
       "right": "2%",
-      "top": "calc(22% + 395px)",
-      "width": "28%"
+      "top": "52%"
     },
-    "growth": {
+    "disks": {
       "right": "2%",
-      "bottom": "4%",
-      "width": "28%"
-    },
-    "backup": {
-      "right": "31%",
-      "bottom": "4%",
-      "width": "16%"
-    },
-    "database": {
-      "right": "48%",
-      "bottom": "4%",
-      "width": "16%"
-    },
-    "credit-openai": {
-      "right": "56.2%",
-      "bottom": "calc(4% + 330px)",
-      "width": "8%"
-    },
-    "credit-seedance": {
-      "right": "47.8%",
-      "bottom": "calc(4% + 330px)",
-      "width": "8%"
-    },
-    "credit-suno": {
-      "right": "39.4%",
-      "bottom": "calc(4% + 330px)",
-      "width": "8%"
-    },
-    "credit-elevenlabs": {
-      "right": "31%",
-      "bottom": "calc(4% + 330px)",
-      "width": "8%"
+      "top": "72%"
     }
   }
 }

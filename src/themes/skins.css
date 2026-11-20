@@ -196,6 +196,7 @@
   height: 158px;
   box-sizing: border-box;
   padding: 10px;
+  z-index: 1;
   border-radius: 50%;
   border: 3px solid #f2c45a;
   background: radial-gradient(circle at 50% 45%, rgba(255, 252, 236, 0.97) 0 48%, rgba(255, 230, 160, 0.92) 70%, rgba(250, 196, 90, 0.85) 100%);
@@ -333,6 +334,207 @@
     transform: scale(1.04);
     opacity: 1;
   }
+}
+
+/* ---------- each theme's own widgets, built as its chosen design draws them ---------- */
+
+/* The Windmill Hill: TODAY and DIARY are stones with the words in the middle and a little picture
+   above (a sun, an open book); Sweep is a stone with its broom; the windmills are larger, the
+   percentage under the hub and the name under the ring */
+.home.glass.skin-windmill-cloud .card.today,
+.home.glass.skin-windmill-cloud .card.diary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 132px;
+  text-align: center;
+}
+.home.glass.skin-windmill-cloud .card.today h3,
+.home.glass.skin-windmill-cloud .card.diary h3 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding-bottom: 0;
+  border-bottom: 0;
+  color: #3c9cf2;
+}
+.home.glass.skin-windmill-cloud .card h3 .icon {
+  display: none;
+}
+.home.glass.skin-windmill-cloud .card.today h3::before,
+.home.glass.skin-windmill-cloud .card.diary h3::before {
+  content: '';
+  width: 26px;
+  height: 26px;
+  background: center / contain no-repeat;
+}
+.home.glass.skin-windmill-cloud .card.today h3::before {
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233c9cf2' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4.5'/%3E%3Cpath d='M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8'/%3E%3C/svg%3E");
+}
+.home.glass.skin-windmill-cloud .card.diary h3::before {
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233c9cf2' stroke-width='1.8' stroke-linejoin='round'%3E%3Cpath d='M12 6.5C9.5 4.8 6.5 4.5 3 5v13c3.5-.5 6.5-.2 9 1.5 2.5-1.7 5.5-2 9-1.5V5c-3.5-.5-6.5-.2-9 1.5z'/%3E%3Cpath d='M12 6.5v13'/%3E%3C/svg%3E");
+}
+.home.glass.skin-windmill-cloud .card.diary .diary-line {
+  justify-content: center;
+}
+.home.glass.skin-windmill-cloud .card.diary .diary-line .text {
+  flex: none;
+  max-width: 100%;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.home.glass.skin-windmill-cloud .card .side {
+  display: none;
+}
+.home.glass.skin-windmill-cloud .widget.sweep {
+  min-width: 170px;
+  text-align: center;
+}
+.home.glass.skin-windmill-cloud .gauge {
+  width: 100px;
+  height: 124px;
+}
+.home.glass.skin-windmill-cloud .gauge svg {
+  height: 100px;
+}
+.home.glass.skin-windmill-cloud .gauge::before {
+  inset: 0 0 24px;
+}
+.home.glass.skin-windmill-cloud .gauge .value {
+  top: 58px;
+  font-size: 15px;
+}
+.home.glass.skin-windmill-cloud .gauge .label {
+  top: 104px;
+}
+
+/* The Thousand Sails: the lantern stands on its white tower; the buoys carry the name above the
+   number and float on small rings of water; TODAY, DIARY and Sweep carry a sun, a book and a shell */
+.home.glass.skin-lighthouse-beam .widget.clock::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(100% - 6px);
+  width: 112px;
+  height: 150px;
+  transform: translateX(-50%);
+  background: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 112 150'%3E%3Crect x='6' y='0' width='100' height='10' rx='3' fill='%23e9edf2'/%3E%3Cpath d='M6 10h100' stroke='%232f6f9a' stroke-width='2'/%3E%3Cpath d='M26 12h60l10 138H16Z' fill='%23f6f8fb'/%3E%3Cpath d='M26 12h60l2 24H24Z' fill='%23dfe6ee'/%3E%3Crect x='48' y='58' width='16' height='22' rx='8' fill='%232f6f9a'/%3E%3Crect x='49' y='104' width='14' height='20' rx='7' fill='%232f6f9a'/%3E%3C/svg%3E") center top / contain no-repeat;
+  z-index: -1;
+  pointer-events: none;
+}
+.home.glass.skin-lighthouse-beam .gauge {
+  width: 92px;
+  height: 104px;
+}
+.home.glass.skin-lighthouse-beam .gauge svg {
+  height: 92px;
+}
+.home.glass.skin-lighthouse-beam .gauge::before {
+  inset: -4px -4px 8px;
+}
+.home.glass.skin-lighthouse-beam .gauge::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 0;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(220, 245, 255, 0.75);
+  box-shadow: 0 0 0 5px rgba(220, 245, 255, 0.18);
+  pointer-events: none;
+}
+.home.glass.skin-lighthouse-beam .gauge .label {
+  top: 24px;
+  color: #123d6e;
+}
+.home.glass.skin-lighthouse-beam .gauge .value {
+  top: 40px;
+  font-size: 19px;
+  color: #123d6e;
+}
+.home.glass.skin-lighthouse-beam .card h3 {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.home.glass.skin-lighthouse-beam .card h3 .icon {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+  vertical-align: -4px;
+  color: transparent;
+  overflow: hidden;
+  background: center / contain no-repeat;
+}
+.home.glass.skin-lighthouse-beam .card.today h3 .icon {
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f2b33d' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4.5'/%3E%3Cpath d='M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8'/%3E%3C/svg%3E");
+}
+.home.glass.skin-lighthouse-beam .card.diary h3 .icon {
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f6f9a' stroke-width='1.8' stroke-linejoin='round'%3E%3Cpath d='M12 6.5C9.5 4.8 6.5 4.5 3 5v13c3.5-.5 6.5-.2 9 1.5 2.5-1.7 5.5-2 9-1.5V5c-3.5-.5-6.5-.2-9 1.5z'/%3E%3Cpath d='M12 6.5v13'/%3E%3C/svg%3E");
+}
+.home.glass.skin-lighthouse-beam .widget.sweep .broom-look .broom {
+  visibility: hidden;
+}
+.home.glass.skin-lighthouse-beam .widget.sweep .broom-look {
+  position: relative;
+}
+.home.glass.skin-lighthouse-beam .widget.sweep .broom-look::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  width: 54px;
+  height: 46px;
+  transform: translateX(-50%);
+  background: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 54 46'%3E%3Cpath d='M27 42C14 42 4 32 4 20C4 18 6 17 8 18C10 10 18 4 27 4C36 4 44 10 46 18C48 17 50 18 50 20C50 32 40 42 27 42Z' fill='%2389c9ec'/%3E%3Cg stroke='%23ffffff' stroke-width='1.6' fill='none' stroke-linecap='round'%3E%3Cpath d='M27 40V8M27 40L14 12M27 40L40 12M27 40L8 22M27 40L46 22'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat;
+  pointer-events: none;
+}
+
+/* The Lantern Falls: TODAY, Sweep and DIARY carry a sun, a broom and a book in the warm light; the
+   ripple gauges carry their name above the ring */
+.home.glass.skin-still-water .card h3 {
+  border-bottom-color: rgba(255, 224, 204, 0.35);
+}
+.home.glass.skin-still-water .card h3 .icon {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+  vertical-align: -4px;
+  color: transparent;
+  overflow: hidden;
+  background: center / contain no-repeat;
+}
+.home.glass.skin-still-water .card.today h3 .icon {
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffcf87' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4.5'/%3E%3Cpath d='M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8'/%3E%3C/svg%3E");
+}
+.home.glass.skin-still-water .card.diary h3 .icon {
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffcf87' stroke-width='1.8' stroke-linejoin='round'%3E%3Cpath d='M12 6.5C9.5 4.8 6.5 4.5 3 5v13c3.5-.5 6.5-.2 9 1.5 2.5-1.7 5.5-2 9-1.5V5c-3.5-.5-6.5-.2-9 1.5z'/%3E%3Cpath d='M12 6.5v13'/%3E%3C/svg%3E");
+}
+.home.glass.skin-still-water .gauge {
+  height: 104px;
+}
+.home.glass.skin-still-water .gauge svg {
+  position: relative;
+  top: 20px;
+  height: 84px;
+}
+.home.glass.skin-still-water .gauge::before {
+  top: 12px;
+}
+.home.glass.skin-still-water .gauge .label {
+  top: 0;
+  font-size: 12px;
+  color: var(--text);
+}
+.home.glass.skin-still-water .gauge .value {
+  top: 50px;
 }
 
 /* each skin's drawing behind a gauge (the rotor, the buoy, the ripples) stays under its dial */
