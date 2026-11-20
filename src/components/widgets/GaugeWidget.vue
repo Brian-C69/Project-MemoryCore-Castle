@@ -142,7 +142,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="card" class="widget gauges">
-    <div v-for="gauge in gauges" :key="gauge.id ?? gauge.key" class="gauge" :title="gauge.title || undefined" role="meter" :aria-label="gauge.label" :aria-valuenow="gauge.value" aria-valuemin="0" aria-valuemax="100">
+    <div v-for="gauge in gauges" :key="gauge.id ?? gauge.key" class="gauge" :style="{ '--load': gauge.value }" :title="gauge.title || undefined" role="meter" :aria-label="gauge.label" :aria-valuenow="gauge.value" aria-valuemin="0" aria-valuemax="100">
       <svg viewBox="0 0 80 80" aria-hidden="true">
         <circle cx="40" cy="40" :r="RADIUS" class="track" />
         <circle cx="40" cy="40" :r="RADIUS" class="fill" :class="[gauge.key, { hot: gauge.limit !== null && isHot(gauge.value, gauge.limit, watch.on) }]" :stroke-dasharray="dash(gauge.value)" />

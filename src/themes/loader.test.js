@@ -14,6 +14,19 @@ describe('a theme\'s widget skin', () => {
     for (const t of themes) if (t.widgetSkin) expect(SKINS).toContain(t.widgetSkin)
     expect(themes.find((t) => t.id === 'constellation')?.widgetSkin).toBeUndefined()
   })
+
+  it('brings the three places of Nov 20 with their own skins and wallpapers, and no video yet', () => {
+    const themes = builtInThemes()
+    const expected = { 'windmill-hill': 'windmill-cloud', 'thousand-sails': 'lighthouse-beam', 'lantern-falls': 'still-water' }
+    for (const [id, skin] of Object.entries(expected)) {
+      const theme = themes.find((t) => t.id === id)
+      expect(theme?.name).toMatch(/^The /)
+      expect(theme.widgetSkin).toBe(skin)
+      expect(skinClass(theme)).toBe(`skin-${skin}`)
+      expect(theme.wallpaperUrl).toBeTruthy()
+      expect(theme.motionVideoUrl).toBeNull()
+    }
+  })
 })
 
 describe('living wallpapers', () => {

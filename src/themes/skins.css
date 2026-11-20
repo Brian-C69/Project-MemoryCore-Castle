@@ -82,3 +82,273 @@
   border: 1px solid rgba(200, 240, 170, 0.42);
   box-shadow: inset 0 0 14px rgba(200, 255, 170, 0.08);
 }
+
+/* The three below follow the designs Kiyo chose on Nov 20 2026 (Project Resources/Design/theme-*).
+   Their small movements rest when HOME is still (Moving wallpapers off, or HOME hidden) and under
+   reduced motion; see the end of this file. */
+
+/* ---------- windmill-cloud (The Windmill Hill): the clock in a cloud, windmill-rotor gauges,
+   round white stones along the path ---------- */
+.home.glass.skin-windmill-cloud .widget {
+  --text: #23476d;
+  --text-dim: #5a7b9c;
+  color: var(--text);
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.86), rgba(236, 245, 255, 0.74));
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 6px 18px rgba(30, 70, 110, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.home.glass.skin-windmill-cloud .terminal-panel {
+  background: linear-gradient(180deg, rgba(120, 170, 220, 0.42), rgba(70, 120, 170, 0.40));
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 28px;
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.10), 0 0 28px rgba(255, 255, 255, 0.28);
+}
+/* the clock rests inside a cloud */
+.home.glass.skin-windmill-cloud .widget.clock {
+  padding: 30px 46px 34px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  -webkit-mask: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 120' preserveAspectRatio='none'%3E%3Cpath d='M28 112C9 112 2 94 14 82C4 64 20 46 40 50C42 26 70 14 90 28C102 8 138 8 150 30C170 22 192 38 188 60C200 72 196 98 178 108C170 112 160 112 152 112Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 120' preserveAspectRatio='none'%3E%3Cpath d='M28 112C9 112 2 94 14 82C4 64 20 46 40 50C42 26 70 14 90 28C102 8 138 8 150 30C170 22 192 38 188 60C200 72 196 98 178 108C170 112 160 112 152 112Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+.home.glass.skin-windmill-cloud .widget.clock .time {
+  color: #3c9cf2;
+}
+/* the gauges are three windmills against the sky: no box, a rotor behind each dial */
+.home.glass.skin-windmill-cloud .widget.gauges {
+  --text: #ffffff;
+  --text-dim: #eaf4ff;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  text-shadow: 0 1px 6px rgba(20, 60, 110, 0.65);
+}
+.home.glass.skin-windmill-cloud .gauge::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  background: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='%23ffffff' fill-opacity='0.82'%3E%3Cpath d='M50 50C46 34 47 12 50 4C53 12 54 34 50 50Z'/%3E%3Cpath d='M50 50C46 34 47 12 50 4C53 12 54 34 50 50Z' transform='rotate(120 50 50)'/%3E%3Cpath d='M50 50C46 34 47 12 50 4C53 12 54 34 50 50Z' transform='rotate(240 50 50)'/%3E%3C/g%3E%3Ccircle cx='50' cy='50' r='4' fill='%23ffffff'/%3E%3C/svg%3E") center / contain no-repeat;
+  opacity: 0.55;
+  pointer-events: none;
+  /* a busier computer turns its windmill faster: 9 s a turn idle, about 2 s at full load */
+  animation: windmill-turn calc(9s - var(--load, 0) * 0.07s) linear infinite;
+}
+.home.glass.skin-windmill-cloud .gauge .fill {
+  stroke: #7fdc6a;
+}
+@keyframes windmill-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* TODAY, Sweep and DIARY: round white stones resting along the path */
+.home.glass.skin-windmill-cloud .widget.sweep,
+.home.glass.skin-windmill-cloud .widget.card.today,
+.home.glass.skin-windmill-cloud .widget.card.diary {
+  border-radius: 46% 54% 44% 56% / 52% 46% 54% 48%;
+  padding-left: 22px;
+  padding-right: 22px;
+  box-shadow: 0 10px 14px -6px rgba(40, 80, 30, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.95), inset 0 -10px 18px rgba(170, 200, 230, 0.35);
+}
+
+/* ---------- lighthouse-beam (The Thousand Sails): the clock in the lighthouse lantern, its beam
+   across the screen, buoy gauges and sea-glass cards ---------- */
+.home.glass.skin-lighthouse-beam::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: conic-gradient(from 228deg at 90% 13%, transparent 0deg, rgba(255, 232, 160, 0) 2deg, rgba(255, 232, 160, 0.30) 9deg, rgba(255, 240, 190, 0.16) 14deg, rgba(255, 232, 160, 0) 20deg, transparent 24deg);
+  mix-blend-mode: screen;
+  transform-origin: 90% 13%;
+  animation: lighthouse-sway 14s ease-in-out infinite alternate;
+}
+@keyframes lighthouse-sway {
+  from {
+    transform: rotate(-5deg);
+  }
+  to {
+    transform: rotate(6deg);
+  }
+}
+.home.glass.skin-lighthouse-beam .widget {
+  --text: #123d6e;
+  --text-dim: #3f6890;
+  color: var(--text);
+  background: linear-gradient(160deg, rgba(232, 248, 255, 0.82), rgba(196, 232, 250, 0.70));
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(8, 40, 90, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -12px 22px rgba(120, 200, 235, 0.22);
+}
+.home.glass.skin-lighthouse-beam .terminal-panel {
+  background: linear-gradient(170deg, rgba(150, 210, 245, 0.30), rgba(30, 90, 160, 0.42));
+  border: 1px solid rgba(220, 245, 255, 0.55);
+  box-shadow: inset 0 0 18px rgba(200, 240, 255, 0.14);
+}
+/* the clock is the lantern room of the lighthouse: round, glowing gold, a dome above */
+.home.glass.skin-lighthouse-beam .widget.clock {
+  position: relative;
+  display: grid;
+  place-content: center;
+  min-width: 220px;
+  aspect-ratio: 1 / 1;
+  padding: 18px;
+  border-radius: 50%;
+  border: 3px solid #f2c45a;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 252, 236, 0.97) 0 48%, rgba(255, 230, 160, 0.92) 70%, rgba(250, 196, 90, 0.85) 100%);
+  box-shadow: 0 0 22px rgba(255, 210, 110, 0.85), 0 0 60px rgba(255, 200, 90, 0.45);
+}
+.home.glass.skin-lighthouse-beam .widget.clock::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -30px;
+  width: 92px;
+  height: 36px;
+  transform: translateX(-50%);
+  background: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 92 36'%3E%3Cpath d='M8 34C10 16 26 6 46 6C66 6 82 16 84 34Z' fill='%232f6f9a'/%3E%3Crect x='42' y='0' width='8' height='8' rx='3' fill='%23f2c45a'/%3E%3Crect x='4' y='32' width='84' height='4' rx='2' fill='%23e9edf2'/%3E%3C/svg%3E") center / contain no-repeat;
+  pointer-events: none;
+}
+.home.glass.skin-lighthouse-beam .widget.clock .time {
+  color: #123d6e;
+}
+/* the gauges float as red-and-white buoys */
+.home.glass.skin-lighthouse-beam .widget.gauges {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.home.glass.skin-lighthouse-beam .gauge::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(250, 253, 255, 0.95) 0 60%, transparent 61%),
+    repeating-conic-gradient(#e2473d 0 45deg, #f7f9fb 45deg 90deg);
+  -webkit-mask: radial-gradient(circle, #000 0 70%, transparent 71% 73%, #000 74% 100%);
+  mask: radial-gradient(circle, #000 0 70%, transparent 71% 73%, #000 74% 100%);
+  box-shadow: 0 6px 10px rgba(10, 40, 80, 0.35);
+  pointer-events: none;
+  animation: buoy-bob 5s ease-in-out infinite alternate;
+}
+.home.glass.skin-lighthouse-beam .gauge:nth-child(2)::before {
+  animation-delay: -1.6s;
+}
+.home.glass.skin-lighthouse-beam .gauge:nth-child(3)::before {
+  animation-delay: -3.2s;
+}
+@keyframes buoy-bob {
+  from {
+    transform: translateY(-1px) rotate(-2deg);
+  }
+  to {
+    transform: translateY(2px) rotate(2deg);
+  }
+}
+
+/* ---------- still-water (The Lantern Falls): liquid-glass panes standing in the pool, ripples at
+   their feet, ripple-ring gauges, the clock and its reflection ---------- */
+.home.glass.skin-still-water .widget,
+.home.glass.skin-still-water .terminal-panel {
+  position: relative;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.16), rgba(255, 190, 210, 0.06) 55%, rgba(255, 170, 110, 0.10));
+  border: 1px solid rgba(255, 224, 204, 0.6);
+  border-radius: 22px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -10px 22px rgba(255, 170, 110, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 8px 26px rgba(40, 10, 50, 0.25);
+  text-shadow: 0 1px 6px rgba(50, 20, 60, 0.55);
+}
+/* ripples where each pane meets the water */
+.home.glass.skin-still-water .widget::after {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -11px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 220, 196, 0.45);
+  box-shadow: 0 0 0 7px rgba(255, 220, 196, 0.10), 0 0 0 14px rgba(255, 220, 196, 0.05);
+  pointer-events: none;
+  animation: still-ripple 6s ease-out infinite;
+}
+@keyframes still-ripple {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.08);
+    opacity: 0.35;
+  }
+}
+/* the clock floats with its reflection beneath it */
+.home.glass.skin-still-water .widget.clock {
+  -webkit-box-reflect: below 6px linear-gradient(transparent 52%, rgba(255, 255, 255, 0.32));
+}
+/* the gauges are rings of ripples */
+.home.glass.skin-still-water .widget.gauges {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.home.glass.skin-still-water .widget.gauges::after {
+  display: none;
+}
+.home.glass.skin-still-water .gauge::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle, transparent 0 7px, rgba(255, 226, 206, 0.28) 8px 9px);
+  -webkit-mask: radial-gradient(circle, #000 40%, transparent 72%);
+  mask: radial-gradient(circle, #000 40%, transparent 72%);
+  pointer-events: none;
+  animation: still-ring 5s ease-in-out infinite alternate;
+}
+@keyframes still-ring {
+  from {
+    transform: scale(0.94);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+
+/* each skin's drawing behind a gauge (the rotor, the buoy, the ripples) stays under its dial */
+.home.glass.skin-windmill-cloud .gauge svg,
+.home.glass.skin-lighthouse-beam .gauge svg,
+.home.glass.skin-still-water .gauge svg {
+  position: relative;
+}
+
+/* HOME at rest: Moving wallpapers off or HOME hidden, or the system asks for less motion */
+.home.still.skin-windmill-cloud .gauge::before,
+.home.still.skin-lighthouse-beam::before,
+.home.still.skin-lighthouse-beam .gauge::before,
+.home.still.skin-still-water .widget::after,
+.home.still.skin-still-water .gauge::before {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home.skin-windmill-cloud .gauge::before,
+  .home.skin-lighthouse-beam::before,
+  .home.skin-lighthouse-beam .gauge::before,
+  .home.skin-still-water .widget::after,
+  .home.skin-still-water .gauge::before {
+    animation: none;
+  }
+}

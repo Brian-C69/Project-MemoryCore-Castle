@@ -562,7 +562,7 @@ watch(settingsStamp, () => {
       @hide="hideCastle().catch(() => {})"
     />
     <main class="screen">
-      <div v-show="active === 'home'" ref="homeEl" class="home" :class="[theme?.widgetStyle ?? 'glass', skinClass(theme), { arranging }]">
+      <div v-show="active === 'home'" ref="homeEl" class="home" :class="[theme?.widgetStyle ?? 'glass', skinClass(theme), { arranging, still: !wallpaperMotion || active !== 'home' }]">
         <UsageReveal v-if="theme?.usageReveal" :theme="theme" :visible="active === 'home'" />
         <ThemeMotion v-if="theme?.motion" :theme="theme" :visible="active === 'home'" :enabled="wallpaperMotion" />
         <ThemeVideo v-if="theme?.motionVideoUrl" :theme="theme" :visible="active === 'home'" :enabled="wallpaperMotion" />
