@@ -561,3 +561,123 @@
     animation: none;
   }
 }
+
+/* ---------- painted parts (Nov 21 2026): the cloud, the windmill rotor, the stone, the lighthouse
+   and the buoy, drawn from the chosen designs and shipped beside each theme, in place of the shapes
+   drawn above ---------- */
+
+/* The Windmill Hill: the clock sits in a painted cloud */
+.home.glass.skin-windmill-cloud .widget.clock {
+  -webkit-mask: none;
+  mask: none;
+  width: 330px;
+  height: 140px;
+  box-sizing: border-box;
+  padding: 30px 20px 0;
+  background: url('./windmill-hill/cloud.png') center / 100% 100% no-repeat;
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* each gauge turns a painted windmill rotor */
+.home.glass.skin-windmill-cloud .gauge::before {
+  background: url('./windmill-hill/rotor.png') center / contain no-repeat;
+  opacity: 0.95;
+}
+/* TODAY, Sweep and DIARY are painted stones resting in the grass */
+.home.glass.skin-windmill-cloud .widget.sweep,
+.home.glass.skin-windmill-cloud .widget.card.today,
+.home.glass.skin-windmill-cloud .widget.card.diary {
+  background: url('./windmill-hill/stone.png') center / 100% 100% no-repeat;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  padding: 18px 34px 40px;
+}
+.home.glass.skin-windmill-cloud .widget.sweep {
+  min-width: 230px;
+}
+.home.glass.skin-windmill-cloud .widget.sweep .broom {
+  width: 70px;
+  height: auto;
+}
+.home.glass.skin-windmill-cloud .widget.sweep .swept {
+  display: none;
+}
+
+/* The Thousand Sails: the clock is read in the glowing window of a painted lighthouse */
+.home.glass.skin-lighthouse-beam .widget.clock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 200px;
+  height: 270px;
+  padding: 124px 0 0;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  background: url('./thousand-sails/lighthouse.png') center top / 100% auto no-repeat;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  -webkit-mask: linear-gradient(#000 78%, transparent);
+  mask: linear-gradient(#000 78%, transparent);
+  filter: drop-shadow(0 0 16px rgba(255, 210, 110, 0.55));
+}
+.home.glass.skin-lighthouse-beam .widget.clock::before,
+.home.glass.skin-lighthouse-beam .widget.clock::after {
+  display: none;
+}
+.home.glass.skin-lighthouse-beam .widget.clock .time {
+  font-size: 36px;
+}
+.home.glass.skin-lighthouse-beam .widget.clock .date {
+  font-size: 10px;
+}
+/* the beam leaves from that window */
+.home.glass.skin-lighthouse-beam::before {
+  background: conic-gradient(from 236deg at 87% 20%, transparent 0deg, rgba(255, 232, 160, 0) 2deg, rgba(255, 232, 160, 0.42) 9deg, rgba(255, 240, 190, 0.22) 15deg, rgba(255, 232, 160, 0) 22deg, transparent 26deg);
+  transform-origin: 87% 20%;
+}
+/* each gauge is a painted buoy floating on its ripples, the dial and its words in the white middle */
+.home.glass.skin-lighthouse-beam .gauge {
+  width: 132px;
+  height: 155px;
+}
+.home.glass.skin-lighthouse-beam .gauge::before {
+  inset: 0;
+  border-radius: 0;
+  background:
+    url('./thousand-sails/buoy.png') center / 100% 100% no-repeat,
+    radial-gradient(circle at 50% 50.4%, rgba(250, 253, 255, 0.96) 0 21%, transparent 21.5%);
+  -webkit-mask: none;
+  mask: none;
+  box-shadow: none;
+}
+.home.glass.skin-lighthouse-beam .gauge::after {
+  display: none;
+}
+.home.glass.skin-lighthouse-beam .gauge svg {
+  position: absolute;
+  left: 38px;
+  top: 50px;
+  width: 56px;
+  height: 56px;
+}
+.home.glass.skin-lighthouse-beam .gauge .track {
+  opacity: 0.25;
+}
+.home.glass.skin-lighthouse-beam .gauge .label {
+  top: 61px;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+.home.glass.skin-lighthouse-beam .gauge .value {
+  top: 72px;
+  font-size: 15px;
+  font-weight: 600;
+}
