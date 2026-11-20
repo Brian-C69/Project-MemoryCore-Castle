@@ -39,7 +39,7 @@
       "size": "l"
     },
     "gauges": {
-      "right": "8%",
+      "right": "5%",
       "top": "25%"
     },
     "today": {
@@ -57,12 +57,12 @@
       "width": "15%"
     },
     "sentinel": {
-      "left": "35%",
-      "top": "4%"
+      "left": "37%",
+      "top": "6%"
     },
     "disks": {
-      "left": "35%",
-      "top": "26%"
+      "left": "36%",
+      "top": "22%"
     }
   }
 }

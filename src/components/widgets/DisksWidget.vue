@@ -47,7 +47,7 @@ onBeforeUnmount(() => clearInterval(timer))
     </div>
     <p v-if="loaded && !rows.length" class="none">No drives found.</p>
     <ul v-else class="drives">
-      <li v-for="row in rows" :key="row.key" :title="row.title">
+      <li v-for="row in rows" :key="row.key" :title="row.title" :style="{ '--used': row.percent }">
         <div class="top">
           <strong>{{ row.name }}</strong>
           <span v-if="row.extra" class="extra">{{ row.extra }}</span>

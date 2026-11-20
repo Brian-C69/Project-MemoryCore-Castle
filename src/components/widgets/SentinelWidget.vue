@@ -46,6 +46,7 @@ onBeforeUnmount(() => {
     role="button"
     tabindex="0"
     :aria-label="`Sentinel: ${word}. ${shown.line} Open the Sentinel.`"
+    :title="`Sentinel: ${word}. ${shown.line}`"
     @click="emit('open')"
     @keydown.enter.prevent="emit('open')"
     @keydown.space.prevent="emit('open')"

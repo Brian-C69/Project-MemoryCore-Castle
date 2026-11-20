@@ -1151,3 +1151,142 @@
 .home.glass.skin-windmill-cloud .card.today .empty {
   max-width: 112px;
 }
+
+/* ---------- The Windmill Hill: each drive a windmill like the gauges, the Sentinel a small cloud
+   with its shield ---------- */
+.home.glass.skin-windmill-cloud .widget.disks {
+  --text: #ffffff;
+  --text-dim: #eaf4ff;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  padding: 0;
+  text-shadow: 0 1px 6px rgba(20, 60, 110, 0.65);
+}
+.home.glass.skin-windmill-cloud .widget.disks .head,
+.home.glass.skin-windmill-cloud .widget.disks .bar,
+.home.glass.skin-windmill-cloud .widget.disks .line,
+.home.glass.skin-windmill-cloud .widget.disks .extra {
+  display: none;
+}
+.home.glass.skin-windmill-cloud .widget.disks .drives {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.home.glass.skin-windmill-cloud .widget.disks li {
+  position: relative;
+  width: 122px;
+  height: 150px;
+}
+/* the ring, filled as far as the drive is used */
+.home.glass.skin-windmill-cloud .widget.disks li::after {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 11px;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: conic-gradient(#7fdc6a calc(var(--used, 0) * 1%), rgba(255, 255, 255, 0.35) 0);
+  -webkit-mask: radial-gradient(circle, transparent 0 44px, #000 45px 50px, transparent 51px);
+  mask: radial-gradient(circle, transparent 0 44px, #000 45px 50px, transparent 51px);
+  pointer-events: none;
+}
+/* the rotor behind it, turning slowly */
+.home.glass.skin-windmill-cloud .widget.disks li::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 28px;
+  background: url('./windmill-hill/rotor.png') center / contain no-repeat;
+  opacity: 0.95;
+  pointer-events: none;
+  animation: windmill-turn 12s linear infinite;
+}
+.home.glass.skin-windmill-cloud .widget.disks .top {
+  position: absolute;
+  inset: 0;
+}
+.home.glass.skin-windmill-cloud .widget.disks .top strong {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 128px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+.home.glass.skin-windmill-cloud .widget.disks .percent {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 72px;
+  z-index: 1;
+  text-align: center;
+  font-size: 17px;
+  color: #ffffff;
+}
+.home.still.skin-windmill-cloud .widget.disks li::before {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home.skin-windmill-cloud .widget.disks li::before {
+    animation: none;
+  }
+}
+
+/* the Sentinel: one small cloud with its shield, the words in its hover */
+.home.glass.skin-windmill-cloud .widget.sentinel {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 66px;
+  padding: 0;
+  cursor: pointer;
+}
+.home.glass.skin-windmill-cloud .widget.sentinel .said,
+.home.glass.skin-windmill-cloud .widget.sentinel .lines,
+.home.glass.skin-windmill-cloud .widget.sentinel .title {
+  display: none;
+}
+.home.glass.skin-windmill-cloud .widget.sentinel .head {
+  justify-content: center;
+}
+.home.glass.skin-windmill-cloud .widget.sentinel .state {
+  font-size: 0;
+  color: #3b84d6;
+}
+.home.glass.skin-windmill-cloud .widget.sentinel .state svg {
+  width: 30px;
+  height: 30px;
+  stroke-width: 1.6;
+}
+.home.glass.skin-windmill-cloud .widget.disks .drives {
+  overflow: visible;
+  max-height: none;
+}
+.home.glass.skin-windmill-cloud .gauge .label,
+.home.glass.skin-windmill-cloud .widget.disks .top strong {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 4px rgba(20, 60, 110, 0.85), 0 0 10px rgba(20, 60, 110, 0.5);
+}
+.home.glass.skin-windmill-cloud .widget.disks {
+  width: max-content;
+  min-width: 0;
+  max-width: none;
+}
+.home.glass.skin-windmill-cloud .widget.disks .drives {
+  flex-wrap: nowrap;
+}
+.home.glass.skin-windmill-cloud .widget.disks .drives {
+  flex-direction: row;
+}
