@@ -902,3 +902,30 @@
     inset 0 0 22px rgba(255, 255, 255, 0.18),
     0 12px 28px rgba(8, 40, 90, 0.26);
 }
+
+/* The Thousand Sails, step 2: the beam is a real shaft of light - bright at the lantern window, widening
+   and fading as it reaches out past the buoys */
+.home.glass.skin-lighthouse-beam::before {
+  background: conic-gradient(from 262deg at 85% 28.5%, transparent 0deg, rgba(255, 222, 130, 0.0) 1deg, rgba(255, 226, 140, 0.55) 6deg, rgba(255, 244, 200, 0.95) 11deg, rgba(255, 226, 140, 0.55) 16deg, rgba(255, 222, 130, 0) 22deg, transparent 23deg);
+  -webkit-mask: radial-gradient(circle at 85% 28.5%, #000 0 14%, rgba(0, 0, 0, 0.55) 34%, transparent 62%);
+  mask: radial-gradient(circle at 85% 28.5%, #000 0 14%, rgba(0, 0, 0, 0.55) 34%, transparent 62%);
+  filter: blur(2px);
+  transform-origin: 85% 28.5%;
+}
+/* the beam drawn in full gold, not screened into the bright sky, fading only far from the lantern */
+.home.glass.skin-lighthouse-beam::before {
+  background: conic-gradient(from 262deg at 85% 28.5%, transparent 0deg, rgba(255, 214, 110, 0) 1deg, rgba(255, 220, 120, 0.5) 6deg, rgba(255, 240, 185, 0.85) 11deg, rgba(255, 220, 120, 0.5) 16deg, rgba(255, 214, 110, 0) 22deg, transparent 23deg);
+  -webkit-mask: linear-gradient(to left, transparent 13%, #000 16%, #000 40%, rgba(0, 0, 0, 0.35) 62%, transparent 72%);
+  mask: linear-gradient(to left, transparent 13%, #000 16%, #000 40%, rgba(0, 0, 0, 0.35) 62%, transparent 72%);
+  mix-blend-mode: normal;
+  filter: blur(3px);
+}
+/* a clear shaft: a widening wedge from the lantern window out over the buoys, gold at the lantern
+   and fading toward the far end, its edges softened */
+.home.glass.skin-lighthouse-beam::before {
+  background: linear-gradient(to right, rgba(255, 226, 140, 0) 22%, rgba(255, 228, 150, 0.32) 42%, rgba(255, 236, 175, 0.62) 66%, rgba(255, 246, 210, 0.88) 84%);
+  clip-path: polygon(85% 25%, 85% 31%, 22% 42%, 22% 6%);
+  -webkit-mask: none;
+  mask: none;
+  filter: blur(6px);
+}
