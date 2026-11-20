@@ -973,3 +973,31 @@
   color: #3a1d08;
   box-shadow: 0 0 12px rgba(255, 180, 90, 0.6);
 }
+
+/* The Windmill Hill, step 4: the chat pane is a soft milky cloud, its top edge billowing, the words
+   in the sky's own blue; the clock's cloud a little larger */
+.home.glass.skin-windmill-cloud .terminal-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(236, 246, 255, 0.48) 60%, rgba(220, 238, 255, 0.40));
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  backdrop-filter: blur(18px) saturate(120%);
+  border: 0;
+  border-radius: 40px;
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.55), inset 0 0 24px rgba(255, 255, 255, 0.5);
+  color: #23476d;
+}
+.home.glass.skin-windmill-cloud .terminal-panel::before {
+  left: -22px;
+  right: -22px;
+  top: -40px;
+  height: 92px;
+}
+.home.glass.skin-windmill-cloud .widget.clock {
+  width: 360px;
+  height: 156px;
+  padding-top: 36px;
+}
+/* the cloud sits above the pane, just touching it, so the companion's name under it stays clear */
+.home.glass.skin-windmill-cloud .terminal-panel::before {
+  top: -58px;
+  height: 74px;
+}
