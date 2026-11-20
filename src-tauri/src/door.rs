@@ -151,6 +151,11 @@ fn find_memory_with(ask: &Ask, named: Option<OsString>, from: &Path) -> Result<P
 /// (the skills' mirror lives there).
 pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> {
     let words: Vec<&str> = ask.words.iter().map(String::as_str).collect();
+    // the project tree's columns arrive with migration 017: a door newer than the running app
+    // brings the database up to date first, as the library and look verbs do
+    if matches!(words.first(), Some(&"project") | Some(&"task")) {
+        memdb::migrate(conn)?;
+    }
     match words.as_slice() {
         ["diary", "add"] => diary_add(conn, ask),
         ["diary", "rewrite"] => diary_rewrite(conn, ask),

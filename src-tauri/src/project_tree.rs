@@ -397,6 +397,12 @@ mod tests {
         std::fs::create_dir_all(&folder).unwrap();
         let mut go = |conn: &mut Conn, line: &[&str]| crate::door::run(conn, &crate::door::parse(&line.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap(), &folder);
 
+        // a database still at 016 (the app not restarted since the update): the door brings it up first
+        conn.query_drop("DROP TABLE project_tasks").unwrap();
+        conn.query_drop("ALTER TABLE projects DROP FOREIGN KEY fk_project_parent, DROP COLUMN parent_id").unwrap();
+        conn.query_drop("DELETE FROM schema_migrations WHERE name = '017_project_tree'").unwrap();
+        assert_eq!(go(&mut conn, &["project", "list"]).unwrap(), "PROJECTS none");
+
         // a parent and two sub-projects; a missing or nested parent is refused before anything is saved
         go(&mut conn, &["project", "add", "--name", "Castle", "--status", "0.2.23-p"]).unwrap();
         assert_eq!(go(&mut conn, &["project", "add", "--name", "Update chip", "--parent", "Castle"]).unwrap(), "PROJECT saved: Update chip (under Castle)");
