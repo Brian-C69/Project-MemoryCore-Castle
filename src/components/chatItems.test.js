@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildItems, isMarker, openPlanFile } from './chatItems.js'
+import { buildItems, isCompanionVoice, isMarker, openPlanFile, songOf, soundName } from './chatItems.js'
 
 const FILE = 'C:\\Users\\Lyra\\.claude\\plans\\hazy-noodling-meerkat.md'
 const PLAN = '# Work Lv.24 - The Handover\n\n### Phase 1\n- [ ] one'
@@ -64,5 +64,33 @@ describe('the markers', () => {
     expect(isMarker({ role: 'plan-file' })).toBe(true)
     expect(isMarker({ role: 'plan-end' })).toBe(true)
     expect(isMarker({ role: 'member' })).toBe(false)
+  })
+})
+
+describe('films and songs in Chat', () => {
+  it('gives a film its own card, never inside a picture group', () => {
+    const entries = [
+      { id: 'p1', role: 'picture', path: 'D:/Memory/art/a.png' },
+      { id: 'v1', role: 'video', path: 'D:/Memory/films/shore.mp4' },
+      { id: 'p2', role: 'picture', path: 'D:/Memory/art/b.png' },
+    ]
+    expect(buildItems(entries).map((item) => item.kind)).toEqual(['pictures', 'video', 'pictures'])
+  })
+
+  it('tells a song from a voice line', () => {
+    const voice = { role: 'voice', path: 'D:/Memory/voice/day 3.mp3' }
+    const song = { role: 'voice', path: 'D:/Memory/music/Night Drive.mp3' }
+    const long = { role: 'voice', path: 'D:/Work/out/theme.mp3' }
+    expect(songOf(voice, 200)).toBe(false)
+    expect(songOf(song, 20)).toBe(true)
+    expect(songOf(long, 95)).toBe(true)
+    expect(songOf(long, 30)).toBe(false)
+    expect(songOf({ role: 'picture', path: 'D:/Memory/music/x.png' }, 100)).toBe(false)
+  })
+
+  it('names a sound by its file, and knows the companion voice by its folder', () => {
+    expect(soundName('D:/Memory/music/night-drive_v2.mp3')).toBe('night drive v2')
+    expect(isCompanionVoice('D:\\Memory\\voice\\day 3.mp3')).toBe(true)
+    expect(isCompanionVoice('D:/Work/out/theme.mp3')).toBe(false)
   })
 })

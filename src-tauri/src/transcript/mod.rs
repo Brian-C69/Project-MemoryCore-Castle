@@ -19,7 +19,8 @@ pub const WORK_DETAIL_LIMIT: usize = 70;
 #[serde(rename_all = "camelCase")]
 pub struct ChatEntry {
     pub id: String,
-    /// "member", "companion", "work" (a tool the companion ran), "plan", "receipt", "picture" or "voice" (a file the companion made)
+    /// "member", "companion", "work" (a tool the companion ran), "plan", "receipt", "plan-file" / "plan-end"
+    /// (where a plan is written, never drawn), "picture", "voice" or "video" (a file the companion made)
     pub role: String,
     pub text: String,
     pub at: Option<String>,
@@ -37,16 +38,20 @@ pub struct ChatEntry {
 
 const PICTURE_TYPES: &[&str] = &["png", "jpg", "jpeg", "webp"];
 const VOICE_TYPES: &[&str] = &["mp3", "wav", "ogg", "m4a"];
+/// Films the companion makes or names: played in Chat, streamed, never read whole.
+const VIDEO_TYPES: &[&str] = &["mp4", "webm", "mov", "m4v"];
 /// How long a path named before its file exists is waited for.
 const PENDING_FOR: Duration = Duration::from_secs(5 * 60);
 
-/// "picture", "voice", or None for any other file.
+/// "picture", "voice", "video", or None for any other file.
 pub fn media_kind(path: &str) -> Option<&'static str> {
     let extension = path.rsplit('.').next()?.to_lowercase();
     if PICTURE_TYPES.contains(&extension.as_str()) {
         Some("picture")
     } else if VOICE_TYPES.contains(&extension.as_str()) {
         Some("voice")
+    } else if VIDEO_TYPES.contains(&extension.as_str()) {
+        Some("video")
     } else {
         None
     }

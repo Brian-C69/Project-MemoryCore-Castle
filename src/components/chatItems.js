@@ -1,7 +1,8 @@
 import { firstHeading } from './markdown.js'
 
 // What Chat draws from the session's record: the companion's words, the member's, pictures side by
-// side, voice lines and plan cards. Tool steps and the plan-file and plan-end markers stay in Log.
+// side, films, voice lines and songs, and plan cards. Tool steps and the plan-file and plan-end
+// markers stay in Log.
 
 const HIDDEN = new Set(['work', 'plan-file', 'plan-end'])
 
@@ -54,10 +55,33 @@ export function buildItems(entries, waiting = null) {
     } else if (entry.role === 'picture' && last?.kind === 'pictures') last.list.push(entry)
     else if (entry.role === 'picture') out.push({ kind: 'pictures', id: entry.id, list: [entry] })
     else if (entry.role === 'voice') out.push({ kind: 'voice', id: entry.id, entry })
+    else if (entry.role === 'video') out.push({ kind: 'video', id: entry.id, entry })
     else out.push({ kind: 'message', id: entry.id, entry })
   }
   if (waiting && waiting.path === openPlanFile(entries) && !plansSeen.has(waiting.text)) {
     out.push(fileCard(waiting, waiting.at))
   }
   return out
+}
+
+/**
+ * A sound the companion showed is a song, not a voice line, when it sits in a music or songs folder,
+ * or runs past a minute outside a voice folder.
+ */
+export function songOf(entry, duration) {
+  if (entry?.role !== 'voice' || !entry.path) return false
+  if (/[\\/](music|songs?)[\\/]/i.test(entry.path)) return true
+  if (isCompanionVoice(entry.path)) return false
+  return Number.isFinite(duration) && duration > 60
+}
+
+/** Whether a sound is the companion's own voice: castle-voice.ps1 saves those in a voice folder. */
+export function isCompanionVoice(path) {
+  return /[\\/]voice[\\/]/i.test(String(path ?? ''))
+}
+
+/** A sound's own name: its file name without the extension, dashes and underscores as spaces. */
+export function soundName(path) {
+  const file = String(path ?? '').split(/[\\/]/).pop()
+  return file.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim()
 }

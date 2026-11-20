@@ -1,12 +1,13 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import MarkdownText from './MarkdownText.vue'
 import { chooseLine, isDesignGroup } from './designpick.js'
+import { isCompanionVoice, songOf, soundName } from './chatItems.js'
 
 // Chat's conversation: the member's bubbles right, the companion's left, plan cards, pictures side
-// by side, voice lines, and the typing bubble (the card for a choice asked in the Log is ChatChoices). Only shows;
-// every action goes up to ChatView.
-defineProps({
+// by side, films, voice lines and songs, and the typing bubble (the card for a choice asked in the
+// Log is ChatChoices). Only shows; every action goes up to ChatView.
+const props = defineProps({
   // "asleep", "waiting", "ok" or "unreadable"
   status: { type: String, default: 'asleep' },
   items: { type: Array, default: () => [] },
@@ -20,7 +21,21 @@ defineProps({
   companion: { type: String, default: 'Your companion' },
   cli: { type: String, default: 'claude' },
 })
-const emit = defineEmits(['show-log', 'send-now', 'open-plan', 'open-picture', 'toggle-voice', 'play-voice', 'choose-designs'])
+const emit = defineEmits(['show-log', 'send-now', 'open-plan', 'open-picture', 'toggle-voice', 'play-voice', 'choose-designs', 'open-media', 'media-play'])
+
+// One film or sound plays at a time: a player that starts pauses the others and the voice line.
+function pauseOthers(except = null) {
+  scroller.value?.querySelectorAll('video, audio').forEach((el) => el !== except && !el.paused && el.pause())
+}
+function started(event) {
+  pauseOthers(event.target)
+  emit('media-play')
+}
+watch(
+  () => props.playing,
+  (now) => now && pauseOthers(),
+)
+const isSong = (entry) => songOf(entry, props.durations[entry.path])
 
 // Designs to choose from (two to four pictures from one Design folder): a tick on each, one Choose.
 const designTicks = ref({}) // group id -> [paths ticked]
@@ -161,14 +176,47 @@ defineExpose({ nearBottom, toBottom })
         </div>
       </div>
 
+      <div v-else-if="item.kind === 'video'" class="row companion">
+        <figure class="film">
+          <video v-if="media[item.entry.path]" :src="`${media[item.entry.path]}#t=0.5`" controls preload="metadata" playsinline @play="started"></video>
+          <span v-else class="thumb-wait">{{ media[item.entry.path] === null ? 'Not available' : 'Loading…' }}</span>
+          <figcaption>
+            <span class="media-name" :title="item.entry.path">{{ fileName(item.entry.path) }}</span>
+            <span class="media-open">
+              <button type="button" @click="emit('open-media', { path: item.entry.path, folder: false })">Open</button>
+              <button type="button" @click="emit('open-media', { path: item.entry.path, folder: true })">Open folder</button>
+            </span>
+          </figcaption>
+        </figure>
+      </div>
+
+      <div v-else-if="item.kind === 'voice' && isSong(item.entry)" class="row companion">
+        <div class="song">
+          <svg class="disc" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="2.5" /></svg>
+          <div class="song-body">
+            <span class="media-name" :title="item.entry.path">{{ soundName(item.entry.path) }}</span>
+            <audio v-if="media[item.entry.path]" :src="media[item.entry.path]" controls preload="metadata" @play="started"></audio>
+          </div>
+          <span class="media-open">
+            <button type="button" @click="emit('open-media', { path: item.entry.path, folder: false })">Open</button>
+            <button type="button" @click="emit('open-media', { path: item.entry.path, folder: true })">Open folder</button>
+          </span>
+        </div>
+      </div>
+
       <div v-else-if="item.kind === 'voice'" class="row companion">
         <div class="voice" :class="{ playing: playing === item.entry.path }">
           <button class="play" :aria-label="playing === item.entry.path ? 'Pause' : 'Play'" @click="emit('toggle-voice', item.entry)">
             {{ playing === item.entry.path ? '❚❚' : '▶' }}
           </button>
-          <span class="voice-label">{{ companion }}'s voice</span>
+          <span v-if="isCompanionVoice(item.entry.path)" class="voice-label">{{ companion }}'s voice</span>
+          <span v-else class="voice-label sound" :title="item.entry.path">{{ soundName(item.entry.path) }}</span>
           <span class="voice-length">{{ length(durations[item.entry.path]) }}</span>
           <button class="again" aria-label="Play again" title="Play again" @click="emit('play-voice', item.entry)">↻</button>
+          <span v-if="!isCompanionVoice(item.entry.path)" class="media-open">
+            <button type="button" @click="emit('open-media', { path: item.entry.path, folder: false })">Open</button>
+            <button type="button" @click="emit('open-media', { path: item.entry.path, folder: true })">Open folder</button>
+          </span>
         </div>
       </div>
 
@@ -535,6 +583,98 @@ button {
   min-width: 32px;
   font-size: 12px;
   color: var(--text-dim);
+}
+
+/* a film or a song the companion showed: its row, the picture's frame */
+.film {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(520px, 100%);
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.film video {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  border-radius: 8px;
+  background: #000;
+}
+
+.film figcaption,
+.song {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.song {
+  max-width: min(520px, 100%);
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.song .disc {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.6;
+}
+
+.song-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.song audio {
+  width: 100%;
+  height: 32px;
+}
+
+.media-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-open {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.media-open button {
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+/* a sound that is not the companion's voice is called by its own name */
+.voice-label.sound {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .shared {

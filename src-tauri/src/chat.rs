@@ -191,6 +191,54 @@ pub fn chat_media(
     files::data_url(Path::new(&path))
 }
 
+/// Lets the asset protocol serve one film or sound Chat showed, so the screen streams it with
+/// `convertFileSrc` instead of reading it whole into a data URL. Only a file this chat showed, and
+/// only a film or a sound.
+fn allow_stream(app: &tauri::AppHandle, path: &str) -> Result<(), String> {
+    if !matches!(transcript::media_kind(path), Some("video") | Some("voice")) {
+        return Err("Only a film or a sound plays here.".into());
+    }
+    let file = Path::new(path);
+    if !file.is_file() {
+        return Err("The file is gone.".into());
+    }
+    tauri::Manager::asset_protocol_scope(app)
+        .allow_file(file)
+        .map_err(|_| "The file could not be opened for playing.".to_string())
+}
+
+/// A film or a long sound the main or STORY chat showed, made playable (see `allow_stream`).
+#[tauri::command]
+pub fn chat_media_stream(
+    path: String,
+    room: Option<String>,
+    main_chat: State<MainChat>,
+    story_chat: State<StoryChat>,
+    store: State<SettingsStore>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let chat = pick(Room::named(room.as_deref()), &main_chat, &story_chat);
+    let allowed = chat.was_shown(&path)
+        || crate::providers::history(&store, Room::named(room.as_deref())).iter().any(|e| e.path.as_ref() == Some(&path));
+    if !allowed {
+        return Err("That file is not one Chat has shown this session.".into());
+    }
+    allow_stream(&app, &path)
+}
+
+/// A film or a long sound a DEV tab's Chat showed, made playable (see `allow_stream`).
+#[tauri::command]
+pub fn dev_chat_media_stream(
+    slot: usize,
+    path: String,
+    chats: State<crate::dev::DevChats>,
+    member: State<MemberPictures>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    dev_allows(&chats.0, slot, &path, &member.0.lock().unwrap())?;
+    allow_stream(&app, &path)
+}
+
 /// Takes the paths the member dropped on Chat; returns the pictures among them (existing png /
 /// jpg / webp files up to 25 MB), which the screen may then show.
 #[tauri::command]

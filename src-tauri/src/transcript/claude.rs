@@ -411,6 +411,9 @@ mod tests {
         assert_eq!(media_paths("a C:\\a.png then D:\\b.mp3"), ["C:\\a.png", "D:\\b.mp3"]);
         assert_eq!(media_kind("x.JPEG"), Some("picture"));
         assert_eq!(media_kind("x.m4a"), Some("voice"));
+        assert_eq!(media_kind("x.MP4"), Some("video"));
+        assert_eq!(media_kind("loop.webm"), Some("video"));
+        assert_eq!(media_paths("the film is at D:\\Memory\\films\\shore loop.mp4 now"), ["D:\\Memory\\films\\shore loop.mp4"]);
     }
 
     /// Reads a real record and lists the pictures and voices it would show (names only).

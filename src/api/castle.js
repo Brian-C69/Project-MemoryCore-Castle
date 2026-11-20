@@ -106,6 +106,14 @@ export const chatMedia = (path, room) => {
   devMediaSlots.set(path, slot)
   return invoke('dev_chat_media', { slot, path })
 }
+// A film or a long sound Chat showed, allowed on the asset protocol so the screen can stream it
+// (convertFileSrc) instead of reading it whole. A DEV tab asks its own door.
+export const chatMediaStream = (path, room) => {
+  const slot = devSlotOf(room)
+  if (slot === null) return invoke('chat_media_stream', { path, room })
+  devMediaSlots.set(path, slot)
+  return invoke('dev_chat_media_stream', { slot, path })
+}
 // The plan Claude Code is asking about, read from its plan file (a plain .md in the user's own
 // plans folder) while the session record has not carried it yet.
 export const chatPlanFile = (path) => invoke('chat_plan_file', { path })

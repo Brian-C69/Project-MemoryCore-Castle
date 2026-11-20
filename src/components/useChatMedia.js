@@ -1,8 +1,9 @@
-// Chat's pictures and the companion's voice: files loaded once from the core (which serves only
-// files the chat showed, or pictures the member shared), their lengths, and one player that plays
-// one voice at a time and never cuts one off.
+// Chat's pictures, films and the companion's voice: files loaded once from the core (which serves
+// only files the chat showed, or pictures the member shared), their lengths, and one player that
+// plays one voice at a time and never cuts one off.
 import { reactive, ref } from 'vue'
-import { chatMedia } from '../api/castle.js'
+import { convertFileSrc } from '@tauri-apps/api/core'
+import { chatMedia, chatMediaStream } from '../api/castle.js'
 import { createVoiceQueue } from './voicequeue.js'
 
 export function useChatMedia(room) {
@@ -21,10 +22,21 @@ export function useChatMedia(room) {
     if (next) startVoice(next)
   })
 
+  // A film, or a sound too large for a data URL, is streamed from its file: the core allows that one
+  // file and the player reads it as it plays.
+  async function streamOf(path) {
+    await chatMediaStream(path, room())
+    return convertFileSrc(path)
+  }
+
   async function loadMedia(entry) {
     if (!entry.path || media[entry.path]) return media[entry.path]
     try {
-      media[entry.path] = await chatMedia(entry.path, room())
+      if (entry.role === 'video') {
+        media[entry.path] = await streamOf(entry.path)
+        return media[entry.path]
+      }
+      media[entry.path] = await chatMedia(entry.path, room()).catch((reason) => (entry.role === 'voice' ? streamOf(entry.path) : Promise.reject(reason)))
       if (entry.role === 'voice') {
         const probe = new Audio(media[entry.path])
         probe.addEventListener('loadedmetadata', () => (durations[entry.path] = probe.duration))

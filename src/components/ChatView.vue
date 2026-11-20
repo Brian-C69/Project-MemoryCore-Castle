@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { chatHistory, chatPlanFile, chatPoll, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
+import { chatHistory, chatMediaOpen, chatPlanFile, chatPoll, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
 import { localSend, mergeEntries, resetEntries } from './ticks.js'
 import { isOwnAnswer, readChoices, tellOf } from './choices.js'
 import { buildItems, isMarker, openPlanFile } from './chatItems.js'
@@ -228,6 +228,15 @@ watch(() => props.running, (on) => { if (signalsWorld()) worldSignals.asleep = !
 
 const planOpen = ref(null)
 
+// Open / Open folder under a film or a song, as the picture viewer does.
+async function openMedia({ path, folder }) {
+  try {
+    await chatMediaOpen(path, folder, props.room)
+  } catch {
+    // The system said no; the row stays as it was.
+  }
+}
+
 // Claude Code may write the "present the plan" step into its record only after the member has
 // answered, so the approve question can be on screen with no plan card to read. The record does name
 // the plan file earlier; when a plan question is up and no plan has come since, Chat reads that file.
@@ -418,6 +427,8 @@ defineExpose({ poll, addPaths })
       @toggle-voice="toggleVoice"
       @play-voice="playVoice"
       @choose-designs="send"
+      @open-media="openMedia"
+      @media-play="stop"
     />
 
     <ChatChoices v-if="menu" :menu="menu" :companion="companion" @choose="choose" @submit="submitChoices" @show-log="emit('show-log')" />
