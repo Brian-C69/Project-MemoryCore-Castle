@@ -286,6 +286,9 @@ pub struct Settings {
     pub dev_tabs: Vec<Option<String>>,
     /// The DEV tab's recent projects, newest first (at most `dev_tabs::RECENT`).
     pub dev_projects: Vec<String>,
+    /// Each DEV project's own database logins, by `dev_tabs::same_folder_key` (the Database panel's
+    /// form). Never a password: those are kept by Windows Credential Manager / the Keychain.
+    pub project_databases: BTreeMap<String, ProjectDb>,
     /// Castle's session is only this companion: the member's personal Claude Code setup (its
     /// own CLAUDE.md, hooks and plugins) is left out, and Castle hands the companion her
     /// instructions itself. Off by default; for a PC where that setup is another companion.
@@ -430,6 +433,7 @@ impl Default for Settings {
             db_offer_seen: false,
             dev_tabs: Vec::new(),
             dev_projects: Vec::new(),
+            project_databases: BTreeMap::new(),
             only_this_companion: false,
             diary_look: "list".into(),
             emotion_room_voice: true,
@@ -595,6 +599,27 @@ pub fn test_override(name: &str) -> Option<PathBuf> {
     }
 }
 
+/// One DEV project's database logins, as the member filled them in (Local may stay empty: then the
+/// project's own `.env` is read).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ProjectDb {
+    pub local: Option<DbLogin>,
+    pub production: Option<DbLogin>,
+}
+
+/// Where one side's database is: never its password.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DbLogin {
+    pub host: String,
+    pub port: u16,
+    pub database: String,
+    pub user: String,
+    /// The copy of the CA certificate Castle keeps (`<settings folder>/certs/<id>.crt`), if any.
+    pub ca: Option<String>,
+}
+
 /// The settings the running Castle holds, and where they are kept.
 pub struct SettingsStore {
     pub path: PathBuf,
@@ -629,6 +654,16 @@ impl SettingsStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_older_settings_file_has_no_project_databases() {
+        let old: Settings = serde_json::from_str(r#"{"setupDone":true}"#).unwrap();
+        assert!(old.project_databases.is_empty());
+        let one: Settings = serde_json::from_str(r#"{"projectDatabases":{"d:/shop":{"production":{"host":"db.example","port":25060,"database":"shop","user":"app"}}}}"#).unwrap();
+        let shop = &one.project_databases["d:/shop"];
+        assert_eq!(shop.local, None);
+        assert_eq!(shop.production.as_ref().map(|p| (p.port, p.ca.clone())), Some((25060, None)));
+    }
 
     #[test]
     fn an_older_settings_file_keeps_watch_at_ninety() {
@@ -850,6 +885,10 @@ mod tests {
             db_offer_seen: true,
             dev_tabs: vec![Some("D:/Projects/shop".into()), None],
             dev_projects: vec!["D:/Projects/shop".into()],
+            project_databases: BTreeMap::from([(
+                "d:/projects/shop".to_string(),
+                ProjectDb { local: None, production: Some(DbLogin { host: "db.example".into(), port: 25060, database: "shop".into(), user: "app".into(), ca: None }) },
+            )]),
             only_this_companion: true,
             diary_look: "book".into(),
             emotion_room_voice: false,

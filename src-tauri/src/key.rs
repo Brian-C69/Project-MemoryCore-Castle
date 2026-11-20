@@ -85,6 +85,25 @@ pub fn keep_db_root(password: &str) -> Result<(), String> {
     save_as(DB_ROOT, password)
 }
 
+/// A DEV project's database password ("local" or "production"), by the project's id
+/// (`projectdb_login::project_id`). Kept by Windows like the keys, never listed in Settings and
+/// never sent to the page.
+fn db_account(side: &str, id: &str) -> String {
+    format!("{}-{id}", if side == "production" { "db-prod" } else { "db-local" })
+}
+
+pub fn load_db_password(side: &str, id: &str) -> Option<String> {
+    load_as(&db_account(side, id))
+}
+
+pub fn save_db_password(side: &str, id: &str, password: &str) -> Result<(), String> {
+    save_as(&db_account(side, id), password)
+}
+
+pub fn forget_db_password(side: &str, id: &str) -> Result<(), String> {
+    forget_as(&db_account(side, id))
+}
+
 /// Shows only the ends of a key: "sk-p…a9F2". Short keys show only the last two characters.
 pub fn mask(key: &str) -> String {
     let chars: Vec<char> = key.chars().collect();

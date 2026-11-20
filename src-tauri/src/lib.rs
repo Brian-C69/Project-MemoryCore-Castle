@@ -49,6 +49,7 @@ mod plans;
 mod project_room;
 mod profile;
 mod projectdb;
+mod projectdb_login;
 mod pty;
 mod providers;
 mod messages;
