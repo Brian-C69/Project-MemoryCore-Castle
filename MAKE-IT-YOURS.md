@@ -57,7 +57,7 @@ By hand, a theme is a folder with a `theme.json` and a wallpaper:
 
 The look a member picks in Sweep's gear always wins over the theme's. A theme that names no place for Sweep still shows it, at its own place.
 
-**Widget skin** - a theme may dress HOME's cards and the companion panel with `"widgetSkin"`, on top of the glass look: `prism-lines` (no boxes, a prismatic light line under each widget), `carved-wood` (wooden frames and amber glass), `sunset-glass` (amber-to-rose glass with a gold rim), `bioluminescent` (navy glass with a glowing cyan edge) or `ripple-glass` (emerald glass with ripple rings). A name Castle does not know is ignored.
+**Widget skin** - a theme may dress HOME's cards and the companion panel with `"widgetSkin"`, on top of the glass look: `prism-lines` (no boxes, a prismatic light line under each widget), `carved-wood` (wooden frames and amber glass), `sunset-glass` (amber-to-rose glass with a gold rim), `bioluminescent` (navy glass with a glowing cyan edge), `ripple-glass` (emerald glass with ripple rings), `windmill-cloud` (the clock in a cloud, windmill-rotor gauges that turn with the load, white stone cards), `lighthouse-beam` (a round lantern clock, a sweeping golden beam, buoy gauges, sea-glass cards) or `still-water` (liquid-glass panes with ripples, ripple-ring gauges, the clock's reflection). A name Castle does not know is ignored.
 
 ```json
 "widgetStyle": "glass",

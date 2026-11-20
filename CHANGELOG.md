@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Three new themes.** **The Windmill Hill**: the clock rests in a cloud and the gauges are windmills that turn faster as your computer works harder. **The Thousand Sails**: the clock is a lighthouse lantern whose golden beam sweeps across HOME, with buoy gauges. **The Lantern Falls**: cards like panes of still water with ripples, and a clock with its reflection. Choose them in THEME.
+
 - **Each DEV project has its own Database panel.** Local fills itself from the project's .env, and Production you fill in once (host, user, password, CA certificate), kept on this computer with the password in Windows Credential Manager. Then the tables and rows show. Production opens read only; when you unlock Change, every write waits for your **Keep** or **Undo**.
 
 - **Chat answers everything Claude Code asks.** The question card shows the whole question with the words around it, and a description under each choice. It now also covers the "do you trust this folder?" question a new DEV tab used to wait on, questions with several answers (tick, then **Submit** or **Next →**), and *"Type something."*, which you now answer by typing in the message box.
