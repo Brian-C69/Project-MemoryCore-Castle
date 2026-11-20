@@ -150,9 +150,9 @@ async function savePictures(patch) {
 }
 const drawsWith = computed(() => {
   const way = pictures.value?.way
-  if (way === 'codex') return 'Draws with Codex, on your ChatGPT subscription.'
+  if (way === 'codex') return 'Draws with Codex, on your ChatGPT subscription, whichever CLI your companion thinks with.'
   if (way === 'openai') return 'Draws with your ChatGPT API key, which is billed per picture.'
-  if (way === 'none') return `To draw, add a ChatGPT key in Keys, or let ${companionLabel.value} think with Codex.`
+  if (way === 'none') return 'To draw, sign in to Codex with ChatGPT on this computer, or add a ChatGPT key in Keys.'
   return ''
 })
 // Voice in the room: whether an ElevenLabs key is saved, and today's numbers
