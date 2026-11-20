@@ -1,0 +1,104 @@
+{
+  "id": "windmill-hill",
+  "name": "The Windmill Hill",
+  "description": "A green summer hill under one colossal white cloud, windmills turning on the ridge, a bicycle with a basket of wildflowers by a red mailbox, and nobody there.",
+  "wallpaper": "wallpaper.jpg",
+  "wallpaperPosition": "center",
+  "widgetStyle": "glass",
+  "widgetSkin": "windmill-cloud",
+  "portrait": "panel",
+  "colors": {
+    "--background": "#123a5e",
+    "--bar-background": "rgba(18, 58, 94, 0.55)",
+    "--panel-background": "rgba(40, 92, 140, 0.45)",
+    "--widget-background": "rgba(48, 104, 156, 0.40)",
+    "--line": "rgba(225, 240, 255, 0.42)",
+    "--text": "#f4f9ff",
+    "--text-dim": "#cfe2f5",
+    "--accent": "#4aa8ff",
+    "--hover": "rgba(74, 168, 255, 0.16)",
+    "--glass-blur": "16px"
+  },
+  "panel": {
+    "left": "1.6%",
+    "top": "3%",
+    "bottom": "3%",
+    "width": "31%"
+  },
+  "sweep": {
+    "look": "bar"
+  },
+  "loader": {
+    "accent": "#4aa8ff"
+  },
+  "widgets": {
+    "sweep": {
+      "right": "31%",
+      "top": "22%"
+    },
+    "clock": {
+      "right": "21%",
+      "top": "4%",
+      "size": "l"
+    },
+    "gauges": {
+      "right": "2%",
+      "top": "4%"
+    },
+    "usage": {
+      "right": "31%",
+      "bottom": "calc(4% + 150px)",
+      "width": "33%"
+    },
+    "today": {
+      "right": "2%",
+      "top": "22%",
+      "width": "28%"
+    },
+    "projects": {
+      "right": "2%",
+      "top": "calc(22% + 190px)",
+      "width": "28%"
+    },
+    "diary": {
+      "right": "2%",
+      "top": "calc(22% + 395px)",
+      "width": "28%"
+    },
+    "growth": {
+      "right": "2%",
+      "bottom": "4%",
+      "width": "28%"
+    },
+    "backup": {
+      "right": "31%",
+      "bottom": "4%",
+      "width": "16%"
+    },
+    "database": {
+      "right": "48%",
+      "bottom": "4%",
+      "width": "16%"
+    },
+    "credit-openai": {
+      "right": "56.2%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-seedance": {
+      "right": "47.8%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-suno": {
+      "right": "39.4%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-elevenlabs": {
+      "right": "31%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    }
+  }
+}

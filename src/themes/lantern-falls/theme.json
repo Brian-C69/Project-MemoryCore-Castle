@@ -1,0 +1,104 @@
+{
+  "id": "lantern-falls",
+  "name": "The Lantern Falls",
+  "description": "A waterfall valley at sunset, golden mist over a still pool that mirrors the sky, fireflies, a lit paper lantern and a folded picnic blanket on the grass.",
+  "wallpaper": "wallpaper.jpg",
+  "wallpaperPosition": "center",
+  "widgetStyle": "glass",
+  "widgetSkin": "still-water",
+  "portrait": "panel",
+  "colors": {
+    "--background": "#24163a",
+    "--bar-background": "rgba(40, 24, 62, 0.56)",
+    "--panel-background": "rgba(70, 44, 96, 0.36)",
+    "--widget-background": "rgba(90, 58, 112, 0.30)",
+    "--line": "rgba(255, 214, 190, 0.46)",
+    "--text": "#fff6ee",
+    "--text-dim": "#ead6cc",
+    "--accent": "#ffb347",
+    "--hover": "rgba(255, 179, 71, 0.16)",
+    "--glass-blur": "10px"
+  },
+  "panel": {
+    "left": "1.6%",
+    "top": "3%",
+    "bottom": "3%",
+    "width": "31%"
+  },
+  "sweep": {
+    "look": "bar"
+  },
+  "loader": {
+    "accent": "#ffb347"
+  },
+  "widgets": {
+    "sweep": {
+      "right": "31%",
+      "top": "22%"
+    },
+    "clock": {
+      "right": "21%",
+      "top": "4%",
+      "size": "l"
+    },
+    "gauges": {
+      "right": "2%",
+      "top": "4%"
+    },
+    "usage": {
+      "right": "31%",
+      "bottom": "calc(4% + 150px)",
+      "width": "33%"
+    },
+    "today": {
+      "right": "2%",
+      "top": "22%",
+      "width": "28%"
+    },
+    "projects": {
+      "right": "2%",
+      "top": "calc(22% + 190px)",
+      "width": "28%"
+    },
+    "diary": {
+      "right": "2%",
+      "top": "calc(22% + 395px)",
+      "width": "28%"
+    },
+    "growth": {
+      "right": "2%",
+      "bottom": "4%",
+      "width": "28%"
+    },
+    "backup": {
+      "right": "31%",
+      "bottom": "4%",
+      "width": "16%"
+    },
+    "database": {
+      "right": "48%",
+      "bottom": "4%",
+      "width": "16%"
+    },
+    "credit-openai": {
+      "right": "56.2%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-seedance": {
+      "right": "47.8%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-suno": {
+      "right": "39.4%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-elevenlabs": {
+      "right": "31%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    }
+  }
+}

@@ -11,7 +11,7 @@ const sounds = import.meta.glob('./*/*.{mp3,ogg}', { eager: true, query: '?url',
 export const DEFAULT_THEME_ID = 'constellation'
 
 // The widget skins Castle knows (themes/skins.css); a theme names one with "widgetSkin".
-export const SKINS = ['prism-lines', 'carved-wood', 'sunset-glass', 'bioluminescent', 'ripple-glass']
+export const SKINS = ['prism-lines', 'carved-wood', 'sunset-glass', 'bioluminescent', 'ripple-glass', 'windmill-cloud', 'lighthouse-beam', 'still-water']
 
 // The class HOME adds for a theme's skin, or '' (an unknown name changes nothing).
 export function skinClass(theme) {

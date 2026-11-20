@@ -1,0 +1,104 @@
+{
+  "id": "thousand-sails",
+  "name": "The Thousand Sails",
+  "description": "A flowered clifftop over a deep blue sea, a white island town with a lighthouse, dozens of small white sails and a straw hat left on the wall.",
+  "wallpaper": "wallpaper.jpg",
+  "wallpaperPosition": "center",
+  "widgetStyle": "glass",
+  "widgetSkin": "lighthouse-beam",
+  "portrait": "panel",
+  "colors": {
+    "--background": "#0b2f63",
+    "--bar-background": "rgba(10, 44, 94, 0.58)",
+    "--panel-background": "rgba(22, 70, 130, 0.45)",
+    "--widget-background": "rgba(26, 80, 146, 0.40)",
+    "--line": "rgba(210, 236, 255, 0.40)",
+    "--text": "#f2f8ff",
+    "--text-dim": "#c4dbf2",
+    "--accent": "#ffc24a",
+    "--hover": "rgba(255, 194, 74, 0.16)",
+    "--glass-blur": "14px"
+  },
+  "panel": {
+    "left": "1.6%",
+    "top": "3%",
+    "bottom": "3%",
+    "width": "31%"
+  },
+  "sweep": {
+    "look": "ring"
+  },
+  "loader": {
+    "accent": "#ffc24a"
+  },
+  "widgets": {
+    "sweep": {
+      "right": "31%",
+      "top": "22%"
+    },
+    "clock": {
+      "right": "21%",
+      "top": "4%",
+      "size": "l"
+    },
+    "gauges": {
+      "right": "2%",
+      "top": "4%"
+    },
+    "usage": {
+      "right": "31%",
+      "bottom": "calc(4% + 150px)",
+      "width": "33%"
+    },
+    "today": {
+      "right": "2%",
+      "top": "22%",
+      "width": "28%"
+    },
+    "projects": {
+      "right": "2%",
+      "top": "calc(22% + 190px)",
+      "width": "28%"
+    },
+    "diary": {
+      "right": "2%",
+      "top": "calc(22% + 395px)",
+      "width": "28%"
+    },
+    "growth": {
+      "right": "2%",
+      "bottom": "4%",
+      "width": "28%"
+    },
+    "backup": {
+      "right": "31%",
+      "bottom": "4%",
+      "width": "16%"
+    },
+    "database": {
+      "right": "48%",
+      "bottom": "4%",
+      "width": "16%"
+    },
+    "credit-openai": {
+      "right": "56.2%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-seedance": {
+      "right": "47.8%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-suno": {
+      "right": "39.4%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    },
+    "credit-elevenlabs": {
+      "right": "31%",
+      "bottom": "calc(4% + 330px)",
+      "width": "8%"
+    }
+  }
+}
