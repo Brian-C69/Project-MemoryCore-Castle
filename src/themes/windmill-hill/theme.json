@@ -21,10 +21,10 @@
     "--glass-blur": "16px"
   },
   "panel": {
-    "left": "1.6%",
-    "top": "3%",
+    "left": "2%",
+    "top": "1.5%",
     "bottom": "3%",
-    "width": "31%"
+    "width": "28%"
   },
   "sweep": {
     "look": "broom"
