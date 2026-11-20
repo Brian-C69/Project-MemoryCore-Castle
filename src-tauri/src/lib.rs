@@ -50,6 +50,7 @@ mod project_room;
 mod profile;
 mod projectdb;
 mod projectdb_login;
+mod cmd_projectdb;
 mod pty;
 mod providers;
 mod messages;
@@ -297,6 +298,7 @@ pub fn run() {
         .manage(chat::MainChat::default())
         .manage(chat::StoryChat::default())
         .manage(chat::MemberPictures::default())
+        .manage(projectdb::Held::default())
         .manage(roomread::RoomReader::default())
         .manage(market::board::Board::default())
         .manage(market::engine::Viewing::default())
@@ -529,6 +531,23 @@ pub fn run() {
             chat::chat_media,
             chat::chat_attach,
             chat::chat_plan_file,
+            cmd_projectdb::projectdb_connection,
+            cmd_projectdb::projectdb_save,
+            cmd_projectdb::projectdb_forget,
+            cmd_projectdb::projectdb_test,
+            cmd_projectdb::projectdb_pick_ca,
+            cmd_projectdb::projectdb_databases,
+            cmd_projectdb::projectdb_tables,
+            cmd_projectdb::projectdb_table_rows,
+            cmd_projectdb::projectdb_columns,
+            cmd_projectdb::projectdb_look,
+            cmd_projectdb::projectdb_change,
+            cmd_projectdb::projectdb_finish,
+            cmd_projectdb::projectdb_export,
+            cmd_projectdb::projectdb_dump,
+            cmd_projectdb::projectdb_import,
+            cmd_projectdb::projectdb_saved,
+            cmd_projectdb::projectdb_saved_set,
             chat::chat_media_stream,
             db::db_status,
             node_runtime::node_status,
@@ -593,6 +612,7 @@ pub fn run() {
                 None => app.path().app_config_dir()?,
             };
             roomalert::register_address();
+            cmd_projectdb::start_sweeper(app.handle().clone());
             alerts::start(app.handle());
             let store = SettingsStore::open(&config);
             session::forget_boot_file(&store);

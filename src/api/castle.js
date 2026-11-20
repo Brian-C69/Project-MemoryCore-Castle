@@ -435,6 +435,30 @@ export const devResize = (slot, cols, rows) => invoke('dev_resize', { slot, cols
 export const devSnapshot = (slot) => invoke('dev_snapshot', { slot })
 // -> { entries, reset, status }, the same as chatPoll
 export const devChatPoll = (slot) => invoke('dev_chat_poll', { slot })
+
+// A DEV project's own database (the Database panel). `target` = { slot, side: 'local' | 'production',
+// database }; the login stays in the core and never reaches the page.
+// -> { project, local, production }: each { host, port, database, user, from, hasPassword, ca, blocked }
+export const projectDbConnection = (slot) => invoke('projectdb_connection', { slot })
+// form = { host, port, database, user, password?: string (undefined keeps it, '' removes it), caPath?: string }
+export const projectDbSave = (slot, side, form) => invoke('projectdb_save', { slot, side, form })
+export const projectDbForget = (slot, side) => invoke('projectdb_forget', { slot, side })
+export const projectDbTest = (target) => invoke('projectdb_test', { target })
+export const projectDbPickCa = () => invoke('projectdb_pick_ca')
+export const projectDbDatabases = (target) => invoke('projectdb_databases', { target })
+export const projectDbTables = (target) => invoke('projectdb_tables', { target })
+export const projectDbTableRows = (target) => invoke('projectdb_table_rows', { target })
+export const projectDbColumns = (target, table) => invoke('projectdb_columns', { target, table })
+// -> { columns, rows, truncated, affected, ms }
+export const projectDbLook = (target, sqlText) => invoke('projectdb_look', { target, sqlText })
+// -> { id, affected, ms }: id 0 = final; otherwise held for Keep / Undo (two minutes)
+export const projectDbChange = (target, sqlText, confirmed = false) => invoke('projectdb_change', { target, sqlText, confirmed })
+export const projectDbFinish = (id, keep) => invoke('projectdb_finish', { id, keep })
+export const projectDbExport = (rows, name) => invoke('projectdb_export', { rows, name })
+export const projectDbDump = (target, table = null) => invoke('projectdb_dump', { target, table })
+export const projectDbImport = (target, table, unlocked) => invoke('projectdb_import', { target, table, unlocked })
+export const projectDbSaved = (slot) => invoke('projectdb_saved', { slot })
+export const projectDbSavedSet = (slot, list) => invoke('projectdb_saved_set', { slot, list })
 // true when the project has changes not yet committed
 export const devGitDirty = (slot) => invoke('dev_git_dirty', { slot })
 // -> { available, message, plans: [{ id, title, phase, status, items: [{ ordinal, kind, text, state }] }] }
