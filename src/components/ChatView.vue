@@ -2,10 +2,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { chatHistory, chatPoll, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
 import { localSend, mergeEntries, resetEntries } from './ticks.js'
-import { readChoices } from './choices.js'
+import { isOwnAnswer, readChoices, tellOf } from './choices.js'
 import { firstHeading } from './markdown.js'
 import { MODES, readContext, readMode, SHIFT_TAB } from './modes.js'
 import { useChatMedia } from './useChatMedia.js'
+import { typeLine } from './typeline.js'
+import { pasted } from '../views/dev/devtabs.js'
+import ChatChoices from './ChatChoices.vue'
 import ChatComposer from './ChatComposer.vue'
 import ChatEntries from './ChatEntries.vue'
 import ImageViewer from './ImageViewer.vue'
@@ -13,8 +16,8 @@ import PlanViewer from './PlanViewer.vue'
 import { worldSignals } from '../world3d/signals.js'
 
 // CHAT: a session as a conversation between two people. This file reads the session's record and
-// the Log screen and holds the state; the conversation and the choice card (ChatEntries) and the
-// box (ChatComposer) only show and ask.
+// the Log screen and holds the state; the conversation (ChatEntries), the choice card (ChatChoices)
+// and the box (ChatComposer) only show and ask.
 const props = defineProps({
   // Whether the session is running.
   running: { type: Boolean, default: false },
@@ -105,13 +108,51 @@ function readMenu() {
 }
 let lastContext = null
 
+// The option whose text field the box stands in for while it is up ("Type something.", "Tell
+// Claude what to change"); Claude Code only.
+const tellOption = computed(() => (isClaude.value ? tellOf(menu.value) : undefined))
+
 async function choose(number) {
+  // an option with no number on screen (the folder-trust question) carries the keys that reach it
+  const keys = menu.value?.options?.find((option) => option.number === number)?.keys
   menu.value = null
   try {
-    await props.write(String(number))
+    await props.write(keys ?? String(number))
   } catch {
     // The menu comes back on the next read.
   }
+}
+
+// The Submit row of a question with several answers: the keys readChoices worked out (the next
+// tab, or the arrows down to the row and Enter).
+async function submitChoices() {
+  const keys = menu.value?.submit?.keys
+  if (!keys) return
+  menu.value = null
+  try {
+    await props.write(keys)
+  } catch {
+    // The menu comes back on the next read.
+  }
+}
+
+/** Answers the question showing now from the box: picks the free-text option, then types the words. */
+async function answerFromBox(option, text) {
+  menu.value = null
+  try {
+    await props.write(String(option.number))
+    // give the terminal a moment to open its field
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    await typeLine(props.write, pasted(text))
+  } catch (reason) {
+    sendProblem.value = String(reason)
+    return false
+  }
+  entries.value = [...entries.value, localSend(text)]
+  sendProblem.value = ''
+  await nextTick()
+  conversation.value?.toBottom()
+  return true
 }
 
 // ---------- The mode (manual / accept edits / plan / auto, Shift+Tab in Claude Code) ----------
@@ -276,11 +317,17 @@ async function poll() {
 
 // ---------- The member's words ----------
 
-const placeholder = computed(() => (props.running ? `Talk to ${props.companion}` : `${props.companion} is resting`))
+const placeholder = computed(() => {
+  if (!props.running) return `${props.companion} is resting`
+  if (tellOption.value) return isOwnAnswer(tellOption.value) ? 'Your own answer...' : `Tell ${props.companion} what to change...`
+  return `Talk to ${props.companion}`
+})
 
 /** Sends the member's words; true when they went in (the box then empties). */
 async function send(text) {
   if (!props.running) return false
+  // An answer must reach the question showing now, never wait in the queue behind it.
+  if (tellOption.value) return answerFromBox(tellOption.value, text)
   // Several lines go in as one paste, so a new line never sends the message early.
   let sent
   try {
@@ -364,7 +411,6 @@ defineExpose({ poll, addPaths })
       :media="media"
       :durations="durations"
       :playing="playing"
-      :menu="menu"
       :codex-asking="codexAsking"
       :companion="companion"
       :cli="cli"
@@ -374,9 +420,10 @@ defineExpose({ poll, addPaths })
       @open-picture="openPicture"
       @toggle-voice="toggleVoice"
       @play-voice="playVoice"
-      @choose="choose"
       @choose-designs="send"
     />
+
+    <ChatChoices v-if="menu" :menu="menu" :companion="companion" @choose="choose" @submit="submitChoices" @show-log="emit('show-log')" />
 
     <ImageViewer v-if="viewerStart !== null" :pictures="allPictures" :start="viewerStart" @close="viewerStart = null" />
     <PlanViewer v-if="planOpen !== null" :plan="planOpen" @close="planOpen = null" />

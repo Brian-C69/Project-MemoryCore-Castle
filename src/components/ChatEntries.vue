@@ -4,7 +4,7 @@ import MarkdownText from './MarkdownText.vue'
 import { chooseLine, isDesignGroup } from './designpick.js'
 
 // Chat's conversation: the member's bubbles right, the companion's left, plan cards, pictures side
-// by side, voice lines, the typing bubble, and the card for a choice asked in the Log. Only shows;
+// by side, voice lines, and the typing bubble (the card for a choice asked in the Log is ChatChoices). Only shows;
 // every action goes up to ChatView.
 defineProps({
   // "asleep", "waiting", "ok" or "unreadable"
@@ -15,14 +15,12 @@ defineProps({
   media: { type: Object, required: true },
   durations: { type: Object, required: true },
   playing: { type: String, default: null },
-  // a choice menu read from the Log screen, or null
-  menu: { type: Object, default: null },
   // Codex is asking for an approval on the Log screen
   codexAsking: { type: Boolean, default: false },
   companion: { type: String, default: 'Your companion' },
   cli: { type: String, default: 'claude' },
 })
-const emit = defineEmits(['show-log', 'send-now', 'open-plan', 'open-picture', 'toggle-voice', 'play-voice', 'choose', 'choose-designs'])
+const emit = defineEmits(['show-log', 'send-now', 'open-plan', 'open-picture', 'toggle-voice', 'play-voice', 'choose-designs'])
 
 // Designs to choose from (two to four pictures from one Design folder): a tick on each, one Choose.
 const designTicks = ref({}) // group id -> [paths ticked]
@@ -186,15 +184,6 @@ defineExpose({ nearBottom, toBottom })
     </div>
   </div>
 
-  <div v-if="menu" class="choices" role="group" :aria-label="menu.question || `${companion} is asking`">
-    <p class="ask">{{ menu.question || `${companion} is asking` }}</p>
-    <div class="options">
-      <button v-for="option in menu.options" :key="option.number" class="option" :title="option.hint" @click="emit('choose', option.number)">
-        <span class="number">{{ option.number }}</span>{{ option.label }}
-      </button>
-      <button class="option log" @click="emit('show-log')">Open Log</button>
-    </div>
-  </div>
 </template>
 
 <style scoped>
@@ -545,64 +534,6 @@ button {
 .voice-length {
   min-width: 32px;
   font-size: 12px;
-  color: var(--text-dim);
-}
-
-.choices {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--accent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.ask {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.option {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.2);
-  color: var(--text);
-  font-size: 12.5px;
-  text-align: left;
-}
-
-.option:hover {
-  background: var(--hover);
-}
-
-.option .number {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #160f33;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.option.log {
   color: var(--text-dim);
 }
 
