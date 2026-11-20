@@ -5,6 +5,7 @@ import ContextMeter from '../../components/ContextMeter.vue'
 import { typeLine } from '../../components/typeline.js'
 import PlanPanel from './PlanPanel.vue'
 import SourcePanel from './SourcePanel.vue'
+import ProjectDatabase from './ProjectDatabase.vue'
 import { useSaveClose } from './useSaveClose.js'
 import { devCloseTab, memoryFeatures } from '../../api/castle.js'
 import { devOpenLink } from '../../api/devgit.js'
@@ -32,6 +33,8 @@ const panel = ref(null)
 const logOpen = ref(false)
 const planOpen = ref(false)
 const sourceOpen = ref(false)
+// the project's own database (Local and Production), wide beside the chat
+const databaseOpen = ref(false)
 // what the chat reads off the session: working or not, and how full her context is
 const busy = ref(false)
 const context = ref(null)
@@ -150,6 +153,7 @@ async function closeNow() {
         <button v-if="running && canSave" :disabled="!!saveClose.saving.value" title="Ask her to save the project: its record in your memory, and a commit" @click="saveProject">Save project</button>
         <button :class="{ on: sourceOpen }" :aria-pressed="sourceOpen" @click="sourceOpen = !sourceOpen">Source</button>
         <button :class="{ on: planOpen }" :aria-pressed="planOpen" @click="planOpen = !planOpen">Plan</button>
+        <button :class="{ on: databaseOpen }" :aria-pressed="databaseOpen" title="This project's own database: Local and Production" @click="databaseOpen = !databaseOpen">Database</button>
         <button :class="{ on: logOpen }" :aria-pressed="logOpen" @click="logOpen = !logOpen">Log</button>
         <button :disabled="closing" @click="askClose">{{ closing ? 'Closing…' : 'Close session' }}</button>
       </div>
@@ -186,6 +190,7 @@ async function closeNow() {
       />
       <SourcePanel v-if="sourceOpen" class="plan-side" :slot="tab.slot" :folder="tab.folder" :companion="companion" :shown="shown && sourceOpen" @ask="say" />
       <PlanPanel v-if="planOpen" class="plan-side" :index="tab.slot" :shown="shown && planOpen" />
+      <ProjectDatabase v-if="databaseOpen" :slot="tab.slot" :shown="shown && databaseOpen" />
     </div>
 
     <div v-if="askingClose" class="close-sheet" role="dialog" aria-modal="true" aria-labelledby="close-sheet-title" @click.self="askingClose = false; saveClose.dismiss()" @keydown.esc.stop="askingClose = false; saveClose.dismiss()">
