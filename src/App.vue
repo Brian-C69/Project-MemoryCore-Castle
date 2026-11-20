@@ -47,7 +47,7 @@ import ThemeSound from './components/ThemeSound.vue'
 import WhatsNew from './components/WhatsNew.vue'
 import { sectionFor, unseenSections } from './components/changelog.js'
 import { moveTab, orderTabs } from './components/taborder.js'
-import { SIZES, WIDGETS, dragBegins, dropPlace, isOn, memberPlace, placeFor, placePatch, resetPatch, sizeOf, startsOnControl, hasItsKey } from './components/widgets/widgetplaces.js'
+import { WIDGETS, dragBegins, dropPlace, isOn, memberPlace, originOf, placeFor, placePatch, resetPatch, scaleOf, startsOnControl, hasItsKey } from './components/widgets/widgetplaces.js'
 import { isCreditWidget } from './components/widgets/credits.js'
 import changelog from '../CHANGELOG.md?raw'
 import { version as appVersion } from '../package.json'
@@ -169,10 +169,13 @@ const shownWidgets = computed(() =>
 )
 
 function slotStyle(id) {
-  const style = placeStyle(placeFor(widgets.value[id] ?? FALLBACK_PLACES[id], memberPlace(widgetPrefs.value, theme.value?.id, id)))
-  const scale = SIZES[sizeOf(id, widgetPrefs.value)]
+  const place = placeFor(widgets.value[id] ?? FALLBACK_PLACES[id], memberPlace(widgetPrefs.value, theme.value?.id, id))
+  const style = placeStyle(place)
+  // the member's size times the theme's starting scale, grown from the corner it is anchored to
+  const scale = scaleOf(id, widgetPrefs.value, theme.value)
   const moving = drag.value?.id === id ? `translate(${drag.value.dx}px, ${drag.value.dy}px) ` : ''
   if (moving || scale !== 1) style.transform = `${moving}scale(${scale})`
+  if (scale !== 1) style.transformOrigin = originOf(place)
   return style
 }
 

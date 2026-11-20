@@ -6,6 +6,7 @@
   "wallpaperPosition": "center",
   "widgetStyle": "glass",
   "widgetSkin": "lighthouse-beam",
+  "widgetScale": 1.3,
   "portrait": "panel",
   "colors": {
     "--background": "#0b2f63",
@@ -44,24 +45,24 @@
     "today": {
       "left": "35%",
       "top": "42%",
-      "width": "25%"
+      "width": "20%"
     },
     "diary": {
       "left": "35%",
-      "top": "60%",
-      "width": "25%"
+      "top": "58%",
+      "width": "20%"
     },
     "sweep": {
-      "left": "62%",
+      "left": "61%",
       "top": "42%"
     },
     "sentinel": {
       "right": "2%",
-      "top": "52%"
+      "top": "63%"
     },
     "disks": {
       "right": "2%",
-      "top": "72%"
+      "top": "78%"
     }
   }
 }

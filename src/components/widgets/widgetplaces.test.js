@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dragBegins, dropPlace, isOn, startsOnControl, memberPlace, placeFor, placePatch, resetPatch, sizeOf, sizePatch, switchPatch, WIDGETS, hasItsKey } from './widgetplaces.js'
+import { dragBegins, dropPlace, isOn, startsOnControl, memberPlace, originOf, placeFor, placePatch, resetPatch, scaleOf, sizeOf, sizePatch, switchPatch, WIDGETS, hasItsKey } from './widgetplaces.js'
 
 describe('HOME widgets as the member arranges them', () => {
   it('lists every widget the themes place', () => {
@@ -83,3 +83,23 @@ describe('dragging a widget on HOME', () => {
   })
 })
 
+
+describe('a theme that draws its widgets larger', () => {
+  it("multiplies the member's own size by the theme's starting scale, kept within bounds", () => {
+    expect(scaleOf('clock', {}, null)).toBe(1)
+    expect(scaleOf('clock', {}, { widgetScale: 1.3 })).toBe(1.3)
+    expect(scaleOf('clock', { widgetSizes: { clock: 'l' } }, { widgetScale: 1.3 })).toBe(1.495)
+    expect(scaleOf('clock', { widgetSizes: { clock: 's' } }, {})).toBe(0.85)
+    expect(scaleOf('clock', {}, { widgetScale: 9 })).toBe(1.6)
+    expect(scaleOf('clock', {}, { widgetScale: 0.1 })).toBe(0.75)
+    expect(scaleOf('clock', {}, { widgetScale: 'big' })).toBe(1)
+  })
+
+  it('grows each widget from the corner it is anchored to', () => {
+    expect(originOf({ right: '2%', top: '4%' })).toBe('right top')
+    expect(originOf({ left: '35%', bottom: '10%' })).toBe('left bottom')
+    expect(originOf({ right: '2%', bottom: '8%' })).toBe('right bottom')
+    expect(originOf({ left: '10%', top: '20%' })).toBe('left top')
+    expect(originOf({})).toBe('left top')
+  })
+})

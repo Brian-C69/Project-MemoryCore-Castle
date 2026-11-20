@@ -62,6 +62,21 @@ export function sizeOf(id, settings = {}) {
   return size in SIZES ? size : 'm'
 }
 
+// How large a widget is drawn: the member's own size for it, times the theme's starting scale
+// ("widgetScale" in theme.json, for a theme whose design draws its widgets larger; 1 when it has
+// none, and kept between 0.75 and 1.6 so no theme can make HOME unusable).
+export function scaleOf(id, settings = {}, theme = null) {
+  const wanted = Number(theme?.widgetScale)
+  const themeScale = Number.isFinite(wanted) && wanted > 0 ? Math.min(1.6, Math.max(0.75, wanted)) : 1
+  return Math.round(SIZES[sizeOf(id, settings)] * themeScale * 1000) / 1000
+}
+
+// The corner a widget grows from when it is drawn larger: the corner it is anchored to, so a widget
+// placed from the right or the bottom grows inward and never off HOME.
+export function originOf(place = {}) {
+  return `${place.right != null && place.left == null ? 'right' : 'left'} ${place.bottom != null && place.top == null ? 'bottom' : 'top'}`
+}
+
 // The settings change for a widget's size ('m' is the default and is not kept).
 export function sizePatch(id, size, settings = {}) {
   const sizes = { ...(settings.widgetSizes ?? {}) }

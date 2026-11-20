@@ -6,6 +6,7 @@
   "wallpaperPosition": "center",
   "widgetStyle": "glass",
   "widgetSkin": "windmill-cloud",
+  "widgetScale": 1.3,
   "portrait": "panel",
   "colors": {
     "--background": "#123a5e",
