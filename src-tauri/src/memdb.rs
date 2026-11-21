@@ -19,7 +19,7 @@ pub const HOST: &str = "127.0.0.1";
 pub const ENV_KEYS: [&str; 5] = ["MEMORY_DB_HOST", "MEMORY_DB_PORT", "MEMORY_DB_NAME", "MEMORY_DB_USER", "MEMORY_DB_PASSWORD"];
 
 /// The migrations, in order. A released file is never edited; a change is a new entry.
-pub const MIGRATIONS: [(&str, &str); 16] = [
+pub const MIGRATIONS: [(&str, &str); 17] = [
     ("001_core", include_str!("../resources/schema/001_core.sql")),
     ("002_imported_files", include_str!("../resources/schema/002_imported_files.sql")),
     ("003_memory_skills", include_str!("../resources/schema/003_memory_skills.sql")),
@@ -36,6 +36,7 @@ pub const MIGRATIONS: [(&str, &str); 16] = [
     ("014_companion_mood", include_str!("../resources/schema/014_companion_mood.sql")),
     ("015_project_shelves", include_str!("../resources/schema/015_project_shelves.sql")),
     ("016_sentinel", include_str!("../resources/schema/016_sentinel.sql")),
+    ("017_project_tree", include_str!("../resources/schema/017_project_tree.sql")),
 ];
 
 /// How to reach one database.
@@ -297,6 +298,17 @@ mod tests {
         assert_eq!(found.len(), 6);
         assert!(found.iter().all(|s| s.starts_with("CREATE TABLE sentinel_") && s.contains("utf8mb4")));
         assert!(!sql.contains("GENERATED"));
+    }
+
+    #[test]
+    fn the_project_tree_splits_into_its_two_statements() {
+        let (name, sql) = MIGRATIONS[16];
+        assert_eq!(name, "017_project_tree");
+        assert!(!sql.trim_start().starts_with("--"));
+        let found = statements(sql);
+        assert_eq!(found.len(), 2);
+        assert!(found[0].starts_with("ALTER TABLE projects") && found[0].contains("parent_id"));
+        assert!(found[1].starts_with("CREATE TABLE project_tasks") && found[1].contains("utf8mb4"));
     }
 
     #[test]

@@ -10,6 +10,11 @@
 //!  castle-memory project list [--deleted] | project show --name "Portfolio site"
 //!  castle-memory project pause --name ".." [--note ".."] | resume | archive | restore --name ".."
 //!  castle-memory project delete --name ".." --confirmed      30 days on Recently deleted, then gone
+//!  castle-memory project add --name "Update chip" --parent "Castle"   a sub-project (--parent "" frees it)
+//!  castle-memory project pause|archive|delete|resume|restore .. --with-subprojects   moves its sub-projects too
+//!  castle-memory project split                 names like "Castle · X" the member can turn into sub-projects
+//!  castle-memory task add --project ".." --title ".." [--due 2026-11-20 [--remind]] | task list --project ".."
+//!  castle-memory task done --id 4 | task undo --id 4 | task remove --id 4
 //!  castle-memory link send --from main --to story --about "..." [--word "..."] [--no-wake]
 //!  castle-memory link inbox --to main | link read --to main --note <file name> | link here --name main
 //!  castle-memory boot                         the memory to read at the start of a session
@@ -39,6 +44,7 @@
 //! `plan copy` without `--plan` takes the newest `*.md` in `%USERPROFILE%\.claude\plans`.
 
 use crate::memdb;
+use crate::project_tree;
 use crate::mirror;
 use crate::door_plan::{next_line, plan_copy, plan_mark, plan_show, plan_status, project_folder};
 use crate::door_trait::{trait_list, trait_propose, trait_retire, trait_set, trait_show};
@@ -66,7 +72,7 @@ pub struct Ask {
     pub flags: BTreeMap<String, String>,
 }
 
-const BARE_FLAGS: [&str; 5] = ["no-wake", "all", "next", "confirmed", "deleted"];
+const BARE_FLAGS: [&str; 7] = ["no-wake", "all", "next", "confirmed", "deleted", "with-subprojects", "remind"];
 
 pub fn parse(args: &[String]) -> Result<Ask, String> {
     let mut ask = Ask::default();
@@ -145,6 +151,11 @@ fn find_memory_with(ask: &Ask, named: Option<OsString>, from: &Path) -> Result<P
 /// (the skills' mirror lives there).
 pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> {
     let words: Vec<&str> = ask.words.iter().map(String::as_str).collect();
+    // the project tree's columns arrive with migration 017: a door newer than the running app
+    // brings the database up to date first, as the library and look verbs do
+    if matches!(words.first(), Some(&"project") | Some(&"task")) {
+        memdb::migrate(conn)?;
+    }
     match words.as_slice() {
         ["diary", "add"] => diary_add(conn, ask),
         ["diary", "rewrite"] => diary_rewrite(conn, ask),
@@ -160,6 +171,15 @@ pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> 
         ["project", "add"] | ["project", "update"] => project_save(conn, ask),
         ["project", "list"] => project_list(conn, ask),
         ["project", "show"] => project_show(conn, ask),
+        ["project", "split"] => project_split(conn),
+        ["task", "add"] => task_add(conn, ask),
+        ["task", "list"] => task_list(conn, ask),
+        ["task", "done"] => task_tick(conn, ask, true),
+        ["task", "undo"] => task_tick(conn, ask, false),
+        ["task", "remove"] => {
+            let id = task_id(ask)?;
+            Ok(format!("TASK #{id} removed: {}", project_tree::task_remove(conn, id)?))
+        }
         ["project", "pause"] => project_move(conn, ask, Shelf::Paused),
         ["project", "resume"] | ["project", "restore"] => project_move(conn, ask, Shelf::Active),
         ["project", "archive"] => project_move(conn, ask, Shelf::Archived),
@@ -373,60 +393,183 @@ fn project_save(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
         return Err(why);
     }
     let body = ask.text()?;
-    conn.exec_drop(
-        "INSERT INTO projects (name, status, shelf, summary, body, last_updated) VALUES (?, ?, COALESCE(?, 'active'), ?, ?, DATE_FORMAT(NOW(), '%Y-%m-%d')) \
-         ON DUPLICATE KEY UPDATE status = COALESCE(VALUES(status), status), shelf = COALESCE(?, shelf), \
-         summary = COALESCE(VALUES(summary), summary), body = COALESCE(VALUES(body), body), last_updated = VALUES(last_updated)",
-        (name, ask.get("status"), ask.get("shelf"), ask.get("summary"), body, ask.get("shelf")),
-    )
-    .map_err(sql("Saving the project"))?;
-    Ok(format!("PROJECT saved: {name}"))
+    // the parent is checked before anything is saved; "" frees a sub-project
+    let parent = match ask.get("parent").map(str::trim) {
+        None => None,
+        Some("") => Some(None),
+        Some(p) => Some(Some(project_tree::need(conn, p)?)),
+    };
+    // a sub-project is found by "Parent · Child" too, so it is updated, never doubled
+    let id = match project_tree::find(conn, name)? {
+        Some(id) => {
+            conn.exec_drop(
+                "UPDATE projects SET status = COALESCE(?, status), shelf = COALESCE(?, shelf), summary = COALESCE(?, summary), \
+                 body = COALESCE(?, body), last_updated = DATE_FORMAT(NOW(), '%Y-%m-%d') WHERE id = ?",
+                (ask.get("status"), ask.get("shelf"), ask.get("summary"), &body, id),
+            )
+            .map_err(sql("Saving the project"))?;
+            id
+        }
+        None => {
+            if let Some(Some(p)) = parent {
+                if let Some(why) = project_tree::parent_refusal(conn, p, None)? {
+                    return Err(why);
+                }
+            }
+            conn.exec_drop(
+                "INSERT INTO projects (name, status, shelf, summary, body, last_updated) VALUES (?, ?, COALESCE(?, 'active'), ?, ?, DATE_FORMAT(NOW(), '%Y-%m-%d'))",
+                (name, ask.get("status"), ask.get("shelf"), ask.get("summary"), &body),
+            )
+            .map_err(sql("Saving the project"))?;
+            conn.last_insert_id()
+        }
+    };
+    match parent {
+        Some(Some(p)) => {
+            project_tree::set_parent(conn, id, Some(p))?;
+            let under: Option<String> = conn.exec_first("SELECT name FROM projects WHERE id = ?", (p,)).map_err(sql("Reading the project"))?;
+            Ok(format!("PROJECT saved: {name} (under {})", under.unwrap_or_default()))
+        }
+        Some(None) => {
+            project_tree::set_parent(conn, id, None)?;
+            Ok(format!("PROJECT saved: {name} (on its own)"))
+        }
+        None => Ok(format!("PROJECT saved: {name}")),
+    }
 }
 
 fn project_list(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
     purge_deleted(conn);
-    // Recently deleted only with --deleted; the rest by shelf, active first
+    // Recently deleted only with --deleted; the rest by shelf, active first, each sub-project
+    // under its parent
     let deleted = ask.get("deleted").is_some();
-    let rows: Vec<(String, Option<String>, String, Option<String>, Option<String>, Option<i64>)> = conn
+    let rows: Vec<(u64, String, Option<String>, String, Option<String>, Option<String>, Option<i64>, Option<u64>)> = conn
         .query(
-            "SELECT name, status, shelf, last_updated, shelf_note, \
-             CASE WHEN shelf = 'deleted' THEN GREATEST(0, 30 - DATEDIFF(NOW(), shelved_at)) END \
+            "SELECT id, name, status, shelf, last_updated, shelf_note, \
+             CASE WHEN shelf = 'deleted' THEN GREATEST(0, 30 - DATEDIFF(NOW(), shelved_at)) END, parent_id \
              FROM projects ORDER BY FIELD(shelf, 'active', 'paused', 'archived', 'deleted'), updated_at DESC, id DESC",
         )
         .map_err(sql("Reading the projects"))?;
-    let lines: Vec<String> = rows
-        .into_iter()
-        .filter(|r| (r.2 == "deleted") == deleted)
-        .map(|(name, status, shelf, updated, note, left)| {
-            let mut line = format!("[{shelf}] {name} · {} · {}", status.unwrap_or_else(|| "-".into()), updated.unwrap_or_else(|| "-".into()));
-            if let Some(note) = note.filter(|n| !n.is_empty()) {
+    let nodes: Vec<project_tree::Node> =
+        rows.iter().map(|r| project_tree::Node { id: r.0, name: r.1.clone(), shelf: r.3.clone(), parent: r.7, status: r.2.clone() }).collect();
+    let progress = project_tree::rolled_progress(&nodes, &project_tree::own_progress(conn));
+    let name_of = |id: u64| nodes.iter().find(|n| n.id == id).map(|n| n.name.clone()).unwrap_or_default();
+    let mut lines: Vec<String> = Vec::new();
+    for shelf in ["active", "paused", "archived", "deleted"] {
+        if (shelf == "deleted") != deleted {
+            continue;
+        }
+        let on: Vec<project_tree::Node> = nodes.iter().filter(|n| shelf_word(&n.shelf) == shelf).cloned().collect();
+        for (node, kid) in project_tree::tree_order(&on) {
+            let r = rows.iter().find(|r| r.0 == node.id).expect("listed");
+            let indent = if kid { "  ↳ " } else { "" };
+            let mut line = format!("[{shelf}] {indent}{} · {} · {}", r.1, r.2.clone().unwrap_or_else(|| "-".into()), r.4.clone().unwrap_or_else(|| "-".into()));
+            // a sub-project resting on another shelf than its parent says whose it is
+            if let (false, Some(p)) = (kid, r.7) {
+                line.push_str(&format!(" · in {}", name_of(p)));
+            }
+            let kids = nodes.iter().filter(|n| n.parent == Some(node.id)).count();
+            if kids > 0 {
+                line.push_str(&format!(" · {kids} sub-project(s)"));
+            }
+            if let Some((done, all)) = progress.get(&node.id).filter(|p| p.1 > 0) {
+                line.push_str(&format!(" · {done}/{all} tasks"));
+            }
+            if let Some(note) = r.5.clone().filter(|n| !n.is_empty()) {
                 line.push_str(&format!(" · {note}"));
             }
-            if let Some(left) = left {
+            if let Some(left) = r.6 {
                 line.push_str(&format!(" · removed for good in {left} day(s) unless restored"));
             }
-            line
-        })
-        .collect();
+            lines.push(line);
+        }
+    }
     if lines.is_empty() {
         return Ok(if deleted { "PROJECTS none recently deleted".into() } else { "PROJECTS none".into() });
     }
     Ok(lines.join("\n"))
 }
 
+/// A shelf word as Castle knows it (an unknown one stays with the active projects).
+fn shelf_word(shelf: &str) -> &'static str {
+    Shelf::named(shelf).unwrap_or(Shelf::Active).word()
+}
+
 fn project_show(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
     let name = ask.need("name")?;
-    let row: Option<(Option<String>, Option<String>, Option<String>)> =
-        conn.exec_first("SELECT status, summary, body FROM projects WHERE name = ?", (name,)).map_err(sql("Reading the project"))?;
-    let (status, summary, body) = row.ok_or(format!("No project called {name}."))?;
+    let id = project_tree::need(conn, name)?;
+    let row: Option<(String, Option<String>, Option<String>, Option<String>, Option<String>)> = conn
+        .exec_first("SELECT c.name, c.status, c.summary, c.body, p.name FROM projects c LEFT JOIN projects p ON p.id = c.parent_id WHERE c.id = ?", (id,))
+        .map_err(sql("Reading the project"))?;
+    let (name, status, summary, body, parent) = row.ok_or(format!("No project called {name}."))?;
     let mut out = format!("# {name}\nStatus: {}\n", status.unwrap_or_else(|| "-".into()));
+    if let Some(parent) = parent {
+        out.push_str(&format!("Parent: {parent}\n"));
+    }
     if let Some(summary) = summary.filter(|s| !s.is_empty()) {
         out.push_str(&format!("Summary: {summary}\n"));
+    }
+    let kids: Vec<(String, String, Option<String>)> =
+        conn.exec("SELECT name, shelf, status FROM projects WHERE parent_id = ? ORDER BY updated_at DESC, id", (id,)).map_err(sql("Reading the sub-projects"))?;
+    if !kids.is_empty() {
+        out.push_str("Sub-projects:\n");
+        for (kid, shelf, status) in kids {
+            out.push_str(&format!("- [{shelf}] {kid} · {}\n", status.unwrap_or_else(|| "-".into())));
+        }
+    }
+    let tasks = project_tree::tasks(conn, id)?;
+    if !tasks.is_empty() {
+        out.push_str(&format!("Tasks ({}/{} done):\n{}\n", tasks.iter().filter(|t| t.done).count(), tasks.len(), task_lines(&tasks)));
     }
     if let Some(body) = body.filter(|b| !b.trim().is_empty()) {
         out.push_str(&format!("\n{}\n", body.trim_end()));
     }
     Ok(out)
+}
+
+fn task_lines(tasks: &[project_tree::Task]) -> String {
+    tasks
+        .iter()
+        .map(|t| format!("#{} [{}] {}{}", t.id, if t.done { "x" } else { " " }, t.title, t.due.as_ref().map(|d| format!(" (by {d})")).unwrap_or_default()))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn task_id(ask: &Ask) -> Result<u64, String> {
+    ask.need("id")?.trim_start_matches('#').parse().map_err(|_| "--id is a number, like 4.".to_string())
+}
+
+fn task_add(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+    let project = project_tree::need(conn, ask.need("project")?)?;
+    let id = project_tree::task_add(conn, project, ask.need("title")?, ask.get("due"), ask.get("remind").is_some())?;
+    Ok(format!("TASK #{id} added{}", if ask.get("remind").is_some() { " with a reminder" } else { "" }))
+}
+
+fn task_list(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
+    let project = project_tree::need(conn, ask.need("project")?)?;
+    let tasks = project_tree::tasks(conn, project)?;
+    Ok(if tasks.is_empty() { "TASKS none".into() } else { task_lines(&tasks) })
+}
+
+fn task_tick(conn: &mut Conn, ask: &Ask, done: bool) -> Result<String, String> {
+    let id = task_id(ask)?;
+    let title = project_tree::task_set_done(conn, id, done)?;
+    Ok(format!("TASK #{id} {}: {title}", if done { "done" } else { "open again" }))
+}
+
+fn project_split(conn: &mut Conn) -> Result<String, String> {
+    let found = project_tree::proposals(&project_tree::nodes(conn));
+    if found.is_empty() {
+        return Ok("PROJECTS no grouped names to split".into());
+    }
+    let mut out = String::from("These names look grouped. The member can turn them into sub-projects in the PROJECTS room (it is their choice, never renamed here):\n");
+    for s in found {
+        out.push_str(&format!("{}{}\n", s.parent, if s.parent_exists { "" } else { " (new parent)" }));
+        for i in s.items {
+            out.push_str(&format!("  ↳ {} -> {}\n", i.name, i.new_name));
+        }
+    }
+    Ok(out.trim_end().to_string())
 }
 
 /// Where a project is: running, resting, put away, or on its way out.
@@ -486,9 +629,11 @@ pub fn move_project(conn: &mut Conn, id: u64, to: Shelf, note: Option<&str>) -> 
 
 fn project_move(conn: &mut Conn, ask: &Ask, to: Shelf) -> Result<String, String> {
     let name = ask.need("name")?;
-    let id: Option<u64> = conn.exec_first("SELECT id FROM projects WHERE name = ?", (name,)).map_err(sql("Reading the project"))?;
-    let id = id.ok_or(format!("No project called {name}."))?;
-    let line = move_project(conn, id, to, ask.get("note"))?;
+    let id = project_tree::need(conn, name)?;
+    let mut line = project_tree::move_with_kids(conn, id, to, ask.get("note"), ask.get("with-subprojects").is_some())?;
+    if line.ends_with("stayed where they were)") {
+        line.push_str("; add --with-subprojects to move them too");
+    }
     purge_deleted(conn);
     Ok(line)
 }
@@ -776,6 +921,27 @@ fn export(conn: &mut Conn, to: &Path) -> Result<String, String> {
     let rows: Vec<(String, Option<String>, String, Option<String>, Option<String>, Option<String>, Option<String>)> = conn
         .query("SELECT name, status, shelf, summary, body, last_updated, source_file FROM projects ORDER BY shelf, id")
         .map_err(sql("Reading the projects"))?;
+    // sub-projects and tasks travel at the end of each page, in markdown's own shape
+    let parents: Vec<(String, String)> =
+        conn.query("SELECT c.name, p.name FROM projects c JOIN projects p ON p.id = c.parent_id").map_err(sql("Reading the projects"))?;
+    let tasks: Vec<(String, String, bool, Option<String>)> = conn
+        .query("SELECT p.name, t.title, t.done_at IS NOT NULL, DATE_FORMAT(t.due_date, '%Y-%m-%d') FROM project_tasks t JOIN projects p ON p.id = t.project_id ORDER BY t.project_id, t.position, t.id")
+        .map_err(sql("Reading the tasks"))?;
+    let tail = |name: &str| {
+        let mut out = String::new();
+        if let Some((_, parent)) = parents.iter().find(|(c, _)| c == name) {
+            out.push_str(&format!("\n\n**Parent:** {parent}"));
+        }
+        let mine: Vec<String> = tasks
+            .iter()
+            .filter(|t| t.0 == name)
+            .map(|(_, title, done, due)| format!("- [{}] {title}{}", if *done { "x" } else { " " }, due.as_ref().map(|d| format!(" (by {d})")).unwrap_or_default()))
+            .collect();
+        if !mine.is_empty() {
+            out.push_str(&format!("\n\n## Tasks\n{}", mine.join("\n")));
+        }
+        if out.is_empty() { out } else { out + "\n" }
+    };
     let projects = rows.len();
     if projects > 0 {
         let mut list = String::from("# Project List\n");
@@ -799,6 +965,8 @@ fn export(conn: &mut Conn, to: &Path) -> Result<String, String> {
                     Some(body) => body.clone(),
                     None => format!("# {name}\n\n{}\n", summary.clone().unwrap_or_default()),
                 };
+                let more = tail(name);
+                let text = if more.is_empty() { text } else { format!("{}{more}", text.trim_end()) };
                 write(&to.join(&page), &text)?;
             }
         }
@@ -857,7 +1025,7 @@ pub fn main(args: &[String]) -> i32 {
     let result = (|| {
         let ask = parse(args)?;
         if ask.words.is_empty() {
-            return Err("castle-memory needs a verb: diary, reminder, project, link, plan, trait, export, dump, restore.".to_string());
+            return Err("castle-memory needs a verb: diary, reminder, project, task, link, plan, trait, export, dump, restore.".to_string());
         }
         let memory = find_memory(&ask, &std::env::current_dir().map_err(|_| "This folder could not be read.".to_string())?)?;
         let mut conn = memdb::open_for(&memory)?;
@@ -1100,13 +1268,18 @@ mod tests {
         assert!(go(&["trait", "show", "--number", "9"]).is_err());
 
         let file = folder.join("backup").join("memory.sql");
-        assert!(go(&["dump", "--to", file.to_str().unwrap()]).unwrap().starts_with("DUMP 22 table(s), "));
+        let dumped = go(&["dump", "--to", file.to_str().unwrap()]).unwrap();
+        drop(go);
+        // every table the migrations made, whatever their number
+        let tables: Vec<String> = conn.query("SHOW TABLES").unwrap();
+        assert!(dumped.starts_with(&format!("DUMP {} table(s), ", tables.len())), "{dumped}");
+        let mut go = |line: &[&str]| run(&mut conn, &parse(&args(line)).unwrap(), &folder);
         let before = go(&["diary", "show", "--date", "2026-11-10"]).unwrap();
         drop(go);
         // the record of the note: sent once, read once
         let recorded: Option<(u64, u64)> = conn.query_first("SELECT COUNT(*), COUNT(read_at) FROM link_notes").unwrap();
         assert_eq!(recorded, Some((1, 1)));
-        conn.query_drop("DROP TABLE diary_entries, reminders, projects, link_notes, link_terminals, imported_files, memory_files, memory_file_history, session_sections, session_section_history, skills, skill_files, skill_file_history, diary_entry_history, project_plan_items, project_plans, companion_trait_history, companion_traits, profile_notes, profile_scores, profile_readings, schema_migrations").unwrap();
+        conn.query_drop("DROP TABLE diary_entries, reminders, project_tasks, projects, link_notes, link_terminals, imported_files, memory_files, memory_file_history, session_sections, session_section_history, skills, skill_files, skill_file_history, diary_entry_history, project_plan_items, project_plans, companion_trait_history, companion_traits, profile_notes, profile_scores, profile_readings, schema_migrations").unwrap();
         let mut go =|line: &[&str]| run(&mut conn, &parse(&args(line)).unwrap(), &folder);
         assert!(go(&["diary", "list"]).is_err());
         assert!(go(&["restore", "--from", file.to_str().unwrap()]).unwrap().starts_with("RESTORE "));

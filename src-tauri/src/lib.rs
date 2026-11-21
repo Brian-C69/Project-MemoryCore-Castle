@@ -47,6 +47,7 @@ mod meter_watch;
 mod mirror;
 mod plans;
 mod project_room;
+mod project_tree;
 mod profile;
 mod projectdb;
 mod projectdb_login;
@@ -306,6 +307,12 @@ pub fn run() {
             get_settings,
             project_room::project_state,
             project_room::project_shelve,
+            project_room::project_task_add,
+            project_room::project_task_done,
+            project_room::project_task_remove,
+            project_room::project_task_order,
+            project_room::project_split_proposals,
+            project_room::project_split_apply,
             alerts::alert_sources,
             alerts::alert_active_room,
             roomalert::alert_sounds,

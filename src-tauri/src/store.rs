@@ -5,7 +5,8 @@
 //! that `read` understands. A memory that has a database but has not moved in yet is still read
 //! from its files.
 
-use crate::memory::{DiaryEntry, Growth, HomeData, Page, Project, Reminder, Shelf};
+use crate::memory::{DiaryEntry, Growth, HomeData, Page, Project, Reminder, Shelf, TreeMark};
+use crate::project_tree::{self, Node};
 use mysql::prelude::Queryable;
 use mysql::Conn;
 use std::path::Path;
@@ -55,11 +56,21 @@ pub fn home(conn: &mut Conn, folder: &Path, today: &str) -> HomeData {
         .into_iter()
         .map(|(title, due, detail)| Reminder { title, due, detail })
         .collect();
-    let projects: Vec<Project> = conn
-        .query::<(u64, String, Option<String>, Option<String>), _>("SELECT id, name, last_updated, status FROM projects WHERE shelf = 'active' ORDER BY updated_at DESC, id")
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(id, name, updated, status)| Project { name, file: Some(project_page(id)), updated, status })
+    // the active projects at the top of the tree: a sub-project shows under its parent's line,
+    // unless its parent is not active
+    let nodes = project_tree::nodes(conn);
+    let progress = project_tree::rolled_progress(&nodes, &project_tree::own_progress(conn));
+    let updated: Vec<(u64, Option<String>)> = conn.query("SELECT id, last_updated FROM projects").unwrap_or_default();
+    let projects: Vec<Project> = nodes
+        .iter()
+        .filter(|n| n.shelf == "active" && n.parent.is_none_or(|p| !nodes.iter().any(|o| o.id == p && o.shelf == "active")))
+        .map(|n| Project {
+            name: n.name.clone(),
+            file: Some(project_page(n.id)),
+            updated: updated.iter().find(|u| u.0 == n.id).and_then(|u| u.1.clone()),
+            status: n.status.clone(),
+            tree: mark(n, &nodes, &progress, None),
+        })
         .collect();
     let diary = conn
         .query_first::<(u64, String, Option<String>), _>(
@@ -89,7 +100,7 @@ pub fn diary_shelves(conn: &mut Conn) -> Vec<Shelf> {
     let mut shelves: Vec<Shelf> = Vec::new();
     for (id, title, date) in rows {
         let month = date.as_ref().map(|d| d[..7].to_string()).unwrap_or_else(|| "Earlier".into());
-        let page = Page { title, file: diary_page(id), date };
+        let page = Page { title, file: diary_page(id), date, tree: None };
         match shelves.iter_mut().find(|s| s.name == month) {
             Some(shelf) => shelf.pages.push(page),
             None => shelves.push(Shelf { name: month, pages: vec![page] }),
@@ -98,19 +109,45 @@ pub fn diary_shelves(conn: &mut Conn) -> Vec<Shelf> {
     shelves
 }
 
+/// A project's mark, when it has a parent, sub-projects or tasks.
+fn mark(n: &Node, nodes: &[Node], progress: &std::collections::HashMap<u64, (u32, u32)>, elsewhere: Option<String>) -> Option<TreeMark> {
+    let kids = nodes.iter().filter(|k| k.parent == Some(n.id)).count() as u32;
+    let parent = n.parent.filter(|p| nodes.iter().any(|o| o.id == *p)).map(project_page);
+    let (done, tasks) = progress.get(&n.id).copied().unwrap_or((0, 0));
+    (kids > 0 || parent.is_some() || tasks > 0 || elsewhere.is_some()).then_some(TreeMark { parent, kids, done, tasks, elsewhere })
+}
+
+/// A shelf as Castle knows it (one it does not know stays with the active ones).
+fn shelf_of(s: &str) -> &'static str {
+    crate::door::Shelf::named(s).unwrap_or(crate::door::Shelf::Active).word()
+}
+
+/// The PROJECTS room's shelves, each in tree order: a parent, then its sub-projects on that
+/// shelf. A parent that rests elsewhere still heads its sub-projects here, marked so.
 pub fn project_shelves(conn: &mut Conn) -> Vec<Shelf> {
     crate::door::purge_deleted(conn);
-    let rows: Vec<(u64, String, String)> = conn.query("SELECT id, name, shelf FROM projects ORDER BY updated_at DESC, id").unwrap_or_default();
-    // a project on a shelf this Castle does not know stays with the active ones
-    let shelf_of = |s: &str| match s {
-        "paused" | "archived" | "deleted" => s.to_string(),
-        _ => "active".to_string(),
-    };
+    let nodes = project_tree::nodes(conn);
+    let progress = project_tree::rolled_progress(&nodes, &project_tree::own_progress(conn));
     [("Active", "active"), ("Paused", "paused"), ("Archived", "archived"), ("Recently deleted", "deleted")]
         .iter()
-        .map(|(name, shelf)| Shelf {
-            name: name.to_string(),
-            pages: rows.iter().filter(|r| shelf_of(&r.2) == *shelf).map(|(id, title, _)| Page { title: title.clone(), file: project_page(*id), date: None }).collect(),
+        .map(|(name, shelf)| {
+            let mut pages = Vec::new();
+            for (n, _) in project_tree::tree_order(&nodes) {
+                let here = shelf_of(&n.shelf) == *shelf;
+                let is_kid = n.parent.is_some_and(|p| nodes.iter().any(|o| o.id == p));
+                if is_kid {
+                    if here {
+                        pages.push(Page { title: n.name.clone(), file: project_page(n.id), date: None, tree: mark(n, &nodes, &progress, None) });
+                    }
+                    continue;
+                }
+                let kids_here = nodes.iter().any(|k| k.parent == Some(n.id) && shelf_of(&k.shelf) == *shelf);
+                if here || kids_here {
+                    let elsewhere = (!here).then(|| shelf_of(&n.shelf).to_string());
+                    pages.push(Page { title: n.name.clone(), file: project_page(n.id), date: None, tree: mark(n, &nodes, &progress, elsewhere) });
+                }
+            }
+            Shelf { name: name.to_string(), pages }
         })
         .filter(|s| !s.pages.is_empty())
         .collect()
