@@ -2,13 +2,14 @@
 // The memory database, step by step: install (or use the one already on this PC), start,
 // create the companion's own database, move the memory in. Used by Settings > Database, the
 // HOME card's sheet and setup's last step. Optional: a memory kept in files works as before.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
-  chooseFolder, dbCreate, dbExport, dbInstall, dbMemory, dbMoveIn, dbMoveOut, dbMovePreview, dbRestore, dbSkills, dbSkillStub, dbStart, dbStatus, dbStop, dbUseExisting,
-  getSettings, onDbInstall, saveSettings,
+  chooseFolder, dbCreate, dbExport, dbMemory, dbMoveIn, dbMoveOut, dbMovePreview, dbRestore, dbSkills, dbSkillStub, dbStart, dbStatus, dbStop, dbUseExisting,
+  getSettings, saveSettings,
 } from '../api/castle.js'
+import { installState, runInstall, runningInstall } from '../composables/useDbInstall.js'
 import HelpTip from './HelpTip.vue'
-import { installLine, moveLine, nextStep, progressLine, steps as stepsOf, thisComputer } from './database.js'
+import { installLine, moveLine, nextStep, steps as stepsOf, thisComputer } from './database.js'
 
 const here = thisComputer()
 
@@ -31,7 +32,6 @@ const bootAtWake = ref(true)
 const sure = ref(false)
 const sureOut = ref(false)
 let settings = null
-let stopListening = null
 
 const engine = computed(() => view.value?.engine ?? null)
 const steps = computed(() => stepsOf(engine.value, memory.value))
@@ -65,11 +65,39 @@ async function check() {
   emit('changed')
 }
 
+// The download belongs to Castle, not to this panel: pressing Install while one is already going
+// joins it, and a panel that opens mid-download shows it again (see followInstall).
 async function install() {
-  const result = await attempt('Downloading…', dbInstall)
+  const result = await attempt(installState.running ? installState.line : 'Downloading…', runInstall)
   if (result) done.value = 'The database is installed and running.'
   await check()
 }
+
+async function followInstall() {
+  const running = runningInstall()
+  if (!running) {
+    // an install that failed while this panel was closed: say why, as it would have
+    if (installState.error) problem.value = installState.error
+    return
+  }
+  busy.value = installState.line
+  try {
+    await running
+    done.value = 'The database is installed and running.'
+  } catch (reason) {
+    problem.value = String(reason)
+  } finally {
+    busy.value = ''
+  }
+  await check()
+}
+
+watch(
+  () => installState.line,
+  (line) => {
+    if (busy.value && installState.running) busy.value = line
+  },
+)
 
 async function useExisting() {
   const result = await attempt('Checking…', dbUseExisting)
@@ -156,15 +184,12 @@ onMounted(async () => {
   try {
     settings = (await getSettings()).settings
     bootAtWake.value = settings.dbBootAtWake
-    stopListening = await onDbInstall(({ done: got, total }) => {
-      if (busy.value) busy.value = progressLine(got, total)
-    })
   } catch {
     // outside Castle's window
   }
-  check()
+  await check()
+  followInstall()
 })
-onBeforeUnmount(() => stopListening?.())
 </script>
 
 <template>
