@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.26 - 2026-11-21
+
 - **Switching providers no longer waits for ever, or freezes, when you also run Claude Code yourself in your memory folder.** Chat and the switch followed whichever Claude Code record in that folder was newest, so your own terminal session was taken for your companion's: Chat showed it, and the switch waited for it to finish a turn that never ended. Castle now follows the record its own session created, and never reads a record over 64 MB to guess.
 
 - **Chat no longer says your companion is resting when it is awake.** If the session was started without you pressing Wake (a message from your phone, for example), the Chat and Log panel now notices and switches over by itself.
@@ -25,6 +27,20 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 - **Films and songs in Chat.** A film your companion makes plays right in the conversation. A song shows its own name, and both have **Open** and **Open folder**.
 
 - **Talk instead of typing in CHAT.** With Claude Code's voice on (`/voice` in the Log, hold mode), a 🎙 button sits beside Send, on HOME and in every DEV tab. Click it (or press ⌘⇧M, Ctrl+Shift+M on Windows, anywhere in CHAT) and speak; click again (or press the keys again) and your words come into the message box, so you can look them over and press Send yourself. Other keys? Settings > Chat > Mic takes your own (⌘ or Ctrl plus a letter or digit). Esc cancels and keeps nothing; the mic also stops by itself after two minutes, or when you leave Castle or the CHAT tab. On a Mac, Castle now asks for the microphone the first time, and voice works in the Log too, also when Castle keeps your personal Claude Code setup out of its sessions.
+
+- **Settings in one standard.** A sidebar in five groups, every page made of the same cards of rows, and one set of switches, choices and buttons throughout.
+
+- **Mark up a picture before it goes to your companion.** Draw, point and write on a picture you shared; the marked copy is sent and the original stays as it was.
+
+- **Sub-projects and tasks.** A project can hold sub-projects one level deep, and every project keeps a task list you tick, reorder and give due dates.
+
+- **DEV: projects stay on the list, sessions are the tabs.** A project can run several sessions ("shop · 1", "shop · 2"); closing a tab ends that session and keeps the project.
+
+- **Real Codex limits on the USAGE card.** Signed in to Codex with ChatGPT, the card shows its five-hour and weekly bars.
+
+- **The room draws with Codex for a Claude Code companion too**, whenever Codex is signed in with ChatGPT.
+
+- **A project status that is too long now says so** instead of failing quietly.
 
 ## 0.2.25 - 2026-11-20
 
