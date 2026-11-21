@@ -1290,3 +1290,315 @@
 .home.glass.skin-windmill-cloud .widget.disks .drives {
   flex-direction: row;
 }
+
+/* ---------- The Thousand Sails chat, as its design draws it ----------
+   clear glass with the sea and its sails seen sharply through it, a soft sun glare at the top, a
+   thick bright ice-white rim; words that read on it, a frosted message pill */
+.home.glass.skin-lighthouse-beam .terminal-panel {
+  --text: #0f3c6e;
+  --text-dim: #2f5f8f;
+  background:
+    radial-gradient(ellipse at 85% 0%, rgba(255, 240, 200, 0.55), transparent 45%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(220, 240, 255, 0.08) 35%, rgba(200, 230, 255, 0.06));
+  -webkit-backdrop-filter: blur(1.5px) saturate(120%);
+  backdrop-filter: blur(1.5px) saturate(120%);
+  border: 2.5px solid rgba(255, 255, 255, 0.92);
+  border-radius: 22px;
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 235, 255, 0.6),
+    inset 0 0 22px rgba(255, 255, 255, 0.45),
+    0 0 18px rgba(255, 255, 255, 0.45),
+    0 12px 28px rgba(8, 40, 90, 0.25);
+}
+.home.glass.skin-lighthouse-beam .terminal-panel .name {
+  color: #ffffff;
+  text-shadow: 0 1px 6px rgba(8, 40, 90, 0.7);
+}
+.home.glass.skin-lighthouse-beam .terminal-panel .tabs button {
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 4px rgba(8, 40, 90, 0.7);
+}
+.home.glass.skin-lighthouse-beam .terminal-panel .tabs button.active {
+  color: #ffffff;
+  border-bottom-color: #ffc24a;
+}
+.home.glass.skin-lighthouse-beam .terminal-panel .quick-actions button {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(255, 255, 255, 0.95);
+  color: #0f3c6e;
+}
+.home.glass.skin-lighthouse-beam .terminal-panel .row.companion .bubble {
+  background: rgba(255, 255, 255, 0.86);
+  color: #0f3c6e;
+  box-shadow: 0 2px 8px rgba(8, 40, 90, 0.15);
+}
+.home.glass.skin-lighthouse-beam .terminal-panel .row.member .bubble {
+  background: rgba(214, 240, 255, 0.92);
+  color: #0f3c6e;
+}
+.home.glass.skin-lighthouse-beam .terminal-panel textarea {
+  background: rgba(255, 255, 255, 0.42);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  color: #0f3c6e;
+}
+.home.glass.skin-lighthouse-beam .terminal-panel textarea::placeholder {
+  color: rgba(255, 255, 255, 0.95);
+}
+.home.glass.skin-lighthouse-beam .terminal-panel .send {
+  background: transparent;
+  color: #ffffff;
+  font-size: 20px;
+  text-shadow: 0 1px 4px rgba(8, 40, 90, 0.6);
+}
+.home.glass.skin-lighthouse-beam .terminal-panel .modes .mode {
+  background: rgba(255, 255, 255, 0.78);
+  color: #0f3c6e;
+  border-color: rgba(255, 255, 255, 0.95);
+}
+.home.glass.skin-lighthouse-beam .terminal-panel .modes-label,
+.home.glass.skin-lighthouse-beam .terminal-panel .modes-hint {
+  color: #ffffff;
+  text-shadow: 0 1px 4px rgba(8, 40, 90, 0.7);
+}
+
+/* ---------- The Thousand Sails cards, as the design draws them ----------
+   warm sunlit sea glass - cream at the lit corner fading to aqua - with a bright white rim; the words
+   in a serif face and deep navy; a big gold sun and a blue book to the left of the words; the shell
+   beside Sweep and a royal-blue Sweep button */
+.home.glass.skin-lighthouse-beam .widget.card,
+.home.glass.skin-lighthouse-beam .widget.sweep {
+  font-family: Georgia, 'Palatino Linotype', 'Book Antiqua', 'Times New Roman', serif;
+  background: linear-gradient(135deg, rgba(255, 246, 214, 0.88), rgba(226, 244, 255, 0.66) 55%, rgba(196, 232, 252, 0.6));
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 0 14px rgba(255, 255, 255, 0.7),
+    0 0 14px rgba(255, 255, 255, 0.5),
+    0 10px 24px rgba(8, 40, 90, 0.22);
+}
+.home.glass.skin-lighthouse-beam .widget.card {
+  position: relative;
+  padding: 14px 18px 14px 72px;
+}
+.home.glass.skin-lighthouse-beam .card h3 {
+  margin: 0 0 4px;
+  border-bottom: 0;
+  padding-bottom: 0;
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: #173b66;
+}
+.home.glass.skin-lighthouse-beam .card h3 .icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  width: 42px;
+  height: 42px;
+  margin: 0;
+  transform: translateY(-50%);
+}
+.home.glass.skin-lighthouse-beam .card .empty,
+.home.glass.skin-lighthouse-beam .card .diary-line {
+  color: #173b66;
+  font-size: 14.5px;
+}
+.home.glass.skin-lighthouse-beam .card .side {
+  display: none;
+}
+.home.glass.skin-lighthouse-beam .card.today h3 .icon {
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f2b33d' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4.5' fill='%23ffe08a'/%3E%3Cpath d='M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8'/%3E%3C/svg%3E");
+}
+.home.glass.skin-lighthouse-beam .card.diary h3 .icon {
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2390c8f0' stroke='%232f6f9a' stroke-width='1.3' stroke-linejoin='round'%3E%3Cpath d='M12 6.5C9.5 4.8 6.5 4.5 3 5v13c3.5-.5 6.5-.2 9 1.5 2.5-1.7 5.5-2 9-1.5V5c-3.5-.5-6.5-.2-9 1.5z'/%3E%3Cpath d='M12 6.5v13' fill='none'/%3E%3C/svg%3E");
+}
+.home.glass.skin-lighthouse-beam .widget.sweep .broom-look::before {
+  width: 54px;
+  height: 48px;
+}
+.home.glass.skin-lighthouse-beam .widget.sweep h3 {
+  font-weight: 400;
+  font-size: 17px;
+  color: #173b66;
+}
+.home.glass.skin-lighthouse-beam .widget.sweep .size strong {
+  background: none;
+  color: #173b66;
+  -webkit-text-fill-color: #173b66;
+  font-size: 24px;
+  font-weight: 400;
+}
+.home.glass.skin-lighthouse-beam .widget.sweep .unit {
+  color: #173b66;
+  font-size: 16px;
+  font-weight: 400;
+}
+.home.glass.skin-lighthouse-beam .widget.sweep .hint::after {
+  color: #173b66;
+}
+.home.glass.skin-lighthouse-beam .widget.sweep .go {
+  background: linear-gradient(180deg, #2f86e8, #1a5fc4);
+  color: #ffffff;
+  font-family: Georgia, 'Times New Roman', serif;
+  box-shadow: 0 2px 8px rgba(26, 95, 196, 0.45);
+}
+.home.glass.skin-lighthouse-beam .widget.card:not(.clock):not(.gauges),
+.home.glass.skin-lighthouse-beam .widget.sweep:not(.clock):not(.gauges) {
+  background: linear-gradient(135deg, rgba(255, 246, 214, 0.9), rgba(232, 246, 255, 0.7) 50%, rgba(200, 234, 252, 0.62));
+  -webkit-backdrop-filter: blur(10px) saturate(130%);
+  backdrop-filter: blur(10px) saturate(130%);
+}
+
+/* ---------- The Thousand Sails: each drive a floating buoy like the gauges, the Sentinel a round
+   sea-glass button with its shield ---------- */
+.home.glass.skin-lighthouse-beam .widget.disks:not(.clock):not(.gauges) {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  padding: 0;
+  width: max-content;
+  min-width: 0;
+  max-width: none;
+}
+.home.glass.skin-lighthouse-beam .widget.disks .head,
+.home.glass.skin-lighthouse-beam .widget.disks .bar,
+.home.glass.skin-lighthouse-beam .widget.disks .line,
+.home.glass.skin-lighthouse-beam .widget.disks .extra {
+  display: none;
+}
+.home.glass.skin-lighthouse-beam .widget.disks .drives {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 14px;
+  overflow: visible;
+  max-height: none;
+  padding: 0;
+}
+.home.glass.skin-lighthouse-beam .widget.disks li {
+  position: relative;
+  width: 132px;
+  height: 155px;
+}
+.home.glass.skin-lighthouse-beam .widget.disks li::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    url('./thousand-sails/buoy.png') center / 100% 100% no-repeat,
+    radial-gradient(circle at 50% 50.4%, rgba(250, 253, 255, 0.96) 0 21%, transparent 21.5%);
+  pointer-events: none;
+  animation: buoy-bob 5s ease-in-out infinite alternate;
+}
+.home.glass.skin-lighthouse-beam .widget.disks li:nth-child(2)::before {
+  animation-delay: -2.4s;
+}
+.home.glass.skin-lighthouse-beam .widget.disks li::after {
+  content: '';
+  position: absolute;
+  left: 38px;
+  top: 50px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: conic-gradient(#2f86e8 calc(var(--used, 0) * 1%), rgba(23, 59, 102, 0.15) 0);
+  -webkit-mask: radial-gradient(circle, transparent 0 23px, #000 23.5px 28px, transparent 28.5px);
+  mask: radial-gradient(circle, transparent 0 23px, #000 23.5px 28px, transparent 28.5px);
+  pointer-events: none;
+}
+.home.glass.skin-lighthouse-beam .widget.disks .top {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.home.glass.skin-lighthouse-beam .widget.disks .top strong {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 61px;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: #173b66;
+}
+.home.glass.skin-lighthouse-beam .widget.disks .percent {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 72px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: #173b66;
+}
+.home.still.skin-lighthouse-beam .widget.disks li::before {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home.skin-lighthouse-beam .widget.disks li::before {
+    animation: none;
+  }
+}
+.home.glass.skin-lighthouse-beam .widget.sentinel:not(.clock):not(.gauges) {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.home.glass.skin-lighthouse-beam .widget.sentinel .said,
+.home.glass.skin-lighthouse-beam .widget.sentinel .lines,
+.home.glass.skin-lighthouse-beam .widget.sentinel .title {
+  display: none;
+}
+.home.glass.skin-lighthouse-beam .widget.sentinel .head {
+  justify-content: center;
+}
+.home.glass.skin-lighthouse-beam .widget.sentinel .state {
+  font-size: 0;
+  color: #173b66;
+}
+.home.glass.skin-lighthouse-beam .widget.sentinel .state svg {
+  width: 30px;
+  height: 30px;
+  stroke-width: 1.6;
+}
+.home.glass.skin-lighthouse-beam .widget.sentinel:not(.clock):not(.gauges) {
+  min-width: 0;
+  max-width: 64px;
+  box-sizing: border-box;
+}
+/* piece 4: the beam as strong as the design draws it - a warm golden shaft with a brighter core */
+.home.glass.skin-lighthouse-beam::before {
+  background:
+    linear-gradient(to right, rgba(255, 226, 140, 0) 18%, rgba(255, 228, 150, 0.45) 38%, rgba(255, 236, 170, 0.8) 64%, rgba(255, 248, 214, 1) 84%),
+    linear-gradient(to right, transparent 30%, rgba(255, 255, 240, 0.5) 84%);
+  clip-path: polygon(85% 24%, 85% 32%, 18% 46%, 18% 2%);
+  filter: blur(4px);
+}
+.home.glass.skin-lighthouse-beam .widget.clock .time,
+.home.glass.skin-lighthouse-beam .widget.clock .date {
+  font-family: Georgia, 'Palatino Linotype', 'Times New Roman', serif;
+  color: #173b66;
+}
+.home.glass.skin-lighthouse-beam .widget.clock .time {
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.home.glass.skin-lighthouse-beam .gauge .label,
+.home.glass.skin-lighthouse-beam .gauge .value {
+  font-family: Georgia, 'Palatino Linotype', 'Times New Roman', serif;
+}
+.home.glass.skin-lighthouse-beam .widget.clock,
+.home.glass.skin-lighthouse-beam .widget.gauges,
+.home.glass.skin-lighthouse-beam .widget.card,
+.home.glass.skin-lighthouse-beam .widget.sweep,
+.home.glass.skin-lighthouse-beam .widget.disks {
+  font-variant-numeric: lining-nums;
+}
