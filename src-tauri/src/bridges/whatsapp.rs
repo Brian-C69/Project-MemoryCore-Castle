@@ -328,7 +328,8 @@ fn handle(app: &AppHandle, client: &reqwest::blocking::Client, m: IncomingMessag
                     crate::bridges::reactions::remember(&app, "whatsapp", &id, &reply);
                 }
             }
-            Who::Guest(_) => {} // answered by the guest-only run (Task 3)
+            // a guest is answered by the guest-only run, never the companion's real session
+            Who::Guest(i) => crate::bridges::guests::heard(&app, settings.whatsapp_guests[i].clone(), text, send, client.clone()),
             Who::Stranger => {
                 let wa_state = app.state::<WhatsAppState>();
                 let mut pending = wa_state.pending.lock().unwrap();
