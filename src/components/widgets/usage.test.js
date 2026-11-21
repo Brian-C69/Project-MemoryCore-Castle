@@ -35,6 +35,7 @@ describe('usage card', () => {
   it('shows one quiet line when there is nothing to show', () => {
     expect(rows({ status: 'not_installed' }, now)).toEqual({ message: 'Not installed', bars: [] })
     expect(rows({ status: 'signed_out' }, now).message).toBe('Sign in to see usage')
+    expect(rows({ status: 'api_key' }, now)).toEqual({ message: 'API key · billed per use', bars: [] })
     expect(rows({ status: 'ok', fiveHour: null, weekly: null }, now).message).toBe('Usage not available yet')
   })
 })
