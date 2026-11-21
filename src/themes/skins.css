@@ -1602,3 +1602,309 @@
 .home.glass.skin-lighthouse-beam .widget.disks {
   font-variant-numeric: lining-nums;
 }
+
+/* ---------- The Lantern Falls chat, as its design draws it ----------
+   a pane of perfectly clear water-glass - the valley sharp behind it - with a thick, wavy rim that
+   catches the sunset in gold and rose along its sides, standing on ripples; the words cream and soft */
+.home.glass.skin-still-water .terminal-panel {
+  --text: #fff4e6;
+  --text-dim: #f3dccb;
+  background: linear-gradient(90deg, rgba(255, 196, 130, 0.16), rgba(255, 255, 255, 0.02) 14%, rgba(255, 255, 255, 0.02) 86%, rgba(255, 170, 200, 0.14));
+  -webkit-backdrop-filter: blur(0.5px) saturate(115%);
+  backdrop-filter: blur(0.5px) saturate(115%);
+  border: 3px solid rgba(255, 228, 196, 0.7);
+  border-radius: 34px;
+  box-shadow:
+    inset 6px 0 10px rgba(255, 196, 110, 0.55),
+    inset -6px 0 10px rgba(255, 170, 210, 0.45),
+    inset 0 3px 6px rgba(255, 255, 255, 0.6),
+    0 0 16px rgba(255, 190, 120, 0.55),
+    0 0 40px rgba(255, 160, 100, 0.25);
+  text-shadow: 0 1px 6px rgba(60, 20, 40, 0.75);
+}
+.home.glass.skin-still-water .terminal-panel::after {
+  content: '';
+  position: absolute;
+  left: -14%;
+  right: -14%;
+  bottom: -26px;
+  height: 46px;
+  background: url('./lantern-falls/ripple.png') center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+.home.glass.skin-still-water .terminal-panel .row.companion .bubble,
+.home.glass.skin-still-water .terminal-panel .row.member .bubble {
+  background: rgba(255, 236, 214, 0.18);
+  border: 1px solid rgba(255, 228, 200, 0.45);
+  color: #fff4e6;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.home.glass.skin-still-water .terminal-panel textarea {
+  background: rgba(255, 236, 214, 0.16);
+  border: 1.5px solid rgba(255, 228, 200, 0.6);
+  border-radius: 999px;
+  color: #fff4e6;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.home.glass.skin-still-water .terminal-panel textarea::placeholder {
+  color: rgba(255, 236, 214, 0.8);
+}
+.home.glass.skin-still-water .terminal-panel .send {
+  background: transparent;
+  color: #ffd79a;
+  font-size: 20px;
+}
+.home.glass.skin-still-water .terminal-panel .quick-actions button,
+.home.glass.skin-still-water .terminal-panel .modes .mode {
+  background: rgba(255, 236, 214, 0.18);
+  border-color: rgba(255, 228, 200, 0.55);
+  color: #fff4e6;
+}
+.home.glass.skin-still-water .terminal-panel .tabs button.active {
+  border-bottom-color: #ffc66b;
+}
+
+/* the clock: clear water-glass, the time in a cream serif glowing gold, mirrored whole in the pool */
+.home.glass.skin-still-water .widget.clock {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.10), rgba(255, 200, 220, 0.04) 50%, rgba(255, 180, 120, 0.08));
+  -webkit-backdrop-filter: blur(2px) saturate(120%);
+  backdrop-filter: blur(2px) saturate(120%);
+  padding: 14px 30px 18px;
+  -webkit-box-reflect: below 6px linear-gradient(transparent 20%, rgba(255, 255, 255, 0.6));
+}
+.home.glass.skin-still-water .widget.clock .time,
+.home.glass.skin-still-water .widget.clock .date {
+  font-family: Georgia, 'Palatino Linotype', 'Times New Roman', serif;
+  font-variant-numeric: lining-nums;
+  color: #ffe8c2;
+}
+.home.glass.skin-still-water .widget.clock .time {
+  font-weight: 700;
+  text-shadow: 0 0 12px rgba(255, 190, 110, 0.85), 0 2px 4px rgba(80, 30, 20, 0.5);
+}
+.home.glass.skin-still-water .widget.clock .date {
+  text-shadow: 0 1px 4px rgba(80, 30, 20, 0.6);
+}
+
+/* ---------- The Lantern Falls gauges and cards, as the design draws them ----------
+   cream serif words throughout; the dials gold, pale gold and lilac; every card clear water-glass
+   with a thick gold rim, no rule under the title, a large cream line icon at its left */
+.home.glass.skin-still-water .widget.gauges,
+.home.glass.skin-still-water .widget.card,
+.home.glass.skin-still-water .widget.sweep,
+.home.glass.skin-still-water .widget.disks {
+  font-family: Georgia, 'Palatino Linotype', 'Times New Roman', serif;
+  font-variant-numeric: lining-nums;
+}
+.home.glass.skin-still-water .widget.gauges {
+  gap: 34px;
+}
+.home.glass.skin-still-water .gauge .label,
+.home.glass.skin-still-water .gauge .value {
+  color: #ffe8c2;
+  text-shadow: 0 0 8px rgba(255, 180, 110, 0.6), 0 1px 3px rgba(60, 20, 30, 0.7);
+}
+.home.glass.skin-still-water .gauge .value {
+  font-weight: 400;
+}
+.home.glass.skin-still-water .gauge .fill.cpu {
+  stroke: #ffb347;
+}
+.home.glass.skin-still-water .gauge .fill.memory {
+  stroke: #ffd28a;
+}
+.home.glass.skin-still-water .gauge .fill.gpu {
+  stroke: #c9a2ff;
+}
+.home.glass.skin-still-water .widget.card:not(.clock):not(.gauges),
+.home.glass.skin-still-water .widget.sweep:not(.clock):not(.gauges) {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.12), rgba(200, 160, 230, 0.10) 50%, rgba(255, 180, 120, 0.10));
+  -webkit-backdrop-filter: blur(3px) saturate(125%);
+  backdrop-filter: blur(3px) saturate(125%);
+  border: 2.5px solid rgba(255, 220, 170, 0.78);
+}
+.home.glass.skin-still-water .widget.card {
+  position: relative;
+  padding: 16px 18px 16px 64px;
+}
+.home.glass.skin-still-water .card h3 {
+  margin: 0 0 4px;
+  padding-bottom: 0;
+  border-bottom: 0;
+  font-size: 16px;
+  font-weight: 400;
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  color: #ffe8c2;
+}
+.home.glass.skin-still-water .card h3 .icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  transform: translateY(-50%);
+}
+.home.glass.skin-still-water .card .empty,
+.home.glass.skin-still-water .card .diary-line {
+  color: #ffe8c2;
+  font-size: 14px;
+}
+.home.glass.skin-still-water .card .side {
+  display: none;
+}
+.home.glass.skin-still-water .widget.sweep .broom .sparkles,
+.home.glass.skin-still-water .widget.sweep .broom .swoosh,
+.home.glass.skin-still-water .widget.sweep .broom .face,
+.home.glass.skin-still-water .widget.sweep .broom .eye {
+  display: none;
+}
+.home.glass.skin-still-water .widget.sweep .broom-look .broom {
+  width: 40px;
+  height: 40px;
+  stroke: #ffe8c2;
+  stroke-width: 5;
+}
+.home.glass.skin-still-water .widget.sweep h3 {
+  font-weight: 400;
+  color: #ffe8c2;
+}
+.home.glass.skin-still-water .widget.sweep .size strong {
+  background: none;
+  color: #ffe8c2;
+  -webkit-text-fill-color: #ffe8c2;
+  font-weight: 400;
+}
+.home.glass.skin-still-water .widget.sweep .unit,
+.home.glass.skin-still-water .widget.sweep .hint::after {
+  color: #ffe8c2;
+}
+
+/* ---------- The Lantern Falls: each drive a glass ripple bubble like the gauges, the Sentinel a round
+   water-glass button with its shield ---------- */
+.home.glass.skin-still-water .widget.disks:not(.clock):not(.gauges) {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  -webkit-box-reflect: unset;
+  padding: 0;
+  width: max-content;
+  min-width: 0;
+  max-width: none;
+}
+.home.glass.skin-still-water .widget.disks::after {
+  display: none;
+}
+.home.glass.skin-still-water .widget.disks .head,
+.home.glass.skin-still-water .widget.disks .bar,
+.home.glass.skin-still-water .widget.disks .line,
+.home.glass.skin-still-water .widget.disks .extra {
+  display: none;
+}
+.home.glass.skin-still-water .widget.disks .drives {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 34px;
+  overflow: visible;
+  max-height: none;
+  padding: 0;
+}
+.home.glass.skin-still-water .widget.disks li {
+  position: relative;
+  width: 132px;
+  height: 132px;
+}
+.home.glass.skin-still-water .widget.disks li::before {
+  content: '';
+  position: absolute;
+  inset: 24px 0 0;
+  background: url('./lantern-falls/bubble.png') center top / 100% auto no-repeat;
+  pointer-events: none;
+  animation: still-ring 5s ease-in-out infinite alternate;
+}
+.home.glass.skin-still-water .widget.disks li::after {
+  content: '';
+  position: absolute;
+  left: 35px;
+  top: 34px;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: conic-gradient(#ffc27a calc(var(--used, 0) * 1%), rgba(255, 232, 200, 0.2) 0);
+  -webkit-mask: radial-gradient(circle, transparent 0 26px, #000 26.5px 31px, transparent 31.5px);
+  mask: radial-gradient(circle, transparent 0 26px, #000 26.5px 31px, transparent 31.5px);
+  pointer-events: none;
+}
+.home.glass.skin-still-water .widget.disks .top {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.home.glass.skin-still-water .widget.disks .top strong {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  color: #ffe8c2;
+  text-shadow: 0 0 8px rgba(255, 180, 110, 0.6), 0 1px 3px rgba(60, 20, 30, 0.7);
+}
+.home.glass.skin-still-water .widget.disks .percent {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52px;
+  text-align: center;
+  font-size: 22px;
+  color: #ffe8c2;
+  text-shadow: 0 0 8px rgba(255, 180, 110, 0.6), 0 1px 3px rgba(60, 20, 30, 0.7);
+}
+.home.still.skin-still-water .widget.disks li::before {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home.skin-still-water .widget.disks li::before {
+    animation: none;
+  }
+}
+.home.glass.skin-still-water .widget.sentinel:not(.clock):not(.gauges) {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  min-width: 0;
+  max-width: 64px;
+  box-sizing: border-box;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  -webkit-box-reflect: unset;
+}
+.home.glass.skin-still-water .widget.sentinel::after {
+  display: none;
+}
+.home.glass.skin-still-water .widget.sentinel .said,
+.home.glass.skin-still-water .widget.sentinel .lines,
+.home.glass.skin-still-water .widget.sentinel .title {
+  display: none;
+}
+.home.glass.skin-still-water .widget.sentinel .head {
+  justify-content: center;
+}
+.home.glass.skin-still-water .widget.sentinel .state {
+  font-size: 0;
+  color: #ffe8c2;
+}
+.home.glass.skin-still-water .widget.sentinel .state svg {
+  width: 30px;
+  height: 30px;
+  stroke-width: 1.6;
+}
