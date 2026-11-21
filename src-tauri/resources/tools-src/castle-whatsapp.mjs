@@ -89,7 +89,7 @@ const server = http.createServer(async (req, res) => {
   try {
     // local-only by design: this door is bound to 127.0.0.1 below, never the network
     if (req.method === 'GET' && req.url === '/status') {
-      return json(res, 200, { paired: !!state?.creds?.registered, connected, qr: latestQr, problem: lastProblem })
+      return json(res, 200, { paired: !!(state?.creds?.me || state?.creds?.registered), connected, qr: latestQr, problem: lastProblem })
     }
     if (req.method === 'GET' && req.url === '/incoming') {
       const drained = incoming.splice(0, incoming.length)

@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **WhatsApp now shows its QR code and finishes pairing.** On Windows the helper was started with a path Node cannot read, so it stopped at once and the card kept saying "Waiting for a QR code"; and after a scan the helper still reported itself unpaired. Both are fixed, the helper starts without an empty console window, and if it ever stops the card says so (with the helper's own log beside your settings) and starts it again.
+
 ## 0.2.26 - 2026-11-21
 
 - **Switching providers no longer waits for ever, or freezes, when you also run Claude Code yourself in your memory folder.** Chat and the switch followed whichever Claude Code record in that folder was newest, so your own terminal session was taken for your companion's: Chat showed it, and the switch waited for it to finish a turn that never ended. Castle now follows the record its own session created, and never reads a record over 64 MB to guess.
