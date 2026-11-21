@@ -427,10 +427,17 @@ export const telegramBridgeForget = () => invoke('telegram_bridge_forget')
 export const discordBridgeStatus = () => invoke('discord_bridge_status')
 export const discordBridgeApprove = () => invoke('discord_bridge_approve')
 export const discordBridgeForget = () => invoke('discord_bridge_forget')
-// MemoryCore in your pocket, WhatsApp: { on, connected, paired, qr: string | null, pending: { chatId, name } | null, problem }
+// MemoryCore in your pocket, WhatsApp: { on, connected, paired, qr: string | null, problem,
+// pending / me: { chatId, name, number } | null, guests: [{ chatId, name, number }] } (number: '+601 2345 6789' or null)
 export const whatsappBridgeStatus = () => invoke('whatsapp_bridge_status')
-export const whatsappBridgeApprove = () => invoke('whatsapp_bridge_approve')
+// the chat waiting: asWho 'me' (your own number), 'guest', or 'no' (not this one)
+export const whatsappBridgeApprove = (asWho = 'me') => invoke('whatsapp_bridge_approve', { asWho })
+export const whatsappBridgeMakeMe = (chatId) => invoke('whatsapp_bridge_make_me', { chatId })
+export const whatsappBridgeRemoveGuest = (chatId) => invoke('whatsapp_bridge_remove_guest', { chatId })
+// forgets your own number; the guests stay
 export const whatsappBridgeForget = () => invoke('whatsapp_bridge_forget')
+// pairs the Castle with a new WhatsApp number; you and every guest stay approved
+export const whatsappBridgeUnpair = () => invoke('whatsapp_bridge_unpair')
 // The member's reactions from the phone on the companion's replies: [{ platform, words, emoji, at }]
 export const phoneReactions = () => invoke('phone_reactions')
 // One just made on the phone (an empty emoji: taken back)

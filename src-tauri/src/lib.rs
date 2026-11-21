@@ -190,6 +190,14 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
         settings.sentinel = current.sentinel.clone();
         // the credit widgets' figures, states and budget are kept by their own commands
         settings.credits = current.credits.clone();
+        // who the phone bridges answer is changed only by their own Approve / Make me / Remove /
+        // Forget commands: a Settings page holding an older copy never un-approves anyone
+        settings.telegram_bridge_chat_id = current.telegram_bridge_chat_id.clone();
+        settings.discord_bridge_channel_id = current.discord_bridge_channel_id.clone();
+        settings.whatsapp_bridge_chat_id = current.whatsapp_bridge_chat_id.clone();
+        settings.whatsapp_bridge_me_name = current.whatsapp_bridge_me_name.clone();
+        settings.whatsapp_bridge_me_digits = current.whatsapp_bridge_me_digits.clone();
+        settings.whatsapp_guests = current.whatsapp_guests.clone();
     }
     settings::save(&store.path, &settings).map_err(|_| "The settings could not be saved.".to_string())?;
     *store.startup_note.lock().unwrap() = startup::sync(&app, settings.start_with_windows);
@@ -468,6 +476,9 @@ pub fn run() {
             bridges::whatsapp::whatsapp_bridge_status,
             bridges::whatsapp::whatsapp_bridge_approve,
             bridges::whatsapp::whatsapp_bridge_forget,
+            bridges::whatsapp::whatsapp_bridge_make_me,
+            bridges::whatsapp::whatsapp_bridge_remove_guest,
+            bridges::whatsapp::whatsapp_bridge_unpair,
             bridges::reactions::phone_reactions,
             voicestudio::voicestudio_speak,
             appearance::appearance_look,

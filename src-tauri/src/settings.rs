@@ -189,6 +189,18 @@ pub struct AlertRule {
     pub sound_name: Option<String>,
 }
 
+/// Someone the member approved to message the Castle's WhatsApp number besides themselves.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WhatsAppGuest {
+    pub chat_id: String,
+    pub name: String,
+    /// the phone digits behind the chat, when WhatsApp gave them
+    pub digits: Option<String>,
+    /// seconds since 1970
+    pub approved_at: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -263,8 +275,18 @@ pub struct Settings {
     /// MemoryCore in your pocket, WhatsApp: no token here - the "credential" is the QR-paired
     /// session itself, kept in the settings folder's whatsapp-auth. Unofficial, ban risk.
     pub whatsapp_bridge_on: bool,
-    /// The one chat id (a WhatsApp JID) the bridge answers, set by whatsapp_bridge_approve.
+    /// The chat id (a WhatsApp JID) of the member's own number - "Me": the one chat whose words
+    /// reach the companion's real session. Set by whatsapp_bridge_approve / _make_me.
     pub whatsapp_bridge_chat_id: Option<String>,
+    /// The name WhatsApp gave the member's own chat, for the Approved numbers list.
+    pub whatsapp_bridge_me_name: Option<String>,
+    /// The phone digits behind the member's own chat, when WhatsApp gave them: the same person is
+    /// known by them even when the chat id changes.
+    pub whatsapp_bridge_me_digits: Option<String>,
+    /// People the member approved to message the Castle's WhatsApp number besides themselves.
+    /// They are answered by a guest-only run (bridges/guests.rs), never by the companion's real
+    /// session. Re-pairing the number keeps them; only Remove lets one go.
+    pub whatsapp_guests: Vec<WhatsAppGuest>,
     /// Whether HOME shows the USAGE card at all. On by default; off hides the whole card and Castle
     /// asks neither CLI.
     pub show_usage_card: bool,
@@ -455,6 +477,9 @@ impl Default for Settings {
             discord_bridge_channel_id: None,
             whatsapp_bridge_on: false,
             whatsapp_bridge_chat_id: None,
+            whatsapp_bridge_me_name: None,
+            whatsapp_bridge_me_digits: None,
+            whatsapp_guests: Vec::new(),
             show_usage_card: true,
             living_wallpaper: true,
             wallpaper_sound: true,
@@ -538,6 +563,9 @@ impl Settings {
         self.telegram_bridge_chat_id = clean(self.telegram_bridge_chat_id);
         self.discord_bridge_channel_id = clean(self.discord_bridge_channel_id);
         self.whatsapp_bridge_chat_id = clean(self.whatsapp_bridge_chat_id);
+        self.whatsapp_bridge_me_name = clean(self.whatsapp_bridge_me_name);
+        self.whatsapp_bridge_me_digits = clean(self.whatsapp_bridge_me_digits);
+        self.whatsapp_guests.retain(|g| !g.chat_id.trim().is_empty());
         self.last_seen_version = clean(self.last_seen_version);
         self.dev_root = clean(self.dev_root);
         // the tab order: plain ids only, each once
@@ -928,6 +956,9 @@ mod tests {
             discord_bridge_channel_id: Some("987654321".into()),
             whatsapp_bridge_on: true,
             whatsapp_bridge_chat_id: Some("6591234567@s.whatsapp.net".into()),
+            whatsapp_bridge_me_name: Some("Rin".into()),
+            whatsapp_bridge_me_digits: Some("6591234567".into()),
+            whatsapp_guests: vec![WhatsAppGuest { chat_id: "60123456789@s.whatsapp.net".into(), name: "Aina".into(), digits: Some("60123456789".into()), approved_at: 1 }],
             show_usage_card: false,
             living_wallpaper: false,
             wallpaper_sound: false,
