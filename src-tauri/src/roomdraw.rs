@@ -1,7 +1,8 @@
 //! The companion draws a picture in the chat room, when someone there asks and the member allows
 //! it (Settings > Chat > Pictures: off by default, at most 5 a day, under the room's own cap).
-//! It draws with Codex (the member's ChatGPT subscription) or with the member's ChatGPT API key,
-//! the same two ways Castle draws anywhere (`env::image_mode`); with neither it never offers.
+//! It draws with Codex (a separate Codex job on the member's ChatGPT subscription, whichever CLI
+//! the companion thinks with) or with the member's ChatGPT API key, in the same order as STUDIO
+//! and APPEARANCE (`env::picture_way`); with neither it never offers.
 //! A drawing runs on its own thread, one at a time, and a failure posts nothing: it goes to the
 //! room log.
 
@@ -19,9 +20,20 @@ pub const DRAW_TEXT_MAX: usize = 400;
 const DRAW_LIMIT: Duration = Duration::from_secs(5 * 60);
 static DRAWING: AtomicBool = AtomicBool::new(false);
 
-/// How this member's companion can draw: "codex", "openai" or "none".
-pub fn way(settings: &Settings, has_key: bool) -> &'static str {
-    crate::env::image_mode(settings.cli, has_key)
+/// How this member's companion can draw in the room: "codex" (Codex signed in with ChatGPT, for a
+/// Claude Code companion too), "openai" (the member's key) or "none". The same order as STUDIO and
+/// APPEARANCE (`env::picture_way`, issue #39), in the room's own words. Pure given `codex_chatgpt`.
+pub fn way(codex_chatgpt: impl FnOnce() -> bool, has_key: bool) -> &'static str {
+    match crate::env::picture_way(codex_chatgpt, has_key) {
+        "codex" => "codex",
+        "key" => "openai",
+        _ => "none",
+    }
+}
+
+/// `way` for this computer now (the ChatGPT sign-in check is kept for a minute).
+fn current_way() -> &'static str {
+    way(crate::providers::codex_chatgpt_cached, has_openai_key())
 }
 
 fn has_openai_key() -> bool {
@@ -82,7 +94,7 @@ fn count_one(folder: &Path) {
 /// both the member's limit and the room's cap leave one (the room is asked with the AI's key; a
 /// room that does not answer leaves none).
 pub fn pictures_left(settings: &Settings, store: &SettingsStore, ai_room: &Room) -> u32 {
-    if !settings.room_pictures_on || way(settings, has_openai_key()) == "none" || DRAWING.load(Ordering::Relaxed) {
+    if !settings.room_pictures_on || current_way() == "none" || DRAWING.load(Ordering::Relaxed) {
         return 0;
     }
     let mine = left_today(&read_day(&crate::roomturn::room_folder(store)), &today(), settings.room_pictures_per_day);
@@ -133,7 +145,7 @@ pub fn draw_and_post(app: &AppHandle, text: String) {
 fn draw_now(app: &AppHandle, folder: &Path, text: &str) -> String {
     let settings = app.state::<SettingsStore>().get();
     let brief = brief(text);
-    let drawn = match way(&settings, has_openai_key()) {
+    let drawn = match current_way() {
         "codex" => {
             let pictures = folder.join("pictures");
             let _ = std::fs::create_dir_all(&pictures);
@@ -144,7 +156,7 @@ fn draw_now(app: &AppHandle, folder: &Path, text: &str) -> String {
             Some(key) => openai_draw(&key, &brief, &settings.room_picture_quality),
             None => Err("The ChatGPT key is gone.".into()),
         },
-        _ => Err("There is no way to draw (no ChatGPT key, and not thinking with Codex).".into()),
+        _ => Err("There is no way to draw (Codex is not signed in with ChatGPT, and there is no ChatGPT key).".into()),
     };
     let bytes = match drawn {
         Ok(b) => b,
@@ -182,7 +194,8 @@ pub struct PicturesStatus {
 pub async fn room_pictures_status(store: tauri::State<'_, SettingsStore>) -> Result<PicturesStatus, String> {
     let settings = store.get();
     let used_today = used_today(&store);
-    let way = way(&settings, has_openai_key());
+    // the sign-in check may start `codex login status`: off the async runtime
+    let way = tauri::async_runtime::spawn_blocking(current_way).await.unwrap_or("none");
     let room = tauri::async_runtime::spawn_blocking(|| crate::key::load("room-companion").and_then(|key| Room::new(&crate::signin::portfolio(), &key).picture_day()))
         .await
         .unwrap_or(None);
@@ -200,6 +213,16 @@ mod tests {
         assert!(b.ends_with("The picture: a cat under a red umbrella"), "spacing squeezed");
         let long = brief(&"x".repeat(2000));
         assert!(long.ends_with(&"x".repeat(DRAW_TEXT_MAX)) && !long.ends_with(&"x".repeat(DRAW_TEXT_MAX + 1)), "the room's words are cut at 400");
+    }
+
+    #[test]
+    fn codex_signed_in_with_chatgpt_draws_first_whichever_cli_the_companion_uses() {
+        // the way no longer asks which CLI the companion thinks with: a Claude Code companion
+        // draws with Codex too when Codex is signed in with ChatGPT (it was "none" without a key)
+        assert_eq!(way(|| true, false), "codex");
+        assert_eq!(way(|| true, true), "codex", "the plan before the key, as in STUDIO");
+        assert_eq!(way(|| false, true), "openai");
+        assert_eq!(way(|| false, false), "none");
     }
 
     #[test]

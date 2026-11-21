@@ -240,9 +240,9 @@ async function savePictures(row, patch) {
 }
 const drawsWith = computed(() => {
   const way = pictures.value?.way
-  if (way === 'codex') return 'Draws with Codex, on your ChatGPT subscription.'
+  if (way === 'codex') return 'Draws with Codex, on your ChatGPT subscription, whichever CLI your companion thinks with.'
   if (way === 'openai') return 'Draws with your ChatGPT API key, billed per picture.'
-  if (way === 'none') return 'Needs a ChatGPT key, or Codex to think with.'
+  if (way === 'none') return 'Needs Codex signed in with ChatGPT on this computer, or a ChatGPT key in Keys.'
   return ''
 })
 const canDraw = computed(() => !roomLocked.value && pictures.value?.way !== 'none')
