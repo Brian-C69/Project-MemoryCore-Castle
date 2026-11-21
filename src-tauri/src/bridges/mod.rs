@@ -39,8 +39,11 @@ pub fn send_and_await(app: &AppHandle, store: &SettingsStore, text: &str, timeou
         }
         std::thread::sleep(Duration::from_millis(300));
     };
-    let mut follower = follow(path, started);
+    let mut follower = follow(path.clone(), started);
+    // The reply is finished when the record gets its end-of-turn line after this point.
+    let mut turn_from: u64 = 0;
     if !fresh {
+        turn_from = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
         // Already running: anything already said is not this message's reply, so it is skipped
         // before the word is typed in - never after, or a fast answer could be skipped too.
         let _ = follower.read_new();
@@ -64,9 +67,18 @@ pub fn send_and_await(app: &AppHandle, store: &SettingsStore, text: &str, timeou
                 last_said = Some(said.text.trim().to_string());
             }
         }
-        if let Some(said) = &last_said {
-            if quiet_since.elapsed() >= QUIET_AFTER {
-                return Ok(said.clone());
+        if last_said.is_some() {
+            let finished = turn_finished(&path, turn_from, cli);
+            if finished || quiet_since.elapsed() >= QUIET_AFTER {
+                if finished {
+                    // anything written between the last read and the end-of-turn line
+                    if let Ok(entries) = follower.read_new() {
+                        if let Some(said) = entries.iter().rev().find(|e| e.role == "companion" && !e.text.trim().is_empty()) {
+                            last_said = Some(said.text.trim().to_string());
+                        }
+                    }
+                }
+                return Ok(last_said.unwrap_or_default());
             }
         }
         if Instant::now() >= deadline {
@@ -78,5 +90,55 @@ pub fn send_and_await(app: &AppHandle, store: &SettingsStore, text: &str, timeou
     }
 }
 
+/// True once the session's record carries its end-of-turn line after `from` (a byte offset taken
+/// before the member's words were typed): Codex writes `task_complete`, Claude Code a system line
+/// of subtype `turn_duration`. Lets the answer go out the moment it is complete.
+fn turn_finished(path: &std::path::Path, from: u64, cli: crate::settings::Cli) -> bool {
+    use std::io::{Read, Seek, SeekFrom};
+    let Ok(mut file) = std::fs::File::open(path) else { return false };
+    if file.seek(SeekFrom::Start(from)).is_err() {
+        return false;
+    }
+    let mut tail = Vec::new();
+    if file.take(16 * 1024 * 1024).read_to_end(&mut tail).is_err() {
+        return false;
+    }
+    let text = String::from_utf8_lossy(&tail);
+    match cli {
+        crate::settings::Cli::Codex => text.contains("\"type\":\"task_complete\""),
+        crate::settings::Cli::Claude => text.contains("\"subtype\":\"turn_duration\""),
+    }
+}
+
 /// How long the companion must stay silent before what it last said counts as its answer.
 const QUIET_AFTER: Duration = Duration::from_secs(12);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::settings::Cli;
+    use std::io::Write;
+
+    #[test]
+    fn a_reply_is_finished_only_by_a_turn_end_written_after_the_words_were_typed() {
+        let path = std::env::temp_dir().join(format!("castle-turn-{}.jsonl", std::process::id()));
+        let mut file = std::fs::File::create(&path).unwrap();
+        // an earlier turn already ended
+        writeln!(file, r#"{{"type":"event_msg","payload":{{"type":"task_complete"}}}}"#).unwrap();
+        file.flush().unwrap();
+        let from = std::fs::metadata(&path).unwrap().len();
+        assert!(!turn_finished(&path, from, Cli::Codex), "the earlier turn's end does not count");
+        writeln!(file, r#"{{"type":"event_msg","payload":{{"type":"agent_message","message":"hi"}}}}"#).unwrap();
+        file.flush().unwrap();
+        assert!(!turn_finished(&path, from, Cli::Codex), "still working");
+        writeln!(file, r#"{{"type":"event_msg","payload":{{"type":"task_complete"}}}}"#).unwrap();
+        file.flush().unwrap();
+        assert!(turn_finished(&path, from, Cli::Codex));
+        assert!(!turn_finished(&path, from, Cli::Claude), "Claude Code ends a turn differently");
+        writeln!(file, r#"{{"type":"system","subtype":"turn_duration","durationMs":5}}"#).unwrap();
+        file.flush().unwrap();
+        assert!(turn_finished(&path, from, Cli::Claude));
+        assert!(!turn_finished(&std::env::temp_dir().join("castle-no-such-file.jsonl"), 0, Cli::Codex));
+        let _ = std::fs::remove_file(path);
+    }
+}
