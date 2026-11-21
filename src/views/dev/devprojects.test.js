@@ -19,6 +19,7 @@ describe("DEV's live servers", () => {
 
   it('names who a server belongs to', () => {
     expect(ownerWords(servers[0], tabs)).toBe('order-tracker')
+    expect(ownerWords(servers[0], [{ slot: 0, name: 'order-tracker', label: 'order-tracker · 2' }])).toBe('order-tracker · 2')
     expect(ownerWords(servers[4], tabs)).toBe('Tab 3')
     expect(ownerWords(servers[1], tabs)).toBe('-')
     expect(ownerWords(servers[3], tabs)).toBe('(not a DEV project)')

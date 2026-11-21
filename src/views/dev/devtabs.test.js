@@ -10,8 +10,12 @@ import {
   orderTabs,
   pasted,
   planProgress,
+  newSlot,
   recentProjects,
+  removeQuestion,
   samePath,
+  sessionsOf,
+  tabLabel,
   sessionView,
   tabForFolder,
 } from './devtabs.js'
@@ -58,9 +62,38 @@ describe('DEV tabs', () => {
       { folder: 'D:\\Shop', name: '' },
     ]
     expect(recentProjects(projects, [tab(4, 'D:\\Site')], 'd:/memory/')).toEqual([
-      { folder: 'D:\\Site', name: 'Site', slot: 4 },
-      { folder: 'D:\\Shop', name: 'Shop', slot: null },
+      { folder: 'D:\\Site', name: 'Site', missing: false, slots: [4], count: 1, slot: 4 },
+      { folder: 'D:\\Shop', name: 'Shop', missing: false, slots: [], count: 0, slot: null },
     ])
+  })
+
+  it('gives a project several sessions, each with its own fixed number', () => {
+    const shop = (slot, number) => ({ ...tab(slot, 'D:\\Shop'), number })
+    const tabs = [shop(5, 3), shop(0, 1), tab(2, 'D:\\Blog')]
+    expect(sessionsOf(tabs, 'd:/shop').map((t) => t.slot)).toEqual([0, 5])
+    const [row] = recentProjects([{ folder: 'D:\\Shop', missing: true }], tabs, '')
+    expect(row).toMatchObject({ name: 'Shop', count: 2, slots: [0, 5], slot: 5, missing: true })
+    expect(tabLabel(shop(5, 3))).toBe('Shop · 3')
+    expect(tabLabel(tab(2, 'D:\\Blog'))).toBe('Blog')
+    expect(tabLabel(null)).toBe('')
+    expect(nextActive(tabs, 2, 'D:\\Shop')).toBe(5)
+  })
+
+  it('finds the tab a new session opened in', () => {
+    const before = [tab(0, 'a'), tab(2, 'b')]
+    expect(newSlot(before, [...before, tab(1, 'a')])).toBe(1)
+    expect(newSlot(before, before)).toBe(null)
+    expect(newSlot(null, [tab(3, 'a')])).toBe(3)
+  })
+
+  it('asks plainly before removing an idle project, and names the sessions that will end', () => {
+    const shop = { folder: 'D:\\Shop', name: 'Shop' }
+    expect(removeQuestion(shop, [])).toMatchObject({ title: 'Remove Shop?', button: 'Remove project' })
+    expect(removeQuestion(shop, []).text).toContain('stay on disk')
+    const two = removeQuestion(shop, [{ ...tab(4, 'D:\\Shop'), number: 2 }, { ...tab(1, 'D:\\Shop'), number: 1 }, tab(3, 'D:\\Blog')])
+    expect(two.text).toBe('Its 2 sessions will end (Shop · 1, Shop · 2). The folder stays on disk.')
+    expect(two.button).toBe('End all 2 and remove')
+    expect(removeQuestion(shop, [{ ...tab(0, 'D:\\Shop'), number: 1 }]).button).toBe('End it and remove')
   })
 
   it('reads a closed tab as asleep', () => {
