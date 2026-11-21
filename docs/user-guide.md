@@ -90,6 +90,7 @@ Chat shows your conversation as message bubbles, like a messaging app.
 - **Share a picture:** drag it onto Chat, or paste it with **Ctrl + V**. It shows above the box before you send.
 - A plan your companion proposes appears as a **PLAN** card; click it to read the whole plan. The card is there while Claude Code asks you to approve the plan, even before the plan reaches the conversation.
 - Ticks on your messages: one tick means it is waiting in the queue (your companion reads it after its current step); two ticks mean it was read.
+- **Your reaction from the phone:** when you react to your companion's reply on Telegram, Discord or WhatsApp (a heart, a laugh), the same emoji appears at the lower corner of that bubble in Chat. A reaction is only shown: it never wakes your companion or costs a turn. Take it back on the phone and it leaves the bubble too.
 
 **Claude Code:** when your companion asks you to choose (for example, to allow a command), a card shows the whole question with the words around it, and each choice as a button with its description under it.
 
@@ -795,10 +796,30 @@ a number it notices behaving like this.
 
 1. Turn on MESSAGING's WhatsApp card. No token - it shows a **QR code** once it's ready.
 2. On the secondary phone, open WhatsApp > **Linked Devices** > **Link a Device**, and scan it.
-3. Message that WhatsApp number once. The card shows who just messaged it; press **Approve this
-   chat**.
+3. Message that WhatsApp number once from your own phone. The card shows who just messaged it
+   (with the number, when WhatsApp gives it); press **This is me**.
 4. From then on, texting that number reaches your companion's real session. The pairing itself
    survives a Castle restart - no QR a second time, unless you're logged out on the phone.
+
+**Approved numbers.** The card lists everyone you approved: you, with a **Me** chip, and your
+guests. **Forget** on your own line lets a different number become you; **Make me** on a guest's
+line makes that number yours (for the day your own number changes), and the old one leaves the
+list. **Remove** lets a guest go.
+
+**Guests.** When someone else messages that number, the card shows them with three choices:
+**This is me**, **Approve as a guest** or **Not this one** (they stay unanswered). A guest is
+answered at once, but never by your companion's real session: a separate guest-only run answers
+instead. It has your companion's public card (the same one the Chat room uses), no tools, and
+nothing private about you - asked about you, it kindly says that isn't its to share, and asked
+for something only you can do, it says it will let you know. After each answer you get a
+WhatsApp message on your own number: who wrote, what they said and what was answered (or that
+nothing was). A guest gets at most one answer every ten seconds and twenty an hour, so two bots
+can never talk to each other at full speed. A guest's picture or voice note reaches the run as
+a line ("sent a picture"); the file stays on WhatsApp.
+
+**A new number for the Castle.** If the paired number is banned or logged out, press **Pair a
+new number** and scan the new QR code with another phone. You and every guest stay approved -
+only **Remove** and **Forget** ever take a person off the list.
 
 ## Alerts
 
