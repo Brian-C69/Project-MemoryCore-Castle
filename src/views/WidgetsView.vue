@@ -47,10 +47,8 @@ onMounted(load)
 <template>
   <section class="widgets-room" aria-label="Widgets">
     <header class="top">
-      <div>
-        <h2>Widgets on HOME</h2>
-        <p class="dim">Choose what HOME shows and how big. Arrange moves them on HOME{{ themeName ? ` - ${themeName} keeps its own places` : '' }}.</p>
-      </div>
+      <!-- the page's title and subtitle are Settings' own (SettingsPage) -->
+      <p class="dim">Arrange moves them on HOME{{ themeName ? ` - ${themeName} keeps its own places` : '' }}.</p>
       <div class="actions">
         <button :disabled="!hasPlaces()" @click="save(resetPatch(settings, themeId), 'Back in the theme\'s places.')">Back to the theme's places</button>
         <button class="primary" @click="emit('arrange')">Arrange on HOME</button>
@@ -105,11 +103,6 @@ onMounted(load)
   flex-wrap: wrap;
 }
 
-h2 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 500;
-}
 
 h3 {
   margin: 0;
