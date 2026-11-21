@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Telegram replies arrive the moment your companion finishes, and the card says Connected at once.** The phone message used to wait 12 quiet seconds after your companion's last words, so Telegram trailed Home by about five seconds; it now sends as soon as the turn ends. Turning Telegram on checks right away, so the card says Connected within a second or two, and messages that were waiting from before it started are no longer answered late.
+
 ## 0.2.26 - 2026-11-21
 
 - **Switching providers no longer waits for ever, or freezes, when you also run Claude Code yourself in your memory folder.** Chat and the switch followed whichever Claude Code record in that folder was newest, so your own terminal session was taken for your companion's: Chat showed it, and the switch waited for it to finish a turn that never ended. Castle now follows the record its own session created, and never reads a record over 64 MB to guess.
