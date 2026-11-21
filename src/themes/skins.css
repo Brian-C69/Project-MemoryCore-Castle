@@ -1908,3 +1908,53 @@
   height: 30px;
   stroke-width: 1.6;
 }
+
+/* ---------- The Lantern Falls panes: the painted liquid-glass slab around the chat, the clock and the
+   three cards - its thick wavy rim drawn as a frame that never stretches out of shape, a faint dusk
+   tint inside, the words crisp on it ---------- */
+.home.glass.skin-still-water .terminal-panel,
+.home.glass.skin-still-water .widget.clock,
+.home.glass.skin-still-water .widget.card:not(.clock):not(.gauges),
+.home.glass.skin-still-water .widget.sweep:not(.clock):not(.gauges) {
+  border: 2px solid transparent;
+  border-image-repeat: stretch;
+  background: rgba(70, 36, 80, 0.16);
+  background-clip: padding-box;
+  -webkit-backdrop-filter: blur(1px) saturate(120%);
+  backdrop-filter: blur(1px) saturate(120%);
+  box-shadow: none;
+}
+.home.glass.skin-still-water .widget.clock,
+.home.glass.skin-still-water .widget.card:not(.clock):not(.gauges),
+.home.glass.skin-still-water .widget.sweep:not(.clock):not(.gauges) {
+  border-image-source: url('./lantern-falls/slab-wide.png');
+  border-image-slice: 64 fill;
+  border-image-width: 30px;
+  border-image-outset: 12px;
+  border-radius: 22px;
+}
+.home.glass.skin-still-water .terminal-panel {
+  border-image-source: url('./lantern-falls/slab-tall.png');
+  border-image-slice: 60 fill;
+  border-image-width: 40px;
+  border-image-outset: 14px;
+  border-radius: 30px;
+}
+/* the design's clock: the time regular, not bold, a little larger */
+.home.glass.skin-still-water .widget.clock .time {
+  font-weight: 400;
+}
+/* the card words: crisp cream, the icons a touch larger, as the design draws them */
+.home.glass.skin-still-water .card h3 .icon {
+  width: 36px;
+  height: 36px;
+}
+.home.glass.skin-still-water .widget.sweep .broom-look .broom {
+  width: 46px;
+  height: 46px;
+  stroke-width: 6;
+}
+.home.glass.skin-still-water .widget.clock {
+  background: rgba(70, 36, 84, 0.34);
+  -webkit-box-reflect: below 8px linear-gradient(transparent 10%, rgba(255, 255, 255, 0.75));
+}
