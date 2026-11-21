@@ -60,6 +60,7 @@ mod page_reader;
 mod oneshot;
 mod quota;
 mod alerts;
+mod bridges;
 mod roomalert;
 mod roomdraw;
 mod roomvoice;
@@ -292,6 +293,9 @@ pub fn run() {
         .manage(providers::Control::default())
         .manage(providers::Images::default())
         .manage(messages::Pending::default())
+        .manage(bridges::telegram::TelegramState::default())
+        .manage(bridges::discord::DiscordState::default())
+        .manage(bridges::whatsapp::WhatsAppState::default())
         .manage(session::StoryHost::default())
         .manage(dev::DevHosts::default())
         .manage(dev::DevChats::default())
@@ -454,6 +458,15 @@ pub fn run() {
             studio::picture_way,
             studio::studio_delete,
             voicestudio::voicestudio_status,
+            bridges::telegram::telegram_bridge_status,
+            bridges::telegram::telegram_bridge_approve,
+            bridges::telegram::telegram_bridge_forget,
+            bridges::discord::discord_bridge_status,
+            bridges::discord::discord_bridge_approve,
+            bridges::discord::discord_bridge_forget,
+            bridges::whatsapp::whatsapp_bridge_status,
+            bridges::whatsapp::whatsapp_bridge_approve,
+            bridges::whatsapp::whatsapp_bridge_forget,
             voicestudio::voicestudio_speak,
             appearance::appearance_look,
             appearance::appearance_new,
@@ -679,6 +692,9 @@ pub fn run() {
             world::restore(app.handle());
             world::watch_covered(app.handle());
             roomread::start(app.handle());
+            bridges::telegram::start(app.handle());
+            bridges::discord::start(app.handle());
+            bridges::whatsapp::start(app.handle());
             link::start(app.handle());
             meter_watch::start(app.handle());
             page_reader::start(app.handle());

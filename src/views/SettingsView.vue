@@ -372,6 +372,7 @@ const ROOM_GROUPS = [
       { id: 'chat', label: 'CHAT', line: 'Off stops reading the room. Its files stay.', tip: 'Turning CHAT off stops reading the room. Its files stay.' },
       { id: 'market', label: 'MARKET' },
       { id: 'dev', label: 'DEV' },
+      { id: 'messaging', label: 'MESSAGING', line: 'Off at first: text your companion from Telegram, Discord or WhatsApp.', tip: 'Off to begin with: MESSAGING lets you text your companion from Telegram, Discord or WhatsApp. Each platform is set up on its own card in the room.' },
     ],
   },
 ]

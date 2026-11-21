@@ -64,6 +64,15 @@ For UI work, check keyboard access, focus, disabled and error states, and narrow
 windows. Prefer native buttons, dropdowns, and scrollbars styled with Castle's
 theme; keep controls sized to their content when a wider control is unnecessary.
 
+A new room's own title is a plain `<header class="bar"><h2>NAME</h2></header>` - no
+background, no border (see LIBRARY, APPEARANCE or THEME). Reserve the boxed
+`<header class="top widget"><h3>NAME</h3></header>` form (STUDIO, MARKET) for a room
+whose top area is itself a toolbar grouping several controls; it is not the default
+room-title style. A `HelpTip` with `block` only lays out correctly inside a wrapper
+that is itself `position: relative` (give that wrapper the `has-tip` class, as
+Settings does) - without it, the bubble anchors to a distant ancestor instead and
+can add a stray scrollbar far from where the `?` actually sits.
+
 ## Loading: at the start-up screen, not on arrival
 
 Castle has a start-up screen (see `MAKE-IT-YOURS.md`, "A start-up screen of your own"). Its purpose is

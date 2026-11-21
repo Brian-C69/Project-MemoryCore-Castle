@@ -6,6 +6,12 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **Switching providers no longer waits for ever, or freezes, when you also run Claude Code yourself in your memory folder.** Chat and the switch followed whichever Claude Code record in that folder was newest, so your own terminal session was taken for your companion's: Chat showed it, and the switch waited for it to finish a turn that never ended. Castle now follows the record its own session created, and never reads a record over 64 MB to guess.
 
+- **Chat no longer says your companion is resting when it is awake.** If the session was started without you pressing Wake (a message from your phone, for example), the Chat and Log panel now notices and switches over by itself.
+
+- **Codex answers reach Chat and Messaging again.** Newer versions of Codex write their words in a new shape that Castle did not read; it does now. A phone message also waits for your companion to finish and sends its last words, not its first ("let me check...").
+
+- **MESSAGING: MemoryCore in your pocket, now on Telegram, Discord and WhatsApp.** A room, off to begin with, with one card per platform. Message your own bot (or, for WhatsApp, a paired secondary number) and it reaches your companion's real session - the same memory and tools it has on this computer, not a canned reply - and waits for you to approve the first chat that messages it. WhatsApp is unofficial and carries real ban risk, disclosed right on its card; pair it with a number you're willing to lose, never your main one.
+
 - **Three new themes.** **The Windmill Hill**: the clock rests in a cloud and the gauges are windmills that turn faster as your computer works harder. **The Thousand Sails**: the clock is a lighthouse lantern whose golden beam sweeps across HOME, with buoy gauges. **The Lantern Falls**: cards like panes of still water with ripples, and a clock with its reflection. Choose them in THEME.
 
 - **Each DEV project has its own Database panel.** Local fills itself from the project's .env, and Production you fill in once (host, user, password, CA certificate), kept on this computer with the password in Windows Credential Manager. Then the tables and rows show. Production opens read only; when you unlock Change, every write waits for your **Keep** or **Undo**.
