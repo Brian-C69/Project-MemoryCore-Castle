@@ -38,6 +38,7 @@ mod key;
 mod link;
 mod memdb;
 mod market;
+mod markup;
 mod sentinel;
 mod memory;
 mod gpu;
@@ -301,6 +302,7 @@ pub fn run() {
         .manage(chat::StoryChat::default())
         .manage(chat::MemberPictures::default())
         .manage(projectdb::Held::default())
+        .manage(markup::MarkedCopies::default())
         .manage(roomread::RoomReader::default())
         .manage(market::board::Board::default())
         .manage(market::engine::Viewing::default())
@@ -559,6 +561,7 @@ pub fn run() {
             cmd_projectdb::projectdb_saved,
             cmd_projectdb::projectdb_saved_set,
             chat::chat_media_stream,
+            markup::chat_markup_save,
             db::db_status,
             node_runtime::node_status,
             node_runtime::node_prepare,

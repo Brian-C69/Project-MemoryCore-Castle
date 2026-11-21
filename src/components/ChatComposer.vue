@@ -1,12 +1,16 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { chatAttach, clipboardPaste } from '../api/castle.js'
+import { chatAttach, chatMarkupSave, clipboardPaste } from '../api/castle.js'
 import ImageViewer from './ImageViewer.vue'
+import MarkupSheet from './MarkupSheet.vue'
+import { applyMarked, keepMarks, markupSource, saveMarkedCopy } from './markupsave.js'
+import { viewerIndex } from './pictureviewer.js'
 import { isMac, shortcutLabel } from '../platform.js'
 import { micShortcutText } from './voicehold.js'
 
 // Chat's box: the member's words, the pictures they drop, paste or type as paths (shown above the
-// box, removable, opened in a viewer), Enter to send, Shift+Enter for a new line.
+// box, removable, opened in a viewer to look closer or mark them up), Enter to send, Shift+Enter for
+// a new line.
 const props = defineProps({
   running: { type: Boolean, default: false },
   placeholder: { type: String, default: '' },
@@ -24,7 +28,12 @@ const props = defineProps({
 
 const draft = ref('')
 const box = ref(null)
+// the draft picture the viewer is open on (the markup sheet opens over it)
 const draftViewer = ref(null)
+// the picture the markup sheet is open for: { shown, original, ops, previous }
+const marking = ref(null)
+// marked copy path -> { original, ops }: a copy's marks stay editable until the message is sent
+const marks = ref({})
 
 const fileName = (path) => path.split(/[\\/]/).pop()
 
@@ -46,6 +55,41 @@ watch(draftPictures, async (paths) => {
   }
   fresh.forEach(props.loadPath)
 })
+
+// a picture sent or taken out of the message forgets its marks
+watch(draftPictures, (paths) => (marks.value = keepMarks(marks.value, paths)))
+
+// the viewer's pictures: each one can be marked up once its original is loaded
+const viewerPictures = computed(() =>
+  draftPictures.value.map((p) => ({
+    path: p,
+    name: fileName(p),
+    url: props.media[p],
+    markable: !!props.media[markupSource(marks.value, p).original],
+    marked: !!marks.value[p],
+  })),
+)
+
+function openMarkup(path) {
+  const source = markupSource(marks.value, path)
+  if (!props.media[source.original]) return
+  // the viewer stands under the sheet, so Save or Cancel comes back to it
+  draftViewer.value = path
+  marking.value = { shown: path, ...source }
+}
+
+// "Use marked copy": the copy is saved beside the original and takes its place in the message.
+async function useMarked(ops, toDataUrl) {
+  const { shown, original, previous } = marking.value
+  const picture = ops.length ? toDataUrl() : null
+  const saved = await saveMarkedCopy({ original, previous, ops, picture, save: chatMarkupSave })
+  if (saved !== original) props.media[saved] = picture
+  const next = applyMarked({ draft: draft.value, marks: marks.value }, { shown, original, ops, saved })
+  marks.value = next.marks
+  draft.value = next.draft
+  // the viewer then shows the marked copy where the picture was
+  draftViewer.value = saved
+}
 
 const quoted = (path) => (/\s/.test(path) ? `"${path}"` : path)
 
@@ -204,19 +248,37 @@ defineExpose({
 <template>
   <div v-if="draftPictures.length" class="attached" aria-label="Pictures in your message">
     <div v-for="path in draftPictures" :key="path" class="attached-item">
-      <button class="attached-thumb" :title="fileName(path)" @click="draftViewer = path">
+      <button class="attached-thumb" :title="`${fileName(path)} - click to look closer`" @click="draftViewer = path">
         <img v-if="media[path]" :src="media[path]" :alt="fileName(path)" />
         <span v-else class="thumb-wait">{{ fileName(path) }}</span>
       </button>
+      <span v-if="marks[path]" class="attached-badge">marked</span>
+      <button
+        v-if="media[markupSource(marks, path).original]"
+        class="attached-markup"
+        title="Mark up"
+        aria-label="Mark up this picture"
+        @click="openMarkup(path)"
+      >&#9998;</button>
       <button class="attached-remove" aria-label="Remove this picture" @click="removeDraftPicture(path)">&times;</button>
     </div>
   </div>
   <ImageViewer
     v-if="draftViewer"
-    :pictures="draftPictures.map((p) => ({ path: p, name: fileName(p), url: media[p] }))"
-    :start="Math.max(0, draftPictures.indexOf(draftViewer))"
+    :pictures="viewerPictures"
+    :start="viewerIndex(draftPictures, draftViewer)"
     :can-open="false"
+    :marking="!!marking"
+    @markup="openMarkup"
     @close="draftViewer = null"
+  />
+  <MarkupSheet
+    v-if="marking"
+    :name="fileName(marking.original)"
+    :src="media[marking.original]"
+    :ops="marking.ops"
+    :save="useMarked"
+    @close="marking = null"
   />
 
   <p v-if="micStatus" class="mic-status" :class="{ live: listening === 'listening' }" aria-live="polite">{{ micStatus }}</p>
@@ -310,6 +372,33 @@ button {
   color: #160f33;
   font-size: 14px;
   line-height: 20px;
+}
+
+.attached-markup {
+  position: absolute;
+  top: -6px;
+  right: 18px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(20, 16, 58, 0.95);
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.attached-badge {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(6, 4, 20, 0.85);
+  color: #7fe0b0;
+  font-size: 9.5px;
+  pointer-events: none;
 }
 
 .composer {
