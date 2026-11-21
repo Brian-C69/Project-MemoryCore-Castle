@@ -50,6 +50,17 @@ describe('the database install kept for the whole run', () => {
     expect(installState.running).toBe(false)
   })
 
+  it('keeps why the last install failed for a panel that opens afterwards, and clears it on the next try', async () => {
+    await expect(runInstall(() => Promise.reject('MariaDB could not be downloaded.'))).rejects.toBe('MariaDB could not be downloaded.')
+    expect(installState.error).toBe('MariaDB could not be downloaded.')
+    const job = deferred()
+    const next = runInstall(() => job.promise)
+    expect(installState.error).toBe('')
+    job.resolve('ok')
+    await next
+    expect(installState.error).toBe('')
+  })
+
   it('starts a fresh install after the last one failed', async () => {
     const failed = runInstall(() => Promise.reject('no internet'))
     await expect(failed).rejects.toBe('no internet')

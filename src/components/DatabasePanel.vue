@@ -75,7 +75,11 @@ async function install() {
 
 async function followInstall() {
   const running = runningInstall()
-  if (!running) return
+  if (!running) {
+    // an install that failed while this panel was closed: say why, as it would have
+    if (installState.error) problem.value = installState.error
+    return
+  }
   busy.value = installState.line
   try {
     await running
