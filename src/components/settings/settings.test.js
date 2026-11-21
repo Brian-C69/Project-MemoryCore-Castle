@@ -73,7 +73,8 @@ describe('defaults', () => {
   })
 
   it("match the core's Settings::default", () => {
-    const rust = readFileSync(new URL('../../../src-tauri/src/settings.rs', import.meta.url), 'utf8')
+    // a Windows checkout has CRLF line ends; the block is found by plain newlines
+    const rust = readFileSync(new URL('../../../src-tauri/src/settings.rs', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
     const start = rust.indexOf('impl Default for Settings')
     const block = rust.slice(start, rust.indexOf('\n}\n', start))
     const camel = (snake) => snake.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
