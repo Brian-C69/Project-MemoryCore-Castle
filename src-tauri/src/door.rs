@@ -353,8 +353,25 @@ fn reminder_done(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
 
 // ---------- projects ----------
 
+/// How long a project's name and status may be (the columns' own sizes).
+pub const PROJECT_NAME_MAX: usize = 255;
+pub const PROJECT_STATUS_MAX: usize = 64;
+
+/// Why a project's name or status is too long for its column, if it is.
+pub fn project_too_long(name: &str, status: Option<&str>) -> Option<String> {
+    let n = name.chars().count();
+    if n > PROJECT_NAME_MAX {
+        return Some(format!("The project name is {n} characters; the limit is {PROJECT_NAME_MAX}. Shorten it and save again."));
+    }
+    let s = status.map(|s| s.chars().count()).unwrap_or(0);
+    (s > PROJECT_STATUS_MAX).then(|| format!("The status is {s} characters; the limit is {PROJECT_STATUS_MAX}. Shorten it (put the rest in --summary) and save again."))
+}
+
 fn project_save(conn: &mut Conn, ask: &Ask) -> Result<String, String> {
     let name = ask.need("name")?;
+    if let Some(why) = project_too_long(name, ask.get("status")) {
+        return Err(why);
+    }
     let body = ask.text()?;
     conn.exec_drop(
         "INSERT INTO projects (name, status, shelf, summary, body, last_updated) VALUES (?, ?, COALESCE(?, 'active'), ?, ?, DATE_FORMAT(NOW(), '%Y-%m-%d')) \
@@ -967,6 +984,18 @@ mod tests {
             assert_eq!(Shelf::named(shelf.word()), Some(shelf));
         }
         assert_eq!(Shelf::named("gone"), None);
+    }
+
+    #[test]
+    fn a_status_too_long_for_its_column_says_so() {
+        assert_eq!(project_too_long("Site", Some(&"x".repeat(64))), None);
+        assert_eq!(
+            project_too_long("Site", Some(&"x".repeat(65))).unwrap(),
+            "The status is 65 characters; the limit is 64. Shorten it (put the rest in --summary) and save again."
+        );
+        // counted in characters, not bytes
+        assert_eq!(project_too_long("Site", Some(&"·".repeat(64))), None);
+        assert!(project_too_long(&"n".repeat(256), None).unwrap().starts_with("The project name is 256 characters"));
         assert!(moved_line("Site", Shelf::Deleted).contains("30 days"));
         assert_eq!(moved_line("Site", Shelf::Paused), "PROJECT paused: Site");
     }
