@@ -90,11 +90,29 @@ fn auth_dir(store: &SettingsStore) -> PathBuf {
 
 fn script_path(app: &AppHandle) -> Option<PathBuf> {
     let path = app.path().resource_dir().ok()?.join("tools").join("castle-whatsapp.cjs");
-    path.is_file().then_some(path)
+    // Windows hands back a path that starts with `\\?\`; Node cannot resolve that form ("EISDIR ... lstat 'C:'"), so the plain path is used.
+    let text = path.to_string_lossy().into_owned();
+    let plain = text.strip_prefix("\\\\?\\").map(PathBuf::from).unwrap_or(path);
+    plain.is_file().then_some(plain)
 }
 
+/// Whether the helper is alive. One that has exited (its port was taken, it crashed) is forgotten,
+/// so the loop starts a new one instead of waiting for ever on a helper that is not there.
 fn running(state: &WhatsAppState) -> bool {
-    state.child.lock().unwrap().is_some()
+    let mut child = state.child.lock().unwrap();
+    let Some(c) = child.as_mut() else { return false };
+    match c.try_wait() {
+        Ok(None) => true,
+        other => {
+            *child = None;
+            let how = match other {
+                Ok(Some(status)) => format!(" (exit {})", status.code().map_or("?".to_string(), |c| c.to_string())),
+                _ => String::new(),
+            };
+            *state.problem.lock().unwrap() = Some(format!("The WhatsApp helper stopped{how}; starting it again."));
+            false
+        }
+    }
 }
 
 fn ensure_started(app: &AppHandle, store: &SettingsStore, state: &WhatsAppState) -> Result<(), String> {
@@ -102,15 +120,24 @@ fn ensure_started(app: &AppHandle, store: &SettingsStore, state: &WhatsAppState)
         return Ok(());
     }
     let script = script_path(app).ok_or("The WhatsApp helper is missing from this install.")?;
-    let child = Command::new(crate::env::node())
+    // What the helper says goes to a log beside its pairing, so a helper that stops can be explained.
+    let log = std::fs::File::create(store.folder().join("whatsapp.log")).map_err(|_| "The WhatsApp helper's log could not be opened.".to_string())?;
+    let mut command = Command::new(crate::env::node());
+    command
         .arg(&script)
+        // Node resolves the script's real path from where it starts; Castle's own folder can make that fail ("EISDIR ... lstat 'C:'").
+        .current_dir(store.folder())
         .env("WA_AUTH_DIR", auth_dir(store))
         .env("WA_PORT", PORT.to_string())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .stdin(Stdio::null())
-        .spawn()
-        .map_err(|_| "The WhatsApp helper could not be started.".to_string())?;
+        .stdout(log.try_clone().map(Stdio::from).unwrap_or_else(|_| Stdio::null()))
+        .stderr(Stdio::from(log))
+        .stdin(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // no console window: the helper is invisible, its words go to the log
+    }
+    let child = command.spawn().map_err(|_| "The WhatsApp helper could not be started.".to_string())?;
     *state.child.lock().unwrap() = Some(child);
     Ok(())
 }

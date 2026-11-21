@@ -149490,7 +149490,7 @@ function readBody(req) {
 var server = import_node_http.default.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && req.url === "/status") {
-      return json(res, 200, { paired: !!state?.creds?.registered, connected, qr: latestQr, problem: lastProblem });
+      return json(res, 200, { paired: !!(state?.creds?.me || state?.creds?.registered), connected, qr: latestQr, problem: lastProblem });
     }
     if (req.method === "GET" && req.url === "/incoming") {
       const drained = incoming.splice(0, incoming.length);

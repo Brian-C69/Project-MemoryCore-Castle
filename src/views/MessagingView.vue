@@ -279,7 +279,7 @@ onBeforeUnmount(() => clearInterval(poll))
           <template v-if="!whatsapp.paired">
             <p v-if="whatsappQrImage" class="hint">Scan with WhatsApp's <strong>Linked Devices</strong> on the secondary phone.</p>
             <img v-if="whatsappQrImage" :src="whatsappQrImage" alt="WhatsApp pairing QR code" class="qr" />
-            <p v-else class="hint">Waiting for a QR code…</p>
+            <p v-else class="hint">{{ whatsapp.problem ?? 'Waiting for a QR code…' }}</p>
           </template>
           <div v-else-if="whatsapp.pending" class="callout ask">
             <span><strong>{{ whatsapp.pending.name }}</strong> just messaged this number.</span>
