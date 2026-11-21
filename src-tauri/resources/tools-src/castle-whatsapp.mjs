@@ -64,9 +64,26 @@ async function connect() {
       if (m.key.fromMe) continue
       const chatId = m.key.remoteJid
       if (!isOneToOne(chatId)) continue
+      // the phone number behind the chat when WhatsApp gives it (a chat id can be a hidden-number one)
+      const pn = m.key.senderPn ?? m.key.remoteJidAlt ?? null
+      const name = m.pushName ?? 'Someone'
+      const reaction = m.message?.reactionMessage
+      if (reaction) {
+        // a heart on one of Castle's own messages; an empty one means it was taken back
+        incoming.push({ id: m.key.id, chatId, pn, name, kind: 'reaction', text: '', emoji: reaction.text ?? '', onId: reaction.key?.id ?? null })
+        continue
+      }
       const text = (m.message?.conversation ?? m.message?.extendedTextMessage?.text ?? '').trim()
-      if (!text) continue
-      incoming.push({ id: m.key.id, chatId, name: m.pushName ?? 'Someone', text })
+      if (text) {
+        incoming.push({ id: m.key.id, chatId, pn, name, kind: 'text', text })
+        continue
+      }
+      // a picture, voice note or video arrives as a line only; the file itself stays on WhatsApp
+      const media = m.message?.imageMessage ? 'a picture' : m.message?.audioMessage ? 'a voice note' : m.message?.videoMessage ? 'a video' : null
+      if (media) {
+        const caption = (m.message?.imageMessage?.caption ?? m.message?.videoMessage?.caption ?? '').trim()
+        incoming.push({ id: m.key.id, chatId, pn, name, kind: 'media', text: `(sent ${media})${caption ? ' ' + caption : ''}` })
+      }
     }
   })
 }
@@ -97,8 +114,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && req.url === '/send') {
       const { to, text } = JSON.parse(await readBody(req))
-      await sock.sendMessage(to, { text })
-      return json(res, 200, { ok: true })
+      const sent = await sock.sendMessage(to, { text })
+      return json(res, 200, { ok: true, id: sent?.key?.id ?? null })
     }
     json(res, 404, { error: 'not found' })
   } catch (error) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildItems, isCompanionVoice, isMarker, openPlanFile, songOf, soundName } from './chatItems.js'
+import { buildItems, isCompanionVoice, isMarker, openPlanFile, placeReactions, songOf, soundName, withReaction } from './chatItems.js'
 
 const FILE = 'C:\\Users\\Lyra\\.claude\\plans\\hazy-noodling-meerkat.md'
 const PLAN = '# Work Lv.24 - The Handover\n\n### Phase 1\n- [ ] one'
@@ -92,5 +92,48 @@ describe('films and songs in Chat', () => {
     expect(soundName('D:/Memory/music/night-drive_v2.mp3')).toBe('night drive v2')
     expect(isCompanionVoice('D:\\Memory\\voice\\day 3.mp3')).toBe(true)
     expect(isCompanionVoice('D:/Work/out/theme.mp3')).toBe(false)
+  })
+})
+
+describe('the member\'s heart from the phone on the companion\'s bubble', () => {
+  const said = (id, role, text) => ({ id, role, text, at: id })
+  const items = buildItems([
+    said(1, 'member', 'Is the shop open tomorrow?'),
+    said(2, 'companion', 'Yes, from ten. I will remind you in the morning.'),
+    said(3, 'member', 'ok'),
+    said(4, 'companion', 'Yes, from ten. I will remind you in the morning.'),
+    said(5, 'companion', 'Goodnight!'),
+  ])
+
+  it('lands on the companion\'s newest bubble that opens with the remembered words', () => {
+    const placed = placeReactions(items, [{ platform: 'telegram', words: 'Yes, from ten. I will', emoji: '❤', at: 1 }])
+    expect(placed.find((i) => i.id === 4).reaction).toBe('❤')
+    expect(placed.find((i) => i.id === 2).reaction).toBeUndefined()
+    expect(items.find((i) => i.id === 4).reaction).toBeUndefined()
+  })
+
+  it('never lands on the member\'s own words, and a reply that is not there shows nowhere', () => {
+    const placed = placeReactions(items, [
+      { platform: 'whatsapp', words: 'Is the shop', emoji: '❤️', at: 1 },
+      { platform: 'whatsapp', words: 'Something else', emoji: '❤️', at: 2 },
+    ])
+    expect(placed.some((i) => i.reaction)).toBe(false)
+  })
+
+  it('lets the newer reaction win on the same bubble', () => {
+    const placed = placeReactions(items, [
+      { platform: 'telegram', words: 'Goodnight!', emoji: '👍', at: 9 },
+      { platform: 'discord', words: 'Goodnight', emoji: '❤️', at: 3 },
+    ])
+    expect(placed.find((i) => i.id === 5).reaction).toBe('👍')
+  })
+
+  it('keeps one reaction per reply and takes it back when it is emptied', () => {
+    let kept = withReaction([], { platform: 'telegram', words: 'Hi', emoji: '❤', at: 1 })
+    kept = withReaction(kept, { platform: 'telegram', words: 'Hi', emoji: '🔥', at: 2 })
+    expect(kept).toEqual([{ platform: 'telegram', words: 'Hi', emoji: '🔥', at: 2 }])
+    kept = withReaction(kept, { platform: 'whatsapp', words: 'Hi', emoji: '❤️', at: 3 })
+    expect(kept).toHaveLength(2)
+    expect(withReaction(kept, { platform: 'telegram', words: 'Hi', emoji: '', at: 4 })).toHaveLength(1)
   })
 })

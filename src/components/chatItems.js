@@ -85,3 +85,27 @@ export function soundName(path) {
   const file = String(path ?? '').split(/[\\/]/).pop()
   return file.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim()
 }
+
+/**
+ * The member's reactions from the phone ({ platform, words, emoji, at }, see bridges/reactions.rs)
+ * placed on the companion's bubbles: each lands on the companion's newest message whose words open
+ * with the remembered words, and a newer one on the same bubble wins. A reaction whose reply is
+ * not in the chat shows nowhere. Returns new items; the given ones are left as they were.
+ */
+export function placeReactions(items, reactions) {
+  if (!reactions?.length) return items
+  const out = items.map((item) => item)
+  const sorted = [...reactions].filter((r) => r?.emoji && r?.words).sort((a, b) => (a.at ?? 0) - (b.at ?? 0))
+  for (const reaction of sorted) {
+    const words = reaction.words.trim()
+    const at = out.findLastIndex((item) => item.kind === 'message' && item.entry.role === 'companion' && (item.entry.text ?? '').trim().startsWith(words))
+    if (at >= 0) out[at] = { ...out[at], reaction: reaction.emoji }
+  }
+  return out
+}
+
+/** A reaction that just arrived, put into the kept list: it replaces an older one on the same reply, or takes it back. */
+export function withReaction(reactions, reaction) {
+  const rest = (reactions ?? []).filter((r) => !(r.platform === reaction.platform && r.words === reaction.words))
+  return reaction.emoji ? [...rest, reaction] : rest
+}

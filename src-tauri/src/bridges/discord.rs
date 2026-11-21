@@ -20,9 +20,10 @@ use tungstenite::{connect, stream::MaybeTlsStream, Message};
 const ACCOUNT: &str = "discord-bridge";
 const GATEWAY_URL: &str = "wss://gateway.discord.gg/?v=10&encoding=json";
 const API: &str = "https://discord.com/api/v10";
-/// DIRECT_MESSAGES (1<<12) | MESSAGE_CONTENT (1<<15, privileged - the member must also switch
-/// this on for their bot in Discord's own Developer Portal).
-const INTENTS: u32 = (1 << 12) | (1 << 15);
+/// DIRECT_MESSAGES (1<<12) | DIRECT_MESSAGE_REACTIONS (1<<13, the member's hearts on the bot's
+/// replies) | MESSAGE_CONTENT (1<<15, privileged - the member must also switch this on for their
+/// bot in Discord's own Developer Portal).
+const INTENTS: u32 = (1 << 12) | (1 << 13) | (1 << 15);
 const READ_TIMEOUT: Duration = Duration::from_secs(5);
 const REPLY_TIMEOUT: Duration = Duration::from_secs(180);
 
@@ -82,18 +83,35 @@ fn incoming(data: &Value) -> Option<(String, String, String)> {
     Some((channel_id, text, name))
 }
 
-fn send_message(client: &reqwest::blocking::Client, token: &str, channel_id: &str, text: &str) -> Result<(), String> {
+/// A reaction from a MESSAGE_REACTION_ADD / _REMOVE's data in a DM: (channel id, the reacted
+/// message's id, the emoji - empty when it was taken back).
+fn reaction_of(kind: &str, data: &Value) -> Option<(String, String, String)> {
+    if data.get("guild_id").is_some() {
+        return None;
+    }
+    let channel_id = data.get("channel_id").and_then(Value::as_str)?.to_string();
+    let message_id = data.get("message_id").and_then(Value::as_str)?.to_string();
+    let emoji = match kind {
+        "MESSAGE_REACTION_ADD" => data.pointer("/emoji/name").and_then(Value::as_str).unwrap_or("⭐").to_string(),
+        "MESSAGE_REACTION_REMOVE" => String::new(),
+        _ => return None,
+    };
+    Some((channel_id, message_id, emoji))
+}
+
+/// Sends one message; the id Discord gave it, so a reaction on it can be placed later.
+fn send_message(client: &reqwest::blocking::Client, token: &str, channel_id: &str, text: &str) -> Result<Option<String>, String> {
     let response = client
         .post(format!("{API}/channels/{channel_id}/messages"))
         .header("Authorization", format!("Bot {token}"))
         .json(&json!({ "content": text }))
         .send()
         .map_err(|_| "Discord did not take the reply.".to_string())?;
-    if response.status().is_success() {
-        Ok(())
-    } else {
-        Err("Discord refused the reply.".to_string())
+    if !response.status().is_success() {
+        return Err("Discord refused the reply.".to_string());
     }
+    let body: Value = response.json().unwrap_or_default();
+    Ok(body.get("id").and_then(Value::as_str).map(str::to_string))
 }
 
 /// One incoming DM: approved, it goes to the companion's real session (in its own thread, so a
@@ -110,7 +128,9 @@ fn handle(app: &AppHandle, token: &str, channel_id: String, text: String, name: 
         match approved {
             Some(id) if id == channel_id => {
                 let reply = crate::bridges::send_and_await(&app, &store, &text, REPLY_TIMEOUT).unwrap_or_else(|problem| problem);
-                let _ = send_message(&client, &token, &channel_id, &reply);
+                if let Ok(Some(id)) = send_message(&client, &token, &channel_id, &reply) {
+                    crate::bridges::reactions::remember(&app, "discord", &id, &reply);
+                }
             }
             Some(_) => {}
             None => {
@@ -151,10 +171,16 @@ fn run(app: &AppHandle, token: &str) -> Result<(), String> {
                     Some(7) | Some(9) => return Err("Discord asked for a fresh connection.".into()),
                     // Dispatch
                     Some(0) => {
-                        if payload.get("t").and_then(Value::as_str) == Some("MESSAGE_CREATE") {
-                            if let Some(data) = payload.get("d") {
+                        let kind = payload.get("t").and_then(Value::as_str).unwrap_or_default();
+                        if let Some(data) = payload.get("d") {
+                            if kind == "MESSAGE_CREATE" {
                                 if let Some((channel_id, text, name)) = incoming(data) {
                                     handle(app, token, channel_id, text, name);
+                                }
+                            } else if let Some((channel_id, message_id, emoji)) = reaction_of(kind, data) {
+                                // only the approved DM's hearts are shown
+                                if app.state::<SettingsStore>().get().discord_bridge_channel_id.as_deref() == Some(channel_id.as_str()) {
+                                    crate::bridges::reactions::record(app, "discord", &message_id, &emoji);
                                 }
                             }
                         }
@@ -259,5 +285,16 @@ mod tests {
         assert!(incoming(&message(1, false, "Rin", "  ")).is_none(), "empty");
         let anon = incoming(&json!({ "channel_type": 1, "channel_id": "1", "content": "hi", "author": {} })).unwrap();
         assert_eq!(anon.2, "Someone");
+    }
+
+    #[test]
+    fn a_dm_reaction_names_its_channel_its_message_and_its_emoji() {
+        let add = json!({ "channel_id": "99", "message_id": "5", "user_id": "1", "emoji": { "id": null, "name": "❤️" } });
+        assert_eq!(reaction_of("MESSAGE_REACTION_ADD", &add), Some(("99".into(), "5".into(), "❤️".into())));
+        assert_eq!(reaction_of("MESSAGE_REACTION_REMOVE", &add), Some(("99".into(), "5".into(), String::new())));
+        let in_a_server = json!({ "guild_id": "7", "channel_id": "99", "message_id": "5", "emoji": { "name": "❤️" } });
+        assert!(reaction_of("MESSAGE_REACTION_ADD", &in_a_server).is_none());
+        assert!(reaction_of("TYPING_START", &add).is_none());
+        assert!(INTENTS & (1 << 13) != 0, "DM reactions are asked for");
     }
 }

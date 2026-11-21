@@ -149,6 +149,7 @@ defineExpose({ nearBottom, toBottom })
             {{ clock(item.entry.at) }}
             <span v-if="item.entry.role === 'member' && item.entry.state" class="ticks" :class="item.entry.state" :title="TICK_TITLES[item.entry.state]">{{ item.entry.state === 'read' ? '✓✓' : '✓' }}</span>
           </span>
+          <span v-if="item.reaction" class="reaction" title="Your reaction from the phone">{{ item.reaction }}</span>
         </div>
       </div>
 
@@ -278,6 +279,29 @@ defineExpose({ nearBottom, toBottom })
 .member .bubble {
   background: color-mix(in srgb, var(--accent) 34%, transparent);
   border-top-right-radius: 4px;
+}
+
+.row:has(.reaction) {
+  margin-bottom: 12px;
+}
+
+/* the member's reaction from the phone, at the bubble's lower corner like WhatsApp */
+.reaction {
+  position: absolute;
+  left: 10px;
+  bottom: -13px;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 11px;
+  background: var(--background, #1d1d24);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
 .time {

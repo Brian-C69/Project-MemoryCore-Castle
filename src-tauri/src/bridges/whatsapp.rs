@@ -72,12 +72,40 @@ struct SidecarIncoming {
     messages: Vec<IncomingMessage>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 struct IncomingMessage {
-    #[serde(rename = "chatId")]
     chat_id: String,
     name: String,
+    #[serde(default)]
     text: String,
+    /// "text", "media" (a picture, voice note or video, as a line) or "reaction"
+    #[serde(default = "text_kind")]
+    kind: String,
+    /// a reaction's emoji; empty when it was taken back
+    #[serde(default)]
+    emoji: String,
+    /// the id of the message a reaction is on
+    #[serde(default)]
+    on_id: Option<String>,
+    /// the phone number behind the chat, when WhatsApp gives it
+    #[serde(default)]
+    pn: Option<String>,
+}
+
+fn text_kind() -> String {
+    "text".into()
+}
+
+#[derive(Deserialize)]
+struct SentReply {
+    id: Option<String>,
+}
+
+/// Sends one message through the helper; the id WhatsApp gave it, so a reaction can be placed.
+fn send(client: &reqwest::blocking::Client, to: &str, text: &str) -> Option<String> {
+    let response = client.post(door("/send")).json(&json!({ "to": to, "text": text })).send().ok()?;
+    response.json::<SentReply>().ok()?.id
 }
 
 fn door(path: &str) -> String {
@@ -164,12 +192,14 @@ fn handle(app: &AppHandle, client: &reqwest::blocking::Client, chat_id: String, 
         match approved {
             Some(id) if id == chat_id => {
                 let reply = crate::bridges::send_and_await(&app, &store, &text, REPLY_TIMEOUT).unwrap_or_else(|problem| problem);
-                let _ = client.post(door("/send")).json(&json!({ "to": chat_id, "text": reply })).send();
+                if let Some(id) = send(&client, &chat_id, &reply) {
+                    crate::bridges::reactions::remember(&app, "whatsapp", &id, &reply);
+                }
             }
             Some(_) => {}
             None => {
                 *app.state::<WhatsAppState>().pending.lock().unwrap() = Some((chat_id.clone(), name));
-                let _ = client.post(door("/send")).json(&json!({ "to": chat_id, "text": "Hi! Approve this chat on Castle's MESSAGING room before I can answer." })).send();
+                let _ = send(&client, &chat_id, "Hi! Approve this chat on Castle's MESSAGING room before I can answer.");
             }
         }
     });
@@ -186,6 +216,17 @@ fn poll(app: &AppHandle, client: &reqwest::blocking::Client, state: &WhatsAppSta
     let Ok(response) = client.get(door("/incoming")).send() else { return };
     let Ok(incoming) = response.json::<SidecarIncoming>() else { return };
     for m in incoming.messages {
+        if m.kind == "reaction" {
+            // only the approved chat's hearts are shown
+            let approved = app.state::<SettingsStore>().get().whatsapp_bridge_chat_id;
+            if let (Some(on), true) = (m.on_id.as_deref(), approved.as_deref() == Some(m.chat_id.as_str())) {
+                crate::bridges::reactions::record(app, "whatsapp", on, &m.emoji);
+            }
+            continue;
+        }
+        if m.kind == "media" {
+            continue; // the companion's own session takes words only
+        }
         handle(app, client, m.chat_id, m.text, m.name);
     }
 }
@@ -261,5 +302,14 @@ mod tests {
     fn the_door_always_points_at_the_local_only_port() {
         assert_eq!(door("/status"), "http://127.0.0.1:51847/status");
         assert_eq!(door("/send"), "http://127.0.0.1:51847/send");
+    }
+
+    #[test]
+    fn the_helpers_lines_read_with_or_without_the_newer_fields() {
+        let old: IncomingMessage = serde_json::from_str(r#"{"chatId":"1@s.whatsapp.net","name":"Rin","text":"hi"}"#).unwrap();
+        assert_eq!(old.kind, "text");
+        assert_eq!(old.on_id, None);
+        let heart: IncomingMessage = serde_json::from_str(r#"{"chatId":"1@s.whatsapp.net","pn":null,"name":"Rin","kind":"reaction","text":"","emoji":"❤️","onId":"ABC"}"#).unwrap();
+        assert_eq!((heart.kind.as_str(), heart.emoji.as_str(), heart.on_id.as_deref()), ("reaction", "❤️", Some("ABC")));
     }
 }

@@ -1,11 +1,11 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { chatHistory, chatMediaOpen, chatPlanFile, chatPoll, claudeVoice, getSettings, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
+import { chatHistory, chatMediaOpen, chatPlanFile, chatPoll, claudeVoice, getSettings, onPhoneReaction, phoneReactions, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
 import { localSend, mergeEntries, resetEntries } from './ticks.js'
 import { isMicShortcut, micOffer, voiceMic } from './voicehold.js'
 import { isMac } from '../platform.js'
 import { isOwnAnswer, readChoices, tellOf } from './choices.js'
-import { buildItems, isMarker, openPlanFile } from './chatItems.js'
+import { buildItems, isMarker, openPlanFile, placeReactions, withReaction } from './chatItems.js'
 import { MODES, readContext, readMode, SHIFT_TAB } from './modes.js'
 import { useChatMedia } from './useChatMedia.js'
 import { typeLine } from './typeline.js'
@@ -206,7 +206,14 @@ watch(
 // only a typing bubble. Pictures made one after another sit side by side; the same plan asked, then
 // approved, is one card; the plan read from its file while the record is late sits at the bottom
 // only while that plan is open (chatItems.js).
-const items = computed(() => buildItems(entries.value, waitingPlan.value))
+// The member's hearts from the phone sit on the companion's bubbles (main room only; the phone
+// talks to the main session).
+const reactions = ref([])
+const items = computed(() => {
+  const built = buildItems(entries.value, waitingPlan.value)
+  return props.room ? built : placeReactions(built, reactions.value)
+})
+let stopReactions = null
 
 // The companion is typing while its newest entry is a tool step: it is working toward its next words.
 const typing = computed(() => {
@@ -449,6 +456,10 @@ onMounted(() => {
   menuTimer = setInterval(readMenu, 700)
   clockTimer = setInterval(() => (now.value = Date.now()), 5000)
   document.addEventListener('visibilitychange', poll)
+  if (!props.room) {
+    phoneReactions().then((kept) => (reactions.value = kept ?? [])).catch(() => {})
+    onPhoneReaction((reaction) => (reactions.value = withReaction(reactions.value, reaction))).then((stop) => (stopReactions = stop))
+  }
 })
 
 onBeforeUnmount(() => {
@@ -458,6 +469,7 @@ onBeforeUnmount(() => {
   clearInterval(menuTimer)
   clearInterval(clockTimer)
   document.removeEventListener('visibilitychange', poll)
+  stopReactions?.()
   stop()
 })
 

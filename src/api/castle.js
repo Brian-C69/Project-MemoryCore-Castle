@@ -431,6 +431,10 @@ export const discordBridgeForget = () => invoke('discord_bridge_forget')
 export const whatsappBridgeStatus = () => invoke('whatsapp_bridge_status')
 export const whatsappBridgeApprove = () => invoke('whatsapp_bridge_approve')
 export const whatsappBridgeForget = () => invoke('whatsapp_bridge_forget')
+// The member's reactions from the phone on the companion's replies: [{ platform, words, emoji, at }]
+export const phoneReactions = () => invoke('phone_reactions')
+// One just made on the phone (an empty emoji: taken back)
+export const onPhoneReaction = on('castle://phone-reaction')
 // A helper's notice (a key was missing): { at, kind, file, reason, settings }
 export const onNotice = on('castle-notice')
 // The tray's Wake companion.

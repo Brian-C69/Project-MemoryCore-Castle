@@ -468,6 +468,7 @@ pub fn run() {
             bridges::whatsapp::whatsapp_bridge_status,
             bridges::whatsapp::whatsapp_bridge_approve,
             bridges::whatsapp::whatsapp_bridge_forget,
+            bridges::reactions::phone_reactions,
             voicestudio::voicestudio_speak,
             appearance::appearance_look,
             appearance::appearance_new,

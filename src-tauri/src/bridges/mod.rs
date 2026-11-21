@@ -4,6 +4,7 @@
 //! Each adapter only needs to turn its own transport's messages into calls to `send_and_await`.
 
 pub mod discord;
+pub mod reactions;
 pub mod telegram;
 pub mod whatsapp;
 

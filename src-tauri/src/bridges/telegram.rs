@@ -20,6 +20,9 @@ const LONG_POLL_SECS: u64 = 25;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
 /// How long a reply is waited for before Telegram is told it took too long.
 const REPLY_TIMEOUT: Duration = Duration::from_secs(180);
+/// What `getUpdates` asks for: messages, and the member's reactions on the bot's replies (Telegram
+/// sends reactions only when asked by name). `["message","message_reaction"]`, written for a URL.
+const ALLOWED_UPDATES: &str = "%5B%22message%22%2C%22message_reaction%22%5D";
 
 #[derive(Default)]
 pub struct TelegramState {
@@ -64,17 +67,32 @@ fn incoming(update: &Value) -> Option<(i64, String, String)> {
     Some((chat_id, text, name))
 }
 
-fn send_message(client: &reqwest::blocking::Client, token: &str, chat_id: i64, text: &str) -> Result<(), String> {
+/// A reaction from one `getUpdates` item: (chat id, the reacted message's id, the emoji). An
+/// empty emoji means the reaction was taken back; a custom or paid one counts as a star.
+fn reaction_of(update: &Value) -> Option<(i64, i64, String)> {
+    let reaction = update.get("message_reaction")?;
+    let chat_id = reaction.pointer("/chat/id")?.as_i64()?;
+    let message_id = reaction.get("message_id")?.as_i64()?;
+    let new = reaction.get("new_reaction").and_then(Value::as_array).cloned().unwrap_or_default();
+    let emoji = match new.first() {
+        None => String::new(),
+        Some(first) => first.get("emoji").and_then(Value::as_str).unwrap_or("⭐").to_string(),
+    };
+    Some((chat_id, message_id, emoji))
+}
+
+/// Sends one message; the id Telegram gave it, so a reaction on it can be placed later.
+fn send_message(client: &reqwest::blocking::Client, token: &str, chat_id: i64, text: &str) -> Result<Option<i64>, String> {
     let response = client
         .post(api(token, "sendMessage"))
         .json(&json!({ "chat_id": chat_id, "text": text }))
         .send()
         .map_err(|_| "Telegram did not take the reply.".to_string())?;
-    if response.status().is_success() {
-        Ok(())
-    } else {
-        Err("Telegram refused the reply.".to_string())
+    if !response.status().is_success() {
+        return Err("Telegram refused the reply.".to_string());
     }
+    let body: Value = response.json().unwrap_or_default();
+    Ok(body.pointer("/result/message_id").and_then(Value::as_i64))
 }
 
 /// One incoming message: approved, it goes to the companion's real session and the answer (or
@@ -87,12 +105,15 @@ fn handle(app: &AppHandle, client: &reqwest::blocking::Client, token: &str, chat
     match approved {
         Some(id) if id == chat_id => {
             let reply = crate::bridges::send_and_await(app, &store, &text, REPLY_TIMEOUT).unwrap_or_else(|problem| problem);
-            send_message(client, token, chat_id, &reply)
+            if let Some(id) = send_message(client, token, chat_id, &reply)? {
+                crate::bridges::reactions::remember(app, "telegram", &id.to_string(), &reply);
+            }
+            Ok(())
         }
         Some(_) => Ok(()),
         None => {
             *app.state::<TelegramState>().pending.lock().unwrap() = Some((chat_id, name));
-            send_message(client, token, chat_id, "Hi! Ask in Castle's Settings > Messaging to approve this chat before I can answer.")
+            send_message(client, token, chat_id, "Hi! Ask in Castle's Settings > Messaging to approve this chat before I can answer.").map(|_| ())
         }
     }
 }
@@ -101,7 +122,7 @@ fn handle(app: &AppHandle, client: &reqwest::blocking::Client, token: &str, chat
 /// Telegram holds and answers nothing before it. Quick, so the card can say "Connected" at once,
 /// and a message that waited while the bridge was off is not answered late.
 fn catch_up(client: &reqwest::blocking::Client, token: &str) -> Result<i64, String> {
-    let url = format!("{}?timeout=0&offset=-1", api(token, "getUpdates"));
+    let url = format!("{}?timeout=0&offset=-1&allowed_updates={ALLOWED_UPDATES}", api(token, "getUpdates"));
     let body: Value = client.get(url).send().map_err(|_| "Telegram did not answer.".to_string())?.json().map_err(|_| "Telegram sent something unreadable.".to_string())?;
     if body.get("ok").and_then(Value::as_bool) != Some(true) {
         let message = body.get("description").and_then(Value::as_str).unwrap_or("Telegram refused the request.");
@@ -112,7 +133,7 @@ fn catch_up(client: &reqwest::blocking::Client, token: &str) -> Result<i64, Stri
 }
 
 fn poll(app: &AppHandle, client: &reqwest::blocking::Client, token: &str, offset: &mut i64) -> Result<(), String> {
-    let url = format!("{}?timeout={LONG_POLL_SECS}&offset={offset}", api(token, "getUpdates"));
+    let url = format!("{}?timeout={LONG_POLL_SECS}&offset={offset}&allowed_updates={ALLOWED_UPDATES}", api(token, "getUpdates"));
     let body: Value = client.get(url).send().map_err(|_| "Telegram did not answer.".to_string())?.json().map_err(|_| "Telegram sent something unreadable.".to_string())?;
     if body.get("ok").and_then(Value::as_bool) != Some(true) {
         let message = body.get("description").and_then(Value::as_str).unwrap_or("Telegram refused the request.");
@@ -123,6 +144,12 @@ fn poll(app: &AppHandle, client: &reqwest::blocking::Client, token: &str, offset
         *offset = update_id + 1;
         if let Some((chat_id, text, name)) = incoming(&update) {
             let _ = handle(app, client, token, chat_id, text, name);
+        } else if let Some((chat_id, message_id, emoji)) = reaction_of(&update) {
+            // only the approved chat's hearts are shown
+            let approved = app.state::<SettingsStore>().get().telegram_bridge_chat_id.and_then(|id| id.parse::<i64>().ok());
+            if approved == Some(chat_id) {
+                crate::bridges::reactions::record(app, "telegram", &message_id.to_string(), &emoji);
+            }
         }
     }
     Ok(())
@@ -233,5 +260,23 @@ mod tests {
         // no name given: a plain fallback, never a panic
         let anon = incoming(&json!({ "update_id": 5, "message": { "chat": { "id": 7 }, "text": "hi" } })).unwrap();
         assert_eq!(anon.2, "Someone");
+        // a reaction is not a message
+        assert!(incoming(&json!({ "update_id": 6, "message_reaction": { "chat": { "id": 7 }, "message_id": 3 } })).is_none());
+    }
+
+    #[test]
+    fn a_reaction_names_its_chat_its_message_and_its_emoji() {
+        let heart = json!({ "update_id": 1, "message_reaction": { "chat": { "id": 42 }, "message_id": 77, "old_reaction": [], "new_reaction": [{ "type": "emoji", "emoji": "❤" }] } });
+        assert_eq!(reaction_of(&heart), Some((42, 77, "❤".to_string())));
+        let back = json!({ "update_id": 2, "message_reaction": { "chat": { "id": 42 }, "message_id": 77, "new_reaction": [] } });
+        assert_eq!(reaction_of(&back), Some((42, 77, String::new())));
+        let custom = json!({ "update_id": 3, "message_reaction": { "chat": { "id": 42 }, "message_id": 78, "new_reaction": [{ "type": "custom_emoji", "custom_emoji_id": "5" }] } });
+        assert_eq!(reaction_of(&custom).unwrap().2, "⭐");
+        assert!(reaction_of(&json!({ "update_id": 4, "message": { "chat": { "id": 1 }, "text": "hi" } })).is_none());
+    }
+
+    #[test]
+    fn get_updates_asks_for_messages_and_reactions_by_name() {
+        assert_eq!(ALLOWED_UPDATES.replace("%5B", "[").replace("%5D", "]").replace("%22", "\"").replace("%2C", ","), r#"["message","message_reaction"]"#);
     }
 }
