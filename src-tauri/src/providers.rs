@@ -110,7 +110,7 @@ pub fn remember(
 
 /// What Castle types into a freshly switched session. It lands in the conversation record like
 /// something the member said, so the handoff must leave it out or every switch repeats it.
-const HANDOFF_PROMPT: &str = "Continue the Castle conversation by reading the private handoff file at";
+pub(crate) const HANDOFF_PROMPT: &str = "Continue the Castle conversation by reading the private handoff file at";
 
 pub fn handoff(entries: &[ChatEntry], memory: &Path) -> String {
     let mut recent = Vec::new();

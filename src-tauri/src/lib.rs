@@ -58,6 +58,7 @@ mod providers;
 mod messages;
 mod page_reader;
 mod oneshot;
+mod resume;
 mod quota;
 mod alerts;
 mod bridges;

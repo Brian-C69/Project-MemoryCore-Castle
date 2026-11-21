@@ -419,8 +419,19 @@ pub(crate) fn wake_with_prompt(app: &AppHandle, store: &SettingsStore, host: &Pt
     let (output_event, exit_event) = room.events();
     let output = app.clone();
     let ending = app.clone();
-    let mut args = wake_args(settings.cli, boot.as_ref());
+    // The main session picks its own earlier conversation up again (never a provider switch's
+    // handoff, which is a fresh session by design); the others always start fresh.
+    let fresh_handoff = prompt.is_some_and(|p| p.starts_with(crate::providers::HANDOFF_PROMPT));
+    let plan = (room == Room::Main).then(|| crate::resume::plan(store, settings.cli, &folder, !fresh_handoff));
+    let resumed = plan.as_ref().is_some_and(|p| p.resumed);
+    let mut args = Vec::new();
+    // Codex's `resume <id>` is a subcommand, so it comes before any option
+    if settings.cli == Cli::Codex { args.extend(plan.iter().flat_map(|p| p.args.clone())); }
+    args.extend(wake_args(settings.cli, boot.as_ref()));
+    if settings.cli == Cli::Claude { args.extend(plan.iter().flat_map(|p| p.args.clone())); }
     args.extend(isolation_args);
+    // a conversation picked up again is not greeted a second time
+    let prompt = prompt.filter(|p| !(resumed && *p == WAKE_PROMPT));
     if let Some(prompt) = prompt { args.push(prompt.to_owned()); }
     let started = host.start(
         pty::launch_command(&program, &folder, &vars, &args),
@@ -441,6 +452,7 @@ pub(crate) fn wake_with_prompt(app: &AppHandle, store: &SettingsStore, host: &Pt
         },
     )?;
     if started { host.bind_provider(settings.cli); }
+    if started && room == Room::Main && settings.cli == Cli::Codex && !resumed { crate::resume::remember_codex_when_it_appears(app, folder.clone()); }
     // A handoff prompt is a turn the new CLI is now working on: a later switch waits for it.
     if started && prompt.is_some() { host.mark_input(); }
     Ok(())

@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- **Your companion picks its conversation up again after Castle restarts.** Castle keeps the id of its own session for each provider and resumes that session when it wakes, so a restart, crash or sleep no longer starts a new conversation (a phone chat counting to ten began again at "Good evening"). It never resumes "the newest session in the folder", so a Claude Code or Codex terminal you use yourself in the same folder is left alone. Switching provider still starts fresh with the handoff. Chat's short replies also keep a minimum width, so the time no longer wraps onto three lines.
+
 ## 0.2.26 - 2026-11-21
 
 - **Switching providers no longer waits for ever, or freezes, when you also run Claude Code yourself in your memory folder.** Chat and the switch followed whichever Claude Code record in that folder was newest, so your own terminal session was taken for your companion's: Chat showed it, and the switch waited for it to finish a turn that never ended. Castle now follows the record its own session created, and never reads a record over 64 MB to guess.

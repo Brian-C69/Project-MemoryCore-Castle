@@ -285,6 +285,7 @@ defineExpose({ nearBottom, toBottom })
   right: 10px;
   bottom: 4px;
   font-size: 10px;
+  white-space: nowrap;
   color: var(--text-dim);
 }
 
@@ -316,6 +317,10 @@ defineExpose({ nearBottom, toBottom })
 }
 
 /* room for the time and the ticks (and "send now") under a short message */
+.bubble {
+  min-width: 84px;
+}
+
 .member .bubble {
   min-width: 96px;
 }

@@ -78,6 +78,26 @@ pub(crate) fn recent_rollouts(root: &Path, floor: SystemTime) -> Vec<(SystemTime
     found
 }
 
+/// The rollout of one session, found by the id in its file name (they sit in dated folders).
+pub fn record_with_id(id: &str) -> Option<PathBuf> {
+    fn find(dir: &Path, tail: &str, depth: u8) -> Option<PathBuf> {
+        for entry in std::fs::read_dir(dir).ok()?.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if depth > 0 {
+                    if let Some(found) = find(&path, tail, depth - 1) {
+                        return Some(found);
+                    }
+                }
+            } else if path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.ends_with(tail)) {
+                return Some(path);
+            }
+        }
+        None
+    }
+    find(&sessions_root()?, &format!("{id}.jsonl"), 4)
+}
+
 /// The newest rollout for `folder` written since `since` (a minute's grace for clocks).
 pub fn newest_record(folder: &Path, since: SystemTime) -> Option<PathBuf> {
     newest_record_in(&sessions_root()?, folder, since)

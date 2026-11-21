@@ -116,7 +116,23 @@ pub fn read_plan_file(path: &str) -> Result<String, String> {
 /// since `since` is used, a minute's grace for clocks - but never one over 64 MB: Chat reads a
 /// record on the thread that keeps the window alive, and a terminal's long record read from its
 /// start froze Castle for a minute and a half.
+/// Castle's own session, when its id is known (Castle gave it to Claude Code, or resumed it): its
+/// record is then that one file, and nothing is guessed among the folder's other records.
+static OWN_SESSION: std::sync::Mutex<Option<(PathBuf, String)>> = std::sync::Mutex::new(None);
+
+pub fn set_own_session(records_folder: PathBuf, id: String) {
+    if let Ok(mut own) = OWN_SESSION.lock() {
+        *own = Some((records_folder, id));
+    }
+}
+
 pub fn newest_record(folder: &Path, since: SystemTime) -> Option<PathBuf> {
+    let own = OWN_SESSION.lock().ok().and_then(|own| own.clone());
+    if let Some((dir, id)) = own.filter(|(dir, _)| dir == folder) {
+        // not there yet in a session's first moments: wait for it, do not take another record
+        let record = dir.join(format!("{id}.jsonl"));
+        return record.is_file().then_some(record);
+    }
     let candidates: Vec<Candidate> = std::fs::read_dir(folder)
         .ok()?
         .flatten()
