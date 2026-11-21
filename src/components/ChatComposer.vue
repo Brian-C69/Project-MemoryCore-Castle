@@ -1,8 +1,9 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { chatAttach, clipboardPaste } from '../api/castle.js'
 import ImageViewer from './ImageViewer.vue'
-import { isMac } from '../platform.js'
+import { isMac, shortcutLabel } from '../platform.js'
+import { micShortcutText } from './voicehold.js'
 
 // Chat's box: the member's words, the pictures they drop, paste or type as paths (shown above the
 // box, removable, opened in a viewer), Enter to send, Shift+Enter for a new line.
@@ -15,6 +16,10 @@ const props = defineProps({
   loadPath: { type: Function, required: true },
   // (text) -> Promise<boolean>: true when the words went in, and the box empties
   send: { type: Function, required: true },
+  // The mic, while Claude Code's voice is on: { ready, hint, shortcut, hold: voiceMic(...) }; null for none
+  mic: { type: Object, default: null },
+  // Chat is the tab showing: switching away stops the mic
+  visible: { type: Boolean, default: true },
 })
 
 const draft = ref('')
@@ -111,7 +116,89 @@ function grow() {
   el.style.height = `${Math.min(el.scrollHeight, 160)}px`
 }
 
-defineExpose({ addPaths, focus: () => box.value?.focus(), hasText: () => !!draft.value.trim() })
+// ---------- The mic: click to talk, click again to stop ----------
+
+// '' | 'listening' (on) | 'writing' (stopped, Claude Code writes the words down)
+const listening = ref('')
+const micNote = ref('')
+// the mic that was started, so the stop reaches it even if the button has gone meanwhile
+let recording = null
+
+function micStart() {
+  if (!props.mic?.ready || !props.running || !props.visible || listening.value) return
+  micNote.value = ''
+  recording = props.mic.hold
+  // the 2-minute cap stops it as usual: the words come to the box
+  if (recording.start({ onCap: micStop })) listening.value = 'listening'
+}
+
+/** Stopped: the words Claude Code wrote down come into the box, to look over before Send. */
+async function micStop() {
+  if (listening.value !== 'listening') return
+  listening.value = 'writing'
+  let heard
+  try {
+    heard = await recording.stop()
+  } catch {
+    heard = { text: '', note: 'Your words could not be read - open Log to see them.' }
+  }
+  listening.value = ''
+  micNote.value = heard.note
+  if (!heard.text) return
+  const before = draft.value.replace(/\s+$/, '')
+  draft.value = (before ? `${before} ` : '') + heard.text
+  await nextTick()
+  grow()
+  const el = box.value
+  el?.focus()
+  el?.setSelectionRange(draft.value.length, draft.value.length)
+}
+
+/** Esc: Claude Code's prompt is emptied and nothing comes to the box. */
+async function micCancel() {
+  if (listening.value !== 'listening') return
+  listening.value = 'writing'
+  let heard
+  try {
+    heard = await recording.cancel()
+  } catch {
+    heard = { text: '', note: 'Cancelled, but the Log could not be read - open Log to empty its prompt.' }
+  }
+  listening.value = ''
+  micNote.value = heard.note
+}
+
+const micToggle = () => (listening.value === 'listening' ? micStop() : micStart())
+
+// Leaving Castle's window, Castle hidden, the Chat tab switched away, the session ending or voice
+// turned off while the mic is on: it stops as usual.
+const whenHidden = () => document.visibilityState === 'hidden' && micStop()
+window.addEventListener('blur', micStop)
+document.addEventListener('visibilitychange', whenHidden)
+watch(() => !!props.mic && props.running && props.visible, (on) => on || micStop())
+onBeforeUnmount(() => {
+  window.removeEventListener('blur', micStop)
+  document.removeEventListener('visibilitychange', whenHidden)
+  micStop()
+})
+
+// the mic's shortcut in this computer's words (⌘⇧M), as chosen in Settings > Chat > Mic
+const micKeys = computed(() => shortcutLabel(micShortcutText(props.mic?.shortcut)))
+const micStatus = computed(() => {
+  if (listening.value === 'listening') return `🎙 Listening… click or ${micKeys.value} to stop · Esc to cancel`
+  if (listening.value === 'writing') return 'Writing your words down…'
+  return micNote.value
+})
+const micTitle = computed(() => (listening.value === 'listening' ? `Stop (${micKeys.value}) · Esc to cancel` : `${props.mic?.hint ?? ''} (${micKeys.value})`))
+
+defineExpose({
+  addPaths,
+  focus: () => box.value?.focus(),
+  hasText: () => !!draft.value.trim(),
+  micToggle,
+  micCancel,
+  micOn: () => listening.value === 'listening',
+})
 </script>
 
 <template>
@@ -132,6 +219,8 @@ defineExpose({ addPaths, focus: () => box.value?.focus(), hasText: () => !!draft
     @close="draftViewer = null"
   />
 
+  <p v-if="micStatus" class="mic-status" :class="{ live: listening === 'listening' }" aria-live="polite">{{ micStatus }}</p>
+
   <form class="composer" @submit.prevent="submit">
     <textarea
       ref="box"
@@ -144,6 +233,18 @@ defineExpose({ addPaths, focus: () => box.value?.focus(), hasText: () => !!draft
       @input="grow"
       @paste="onPaste"
     ></textarea>
+    <button
+      v-if="mic"
+      type="button"
+      class="mic"
+      :class="{ on: listening === 'listening' }"
+      :disabled="!running || !mic.ready || listening === 'writing'"
+      :title="micTitle"
+      :aria-label="listening === 'listening' ? 'Stop the mic' : 'Talk'"
+      :aria-keyshortcuts="isMac ? 'Meta+Shift+M' : 'Control+Shift+M'"
+      :aria-pressed="listening === 'listening'"
+      @click="micToggle"
+    >&#127897;</button>
     <button type="submit" class="send" :disabled="!running || !draft.trim()" aria-label="Send">&#10148;</button>
   </form>
 </template>
@@ -252,6 +353,50 @@ textarea:disabled {
   background: var(--accent);
   color: #160f33;
   font-size: 16px;
+}
+
+.mic {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  font-size: 16px;
+}
+
+.mic.on {
+  border-color: #e5484d;
+  background: color-mix(in srgb, #e5484d 38%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, #e5484d 24%, transparent);
+  animation: mic-on 1.4s ease-in-out infinite;
+}
+
+@keyframes mic-on {
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, #e5484d 10%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mic.on {
+    animation: none;
+  }
+}
+
+.mic:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mic-status {
+  margin: 6px 2px 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.mic-status.live {
+  color: #ff6b6f;
 }
 
 .send:disabled {

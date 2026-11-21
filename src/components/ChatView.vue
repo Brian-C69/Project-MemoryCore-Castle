@@ -1,7 +1,9 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { chatHistory, chatMediaOpen, chatPlanFile, chatPoll, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
+import { chatHistory, chatMediaOpen, chatPlanFile, chatPoll, claudeVoice, getSettings, queuedMessageAction, queuedMessages, sendMessage } from '../api/castle.js'
 import { localSend, mergeEntries, resetEntries } from './ticks.js'
+import { isMicShortcut, micOffer, voiceMic } from './voicehold.js'
+import { isMac } from '../platform.js'
 import { isOwnAnswer, readChoices, tellOf } from './choices.js'
 import { buildItems, isMarker, openPlanFile } from './chatItems.js'
 import { MODES, readContext, readMode, SHIFT_TAB } from './modes.js'
@@ -34,6 +36,8 @@ const props = defineProps({
   companion: { type: String, default: 'Your companion' },
   // 'claude' or 'codex': answer buttons, send-now and the mode pills are Claude Code's; Codex asks in the Log
   cli: { type: String, default: 'claude' },
+  // Bumped when Settings are saved: the mic's shortcut is read again
+  settingsStamp: { type: Number, default: 0 },
 })
 // busy: the companion is working or not (the typing bubble)
 // context: the context window as Castle's status line says it ({ percent, tokens }), when it
@@ -366,18 +370,81 @@ async function sendNow() {
   }
 }
 
+// ---------- The mic (Claude Code's own voice mode) ----------
+
+// The member's Claude Code voice: { enabled, mode }; undefined until read, null when it cannot be read.
+const voice = ref(undefined)
+let voiceTimer
+async function readVoice() {
+  try {
+    voice.value = await claudeVoice()
+  } catch {
+    voice.value = null
+  }
+}
+
+// The mic's shortcut as chosen in Settings > Chat > Mic (null = ⌘⇧M / Ctrl+Shift+M); undefined until
+// read, and the 🎙 waits for it, so it never shows the default keys first.
+const micShortcut = ref(undefined)
+async function readMicShortcut() {
+  try {
+    micShortcut.value = (await getSettings())?.settings?.micShortcut ?? null
+  } catch {
+    // keeps the one it has; the first time, the default
+    if (micShortcut.value === undefined) micShortcut.value = null
+  }
+}
+watch(() => props.settingsStamp, readMicShortcut)
+
+// The mic holds Space in this session while it is on, wherever it runs (HOME, STORY or a DEV tab):
+// `write` is the panel's own session, and the words are read back off the same panel's Log screen.
+const micHold = voiceMic({
+  write: (data) => props.write(data),
+  readScreen: (count) => props.readScreen(count),
+  readTyped: (count) => props.readScreen(count, { typed: true }),
+})
+
+// Shown only while Claude Code's voice is on (hold mode, which records while Space is held). When Castle cannot
+// tell, it shows with a hint to turn voice on first.
+const mic = computed(() => {
+  const offer = micOffer({ running: props.running, claude: isClaude.value, voice: voice.value, shortcut: micShortcut.value })
+  return offer && { ...offer, hold: micHold }
+})
+
 watch(
   () => props.visible,
   (shown) => {
     if (shown) {
       poll()
+      readVoice()
+      readMicShortcut()
       nextTick(() => composer.value?.focus())
     }
   },
 )
 
+// The mic's shortcut (⌘⇧M / Ctrl+Shift+M unless changed in Settings) turns the mic on or off from
+// anywhere in Chat, the message box too; Esc while it is on cancels. Only these keys: every other
+// one goes on as before. Keys pressed where Castle records a shortcut ([data-takes-keys]) are left alone.
+function micKeys(event) {
+  if (!props.visible || !mic.value || event.target?.closest?.('[data-takes-keys]')) return
+  if (isMicShortcut(event, isMac, micShortcut.value)) {
+    event.preventDefault()
+    composer.value?.micToggle()
+  } else if (event.key === 'Escape' && composer.value?.micOn()) {
+    event.preventDefault()
+    event.stopPropagation()
+    composer.value.micCancel()
+  }
+}
+
 onMounted(() => {
   poll()
+  readVoice()
+  readMicShortcut()
+  window.addEventListener('keydown', micKeys, true)
+  // /voice in the Log turns the mic on or off within a few seconds
+  voiceTimer = setInterval(() => props.visible && readVoice(), 5000)
   timer = setInterval(poll, POLL_MS)
   menuTimer = setInterval(readMenu, 700)
   clockTimer = setInterval(() => (now.value = Date.now()), 5000)
@@ -386,6 +453,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearInterval(timer)
+  clearInterval(voiceTimer)
+  window.removeEventListener('keydown', micKeys, true)
   clearInterval(menuTimer)
   clearInterval(clockTimer)
   document.removeEventListener('visibilitychange', poll)
@@ -436,7 +505,7 @@ defineExpose({ poll, addPaths })
     <ImageViewer v-if="viewerStart !== null" :pictures="allPictures" :start="viewerStart" @close="viewerStart = null" />
     <PlanViewer v-if="planOpen !== null" :plan="planOpen" @close="planOpen = null" />
 
-    <ChatComposer ref="composer" :running="running" :placeholder="placeholder" :companion="companion" :media="media" :load-path="loadPath" :send="send" />
+    <ChatComposer ref="composer" :running="running" :placeholder="placeholder" :companion="companion" :media="media" :load-path="loadPath" :send="send" :mic="mic" :visible="visible" />
 
     <div v-if="running && isClaude" class="modes" role="group" aria-label="Claude Code's mode">
       <span class="modes-label">MODE</span>

@@ -474,6 +474,7 @@ pub fn run() {
             world::castle_move_to_screen,
             world::world_music,
             world::world_identify,
+            session::claude_voice,
             quota::cli_quota,
             quota::cli_usage,
             rooms::rooms_apply,

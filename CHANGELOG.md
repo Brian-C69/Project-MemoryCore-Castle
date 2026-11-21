@@ -18,6 +18,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 - **Films and songs in Chat.** A film your companion makes plays right in the conversation. A song shows its own name, and both have **Open** and **Open folder**.
 
+- **Talk instead of typing in CHAT.** With Claude Code's voice on (`/voice` in the Log, hold mode), a 🎙 button sits beside Send, on HOME and in every DEV tab. Click it (or press ⌘⇧M, Ctrl+Shift+M on Windows, anywhere in CHAT) and speak; click again (or press the keys again) and your words come into the message box, so you can look them over and press Send yourself. Other keys? Settings > Chat > Mic takes your own (⌘ or Ctrl plus a letter or digit). Esc cancels and keeps nothing; the mic also stops by itself after two minutes, or when you leave Castle or the CHAT tab. On a Mac, Castle now asks for the microphone the first time, and voice works in the Log too, also when Castle keeps your personal Claude Code setup out of its sessions.
+
 ## 0.2.25 - 2026-11-20
 
 - **Wallpaper sounds.** The Star Shore's surf, The Sunset Shore's waves and The Emerald River's water and birds play quietly on HOME, under any music and at its slider's level. Settings > Rooms > Wallpaper sounds turns them off.

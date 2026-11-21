@@ -158,6 +158,27 @@ impl Default for WorldSettings {
     }
 }
 
+/// The keys that start and stop Chat's mic, set on Settings > Chat > Mic: the key by its
+/// KeyboardEvent code (KeyA..KeyZ, Digit0..Digit9), with ⌘ on a Mac (Ctrl elsewhere) always held,
+/// plus Shift and/or Alt. None (the default) is ⌘⇧M / Ctrl+Shift+M.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MicShortcut {
+    pub code: String,
+    pub shift: bool,
+    pub alt: bool,
+}
+
+impl MicShortcut {
+    /// A letter or a digit key; anything else is no choice.
+    fn known(&self) -> bool {
+        let code = self.code.as_str();
+        let one = |rest: &str, ok: fn(char) -> bool| rest.len() == 1 && rest.chars().all(ok);
+        code.strip_prefix("Key").is_some_and(|r| one(r, |c| c.is_ascii_uppercase()))
+            || code.strip_prefix("Digit").is_some_and(|r| one(r, |c| c.is_ascii_digit()))
+    }
+}
+
 /// One alert source's choices, set on Settings > Alerts. A field left out (None) keeps the source's
 /// own default, so a source added later by a theme or a new feature works before it is ever set.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -305,6 +326,8 @@ pub struct Settings {
     pub emotion_market_voice: bool,
     /// How HOME's PROFILE tab shows the emotion engine: one of PROFILE_LOOKS.
     pub profile_look: String,
+    /// The keys for Chat's mic (None = ⌘⇧M / Ctrl+Shift+M).
+    pub mic_shortcut: Option<MicShortcut>,
     /// The DEV tab's projects folder: new projects are cloned or made in it (or in one of its
     /// folders). None until the member chooses one; there is no default.
     pub dev_root: Option<String>,
@@ -442,6 +465,7 @@ impl Default for Settings {
             emotion_room_voice: true,
             emotion_market_voice: true,
             profile_look: "cards".into(),
+            mic_shortcut: None,
             dev_root: None,
             tab_order: Vec::new(),
             widgets_off: Vec::new(),
@@ -520,6 +544,7 @@ impl Settings {
         if !PROFILE_LOOKS.contains(&self.profile_look.as_str()) {
             self.profile_look = "cards".into();
         }
+        self.mic_shortcut = self.mic_shortcut.take().filter(MicShortcut::known);
         // HOME's widgets: known ids only, USAGE's switch is show_usage_card; places kept on HOME
         let mut off: Vec<String> = std::mem::take(&mut self.widgets_off).into_iter().filter(|w| WIDGETS.contains(&w.as_str()) && w != "usage").collect();
         off.sort();
@@ -688,6 +713,20 @@ mod tests {
         assert_eq!(old.profile_look, "cards");
         let odd: Settings = serde_json::from_str(r#"{"profileLook":"spiral"}"#).unwrap();
         assert_eq!(odd.normalized().profile_look, "cards");
+    }
+
+    #[test]
+    fn the_mic_shortcut_keeps_only_a_letter_or_a_digit() {
+        let old: Settings = serde_json::from_str(r#"{"setupDone":true}"#).unwrap();
+        assert_eq!(old.mic_shortcut, None, "an older file keeps ⌘⇧M");
+        let k: Settings = serde_json::from_str(r#"{"micShortcut":{"code":"KeyK","shift":true}}"#).unwrap();
+        assert_eq!(k.normalized().mic_shortcut, Some(MicShortcut { code: "KeyK".into(), shift: true, alt: false }));
+        let seven: Settings = serde_json::from_str(r#"{"micShortcut":{"code":"Digit7","alt":true}}"#).unwrap();
+        assert_eq!(seven.normalized().mic_shortcut.map(|m| m.code), Some("Digit7".into()));
+        for odd in ["Escape", "Keyk", "KeyAB", "F5", "", "Digit10"] {
+            let s: Settings = serde_json::from_str(&format!(r#"{{"micShortcut":{{"code":"{odd}"}}}}"#)).unwrap();
+            assert_eq!(s.normalized().mic_shortcut, None, "{odd} is no choice");
+        }
     }
 
     #[test]
@@ -898,6 +937,7 @@ mod tests {
             emotion_room_voice: false,
             emotion_market_voice: false,
             profile_look: "constellation".into(),
+            mic_shortcut: Some(MicShortcut { code: "KeyK".into(), shift: true, alt: false }),
             dev_root: Some("D:/Projects".into()),
             tab_order: vec!["dev".into(), "home".into(), "chat".into()],
             widgets_off: vec!["growth".into()],
