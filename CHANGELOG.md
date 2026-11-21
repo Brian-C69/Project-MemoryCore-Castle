@@ -4,6 +4,16 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.27 - 2026-11-22
+
+- **Your heart on the phone shows on your companion's bubble.** React to its reply on Telegram, Discord or WhatsApp (a heart, a laugh, anything) and the same emoji appears at the corner of that bubble in Chat, the moment you tap it. It is only shown: it never wakes your companion or costs a turn, and taking it back on the phone takes it off the bubble.
+
+- **WhatsApp knows which number is you, and keeps a list of approved numbers.** When a chat messages your Castle's number, the card now offers **This is me**, **Approve as a guest** or **Not this one**, with the number when WhatsApp gives it. **Approved numbers** lists you with a **Me** chip and your guests: **Make me** for the day your own number changes, **Remove** to let a guest go.
+
+- **Guests are answered at once, and you hear about every answer.** A guest is never answered by your companion's real session: a separate guest-only run answers, with your companion's public card, no tools and nothing private about you. After each answer you get a WhatsApp message on your own number saying who wrote, what they said and what was answered. At most one answer every ten seconds and twenty an hour per guest, so two bots can never chat at full speed.
+
+- **A new number for your Castle keeps everyone.** If the paired WhatsApp number is banned or logged out, **Pair a new number** removes the old pairing and shows a fresh QR code. You and every guest stay approved.
+
 - **Telegram replies arrive the moment your companion finishes, and the card says Connected at once.** The phone message used to wait 12 quiet seconds after your companion's last words, so Telegram trailed Home by about five seconds; it now sends as soon as the turn ends. Turning Telegram on checks right away, so the card says Connected within a second or two, and messages that were waiting from before it started are no longer answered late.
 
 - **WhatsApp now shows its QR code and finishes pairing.** On Windows the helper was started with a path Node cannot read, so it stopped at once and the card kept saying "Waiting for a QR code"; and after a scan the helper still reported itself unpaired. Both are fixed, the helper starts without an empty console window, and if it ever stops the card says so (with the helper's own log beside your settings) and starts it again.
