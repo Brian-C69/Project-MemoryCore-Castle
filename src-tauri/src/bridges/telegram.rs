@@ -97,6 +97,20 @@ fn handle(app: &AppHandle, client: &reqwest::blocking::Client, token: &str, chat
     }
 }
 
+/// The first look after the bridge starts: asks for no waiting, takes note of the newest update
+/// Telegram holds and answers nothing before it. Quick, so the card can say "Connected" at once,
+/// and a message that waited while the bridge was off is not answered late.
+fn catch_up(client: &reqwest::blocking::Client, token: &str) -> Result<i64, String> {
+    let url = format!("{}?timeout=0&offset=-1", api(token, "getUpdates"));
+    let body: Value = client.get(url).send().map_err(|_| "Telegram did not answer.".to_string())?.json().map_err(|_| "Telegram sent something unreadable.".to_string())?;
+    if body.get("ok").and_then(Value::as_bool) != Some(true) {
+        let message = body.get("description").and_then(Value::as_str).unwrap_or("Telegram refused the request.");
+        return Err(message.to_string());
+    }
+    let newest = body["result"].as_array().and_then(|u| u.iter().filter_map(|x| x.get("update_id").and_then(Value::as_i64)).max());
+    Ok(newest.map_or(0, |id| id + 1))
+}
+
 fn poll(app: &AppHandle, client: &reqwest::blocking::Client, token: &str, offset: &mut i64) -> Result<(), String> {
     let url = format!("{}?timeout={LONG_POLL_SECS}&offset={offset}", api(token, "getUpdates"));
     let body: Value = client.get(url).send().map_err(|_| "Telegram did not answer.".to_string())?.json().map_err(|_| "Telegram sent something unreadable.".to_string())?;
@@ -118,13 +132,13 @@ fn poll(app: &AppHandle, client: &reqwest::blocking::Client, token: &str, offset
 pub fn start(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
-        let mut offset: i64 = 0;
+        let mut offset: Option<i64> = None;
         loop {
             let state = app.state::<TelegramState>();
             let settings = app.state::<SettingsStore>().get();
             let token = crate::key::load(ACCOUNT);
             let (true, Some(token)) = (settings.telegram_bridge_on, token) else {
-                offset = 0; // switched on again: do not answer messages sent while it was off
+                offset = None; // switched on again: do not answer messages sent while it was off
                 *state.connected.lock().unwrap() = false;
                 *state.problem.lock().unwrap() = None;
                 std::thread::sleep(Duration::from_secs(3));
@@ -135,7 +149,24 @@ pub fn start(app: &AppHandle) {
                 std::thread::sleep(Duration::from_secs(5));
                 continue;
             };
-            let outcome = poll(&app, &client, &token, &mut offset);
+            let Some(next) = offset else {
+                let outcome = catch_up(&client, &token);
+                *state.connected.lock().unwrap() = outcome.is_ok();
+                match outcome {
+                    Ok(next) => {
+                        offset = Some(next);
+                        *state.problem.lock().unwrap() = None;
+                    }
+                    Err(problem) => {
+                        *state.problem.lock().unwrap() = Some(problem);
+                        std::thread::sleep(Duration::from_secs(3));
+                    }
+                }
+                continue;
+            };
+            let mut next = next;
+            let outcome = poll(&app, &client, &token, &mut next);
+            offset = Some(next);
             *state.connected.lock().unwrap() = outcome.is_ok();
             *state.problem.lock().unwrap() = outcome.err();
         }
