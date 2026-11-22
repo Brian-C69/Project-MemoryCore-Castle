@@ -130,8 +130,10 @@ pub(super) fn event_key(platform: &str, chat: &str, id: &str) -> String {
     }
     format!("{:x}", hash.finalize())
 }
-/// Return whether normal companion chat may continue. Errors fail closed while automations
-/// are on: never route a potentially matching untrusted message into the real session.
+/// Return whether normal companion chat may continue. Only a duplicate, or jobs that took the
+/// message without `also_chat`, keep it from the chat. Intake trouble (the database unreadable,
+/// a limit) comes before any job starts, so the approved chat is answered as it was before
+/// AUTOMATIONS existed and the trouble is shown in the room: the member's phone is never silenced.
 pub fn incoming(app: &AppHandle, platform: &str, chat: &str, event: &str, text: &str) -> bool {
     let store = app.state::<SettingsStore>();
     if !approved(&store.get(), platform, chat) {
@@ -140,16 +142,18 @@ pub fn incoming(app: &AppHandle, platform: &str, chat: &str, event: &str, text: 
     if !allowed(&store.get()) {
         return true;
     }
-    match process(app, platform, chat, event, text) {
-        Ok(chat) => {
-            *PROBLEM.lock().unwrap() = None;
-            chat
-        }
-        Err(error) => {
-            *PROBLEM.lock().unwrap() = Some(format!("Message intake stopped: {error} Normal chat was suppressed; this event was not retried."));
-            let _ = app.emit("castle://automations", json!({"messageProblem":true}));
-            false
-        }
+    let outcome = process(app, platform, chat, event, text);
+    if let Err(error) = &outcome {
+        *PROBLEM.lock().unwrap() = Some(format!("Message intake stopped: {error} The message went to the chat as usual; no job ran for it."));
+        let _ = app.emit("castle://automations", json!({"messageProblem":true}));
+    }
+    goes_to_chat(&outcome)
+}
+/// An intake error never silences the chat; otherwise the route's own answer stands.
+fn goes_to_chat(outcome: &Result<bool, String>) -> bool {
+    match outcome {
+        Ok(chat) => *chat,
+        Err(_) => true,
     }
 }
 fn process(
@@ -169,26 +173,26 @@ fn process(
     }
     let mut c = connection(&store)?;
     let (also_chat, selected) = route(&mut c, platform, chat, event, text)?;
+    *PROBLEM.lock().unwrap() = None;
     let payload = json!({"cause":"message","platform":platform,"text":text,"time":schedule::stamp(chrono::Local::now())});
     let mut failed = false;
     for j in selected {
         if !approved(&store.get(), platform, chat) || !allowed(&store.get()) {
             return Ok(false);
         }
-        if runner::launch_payload(
-            app,
-            j["id"].as_u64().ok_or("Missing job id.")?,
-            "message",
-            payload.clone(),
-            Some(&j),
-        )
-        .is_err()
-        {
+        let launched = j["id"]
+            .as_u64()
+            .ok_or_else(|| "Missing job id.".to_string())
+            .and_then(|id| runner::launch_payload(app, id, "message", payload.clone(), Some(&j)));
+        if launched.is_err() {
             failed = true;
         }
     }
+    // the event is reserved and some jobs may have started: the jobs' own choice about the chat
+    // still holds, and the trouble is shown in the room instead of turning into silence
     if failed {
-        return Err("A message job could not start; the event was not replayed.".into());
+        *PROBLEM.lock().unwrap() = Some("A message job could not start; the event was not replayed.".into());
+        let _ = app.emit("castle://automations", json!({"messageProblem":true}));
     }
     Ok(also_chat)
 }
@@ -239,6 +243,12 @@ fn route(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn intake_trouble_never_silences_the_chat() {
+        assert!(goes_to_chat(&Err("Message receipts unavailable.".into())), "a database that cannot be read lets the chat through");
+        assert!(goes_to_chat(&Ok(true)));
+        assert!(!goes_to_chat(&Ok(false)), "a duplicate or a job without also_chat still keeps it from the chat");
+    }
     fn value(mode: &str, case: bool) -> Value {
         json!({"platform":"any","match":mode,"text":"invoice","case":case})
     }

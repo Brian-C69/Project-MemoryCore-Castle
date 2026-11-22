@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- Fixed: with AUTOMATIONS on, a message from your approved Telegram, Discord or WhatsApp chat went unanswered whenever the database could not be read. Now it is answered as usual and AUTOMATIONS shows what went wrong.
+
 - APPS now has a search box and keyboard control: press Ctrl+K from anywhere, type to find a room, Enter opens the first, arrow keys move between tiles, P pins one, Esc goes back. Tiles also show what is waiting: failed or paused automations, chats waiting for approval, new chat or story lines, and what needs a look in CALENDAR.
 
 - A new room, APPS, opens every room from one page of tiles, so the top bar can stay short: it now holds HOME, APPS and the rooms you pin (CHAT, PROJECTS and DEV to begin with). Pin or unpin a room from its tile or from Settings > Rooms > Top bar. A room you open that is not pinned shows as a tab while you are in it. Nothing is removed and every room keeps its place and settings.

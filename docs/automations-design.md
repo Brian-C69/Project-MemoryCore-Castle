@@ -77,7 +77,7 @@ Every trigger yields a **payload** (a small JSON object: time, matched text, fil
 ### 4.2 `message` (phase 4)
 
 - Fields: `{ "platform": "telegram|discord|whatsapp|any", "match": "contains|starts_with|regex", "text": "invoice", "case": false }`.
-- Hooks into the bridges' incoming path, only for the one approved chat of each platform (the same gate as the companion chat). A matching message is **not** also sent to the companion unless the job says `"also_chat": true`.
+- Hooks into the bridges' incoming path, only for the one approved chat of each platform (the same gate as the companion chat). A matching message is **not** also sent to the companion unless the job says `"also_chat": true`. Intake trouble before any job starts (the database cannot be read, a limit is passed) never silences the chat: the message is answered as usual and the room shows the problem.
 - The message text becomes `payload.text` (untrusted: see 8).
 - Regex has a length cap and a match time cap.
 
