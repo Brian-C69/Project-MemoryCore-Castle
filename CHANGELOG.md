@@ -4,7 +4,21 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- CALENDAR can show public holidays: add "Holidays in Malaysia" (or any public .ics address) from the Holidays button, choose your state, and the days appear on the calendar. Castle fetches it once a day, sends nothing about you, keeps the last copy if an update fails, and never turns a holiday into an event or a reminder.
+
+- CALENDAR can export your events as a standard .ics file and import one: you see what a file holds before anything is added, events already in your calendar are skipped, and a repeat Castle cannot keep is imported as its first date with a note. A file can never set a reminder or start an automation.
+
+- A CALENDAR event can start an AUTOMATIONS job at its time or some minutes before (for example a briefing before a meeting). Make a job with the trigger "Calendar event reaches its time" and choose it on the event. It starts once per occurrence, never late, and only while AUTOMATIONS is on and not paused.
+
+- Your companion can now read your CALENDAR and suggest an event. A suggestion waits in CALENDAR for your Approve, Edit or Dismiss, does nothing and rings nothing until you approve it, and she cannot approve, change or delete anything herself.
+
+- CALENDAR reminders: choose "Remind me" on an event and Castle shows a notice at the time, on your computer and on a new HOME card, once per occurrence; reminders missed while Castle was closed are shown once when it starts.
+
 - Fixed: the HOME card for AUTOMATIONS never appeared because it was not connected to HOME; it now shows.
+
+- CALENDAR now holds your own events: quick add from one line of words ("Dentist fri 3pm"), repeats, a week view, and dragging to move. Single days of a repeat can be moved or skipped.
+
+- New room CALENDAR (off at first): reminders, project tasks, diary pages and automation runs on one page by date, as a month grid or a 30-day agenda. It only shows them; each is changed where it lives.
 
 - AUTOMATIONS 24/7 reliability: backend heartbeat and database health, atomic schedule claims, missed-run policy after interruptions, and clear actual-Quit warnings while hidden/taskbar operation stays unchanged.
 

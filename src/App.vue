@@ -9,6 +9,7 @@ import DisksWidget from './components/widgets/DisksWidget.vue'
 import SentinelWidget from './components/widgets/SentinelWidget.vue'
 import SweepWidget from './components/widgets/SweepWidget.vue'
 import AutomationsWidget from './components/widgets/AutomationsWidget.vue'
+import CalendarWidget from './components/widgets/CalendarWidget.vue'
 import SetupView from './views/SetupView.vue'
 import HomeCards from './components/widgets/HomeCards.vue'
 import UsageWidget from './components/widgets/UsageWidget.vue'
@@ -33,6 +34,8 @@ import LibraryView from './views/LibraryView.vue'
 import MarketView from './views/MarketView.vue'
 import MessagingView from './views/MessagingView.vue'
 import AutomationsView from './views/AutomationsView.vue'
+import CalendarView from './views/CalendarView.vue'
+import { calendarCard, prepareCalendar, refreshCalendarCard } from './composables/useCalendar.js'
 import { automations, prepareAutomations } from './composables/useAutomations.js'
 import ThemeView from './views/ThemeView.vue'
 import StudioView from './views/StudioView.vue'
@@ -58,7 +61,7 @@ import { version as appVersion } from '../package.json'
 import NoticeToasts from './components/NoticeToasts.vue'
 import MeterAlert from './components/MeterAlert.vue'
 import AmbientMusic from './components/AmbientMusic.vue'
-import { avatarGet, backupNow, backupStatus, dbMemory, dbStart, dbStatus, getSettings, onAutomations, hideCastle, keyStatus, memoryHome, saveSettings, onBackupDone, onStoryOutput, versionSeen } from './api/castle.js'
+import { avatarGet, backupNow, backupStatus, dbMemory, dbStart, dbStatus, getSettings, onAutomations, onCalendar, hideCastle, keyStatus, memoryHome, saveSettings, onBackupDone, onStoryOutput, versionSeen } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle, skinClass } from './themes/loader.js'
 
 // The rooms across the top. A room whose MemoryCore feature is not installed stays hidden
@@ -80,6 +83,7 @@ const allTabs = [
   { id: 'market', label: 'MARKET' },
   { id: 'messaging', label: 'MESSAGING' },
   { id: 'automations', label: 'AUTOMATIONS' },
+  { id: 'calendar', label: 'CALENDAR' },
 ]
 // dev only: ?tab=<room> opens a room straight away (for checking a room in a browser)
 const devTab = import.meta.env.DEV ? new URLSearchParams(location.search).get('tab') : null
@@ -87,6 +91,7 @@ const active = ref(devTab || 'home')
 // What HOME shows (memory_home), the backup card, the portrait and the CLI chip.
 const home = ref(null)
 let stopAutomations
+let stopCalendar
 const backup = ref(null)
 // the DATABASE card: { engine, memory }
 const database = ref(null)
@@ -106,7 +111,7 @@ const settingsSection = ref('companion')
 // the update line for Settings > About
 const updateInfo = ref(null)
 // Rooms that are built; any other room shows its name until its phase lands.
-const BUILT = new Set(['home', 'theme', 'apps', 'myprofile', 'diary', 'projects', 'library', 'studio', 'appearance', 'story', 'world', 'chat', 'dev', 'market', 'messaging', 'automations'])
+const BUILT = new Set(['home', 'theme', 'apps', 'myprofile', 'diary', 'projects', 'library', 'studio', 'appearance', 'story', 'world', 'chat', 'dev', 'market', 'messaging', 'automations', 'calendar'])
 // Tabs with something new waiting (the story speaking while the member is elsewhere).
 const marks = ref([])
 const memberName = ref('')
@@ -167,8 +172,8 @@ const savedKeys = ref([])
 // The widgets HOME draws: switched on, placed by the theme (all but the clock and the gauges),
 // and for a credit widget, its key saved.
 // clock, gauges, Sweep and weather show even when a theme names no place for them (Sweep and weather then take their own)
-const SELF_PLACED = ['clock', 'gauges', 'sweep', 'weather', 'disks', 'sentinel', 'automations']
-const FALLBACK_PLACES = { sweep: { right: '31%', top: '22%' }, weather: { left: '2%', bottom: '4%' }, disks: { right: '2%', bottom: '4%' }, sentinel: { right: '43%', top: '22%' }, automations: { right: '2%', top: '38%' } }
+const SELF_PLACED = ['clock', 'gauges', 'sweep', 'weather', 'disks', 'sentinel', 'automations', 'calendar']
+const FALLBACK_PLACES = { sweep: { right: '31%', top: '22%' }, weather: { left: '2%', bottom: '4%' }, disks: { right: '2%', bottom: '4%' }, sentinel: { right: '43%', top: '22%' }, automations: { right: '2%', top: '38%' }, calendar: { right: '2%', top: '62%' } }
 const shownWidgets = computed(() =>
   WIDGETS.map((w) => w.id).filter(
     (id) => isOn(id, { ...widgetPrefs.value, showUsageCard: usageCard.value }) && (SELF_PLACED.includes(id) || widgets.value[id]) && hasItsKey(id, savedKeys.value) && roomIsOn(id, rooms.value),
@@ -504,7 +509,7 @@ onMounted(async () => {
   // a room switched off is not prepared; settings and the theme are two pieces, then one per room
   await loadSettingsAndTheme()
   const roomOn = (id) => rooms.value[id] !== false
-  const rooms_ = ['studio', 'library', 'appearance', 'world', 'automations'].filter(roomOn)
+  const rooms_ = ['studio', 'library', 'appearance', 'world', 'automations', 'calendar'].filter(roomOn)
   loaderExpect(2 + 4 + rooms_.length)
   // each piece has its own limit, so one slow piece (the internet, a first run) never holds the rest
   const piece = (id, label, file, work, limit = 25000) => {
@@ -524,6 +529,7 @@ onMounted(async () => {
     roomOn('appearance') && piece('appearance', 'Hanging up the wardrobe', 'appearance/', () => prepareAppearance((done, total) => loaderBegin('appearance', 'Making small copies of the wardrobe', `${done} / ${total}`))),
     roomOn('world') && piece('world', 'Counting the screens and worlds', 'screens and worlds', prepareWorld, 8000),
     roomOn('automations') && piece('automations', 'Preparing AUTOMATIONS', 'scheduled jobs', prepareAutomations, 8000),
+    roomOn('calendar') && piece('calendar', 'Preparing CALENDAR', 'dated things', prepareCalendar, 8000),
     roomOn('library') && piece('library', "Opening LIBRARY's shelves", 'my books and the Spiral Library', prepareLibrary, 8000),
   ].filter(Boolean))
   // long enough for a first start to make a large gallery's small copies; after that it is quick
@@ -531,9 +537,10 @@ onMounted(async () => {
   loaderDone()
   // the memory changes as the companion writes: read it again every minute
   const automationRefresh = () => { if (rooms.value.automations) prepareAutomations().catch(() => {}) }; automationRefresh()
-  refresh = setInterval(() => { loadHome(); if (rooms.value.automations) prepareAutomations().catch(() => {}) }, 60000)
+  refresh = setInterval(() => { loadHome(); if (rooms.value.automations) prepareAutomations().catch(() => {}); if (rooms.value.calendar) refreshCalendarCard() }, 60000)
   try {
     stopAutomations = await onAutomations(() => { if (rooms.value.automations) prepareAutomations().catch(() => {}) })
+    stopCalendar = await onCalendar(() => { if (rooms.value.calendar) refreshCalendarCard() })
     stopBackupEvents = await onBackupDone(() => loadBackup())
     stopStoryEvents = await onStoryOutput(() => {
       if (active.value !== 'story' && !marks.value.includes('story')) marks.value = [...marks.value, 'story']
@@ -545,6 +552,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onArrangeKey)
   stopAutomations?.()
+  stopCalendar?.()
   stopProviderEvents?.()
   stopOpenChat?.()
   stopOpenRoom?.()
@@ -608,6 +616,7 @@ watch(settingsStamp, () => {
           <DisksWidget v-else-if="id === 'disks'" />
           <SentinelWidget v-else-if="id === 'sentinel'" @open="sentinelOpen = true" />
           <AutomationsWidget v-else-if="id === 'automations'" :data="automations" @open="active = 'automations'" />
+          <CalendarWidget v-else-if="id === 'calendar'" :data="calendarCard" @open="active = 'calendar'" />
           <SweepWidget v-else-if="id === 'sweep'" :theme-look="theme?.sweep?.look ?? ''" />
           <UsageWidget v-else-if="id === 'usage'" :stamp="settingsStamp" />
           <CreditWidget v-else-if="isCreditWidget(id)" :widget="id" />
@@ -633,6 +642,7 @@ watch(settingsStamp, () => {
       <LibraryView v-if="active === 'library'" :companion="companion" :stamp="memoryStamp" />
       <MarketView v-if="active === 'market'" :companion="companion" />
       <AutomationsView v-if="active === 'automations'" @settings="openSettings" />
+      <CalendarView v-if="active === 'calendar'" @open="(room) => (active = room)" />
       <MessagingView v-if="active === 'messaging'" :companion="companion" />
       <div v-if="!BUILT.has(active)" class="room-soon">
         <p>{{ activeLabel }}</p>

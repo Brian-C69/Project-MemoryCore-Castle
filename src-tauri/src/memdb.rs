@@ -19,7 +19,7 @@ pub const HOST: &str = "127.0.0.1";
 pub const ENV_KEYS: [&str; 5] = ["MEMORY_DB_HOST", "MEMORY_DB_PORT", "MEMORY_DB_NAME", "MEMORY_DB_USER", "MEMORY_DB_PASSWORD"];
 
 /// The migrations, in order. A released file is never edited; a change is a new entry.
-pub const MIGRATIONS: [(&str, &str); 20] = [
+pub const MIGRATIONS: [(&str, &str); 25] = [
     ("001_core", include_str!("../resources/schema/001_core.sql")),
     ("002_imported_files", include_str!("../resources/schema/002_imported_files.sql")),
     ("003_memory_skills", include_str!("../resources/schema/003_memory_skills.sql")),
@@ -40,6 +40,11 @@ pub const MIGRATIONS: [(&str, &str); 20] = [
     ("018_automations", include_str!("../resources/schema/018_automations.sql")),
     ("019_automation_messages", include_str!("../resources/schema/019_automation_messages.sql")),
     ("020_automation_companion", include_str!("../resources/schema/020_automation_companion.sql")),
+    ("021_calendar", include_str!("../resources/schema/021_calendar.sql")),
+    ("022_calendar_notices", include_str!("../resources/schema/022_calendar_notices.sql")),
+    ("023_calendar_automation", include_str!("../resources/schema/023_calendar_automation.sql")),
+    ("024_calendar_ics", include_str!("../resources/schema/024_calendar_ics.sql")),
+    ("025_calendar_subscriptions", include_str!("../resources/schema/025_calendar_subscriptions.sql")),
 ];
 
 /// How to reach one database.

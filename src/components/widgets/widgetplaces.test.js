@@ -4,7 +4,7 @@ import { dragBegins, dropPlace, isOn, startsOnControl, memberPlace, originOf, pl
 describe('HOME widgets as the member arranges them', () => {
   it('lists every widget the themes place', () => {
     expect(WIDGETS.map((w) => w.id)).toEqual([
-      'clock', 'gauges', 'weather', 'disks', 'sentinel', 'automations', 'sweep', 'usage', 'today', 'projects', 'diary', 'growth', 'backup', 'database',
+      'clock', 'gauges', 'weather', 'disks', 'sentinel', 'automations', 'calendar', 'sweep', 'usage', 'today', 'projects', 'diary', 'growth', 'backup', 'database',
       'credit-openai', 'credit-seedance', 'credit-suno', 'credit-elevenlabs',
     ])
   })

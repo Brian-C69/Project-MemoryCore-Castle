@@ -5,6 +5,7 @@ export const EVENTS = [
   { value: 'diary_saved', label: 'Diary entry saved' },
   { value: 'task_done', label: 'Project task ticked' },
   { value: 'reminder_due', label: 'Reminder due today' },
+  { value: 'calendar_event', label: 'Calendar event reaches its time' },
 ]
 export function eventTrigger() { return { event: 'backup_failed' } }
 export function triggerSummary(t = {}, kind = '') {

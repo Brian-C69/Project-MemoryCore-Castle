@@ -11,13 +11,15 @@ use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 /// (name, what the member sees). The one list; the editor shows the same names.
-pub const EVENTS: [(&str, &str); 6] = [
+pub const EVENTS: [(&str, &str); 7] = [
     ("backup_done", "Memory backup finished"),
     ("backup_failed", "Memory backup failed"),
     ("provider_switched", "Companion provider switched"),
     ("diary_saved", "Diary entry saved"),
     ("task_done", "Project task ticked"),
     ("reminder_due", "Reminder due today"),
+    // started only by CALENDAR, for the one job a calendar event names (see `fire_linked`)
+    ("calendar_event", "Calendar event reaches its time"),
 ];
 pub const MAX_JOBS: u64 = 16;
 const QUEUE_MAX: usize = 50;
@@ -51,6 +53,20 @@ pub fn conflict(event: &str, action: &Value) -> Result<(), String> {
         return Err("That action would trigger this event again. Choose a different action or event.".into());
     }
     Ok(())
+}
+
+/// CALENDAR: start the one job a calendar event is linked to. Only a job whose trigger is the calendar
+/// event can be started this way, and it goes through the same launch path as every other trigger,
+/// so it must be switched on, unpaused and unchanged, and it keeps the concurrency and hourly limits.
+pub fn fire_linked(app: &AppHandle, job_id: u64, text: &str) -> Result<u64, String> {
+    let settings = app.state::<SettingsStore>();
+    let mut c = connection(&settings)?;
+    let j = store::get(&mut c, job_id)?;
+    if j["state"] != "active" || j["enabled"] != 1 || j["triggerKind"] != "event" || j["trigger"]["event"] != "calendar_event" {
+        return Err("That automation is switched off, or no longer waits for calendar events.".into());
+    }
+    let text: String = text.chars().take(500).collect();
+    runner::launch_payload(app, job_id, "event", payload("calendar_event", &text), Some(&j))
 }
 
 /// Called from the place an event happens. Never blocks and never fails the caller.
@@ -245,9 +261,9 @@ mod tests {
 
     #[test]
     fn the_names_match_the_editor_list() {
-        // src/components/automations/automations.js keeps the same six, in the same order
+        // src/components/automations/automations.js keeps the same seven, in the same order
         let names: Vec<&str> = EVENTS.iter().map(|e| e.0).collect();
-        assert_eq!(names, ["backup_done", "backup_failed", "provider_switched", "diary_saved", "task_done", "reminder_due"]);
+        assert_eq!(names, ["backup_done", "backup_failed", "provider_switched", "diary_saved", "task_done", "reminder_due", "calendar_event"]);
     }
 
     #[test]

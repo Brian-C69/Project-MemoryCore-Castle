@@ -157,6 +157,7 @@ pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> 
         memdb::migrate(conn)?;
     }
     if words.first()==Some(&"automation") { return crate::automations::companion::door(conn,ask,memory); }
+    if words.first()==Some(&"calendar") { return crate::calendar::companion::door(conn,ask); }
     match words.as_slice() {
         ["diary", "add"] => diary_add(conn, ask),
         ["diary", "rewrite"] => diary_rewrite(conn, ask),

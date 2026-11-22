@@ -8,7 +8,7 @@ describe('App.vue', () => {
   const used = [...new Set([...source.matchAll(/<([A-Z][A-Za-z0-9]+)[ \n\r/>]/g)].map((m) => m[1]))]
   it('finds the components it uses', () => {
     expect(used.length).toBeGreaterThan(5)
-    expect(used).toContain('AutomationsWidget')
+    expect(used).toContain('CalendarWidget')
   })
   it.each(used)('imports <%s>', (name) => {
     expect(source.includes(`import ${name} from '`)).toBe(true)

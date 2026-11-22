@@ -9,6 +9,7 @@ export const WIDGETS = [
   { id: 'disks', name: 'Disks', about: 'How much room each drive of your computer has left.' },
   { id: 'sentinel', name: 'Sentinel', about: 'Your companion keeping watch over this computer: the state, the last patrol and whether the watch is running.' },
   { id: 'automations', name: 'Automations', about: 'What your automations last reported, and whether they are paused. Shown while the AUTOMATIONS room is on.', room: 'automations' },
+  { id: 'calendar', name: 'Calendar', about: 'Your event reminders (also the ones missed while Castle was closed) and the next events. Shown while the CALENDAR room is on.', room: 'calendar' },
   { id: 'sweep', name: 'Sweep', about: 'Frees space: temp files, caches and more, after a preview.' },
   { id: 'usage', name: 'Usage', about: 'How much of your Claude Code and Codex limits is used.' },
   { id: 'today', name: 'Today', about: 'Your reminders for today.' },
