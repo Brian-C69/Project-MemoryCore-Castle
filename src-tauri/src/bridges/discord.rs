@@ -117,7 +117,7 @@ fn send_message(client: &reqwest::blocking::Client, token: &str, channel_id: &st
 /// One incoming DM: approved, it goes to the companion's real session (in its own thread, so a
 /// slow reply never stalls the Gateway's heartbeat); not yet approved, the sender is told so and
 /// held pending; a different, already-ignored channel is left alone.
-fn handle(app: &AppHandle, token: &str, channel_id: String, text: String, name: String) {
+fn handle(app: &AppHandle, token: &str, channel_id: String, text: String, name: String, event: String) {
     let app = app.clone();
     let token = token.to_string();
     std::thread::spawn(move || {
@@ -127,6 +127,7 @@ fn handle(app: &AppHandle, token: &str, channel_id: String, text: String, name: 
         let approved = settings.discord_bridge_channel_id.as_deref();
         match approved {
             Some(id) if id == channel_id => {
+                if !crate::automations::triggers::incoming(&app, "discord", &channel_id, &event, &text) { return; }
                 let reply = crate::bridges::send_and_await(&app, &store, &text, REPLY_TIMEOUT).unwrap_or_else(|problem| problem);
                 if let Ok(Some(id)) = send_message(&client, &token, &channel_id, &reply) {
                     crate::bridges::reactions::remember(&app, "discord", &id, &reply);
@@ -175,7 +176,7 @@ fn run(app: &AppHandle, token: &str) -> Result<(), String> {
                         if let Some(data) = payload.get("d") {
                             if kind == "MESSAGE_CREATE" {
                                 if let Some((channel_id, text, name)) = incoming(data) {
-                                    handle(app, token, channel_id, text, name);
+                                    handle(app, token, channel_id, text, name, data["id"].as_str().unwrap_or("").to_string());
                                 }
                             } else if let Some((channel_id, message_id, emoji)) = reaction_of(kind, data) {
                                 // only the approved DM's hearts are shown
@@ -298,3 +299,12 @@ mod tests {
         assert!(INTENTS & (1 << 13) != 0, "DM reactions are asked for");
     }
 }
+
+pub(super) fn notify(store:&SettingsStore,expected:&str,text:&str)->Result<(),String>{
+ let current=super::notification_target(&store.get(),"discord")?;if current!=expected{return Err("The approved Discord chat changed.".into());}
+ let token=crate::key::load(ACCOUNT).ok_or("The Discord token is missing.")?;let client=reqwest::blocking::Client::builder().timeout(Duration::from_secs(10)).build().map_err(|_|"Discord could not start.")?;
+ let response=client.post(format!("{API}/channels/{current}/messages")).header("Authorization",format!("Bot {token}")).json(&notice_body(text)).send().map_err(|_|"Discord did not take the notice.")?;
+ if response.status().is_success(){Ok(())}else{Err("Discord refused the notice.".into())}
+}
+fn notice_body(text:&str)->Value{json!({"content":text,"allowed_mentions":{"parse":[]}})}
+#[cfg(test)]mod notice_tests{use super::*;#[test]fn notice_text_cannot_ping_people(){let body=notice_body("@everyone <@123>");assert_eq!(body["allowed_mentions"]["parse"],json!([]));assert_eq!(body["content"],"@everyone <@123>");}}

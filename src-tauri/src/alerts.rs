@@ -25,6 +25,7 @@ pub struct Source {
 }
 
 pub const SOURCES: &[Source] = &[
+    Source { id: "automation", label: "An automation finished", about: "Scheduled briefings and failed jobs.", room: "home", notify: true, sound: false, sound_name: "koto" },
     Source { id: "chat", label: "Chat room messages", about: "A new line in the Foundation room.", room: "chat", notify: true, sound: false, sound_name: "glass" },
     Source { id: "home_reply", label: "Your companion finished replying", about: "HOME: the reply or the task is complete and waiting for you.", room: "home", notify: true, sound: false, sound_name: "koto" },
     Source { id: "market_round", label: "A MARKET round finished", about: "The companion's automatic trading round has ended. Rounds can be frequent, so this starts off.", room: "market", notify: false, sound: false, sound_name: "woodblock" },

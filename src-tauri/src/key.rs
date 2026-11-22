@@ -8,7 +8,7 @@ use serde::Serialize;
 const SERVICE: &str = "com.memorycore.castle";
 
 /// Every key Castle can keep: (account, label shown in Settings).
-pub const KEYS: [(&str, &str); 8] = [
+pub const KEYS: [(&str, &str); 9] = [
     ("openai", "ChatGPT (OpenAI)"),
     ("seedance", "Seedance"),
     ("suno", "Suno"),
@@ -21,6 +21,7 @@ pub const KEYS: [(&str, &str); 8] = [
     ("telegram-bridge", "Telegram bot token"),
     // the member's own Discord bot, for MemoryCore in your pocket (MESSAGING)
     ("discord-bridge", "Discord bot token"),
+    ("automation-http", "Automation HTTP authentication"),
 ];
 
 fn known(account: &str) -> Result<(), String> {
@@ -75,6 +76,24 @@ fn forget_as(account: &str) -> Result<(), String> {
         }
         Err(_) => Err(format!("The key could not be removed from {}.", if cfg!(windows) { "Windows Credential Manager" } else { "the Keychain" })),
     }
+}
+
+/// The secret in one automation's web-request link, kept by Windows like the keys, never listed
+/// in Settings and never put in a job's definition or run output.
+fn hook_account(job: u64) -> String {
+    format!("automation-hook-{job}")
+}
+
+pub fn hook_secret_load(job: u64) -> Option<String> {
+    load_as(&hook_account(job))
+}
+
+pub fn hook_secret_save(job: u64, secret: &str) -> Result<(), String> {
+    save_as(&hook_account(job), secret)
+}
+
+pub fn hook_secret_forget(job: u64) -> Result<(), String> {
+    forget_as(&hook_account(job))
 }
 
 /// The password of Castle's own database engine: kept by Windows like the keys, but never
@@ -242,6 +261,7 @@ mod tests {
         assert!(save("not-a-key", "x").is_err());
         assert!(load("not-a-key").is_none());
         assert!(save("openai", "   ").is_err());
-        assert_eq!(statuses().len(), 8);
+        assert_eq!(statuses().len(), 9);
+        assert!(known("automation-http").is_ok());
     }
 }

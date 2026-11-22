@@ -25,7 +25,8 @@ export const SETTINGS_GROUPS = [
   {
     id: 'connect',
     label: 'Connect',
-    pages: [{ id: 'keys', label: 'Keys', subtitle: 'The keys for pictures, voice, songs and video.' }],
+    pages: [{ id: 'keys', label: 'Keys', subtitle: 'The keys for pictures, voice, songs and video.' },
+      { id: 'automations', label: 'Automations', subtitle: 'Programs your scheduled jobs may run.' }],
   },
   {
     id: 'data',

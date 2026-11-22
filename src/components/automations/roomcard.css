@@ -1,0 +1,23 @@
+/* Messaging and Automations use one room-card surface. */
+.castle-room-card {
+  position: relative;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel-background);
+  backdrop-filter: blur(14px);
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.castle-room-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  border-radius: 18px 18px 0 0;
+  background: linear-gradient(90deg, transparent, var(--tone, var(--accent)), transparent);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.castle-room-card.live::before { opacity: 0.9; }
+.castle-room-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }

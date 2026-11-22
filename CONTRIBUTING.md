@@ -73,6 +73,32 @@ that is itself `position: relative` (give that wrapper the `has-tip` class, as
 Settings does) - without it, the bubble anchors to a distant ancestor instead and
 can add a stray scrollbar far from where the `?` actually sits.
 
+## How a room looks: the room standard
+
+Every room is built from the same few pieces, so a new one looks like it was always part of
+Castle. The working models are MESSAGING and AUTOMATIONS; copy them, do not invent a new look.
+Settings pages follow their own kit in [`docs/settings-standard.md`](docs/settings-standard.md).
+
+| Piece | Use | Do not |
+|---|---|---|
+| **Container** | `position: absolute; inset: 24px; display: flex; flex-direction: column; gap: 16px; overflow: auto`, with the themed scrollbar (`scrollbar-width: var(--scrollbar-width); scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track)`) | `inset: 0` with your own padding, a fixed width, a page-wide `h1` |
+| **Title** | `<header class="bar"><h2>NAME</h2><span class="spacer"></span> ...room buttons... </header>`. The `h2` is `margin: 0; font-size: 13px; font-weight: 500; letter-spacing: 0.2em; color: var(--accent)`. Room buttons sit in the bar after the spacer | `h1`, 20px titles, the sub line inside the header, a boxed header (only STUDIO and MARKET, for a real toolbar) |
+| **Lede** | One `<p class="lede">` under the bar: `margin: 0; max-width: 60em; color: var(--text-dim)`. One or two sentences on what the room is for | Paragraph hints scattered through the room |
+| **Cards** | Add the class `castle-room-card` and `import '.../automations/roomcard.css'`. It gives the border (`var(--line)`), 18px radius, `var(--panel-background)`, 14px blur, accent hover and the faint top line. Add `live` for an active item | Copying the card CSS into your room, `--border`, hard-coded colours, a new radius or shadow |
+| **Buttons** | Native `<button>`, themed: `padding: 8px 14px; border: 1px solid var(--line); border-radius: 10px; background: none; color: var(--text); font: inherit; cursor: pointer`. Hover: `border-color: color-mix(in srgb, var(--accent) 45%, var(--line))`. Disabled: `opacity: .45`. `button.primary` (one per view, the main action): `background: color-mix(in srgb, var(--accent) 25%, transparent)`. `button.danger`: `color: #ef9393` with a matching outline. Exclude `.setting-switch` and `.glass-select` from the rule | A button with no styling (it renders as a grey browser box), filled grey or white buttons, icon-only buttons without an `aria-label` |
+| **Selects** | `GlassSelect` | Native `<select>` |
+| **Switches** | `SettingSwitch` | Checkboxes styled by hand |
+| **Fields** | `padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-background); color: var(--text); font: inherit` and a focus ring: `outline: 2px solid var(--accent); outline-offset: 2px` on `:focus-visible` | Default browser inputs |
+| **Section labels** inside a card or editor | `h3` at 11px, weight 500, `letter-spacing: 0.16em`, `color: var(--accent)` | Bold 16px headings |
+| **Help** | `HelpTip` beside a label (see the `has-tip` note above) | Long grey paragraphs under every field |
+| **Text** | Sentence case ("Run now", "Approved programs"); a button says its action; no setting keys, file names or ports in labels | Title Case Labels, "Enable...", "Toggle...", questions as labels |
+| **Colour** | Theme variables only (`--text`, `--text-dim`, `--accent`, `--line`, `--panel-background`); the one fixed colour is the soft red `#ef9393` for errors and danger | Raw hex colours, a colour that disappears in a light or custom theme |
+
+Before asking for review, open the room next to MESSAGING in at least two themes and check:
+no default browser control is visible anywhere (including empty, error, editor and history
+states); the title, lede and cards line up with MESSAGING; keyboard focus is visible;
+narrow windows do not scroll sideways. Put a before/after screenshot in the PR.
+
 ## Loading: at the start-up screen, not on arrival
 
 Castle has a start-up screen (see `MAKE-IT-YOURS.md`, "A start-up screen of your own"). Its purpose is

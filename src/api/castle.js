@@ -544,3 +544,23 @@ export const projectTaskOrder = (file, ids) => invoke('project_task_order', { fi
 // -> [{ parent, parentExists, items: [{ id, name, newName }] }]
 export const projectSplitProposals = () => invoke('project_split_proposals')
 export const projectSplitApply = (ids) => invoke('project_split_apply', { ids })
+
+// Automations phase 1: schedules and isolated briefing jobs.
+export const automationList = () => invoke('automation_list')
+export const automationSave = (job) => invoke('automation_save', { job })
+export const automationRun = (id, test = false) => invoke('automation_run', { id, test })
+export const automationHistory = (id) => invoke('automation_history', { id })
+export const automationArchive = (id) => invoke('automation_archive', { id })
+export const automationPause = (paused) => invoke('automation_pause', { paused })
+
+export const onAutomations = (fn) => listen('castle://automations', fn)
+
+export const automationProgramPick = () => invoke('automation_program_pick')
+export const automationProgramsSave = (programs) => invoke('automation_programs_save', { programs })
+
+export const automationHookReset = (id) => invoke('automation_hook_reset', { id })
+export const automationMessageMatch = (trigger, text) => invoke('automation_message_match', {trigger, text})
+
+export const automationDescribe = text => invoke('automation_describe', { text })
+
+export const automationHealth = () => invoke('automation_health')

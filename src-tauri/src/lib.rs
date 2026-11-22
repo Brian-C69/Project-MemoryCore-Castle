@@ -86,6 +86,7 @@ mod system;
 mod theme;
 mod themes;
 mod workflows;
+mod automations;
 mod describe;
 mod market_shop;
 mod keeper;
@@ -154,6 +155,7 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
     if settings.memory_folder != store.get().memory_folder && (sessions_running(&app) || app.state::<providers::Images>().0.lock().unwrap().iter().any(|j| j.phase == "working")) {
         return Err("End active sessions and image work before changing the MemoryCore folder.".into());
     }
+    let changed_automations=settings.room_on("automations")!=store.get().room_on("automations");
     let mut settings = settings.normalized();
     if app.state::<session::MainHost>().0.is_running() {
         // Provider changes go through the queued handoff, not stale room/settings snapshots.
@@ -162,6 +164,8 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
     // the companion's room key is Rust's to keep: a page holding an older copy never writes it back
     {
         let current = store.get();
+        settings.automations_paused = current.automations_paused;
+        settings.automations_commands = current.automations_commands;
         settings.room_companion_key_id = current.room_companion_key_id;
         settings.room_companion_name = current.room_companion_name;
         // the database's port and kind are set by the engine's own buttons
@@ -202,6 +206,7 @@ fn save_settings(app: AppHandle, settings: Settings, store: State<SettingsStore>
     settings::save(&store.path, &settings).map_err(|_| "The settings could not be saved.".to_string())?;
     *store.startup_note.lock().unwrap() = startup::sync(&app, settings.start_with_windows);
     *store.current.lock().unwrap() = settings;
+    if changed_automations{automations::health::interrupt(&app);}
     *store.warning.lock().unwrap() = None;
     studio::allow_memory_folder(&app);
     Ok(view(&store))
@@ -297,6 +302,8 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![startup::SIGN_IN_ARG]),
         ))
+        .manage(automations::Running::default())
+        .manage(automations::health::Health::default())
         .manage(alerts::ActiveRoom::default())
         .manage(session::MainHost::default())
         .manage(providers::Control::default())
@@ -435,6 +442,18 @@ pub fn run() {
             theme::theme_create,
             theme::theme_delete,
             theme::theme_folder,
+            automations::automation_list,
+            automations::health::automation_health,
+            automations::automation_save,
+            automations::automation_history,
+            automations::automation_run,
+            automations::companion::automation_describe,
+            automations::triggers::automation_message_match,
+            automations::automation_archive,
+            automations::automation_pause,
+            automations::automation_program_pick,
+            automations::automation_programs_save,
+            automations::hook::automation_hook_reset,
             workflows::workflow_list,
             workflows::workflow_check,
             workflows::workflow_save,
@@ -714,6 +733,7 @@ pub fn run() {
             market::engine::start(app.handle());
             market::companion::start(app.handle());
             sentinel::start(app.handle());
+            automations::start(app.handle());
             db::start_with_castle(app.handle());
             Ok(())
         })

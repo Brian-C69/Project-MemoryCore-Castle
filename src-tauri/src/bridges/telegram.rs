@@ -98,12 +98,13 @@ fn send_message(client: &reqwest::blocking::Client, token: &str, chat_id: i64, t
 /// One incoming message: approved, it goes to the companion's real session and the answer (or
 /// the trouble reaching it) is sent back; not yet approved, the sender is told so and held
 /// pending for Settings to approve; a different, already-rejected-by-silence chat is ignored.
-fn handle(app: &AppHandle, client: &reqwest::blocking::Client, token: &str, chat_id: i64, text: String, name: String) -> Result<(), String> {
+fn handle(app: &AppHandle, client: &reqwest::blocking::Client, token: &str, chat_id: i64, text: String, name: String, event: String) -> Result<(), String> {
     let store = app.state::<SettingsStore>();
     let settings = store.get();
     let approved = settings.telegram_bridge_chat_id.as_deref().and_then(|id| id.parse::<i64>().ok());
     match approved {
         Some(id) if id == chat_id => {
+            if !crate::automations::triggers::incoming(app, "telegram", &chat_id.to_string(), &event, &text) { return Ok(()); }
             let reply = crate::bridges::send_and_await(app, &store, &text, REPLY_TIMEOUT).unwrap_or_else(|problem| problem);
             if let Some(id) = send_message(client, token, chat_id, &reply)? {
                 crate::bridges::reactions::remember(app, "telegram", &id.to_string(), &reply);
@@ -143,7 +144,7 @@ fn poll(app: &AppHandle, client: &reqwest::blocking::Client, token: &str, offset
         let Some(update_id) = update.get("update_id").and_then(Value::as_i64) else { continue };
         *offset = update_id + 1;
         if let Some((chat_id, text, name)) = incoming(&update) {
-            let _ = handle(app, client, token, chat_id, text, name);
+            let _ = handle(app, client, token, chat_id, text, name, update_id.to_string());
         } else if let Some((chat_id, message_id, emoji)) = reaction_of(&update) {
             // only the approved chat's hearts are shown
             let approved = app.state::<SettingsStore>().get().telegram_bridge_chat_id.and_then(|id| id.parse::<i64>().ok());
@@ -279,4 +280,12 @@ mod tests {
     fn get_updates_asks_for_messages_and_reactions_by_name() {
         assert_eq!(ALLOWED_UPDATES.replace("%5B", "[").replace("%5D", "]").replace("%22", "\"").replace("%2C", ","), r#"["message","message_reaction"]"#);
     }
+}
+
+/// A notice may only use the chat still approved when it is sent.
+pub(super) fn notify(store:&SettingsStore,expected:&str,text:&str)->Result<(),String>{
+ let current=super::notification_target(&store.get(),"telegram")?;if current!=expected{return Err("The approved Telegram chat changed.".into());}let id=current.parse::<i64>().map_err(|_|"Approve a valid Telegram chat.")?;
+ let token=crate::key::load(ACCOUNT).ok_or("The Telegram token is missing.")?;let client=reqwest::blocking::Client::builder().timeout(Duration::from_secs(10)).build().map_err(|_|"Telegram could not start.")?;
+ let response=client.post(api(&token,"sendMessage")).json(&json!({"chat_id":id,"text":text})).send().map_err(|_|"Telegram did not take the notice.")?;
+ if !response.status().is_success(){return Err("Telegram refused the notice.".into());}let body:Value=response.json().map_err(|_|"Telegram did not confirm the notice.")?;if body["ok"]==true{Ok(())}else{Err("Telegram did not confirm the notice.".into())}
 }

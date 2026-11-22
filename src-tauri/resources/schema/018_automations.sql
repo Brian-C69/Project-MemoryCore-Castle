@@ -1,0 +1,21 @@
+CREATE TABLE automation_jobs (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ name VARCHAR(80) NOT NULL UNIQUE, note TEXT NOT NULL,
+ enabled TINYINT NOT NULL DEFAULT 0,
+ trigger_kind VARCHAR(16) NOT NULL DEFAULT 'schedule', trigger_json JSON NOT NULL,
+ action_kind VARCHAR(16) NOT NULL DEFAULT 'companion', action_json JSON NOT NULL,
+ delivery_json JSON NOT NULL, policy_json JSON NOT NULL,
+ next_run_at DATETIME NULL, created_by VARCHAR(24) NOT NULL DEFAULT 'member',
+ state VARCHAR(16) NOT NULL DEFAULT 'active',
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ KEY ix_automation_due (state, enabled, next_run_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE automation_runs (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, job_id BIGINT UNSIGNED NOT NULL,
+ started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, finished_at DATETIME NULL,
+ cause VARCHAR(16) NOT NULL, status VARCHAR(16) NOT NULL DEFAULT 'running',
+ summary VARCHAR(400) NOT NULL DEFAULT '', output MEDIUMTEXT NOT NULL, error TEXT NULL,
+ delivered JSON NOT NULL, KEY ix_automation_history (job_id,id),
+ CONSTRAINT fk_automation_job FOREIGN KEY (job_id) REFERENCES automation_jobs(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { dragBegins, dropPlace, isOn, startsOnControl, memberPlace, originOf, placeFor, placePatch, resetPatch, scaleOf, sizeOf, sizePatch, switchPatch, WIDGETS, hasItsKey } from './widgetplaces.js'
+import { dragBegins, dropPlace, isOn, startsOnControl, memberPlace, originOf, placeFor, placePatch, resetPatch, scaleOf, sizeOf, sizePatch, switchPatch, WIDGETS, hasItsKey, roomIsOn } from './widgetplaces.js'
 
 describe('HOME widgets as the member arranges them', () => {
   it('lists every widget the themes place', () => {
     expect(WIDGETS.map((w) => w.id)).toEqual([
-      'clock', 'gauges', 'weather', 'disks', 'sentinel', 'sweep', 'usage', 'today', 'projects', 'diary', 'growth', 'backup', 'database',
+      'clock', 'gauges', 'weather', 'disks', 'sentinel', 'automations', 'sweep', 'usage', 'today', 'projects', 'diary', 'growth', 'backup', 'database',
       'credit-openai', 'credit-seedance', 'credit-suno', 'credit-elevenlabs',
     ])
   })
@@ -16,6 +16,13 @@ describe('HOME widgets as the member arranges them', () => {
     expect(switchPatch('weather', true, {})).toEqual({ widgetsOn: ['weather'] })
     expect(switchPatch('weather', false, { widgetsOn: ['weather'] })).toEqual({ widgetsOn: [] })
     expect(switchPatch('diary', false, {})).toEqual({ widgetsOff: ['diary'] })
+  })
+
+  it('shows a widget that belongs to a room only while that room is on', () => {
+    expect(roomIsOn('automations', { automations: true })).toBe(true)
+    expect(roomIsOn('automations', { automations: false })).toBe(false)
+    expect(roomIsOn('automations', {})).toBe(true)
+    expect(roomIsOn('disks', { automations: false })).toBe(true)
   })
 
   it('shows a credit widget only once its key is saved', () => {

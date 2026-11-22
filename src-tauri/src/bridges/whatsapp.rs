@@ -90,6 +90,8 @@ struct SidecarIncoming {
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct IncomingMessage {
+    #[serde(default)]
+    id: String,
     chat_id: String,
     name: String,
     #[serde(default)]
@@ -323,6 +325,8 @@ fn handle(app: &AppHandle, client: &reqwest::blocking::Client, m: IncomingMessag
         match who(&settings, &chat_id, digits.as_deref()) {
             Who::Me if m.kind == "media" => {} // the companion's own session takes words only
             Who::Me => {
+                // the AUTOMATIONS message trigger only looks at the approved chat itself; a member recognised by number alone is answered as before
+                if settings.whatsapp_bridge_chat_id.as_deref() == Some(chat_id.as_str()) && !crate::automations::triggers::incoming(&app, "whatsapp", &chat_id, &m.id, &text) { return; }
                 let reply = crate::bridges::send_and_await(&app, &store, &text, REPLY_TIMEOUT).unwrap_or_else(|problem| problem);
                 if let Some(id) = send(&client, &chat_id, &reply) {
                     crate::bridges::reactions::remember(&app, "whatsapp", &id, &reply);
@@ -549,4 +553,11 @@ mod tests {
         let heart: IncomingMessage = serde_json::from_str(r#"{"chatId":"1@s.whatsapp.net","pn":null,"name":"Rin","kind":"reaction","text":"","emoji":"❤️","onId":"ABC"}"#).unwrap();
         assert_eq!((heart.kind.as_str(), heart.emoji.as_str(), heart.on_id.as_deref()), ("reaction", "❤️", Some("ABC")));
     }
+}
+
+pub(super) fn notify(app:&AppHandle,store:&SettingsStore,expected:&str,text:&str)->Result<(),String>{
+ let current=super::notification_target(&store.get(),"whatsapp")?;if current!=expected{return Err("The approved WhatsApp chat changed.".into());}
+ if !*app.state::<WhatsAppState>().connected.lock().unwrap(){return Err("The WhatsApp helper is not connected.".into());}
+ let client=reqwest::blocking::Client::builder().timeout(Duration::from_secs(10)).build().map_err(|_|"WhatsApp could not start.")?;let response=client.post(door("/send")).json(&json!({"to":current,"text":text})).send().map_err(|_|"WhatsApp did not take the notice.")?;
+ if !response.status().is_success(){return Err("WhatsApp refused the notice.".into());}let body:serde_json::Value=response.json().map_err(|_|"WhatsApp did not confirm the notice.")?;if body["ok"]==true{Ok(())}else{Err("WhatsApp did not confirm the notice.".into())}
 }
