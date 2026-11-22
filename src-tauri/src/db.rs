@@ -291,11 +291,15 @@ fn brew_install(progress: impl Fn(u64, u64)) -> Result<(), String> {
 
 #[cfg_attr(target_os = "macos", allow(dead_code))]
 fn install_release(home: &Path, port: u16, progress: impl Fn(u64, u64)) -> Result<u16, String> {
-    let bytes = crate::fetch::download(ZIP_URL, ZIP_BYTES, "MariaDB", progress)?;
+    // kept on disk while it comes, so a dropped connection or a closed Castle carries on from there
+    let part = home.join(format!("mariadb-{VERSION}-winx64.zip.part"));
+    let bytes = crate::fetch::download_resumable(ZIP_URL, ZIP_BYTES, "MariaDB", &part, progress)?;
     if !checksum_ok(&bytes) {
+        crate::fetch::discard(&part);
         return Err("The download did not match MariaDB's own checksum, so Castle threw it away. Try again later.".into());
     }
     crate::fetch::unzip_dropping_top(&bytes, &home.join(VERSION), keep_in_unpack, "database")?;
+    crate::fetch::discard(&part);
     initialise(home, port)?;
     Ok(port)
 }
