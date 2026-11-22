@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { appOpen, appsDrawIcons, appsList } from '../api/castle.js'
 
 const MOST_USED = 8
@@ -58,7 +58,6 @@ const initial = (name) => name.trim().charAt(0).toUpperCase() || '?'
 
 onMounted(async () => {
   await load()
-  nextTick(() => search.value?.focus())
   // Icons are drawn once and cached; the room shows letters until they are ready.
   try {
     if ((await appsDrawIcons()) > 0) await load()
@@ -78,7 +77,9 @@ onMounted(async () => {
         placeholder="Search apps"
         aria-label="Search apps"
         @keydown.enter="openFirst"
+        @keydown.esc="query = ''"
       />
+      <button v-if="query" type="button" class="clear" aria-label="Clear the search" title="Clear" @click="query = ''; search?.focus()">Clear</button>
       <span class="count">{{ matches.length }} apps</span>
     </div>
 
@@ -141,6 +142,11 @@ input {
   font-size: 15px;
 }
 
+.clear {
+  padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--text); font: inherit; font-size: 12px; cursor: pointer;
+}
+.clear:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .count {
   font-size: 12px;
   color: var(--text-dim);

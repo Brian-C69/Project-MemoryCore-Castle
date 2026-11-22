@@ -13,9 +13,7 @@ pub fn system_meters(meters: State<system::SystemMeters>) -> system::Meters {
 
 #[tauri::command]
 pub fn apps_list(store: State<SettingsStore>) -> Vec<apps::App> {
-    if crate::rooms::need(&store, "apps").is_err() {
-        return Vec::new();
-    }
+    // DESKTOP is always reachable from APPS: the room switch no longer empties this list.
     apps::list(&store.folder(), &apps::start_menu_folders())
 }
 
@@ -31,7 +29,6 @@ pub async fn apps_draw_icons(store: State<'_, SettingsStore>) -> Result<usize, S
 /// Opens a Start-menu app (only one that is really in the Start menu) and counts the use.
 #[tauri::command]
 pub fn app_open(path: String, store: State<SettingsStore>) -> Result<(), String> {
-    crate::rooms::need(&store, "apps")?;
     let known = apps::scan(&apps::start_menu_folders())
         .into_iter()
         .find(|(_, shortcut)| shortcut.to_string_lossy() == path);

@@ -125,10 +125,10 @@ onBeforeUnmount(stopListening)
         class="tab"
         :data-tab="tab.id"
         :class="{ active: tab.id === active, fresh: marks.includes(tab.id), dragging: tab.id === dragging, 'drop-target': dragging && tab.id === over && tab.id !== dragging }"
-        :title="marks.includes(tab.id) ? markTitles[tab.id] || 'Something new is waiting' : moveHint"
-        @pointerdown="onDown($event, tab.id)"
+        :title="marks.includes(tab.id) ? markTitles[tab.id] || 'Something new is waiting' : tab.fixed ? tab.title || tab.label : moveHint"
+        @pointerdown="tab.fixed || onDown($event, tab.id)"
         @click="onClick(tab.id)"
-        @keydown="onKey($event, tab.id)"
+        @keydown="tab.fixed || onKey($event, tab.id)"
       >
         {{ tab.label }}
       </button>

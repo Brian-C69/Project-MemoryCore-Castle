@@ -8,6 +8,7 @@ import GlassSelect from '../components/GlassSelect.vue'
 import AlertsPane from './AlertsPane.vue'
 import SentinelSettings from './SentinelSettings.vue'
 import WidgetsView from './WidgetsView.vue'
+import { DEFAULT_PINS, setPinned } from '../launcher.js'
 import { computed, nextTick, onMounted, provide, ref, watch } from 'vue'
 import ModalSheet from '../components/ModalSheet.vue'
 import BackupPanel from '../components/BackupPanel.vue'
@@ -364,7 +365,8 @@ const ROOM_GROUPS = [
     title: 'Your rooms',
     rooms: [
       { id: 'theme', label: 'THEME' },
-      { id: 'apps', label: 'APPS' },
+      // the Start-menu apps room: id `apps`, label DESKTOP (APPS is for the room launcher, id `launcher`)
+      { id: 'apps', label: 'DESKTOP' },
       { id: 'myprofile', label: 'MY PROFILE' },
       { id: 'diary', label: 'DIARY' },
       { id: 'projects', label: 'PROJECTS' },
@@ -388,6 +390,12 @@ const ROOM_GROUPS = [
     ],
   },
 ]
+// Pins: which rooms sit in the top bar beside HOME and APPS (the room launcher).
+const pinnable = computed(() => ROOM_GROUPS.flatMap((g) => g.rooms))
+const pinnedNow = computed(() => settings.value?.pinnedRooms ?? DEFAULT_PINS)
+function setPin(id, on) {
+  return saveRow('pins', { pinnedRooms: setPinned(pinnedNow.value, id, on, pinnable.value.map((r) => r.id)) })
+}
 const roomsNote = 'Off takes the tab away and stops it. Nothing is removed. HOME always stays.'
 
 async function switchRoom(id, on) {
@@ -829,6 +837,15 @@ onMounted(async () => {
             <SettingGroup v-for="g in ROOM_GROUPS" :id="g.id" :key="g.id" :title="g.title" :note="roomsNote">
               <SettingRow v-for="r in g.rooms" :id="`room-${r.id}`" :key="r.id" :label="r.label" :description="r.line || ''" :tip="r.tip || ''">
                 <SettingSwitch :model-value="settings.rooms?.[r.id] !== false" :label="r.label" :disabled="locked" @update:model-value="(on) => switchRoom(r.id, on)" />
+              </SettingRow>
+            </SettingGroup>
+
+            <SettingGroup id="top-bar" title="Top bar" note="HOME and APPS always show. Pinned rooms sit beside them; every other room opens from APPS.">
+              <SettingRow v-for="r in pinnable" :id="`pin-${r.id}`" :key="r.id" :label="r.label">
+                <SettingSwitch :model-value="pinnedNow.includes(r.id)" :label="`Pin ${r.label} to the top bar`" :disabled="locked" @update:model-value="(on) => setPin(r.id, on)" />
+              </SettingRow>
+              <SettingRow id="pins-reset" label="First pins" description="CHAT, PROJECTS and DEV.">
+                <button :disabled="locked" @click="saveRow('pins-reset', { pinnedRooms: [...DEFAULT_PINS] })">Put back</button>
               </SettingRow>
             </SettingGroup>
 

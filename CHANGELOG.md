@@ -4,6 +4,12 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- APPS now has a search box and keyboard control: press Ctrl+K from anywhere, type to find a room, Enter opens the first, arrow keys move between tiles, P pins one, Esc goes back. Tiles also show what is waiting: failed or paused automations, chats waiting for approval, new chat or story lines, and what needs a look in CALENDAR.
+
+- A new room, APPS, opens every room from one page of tiles, so the top bar can stay short: it now holds HOME, APPS and the rooms you pin (CHAT, PROJECTS and DEV to begin with). Pin or unpin a room from its tile or from Settings > Rooms > Top bar. A room you open that is not pinned shows as a tab while you are in it. Nothing is removed and every room keeps its place and settings.
+
+- The room that lists your Start-menu apps is now called DESKTOP (it was APPS), so the name APPS can be used for a room launcher later. Nothing else about it changes: your most-used apps, its place in the top bar and its on/off switch stay as they were.
+
 - CALENDAR can show public holidays: add "Holidays in Malaysia" (or any public .ics address) from the Holidays button, choose your state, and the days appear on the calendar. Castle fetches it once a day, sends nothing about you, keeps the last copy if an update fails, and never turns a holiday into an event or a reminder.
 
 - CALENDAR can export your events as a standard .ics file and import one: you see what a file holds before anything is added, events already in your calendar are skipped, and a repeat Castle cannot keep is imported as its first date with a note. A file can never set a reminder or start an automation.
