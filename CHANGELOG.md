@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+## 0.2.28 - 2026-11-22
+
 - Fixed: with AUTOMATIONS on, a message from your approved Telegram, Discord or WhatsApp chat went unanswered whenever the database could not be read. Now it is answered as usual and AUTOMATIONS shows what went wrong.
 
 - APPS now has a search box and keyboard control: press Ctrl+K from anywhere, type to find a room, Enter opens the first, arrow keys move between tiles, P pins one, Esc goes back. Tiles also show what is waiting: failed or paused automations, chats waiting for approval, new chat or story lines, and what needs a look in CALENDAR.
