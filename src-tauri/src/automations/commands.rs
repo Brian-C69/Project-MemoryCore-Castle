@@ -450,13 +450,15 @@ mod tests {
     }
     #[test]
     fn timeout_kills_descendant_and_keeps_partial_output() {
+        // the release runner can take more than 20 s to start PowerShell while the suite runs in parallel;
+        // the child's id must be printed before the limit stops the script
         let f = Fixture::new();
-        let s=f.shell(r#"$p=Start-Process -WindowStyle Hidden -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList '127.0.0.1','-n','300' -PassThru;[Console]::WriteLine($p.Id);Start-Sleep -Seconds 300"#);
+        let s=f.shell(r#"$p=Start-Process -WindowStyle Hidden -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList '127.0.0.1','-n','600' -PassThru;[Console]::WriteLine($p.Id);Start-Sleep -Seconds 600"#);
         let r = run(
             &s,
             &allow(&s),
             &serde_json::json!({}),
-            Duration::from_secs(20),
+            Duration::from_secs(60),
         )
         .unwrap();
         assert!(r.timed_out);
