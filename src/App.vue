@@ -35,6 +35,8 @@ import MarketView from './views/MarketView.vue'
 import MessagingView from './views/MessagingView.vue'
 import AutomationsView from './views/AutomationsView.vue'
 import CalendarView from './views/CalendarView.vue'
+import LauncherView from './views/LauncherView.vue'
+import { DEFAULT_PINS, badgesFor, cleanPins, headerTabs, opensLauncher, setPinned } from './launcher.js'
 import { calendarCard, prepareCalendar, refreshCalendarCard } from './composables/useCalendar.js'
 import { automations, prepareAutomations } from './composables/useAutomations.js'
 import ThemeView from './views/ThemeView.vue'
@@ -61,7 +63,7 @@ import { version as appVersion } from '../package.json'
 import NoticeToasts from './components/NoticeToasts.vue'
 import MeterAlert from './components/MeterAlert.vue'
 import AmbientMusic from './components/AmbientMusic.vue'
-import { avatarGet, backupNow, backupStatus, dbMemory, dbStart, dbStatus, getSettings, onAutomations, onCalendar, hideCastle, keyStatus, memoryHome, saveSettings, onBackupDone, onStoryOutput, versionSeen } from './api/castle.js'
+import { avatarGet, backupNow, backupStatus, dbMemory, dbStart, dbStatus, getSettings, onAutomations, onCalendar, hideCastle, telegramBridgeStatus, discordBridgeStatus, whatsappBridgeStatus, keyStatus, memoryHome, saveSettings, onBackupDone, onStoryOutput, versionSeen } from './api/castle.js'
 import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolders, placeStyle, skinClass } from './themes/loader.js'
 
 // The rooms across the top. A room whose MemoryCore feature is not installed stays hidden
@@ -69,7 +71,9 @@ import { DEFAULT_THEME_ID, applyTheme, builtInThemes, chooseTheme, fromUserFolde
 const allTabs = [
   { id: 'home', label: 'HOME' },
   { id: 'theme', label: 'THEME' },
-  { id: 'apps', label: 'APPS' },
+  // Kiyo's room of Start-menu apps. Its id stays `apps` (saved tab order, room switches and the code all use it);
+  // only the label is DESKTOP, so the name APPS can belong to the room launcher (id `launcher`) that comes next.
+  { id: 'apps', label: 'DESKTOP' },
   { id: 'myprofile', label: 'MY PROFILE' },
   { id: 'diary', label: 'DIARY', needs: 'diary' },
   { id: 'projects', label: 'PROJECTS', needs: 'projects' },
@@ -111,7 +115,7 @@ const settingsSection = ref('companion')
 // the update line for Settings > About
 const updateInfo = ref(null)
 // Rooms that are built; any other room shows its name until its phase lands.
-const BUILT = new Set(['home', 'theme', 'apps', 'myprofile', 'diary', 'projects', 'library', 'studio', 'appearance', 'story', 'world', 'chat', 'dev', 'market', 'messaging', 'automations', 'calendar'])
+const BUILT = new Set(['launcher', 'home', 'theme', 'apps', 'myprofile', 'diary', 'projects', 'library', 'studio', 'appearance', 'story', 'world', 'chat', 'dev', 'market', 'messaging', 'automations', 'calendar'])
 // Tabs with something new waiting (the story speaking while the member is elsewhere).
 const marks = ref([])
 const memberName = ref('')
@@ -119,7 +123,14 @@ const storyOpened = ref(active.value === 'story')
 const chatOpened = ref(active.value === 'chat')
 // DEV stays mounted once opened, so its project sessions keep going behind the other rooms
 const devOpened = ref(active.value === 'dev')
-watch(active, (room) => {
+// where APPS was opened from, so Esc there goes back
+const previousRoom = ref('home')
+const launcherView = ref(null)
+const launcherSearch = ref(false)
+watch(active, (room, was) => {
+  if (room !== 'launcher') launcherSearch.value = false
+  if (room === 'launcher' && was && was !== 'launcher') previousRoom.value = was
+  if (room === 'launcher') refreshPending()
   alertActiveRoom(room).catch(() => {})
   if (room !== 'home') arranging.value = false
   if (room === 'story') storyOpened.value = true
@@ -141,12 +152,36 @@ const homeEl = ref(null)
 // the member's own tab order (dragged in the top bar); empty = Castle's order
 const tabOrder = ref([])
 const tabs = computed(() =>
-  orderTabs(allTabs, tabOrder.value).filter((tab) => (!tab.needs || home.value?.features?.[tab.needs]) && (tab.id === 'home' || rooms.value[tab.id] !== false)),
+  // APPS shows EVERY room; the per-room switches in Settings no longer hide a room here or in the top bar (the member pins what they use). Only a room whose MemoryCore feature is missing stays out.
+  orderTabs(allTabs, tabOrder.value).filter((tab) => !tab.needs || home.value?.features?.[tab.needs]),
 )
+// Chats waiting for the member's approval (Telegram, Discord, WhatsApp): the badge on MESSAGING.
+const pendingChats = ref(0)
+async function refreshPending() {
+  if (rooms.value.messaging === false || !rooms.value.messaging) { pendingChats.value = 0; return }
+  const got = await Promise.allSettled([telegramBridgeStatus(), discordBridgeStatus(), whatsappBridgeStatus()])
+  pendingChats.value = got.filter((g) => g.status === 'fulfilled' && g.value?.pending).length
+}
+// What each tile in APPS says is waiting: only state Castle already holds, nothing is fetched for it.
+const badges = computed(() => badgesFor({
+  automations: rooms.value.automations ? automations.value : null,
+  pending: pendingChats.value,
+  marks: marks.value,
+  calendar: rooms.value.calendar ? calendarCard.value : null,
+}))
+// The rooms pinned to the top bar (Settings `pinnedRooms`); every other room opens from APPS, the room launcher.
+const pins = ref([...DEFAULT_PINS])
+// What the top bar holds: HOME, APPS, the pinned rooms, and the open room if it is not pinned.
+const barTabs = computed(() => headerTabs(tabs.value, pins.value, active.value))
+// A room that is not in the bar can still have something new (the story speaking): APPS says so.
+const barMarks = computed(() => {
+  const shown = new Set(barTabs.value.map((t) => t.id))
+  return marks.value.some((m) => !shown.has(m)) ? [...marks.value, 'launcher'] : marks.value
+})
 // a room switched off closes: its tab goes, its mark clears, a kept-alive room unmounts
 watch(tabs, (list) => {
   const ids = new Set(list.map((t) => t.id))
-  if (!ids.has(active.value)) active.value = 'home'
+  if (!ids.has(active.value) && active.value !== 'launcher') active.value = 'home'
   if (!ids.has('story')) storyOpened.value = false
   if (!ids.has('chat')) chatOpened.value = false
   if (!ids.has('dev')) devOpened.value = false
@@ -295,6 +330,7 @@ async function loadSettingsAndTheme() {
     wallpaperSound.value = view.settings.wallpaperSound !== false
     widgetPrefs.value = { widgetsOff: view.settings.widgetsOff ?? [], widgetsOn: view.settings.widgetsOn ?? [], widgetSizes: view.settings.widgetSizes ?? {}, widgetPlaces: view.settings.widgetPlaces ?? {} }
     tabOrder.value = view.settings.tabOrder ?? []
+    pins.value = cleanPins(view.settings.pinnedRooms ?? DEFAULT_PINS)
     try {
       savedKeys.value = (await keyStatus()).filter((k) => k.set).map((k) => k.name)
     } catch {
@@ -346,6 +382,38 @@ async function reorderTabs({ from, to }) {
     await saveSettings({ ...settings, tabOrder: next })
   } catch {
     // outside Castle's window: the order holds until the page reloads
+  }
+}
+
+// Esc in APPS: back to the room it was opened from (HOME if that room is gone).
+function closeLauncher() {
+  active.value = tabs.value.some((t) => t.id === previousRoom.value) ? previousRoom.value : 'home'
+}
+// Ctrl+K (Cmd+K on a Mac) opens APPS from anywhere, and closes it again. DEV is left alone: in a terminal
+// Ctrl+K is the shell's own "delete to the end of the line", and a sheet over Castle keeps the keyboard.
+function onLauncherKey(event) {
+  if (!opensLauncher(event, { room: active.value, sheetOpen: settingsOpen.value || sentinelOpen.value || backupOpen.value })) return
+  event.preventDefault()
+  // In APPS, Ctrl+K puts the cursor in the search box (Esc is what leaves APPS); from another room it opens APPS with the cursor there.
+  if (active.value === 'launcher') launcherView.value?.focusSearch()
+  else { launcherSearch.value = true; active.value = 'launcher' }
+}
+
+// A room opened from APPS. A pinned room is just a tab; any other room shows as a tab while it is open.
+function openRoom(id) {
+  active.value = id
+  marks.value = marks.value.filter((m) => m !== id)
+}
+
+// The pin on a tile (or in Settings): the room joins or leaves the top bar.
+async function pinRoom({ id, on }) {
+  const next = setPinned(pins.value, id, on, allTabs.map((t) => t.id))
+  pins.value = next
+  try {
+    const { settings } = await getSettings()
+    await saveSettings({ ...settings, pinnedRooms: next })
+  } catch {
+    // outside Castle's window: the pins hold until the page reloads
   }
 }
 
@@ -402,7 +470,7 @@ async function loadHome() {
     // outside Castle's window
   }
   // a hidden room may not stay open
-  if (!tabs.value.some((t) => t.id === active.value)) active.value = 'home'
+  if (active.value !== 'launcher' && !tabs.value.some((t) => t.id === active.value)) active.value = 'home'
 }
 
 async function loadDatabase() {
@@ -492,6 +560,7 @@ let stopOpenChat
 let stopOpenRoom
 onMounted(async () => {
   window.addEventListener('keydown', onArrangeKey)
+  window.addEventListener('keydown', onLauncherKey)
   stopProviderEvents = await onProviderChanged(async () => { await settingsSaved(); window.dispatchEvent(new Event('castle-provider-changed')) }).catch(() => null)
   stopOpenChat = await onOpenChat(() => {
     active.value = 'chat'
@@ -537,7 +606,7 @@ onMounted(async () => {
   loaderDone()
   // the memory changes as the companion writes: read it again every minute
   const automationRefresh = () => { if (rooms.value.automations) prepareAutomations().catch(() => {}) }; automationRefresh()
-  refresh = setInterval(() => { loadHome(); if (rooms.value.automations) prepareAutomations().catch(() => {}); if (rooms.value.calendar) refreshCalendarCard() }, 60000)
+  refresh = setInterval(() => { loadHome(); if (rooms.value.automations) prepareAutomations().catch(() => {}); if (rooms.value.calendar) refreshCalendarCard(); refreshPending() }, 60000)
   try {
     stopAutomations = await onAutomations(() => { if (rooms.value.automations) prepareAutomations().catch(() => {}) })
     stopCalendar = await onCalendar(() => { if (rooms.value.calendar) refreshCalendarCard() })
@@ -551,6 +620,7 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onArrangeKey)
+  window.removeEventListener('keydown', onLauncherKey)
   stopAutomations?.()
   stopCalendar?.()
   stopProviderEvents?.()
@@ -570,13 +640,13 @@ watch(settingsStamp, () => {
 <template>
   <div class="castle">
     <TopBar
-      :tabs="tabs"
+      :tabs="barTabs"
       :active="active"
       :display-clock="barClock.enabled"
       :version="appVersion"
       :clock-format="barClock.format"
-      :marks="marks"
-      :mark-titles="{ story: 'The story has new lines', chat: 'New in the room' }"
+      :marks="barMarks"
+      :mark-titles="{ story: 'The story has new lines', chat: 'New in the room', launcher: 'Something new is waiting in a room' }"
       @select="active = $event; marks = marks.filter((m) => m !== $event)"
       @reorder="reorderTabs"
       @settings="openSettings"
@@ -642,6 +712,7 @@ watch(settingsStamp, () => {
       <LibraryView v-if="active === 'library'" :companion="companion" :stamp="memoryStamp" />
       <MarketView v-if="active === 'market'" :companion="companion" />
       <AutomationsView v-if="active === 'automations'" @settings="openSettings" />
+      <LauncherView v-if="active === 'launcher'" ref="launcherView" :search-on-open="launcherSearch" :tabs="tabs" :pins="pins" :badges="badges" :current="active" @open="openRoom" @pin="pinRoom" @close="closeLauncher" />
       <CalendarView v-if="active === 'calendar'" @open="(room) => (active = room)" />
       <MessagingView v-if="active === 'messaging'" :companion="companion" />
       <div v-if="!BUILT.has(active)" class="room-soon">

@@ -374,6 +374,9 @@ pub struct Settings {
     /// The top bar's tabs in the member's own order (tab ids, dragged into place). Empty means
     /// Castle's own order; a tab not listed (a room added in a later release) follows the listed ones.
     pub tab_order: Vec<String>,
+    /// The rooms pinned to the top bar beside HOME and APPS (the room launcher). Every other room opens from
+    /// APPS. A settings file without this key gets Castle's first pins; an empty list means none.
+    pub pinned_rooms: Vec<String>,
     /// HOME's widgets the member switched off in WIDGETS. USAGE is not listed here: its switch is
     /// `show_usage_card`, which also stops Castle asking the CLIs.
     pub widgets_off: Vec<String>,
@@ -431,6 +434,14 @@ fn plain_id(id: &str) -> bool {
 
 /// The longest tab order kept, and the longest tab id in it.
 const TAB_ORDER_MAX: usize = 32;
+
+/// The rooms pinned to the top bar until the member chooses their own.
+pub const DEFAULT_PINS: [&str; 3] = ["chat", "projects", "dev"];
+fn default_pinned_rooms() -> Vec<String> {
+    DEFAULT_PINS.iter().map(|r| r.to_string()).collect()
+}
+/// HOME and the launcher are always in the top bar and are never "pinned"; `widgets` is not a tab.
+const ALWAYS_SHOWN: [&str; 3] = ["home", "launcher", "widgets"];
 const TAB_ID_MAX: usize = 32;
 
 pub const DIARY_LOOKS: [&str; 3] = ["list", "calendar", "book"];
@@ -519,6 +530,7 @@ impl Default for Settings {
             mic_shortcut: None,
             dev_root: None,
             tab_order: Vec::new(),
+            pinned_rooms: default_pinned_rooms(),
             widgets_off: Vec::new(),
             widgets_on: Vec::new(),
             widget_sizes: std::collections::BTreeMap::new(),
@@ -580,6 +592,14 @@ impl Settings {
             .filter(|id| !id.is_empty() && id.len() <= TAB_ID_MAX && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
             .filter(|id| seen.insert(id.clone()))
             .take(TAB_ORDER_MAX)
+            .collect();
+        // the pinned rooms: only real rooms, each once, in the member's order; HOME and the launcher need no pin
+        let mut pinned_seen = std::collections::BTreeSet::new();
+        self.pinned_rooms = std::mem::take(&mut self.pinned_rooms)
+            .into_iter()
+            .map(|id| id.trim().to_string())
+            .filter(|id| ROOMS.contains(&id.as_str()) && !ALWAYS_SHOWN.contains(&id.as_str()))
+            .filter(|id| pinned_seen.insert(id.clone()))
             .collect();
         self.world.volume = self.world.volume.clamp(0.0, 1.0);
         self.quick_actions.retain(|a| !a.label.trim().is_empty() && !a.command.trim().is_empty());
@@ -811,6 +831,29 @@ mod tests {
     }
 
     #[test]
+    fn an_old_settings_file_gets_the_first_pins_and_an_empty_list_stays_empty() {
+        let old: Settings = serde_json::from_str(r#"{"setupDone":true}"#).unwrap();
+        assert_eq!(old.pinned_rooms, vec!["chat", "projects", "dev"], "a file written before pins existed");
+        let none: Settings = serde_json::from_str(r#"{"pinnedRooms":[]}"#).unwrap();
+        assert!(none.normalized().pinned_rooms.is_empty(), "the member may pin nothing");
+        assert_eq!(Settings::default().pinned_rooms, vec!["chat", "projects", "dev"]);
+    }
+
+    #[test]
+    fn pinned_rooms_keep_only_real_rooms_once_each_and_never_home_or_the_launcher() {
+        let messy: Settings = serde_json::from_str(r#"{"pinnedRooms":[" dev ","home","launcher","widgets","dev","../x","","nothing","calendar","apps","chat"]}"#).unwrap();
+        assert_eq!(messy.clone().normalized().pinned_rooms, vec!["dev", "calendar", "apps", "chat"]);
+        // saved and read back unchanged
+        let back: Settings = serde_json::from_str(&serde_json::to_string(&messy.normalized()).unwrap()).unwrap();
+        assert_eq!(back.pinned_rooms, vec!["dev", "calendar", "apps", "chat"]);
+    }
+
+    #[test]
+    fn the_first_pins_are_real_rooms() {
+        assert!(DEFAULT_PINS.iter().all(|r| ROOMS.contains(r) && !ALWAYS_SHOWN.contains(r)));
+    }
+
+    #[test]
     fn the_tab_order_keeps_plain_ids_once_each() {
         let old: Settings = serde_json::from_str(r#"{"setupDone":true}"#).unwrap();
         assert!(old.tab_order.is_empty());
@@ -1008,6 +1051,7 @@ mod tests {
             mic_shortcut: Some(MicShortcut { code: "KeyK".into(), shift: true, alt: false }),
             dev_root: Some("D:/Projects".into()),
             tab_order: vec!["dev".into(), "home".into(), "chat".into()],
+            pinned_rooms: vec!["dev".into(), "calendar".into()],
             widgets_off: vec!["growth".into()],
             widgets_on: vec!["weather".into()],
             widget_sizes: [("clock".to_string(), "l".to_string())].into_iter().collect(),

@@ -277,7 +277,13 @@ Your themes live in Castle's settings folder (`%APPDATA%\com.memorycore.castle\t
 
 ### APPS
 
-Your Start-menu apps, with the ones you use most at the top. Type to search, then press **Enter** or click to open an app.
+Every room on one page of tiles, in groups. The top bar holds only HOME, APPS and the rooms you pinned; click a tile to open any other room, and use the small pin on a tile to put a room in the top bar (or take it out). Settings > Rooms > Top bar has the same pins as switches. A room you open that is not pinned shows as a tab while you are in it.
+
+Press **Ctrl+K** (Cmd+K on a Mac) anywhere to open APPS, type to find a room, and press **Enter** to open the first match. The arrow keys move between tiles, **P** pins or unpins the tile, and **Esc** goes back. (In DEV, Ctrl+K is left to the terminal.) A small number or dot on a tile says something is waiting there: a failed or paused automation, a chat waiting for your approval, something new in CHAT or STORY, or something that needs a look in CALENDAR.
+
+### DESKTOP
+
+This room was called APPS before; it is renamed so APPS can be the room launcher. Your Start-menu apps, with the ones you use most at the top. Type to search, then press **Enter** or click to open an app.
 
 ### DIARY, PROJECTS and LIBRARY
 
@@ -631,7 +637,7 @@ Each theme keeps its own places: change theme and the cards sit where that theme
 
 ## 15. My profile
 
-**MY PROFILE** (after APPS in the top bar) is a reading of you, made by your companion from your own diary, one reading for each finished month: a type such as `INTJ-A` (and an enneagram and tritype when the month gives a real sense of them), two or three sentences about who you were that month, and three tiles - **Growth**, **Focus** and **Wellbeing** - each with how far it moved since the month before. Under them, **How I Think**, **Values** and **Shadow** show up to five bars each, with a few short lines.
+**MY PROFILE** (after DESKTOP in the top bar) is a reading of you, made by your companion from your own diary, one reading for each finished month: a type such as `INTJ-A` (and an enneagram and tritype when the month gives a real sense of them), two or three sentences about who you were that month, and three tiles - **Growth**, **Focus** and **Wellbeing** - each with how far it moved since the month before. Under them, **How I Think**, **Values** and **Shadow** show up to five bars each, with a few short lines.
 
 - **Scan my diary** reads every finished month that has at least five diary entries and no reading yet, one month after another; the line under the button says which month it is reading. The first scan fills in your past months; later scans only add the months that have finished since. **The month you are in is never read** - it is read once it is over.
 - **Changes** is a timeline with one dot for each month, the newest on the right. A dot glows when your type changed or a tile moved by ten or more. Click a dot to see that month everywhere on the page.
