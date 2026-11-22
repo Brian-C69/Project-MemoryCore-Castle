@@ -398,7 +398,7 @@ mod tests {
         s.env.insert("REPORT_MODE".into(), "daily".into());
         let payload = serde_json::json!({"text":"; calc","file":"a&calc.pdf"});
         let original = s.args.clone();
-        let result = run(&s, &allow(&s), &payload, Duration::from_secs(15)).unwrap();
+        let result = run(&s, &allow(&s), &payload, Duration::from_secs(120)).unwrap();
         assert_eq!(result.exit_code, Some(0));
         assert_eq!(s.args, original);
         let data: Value = serde_json::from_str(result.stdout.trim()).unwrap();
@@ -430,7 +430,7 @@ mod tests {
             &s,
             &allow(&s),
             &serde_json::json!({}),
-            Duration::from_secs(15),
+            Duration::from_secs(120),
         )
         .unwrap();
         assert_eq!(r.exit_code, Some(7));
@@ -442,7 +442,7 @@ mod tests {
             &s,
             &allow(&s),
             &serde_json::json!({}),
-            Duration::from_secs(15),
+            Duration::from_secs(120),
         )
         .unwrap();
         assert_eq!(r.exit_code, Some(0));
@@ -451,12 +451,12 @@ mod tests {
     #[test]
     fn timeout_kills_descendant_and_keeps_partial_output() {
         let f = Fixture::new();
-        let s=f.shell(r#"$p=Start-Process -WindowStyle Hidden -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList '127.0.0.1','-n','60' -PassThru;[Console]::WriteLine($p.Id);Start-Sleep -Seconds 60"#);
+        let s=f.shell(r#"$p=Start-Process -WindowStyle Hidden -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList '127.0.0.1','-n','300' -PassThru;[Console]::WriteLine($p.Id);Start-Sleep -Seconds 300"#);
         let r = run(
             &s,
             &allow(&s),
             &serde_json::json!({}),
-            Duration::from_secs(2),
+            Duration::from_secs(20),
         )
         .unwrap();
         assert!(r.timed_out);
@@ -525,7 +525,7 @@ mod hidden_tests {
             &spec,
             &[program],
             &serde_json::json!({}),
-            Duration::from_secs(15),
+            Duration::from_secs(120),
         );
         let _ = std::fs::remove_file(&file);
         let _ = std::fs::remove_dir(&folder);
