@@ -70,6 +70,8 @@ describe('defaults', () => {
     expect(differsFromDefault({ clockFormat: '24h' }, 'clockFormat')).toBe(false)
     expect(differsFromDefault({ clockFormat: '12h' }, 'clockFormat')).toBe(true)
     expect(differsFromDefault({ anything: 1 }, 'anything')).toBe(false)
+    expect(differsFromDefault({ automationsCommands: [] }, 'automationsCommands')).toBe(false)
+    expect(differsFromDefault({ automationsCommands: ['program.exe'] }, 'automationsCommands')).toBe(true)
   })
 
   it("match the core's Settings::default", () => {
@@ -85,10 +87,11 @@ describe('defaults', () => {
       else if (/^\d+$/.test(raw)) core[key] = Number(raw)
       else if (/^"[^"]*"\.into\(\)$/.test(raw)) core[key] = raw.slice(1, raw.indexOf('"', 1))
       else if (raw === 'Cli::Claude') core[key] = 'claude'
+      else if (raw === 'Vec::new()') core[key] = []
     }
     for (const [key, value] of Object.entries(SETTINGS_DEFAULTS)) {
       expect(core, key).toHaveProperty(key)
-      expect(value, key).toBe(core[key])
+      expect(value, key).toEqual(core[key])
     }
   })
 })

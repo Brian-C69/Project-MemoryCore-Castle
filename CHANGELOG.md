@@ -4,6 +4,26 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- Fixed: the HOME card for AUTOMATIONS never appeared because it was not connected to HOME; it now shows.
+
+- AUTOMATIONS 24/7 reliability: backend heartbeat and database health, atomic schedule claims, missed-run policy after interruptions, and clear actual-Quit warnings while hidden/taskbar operation stays unchanged.
+
+- AUTOMATIONS follow-up chains, fixed HTTP requests, companion drafts/proposals and read/propose/run-once memory commands; proposals wait for approval.
+
+- Automation results and failures now show on a HOME card of their own (Automations) that you can drag, resize and switch off like the others, instead of a notice fixed to the bottom of HOME.
+
+- Add automation event triggers: a job can run when a memory backup finishes or fails, the companion provider is switched, a diary entry is saved, a project task is ticked or a reminder falls due.
+
+- Add automation file triggers (a watched folder, run once when a file appears or changes and stops changing) and web request triggers (a private link that only this computer can use).
+
+- Add approved-chat automation message triggers with bounded matching, duplicate protection and explicit Also chat routing.
+
+- AUTOMATIONS Castle actions: local backups/exports, reminders/tasks, session requests and HOME notices, plus approved-chat delivery with persistent limits and readable delivery receipts.
+
+- AUTOMATIONS command jobs: approved-program settings, arguments, working folder, payload input, exit reports and process-group timeouts.
+
+- AUTOMATIONS room (off at first): local schedules, isolated companion briefings, run history, HOME notices and Pause all.
+
 ## 0.2.27 - 2026-11-22
 
 - **Your heart on the phone shows on your companion's bubble.** React to its reply on Telegram, Discord or WhatsApp (a heart, a laugh, anything) and the same emoji appears at the corner of that bubble in Chat, the moment you tap it. It is only shown: it never wakes your companion or costs a turn, and taking it back on the phone takes it off the bubble.

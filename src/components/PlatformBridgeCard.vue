@@ -5,6 +5,7 @@
 // default slot. Purely presentational: the room owns the status polling and the save/approve/forget
 // calls, this just renders whatever status it's handed and emits plain events back.
 import { computed, ref } from 'vue'
+import './automations/roomcard.css'
 
 const props = defineProps({
   title: { type: String, required: true },
@@ -53,7 +54,7 @@ const STEPS = ['Token', 'Message it', 'Approve']
 </script>
 
 <template>
-  <section class="platform" :class="{ live: on, [`tone-${pill.tone}`]: true }">
+  <section class="platform castle-room-card" :class="{ live: on, [`tone-${pill.tone}`]: true }">
     <header class="top">
       <span class="badge" aria-hidden="true">
         <svg v-if="icon === 'telegram'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 3.5 2.8 10.7c-.8.3-.8 1.4 0 1.7l4.6 1.6 1.8 5.6c.2.7 1.1.9 1.6.4l2.6-2.4 4.7 3.4c.6.4 1.4.1 1.6-.6L22.9 5c.2-.9-.6-1.8-1.4-1.5Z" /><path d="m7.4 14 9.6-7.2" /></svg>
@@ -122,32 +123,9 @@ const STEPS = ['Token', 'Message it', 'Approve']
 <style scoped>
 .platform {
   --tone: var(--text-dim);
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--panel-background);
-  backdrop-filter: blur(14px);
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
-}
-.platform::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 2px;
-  border-radius: 18px 18px 0 0;
-  background: linear-gradient(90deg, transparent, var(--tone), transparent);
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-.platform.live::before {
-  opacity: 0.9;
-}
-.platform:hover {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
 }
 .platform.tone-ok {
   --tone: var(--ok, #4ade80);

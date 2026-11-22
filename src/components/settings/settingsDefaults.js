@@ -4,6 +4,8 @@
 
 export const SETTINGS_DEFAULTS = {
   cli: 'claude',
+  automationsPaused: false,
+  automationsCommands: [],
   startWithWindows: false,
   startSessionOnLaunch: true,
   minimizeToTaskbar: false,
@@ -42,5 +44,7 @@ export function valueOf(settings, key) {
 
 /** True when a setting differs from its default (a row may then offer Reset). */
 export function differsFromDefault(settings, key) {
-  return key in SETTINGS_DEFAULTS && valueOf(settings, key) !== SETTINGS_DEFAULTS[key]
+  if (!(key in SETTINGS_DEFAULTS)) return false
+  const value = valueOf(settings, key), fallback = SETTINGS_DEFAULTS[key]
+  return Array.isArray(fallback) ? !Array.isArray(value) || value.length !== fallback.length || value.some((v, i) => v !== fallback[i]) : value !== fallback
 }

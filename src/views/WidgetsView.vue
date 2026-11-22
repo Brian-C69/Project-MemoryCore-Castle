@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { getSettings, keyStatus, saveSettings } from '../api/castle.js'
-import { hasItsKey, isOn, resetPatch, sizeOf, sizePatch, switchPatch, WIDGETS } from '../components/widgets/widgetplaces.js'
+import { hasItsKey, isOn, resetPatch, roomIsOn, sizeOf, sizePatch, switchPatch, WIDGETS } from '../components/widgets/widgetplaces.js'
 
 // WIDGETS: HOME's widgets, each switched on or off and given a size; Arrange takes the member to
 // HOME to drag them into place (each theme keeps its own places).
@@ -69,6 +69,7 @@ onMounted(load)
         <p class="dim">{{ w.about }}</p>
         <p v-if="w.id === 'usage'" class="dim small">Off also stops Castle asking Claude Code and Codex for their limits.</p>
         <p v-if="!hasItsKey(w.id, savedKeys)" class="dim small">Shown once its key is saved in Settings &gt; Keys.</p>
+        <p v-if="!roomIsOn(w.id, settings.rooms)" class="dim small">Shown while its room is on, in Settings &gt; Rooms.</p>
         <div class="sizes" role="group" :aria-label="`${w.name} size`">
           <button
             v-for="size in ['s', 'm', 'l']"

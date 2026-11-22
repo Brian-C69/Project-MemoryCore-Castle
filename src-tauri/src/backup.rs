@@ -326,9 +326,19 @@ pub async fn backup_create(name: String, store: State<'_, SettingsStore>) -> Res
 #[tauri::command]
 pub async fn backup_now(store: State<'_, SettingsStore>) -> Result<BackupStatus, String> {
     let folder = memory_folder(&store)?;
-    tauri::async_runtime::spawn_blocking(move || back_up_now(&folder, "Memory backup by MemoryCore Castle"))
+    let result = tauri::async_runtime::spawn_blocking(move || back_up_now(&folder, "Memory backup by MemoryCore Castle"))
         .await
-        .map_err(|_| "The backup stopped.".to_string())?
+        .map_err(|_| "The backup stopped.".to_string())?;
+    announce(&result);
+    result
+}
+
+/// Tells AUTOMATIONS how a backup went (a job can follow "Memory backup failed", for instance).
+fn announce(result: &Result<BackupStatus, String>) {
+    match result {
+        Ok(_) => crate::automations::events::emit("backup_done", "Memory backup finished."),
+        Err(_) => crate::automations::events::emit("backup_failed", "Memory backup failed."),
+    }
 }
 
 /// Opens GitHub's own sign-in in a console window of its own (browser + one-time code); the
@@ -403,6 +413,7 @@ pub fn start_diary_watcher(app: &AppHandle) {
             let settled = changed.is_some_and(|t| SystemTime::now().duration_since(t).unwrap_or_default() > Duration::from_secs(60));
             if settings.backup_after_diary && settled && seen.is_some() && changed != seen {
                 let result = back_up_now(&folder, "Memory backup after Save diary");
+                announce(&result);
                 let _ = app.emit(BACKUP_EVENT, result.map(|_| "Memory backed up after Save diary.".to_string()));
             }
             if settled || seen.is_none() {

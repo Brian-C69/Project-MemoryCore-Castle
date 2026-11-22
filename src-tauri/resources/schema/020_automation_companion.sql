@@ -1,0 +1,17 @@
+CREATE TABLE automation_requests (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ job_id BIGINT UNSIGNED NOT NULL,
+ state VARCHAR(16) NOT NULL DEFAULT 'pending',
+ requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ run_id BIGINT UNSIGNED NULL,
+ error VARCHAR(400) NULL,
+ KEY ix_automation_requests(state,requested_at),
+ CONSTRAINT fk_automation_request_job FOREIGN KEY(job_id) REFERENCES automation_jobs(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+CREATE TABLE automation_approvals (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ job_id BIGINT UNSIGNED NOT NULL,
+ approved_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ definition JSON NOT NULL,
+ CONSTRAINT fk_automation_approval_job FOREIGN KEY(job_id) REFERENCES automation_jobs(id) ON DELETE CASCADE
+) ENGINE=InnoDB;

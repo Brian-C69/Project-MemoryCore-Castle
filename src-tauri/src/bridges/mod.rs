@@ -8,6 +8,10 @@ pub mod guests;
 pub mod reactions;
 pub mod telegram;
 pub mod whatsapp;
+mod notify;
+pub use notify::notify;
+pub use notify::target as notification_target;
+pub use notify::ready as notification_ready;
 
 use crate::session::{MainHost, Room};
 use crate::settings::SettingsStore;

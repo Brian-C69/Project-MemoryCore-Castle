@@ -156,6 +156,7 @@ pub fn run(conn: &mut Conn, ask: &Ask, memory: &Path) -> Result<String, String> 
     if matches!(words.first(), Some(&"project") | Some(&"task")) {
         memdb::migrate(conn)?;
     }
+    if words.first()==Some(&"automation") { return crate::automations::companion::door(conn,ask,memory); }
     match words.as_slice() {
         ["diary", "add"] => diary_add(conn, ask),
         ["diary", "rewrite"] => diary_rewrite(conn, ask),

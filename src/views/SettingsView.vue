@@ -30,6 +30,8 @@ import { DEFAULT_MIC_SHORTCUT, micShortcutOf, micShortcutText, readMicShortcut, 
 import { DIARY_LOOKS, lookOf } from '../components/diaryviews.js'
 import { PROFILE_LOOKS, profileLookOf } from './profile/profile.js'
 import {
+  automationProgramPick,
+  automationProgramsSave,
   providerSwitch,
   roomsApply,
   roomCompanionRefresh,
@@ -187,7 +189,10 @@ async function saveRow(row, patch) {
   problem.value = ''
   done.value = ''
   try {
-    const saved = await rows.run(row, () => saveSettings(next))
+    const saved = await rows.run(row, async () => {
+      if (Object.hasOwn(patch, 'automationsCommands')) { await automationProgramsSave(patch.automationsCommands); return getSettings() }
+      return saveSettings(next)
+    })
     if (saved) {
       view.value = saved
       settings.value = saved.settings
@@ -210,6 +215,11 @@ async function save(patch, message = 'Saved.') {
     emit('saved')
   }
   return saved
+}
+
+async function addAutomationProgram() {
+  const program = await rows.run('approved-programs', () => automationProgramPick())
+  if (program) await saveRow('approved-programs', { automationsCommands: [...(settings.value.automationsCommands || []), program] })
 }
 
 // ---------- Chat: the room's alerts and the companion in the room ----------
@@ -372,6 +382,7 @@ const ROOM_GROUPS = [
       { id: 'chat', label: 'CHAT', line: 'Off stops reading the room. Its files stay.', tip: 'Turning CHAT off stops reading the room. Its files stay.' },
       { id: 'market', label: 'MARKET' },
       { id: 'dev', label: 'DEV' },
+      { id: 'automations', label: 'AUTOMATIONS', line: 'Off at first: private briefings on your schedule.', tip: 'Jobs run while Castle is open. New jobs start switched off. Pause all stops new runs and delivery.' },
       { id: 'messaging', label: 'MESSAGING', line: 'Off at first: text your companion from Telegram, Discord or WhatsApp.', tip: 'Off to begin with: MESSAGING lets you text your companion from Telegram, Discord or WhatsApp. Each platform is set up on its own card in the room.' },
     ],
   },
@@ -797,6 +808,21 @@ onMounted(async () => {
             </SettingGroup>
           </template>
 
+          <template v-else-if="tab === 'automations'">
+            <SettingGroup id="programs" title="Command jobs">
+              <SettingRow id="approved-programs" label="Approved programs" description="Only these programs may run from a job." tip="Choose an executable from this computer. Scripts use an approved interpreter, with the script file as an argument. Removing a program stops future runs using it.">
+                <button :disabled="locked" @click="addAutomationProgram">Add program</button>
+                <template #below>
+                  <p v-if="!settings.automationsCommands?.length">No programs approved yet.</p>
+                  <ul class="approved-programs"><li v-for="program in settings.automationsCommands || []" :key="program"><code>{{ program }}</code><SettingConfirm label="Remove" :disabled="locked" @confirm="saveRow('approved-programs', { automationsCommands: settings.automationsCommands.filter(p => p !== program) })" /></li></ul>
+                </template>
+              </SettingRow>
+              <SettingRow id="command-limits" label="Run limits" description="Two jobs at once, with the newest 200 runs kept for each.">
+                <SettingPill>While Castle is open</SettingPill>
+              </SettingRow>
+            </SettingGroup>
+          </template>
+
           <!-- ============ Rooms ============ -->
           <template v-else-if="tab === 'rooms'">
             <SettingGroup v-for="g in ROOM_GROUPS" :id="g.id" :key="g.id" :title="g.title" :note="roomsNote">
@@ -931,7 +957,7 @@ onMounted(async () => {
           <!-- ============ Start-up ============ -->
           <template v-else-if="tab === 'startup'">
             <SettingGroup id="start" title="Start-up">
-              <SettingRow id="start-with" :label="words.startWith" :description="view?.startupNote || ''">
+              <SettingRow id="start-with" :label="words.startWith" :description="view?.startupNote || 'Opens Castle after you sign in. Automations run while Castle stays open, including when hidden or minimized.'">
                 <SettingSwitch :model-value="valueOf(settings, 'startWithWindows')" :label="words.startWith" :disabled="locked" @update:model-value="(on) => saveRow('start-with', { startWithWindows: on })" />
               </SettingRow>
               <SettingRow id="wake" :label="`Wake ${companionLabel} on start`" :description="`Starts ${companionLabel}'s session ${words.wakeWhen}.`">
@@ -1237,3 +1263,5 @@ button:disabled {
   color: var(--accent);
 }
 </style>
+
+<style scoped>.approved-programs{list-style:none;padding:0;display:grid;gap:10px}.approved-programs li{display:flex;align-items:center;gap:16px;justify-content:space-between}.approved-programs code{overflow-wrap:anywhere;min-width:0;font-size:12px}</style>

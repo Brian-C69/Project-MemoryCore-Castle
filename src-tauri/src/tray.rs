@@ -49,19 +49,54 @@ pub fn toggle_main(app: &AppHandle) {
     }
 }
 
-/// Quits at once when no session is running; asks first when one is.
+/// Actual Quit ends the process; hiding/minimizing never does.
+pub fn quit_notice(session: bool, automations: bool, active: Option<usize>) -> Option<String> {
+    if !session && !automations && active == Some(0) {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if session {
+        parts.push("Your companion's session will end.".to_string());
+    }
+    if automations || active != Some(0) {
+        parts.push("Automations stop until Castle opens again.".to_string());
+        if let Some(n) = active.filter(|n| *n > 0) {
+            parts.push(format!(
+                "{n} run(s) are still active; quitting may leave unconfirmed results."
+            ));
+        }
+    }
+    parts.push("Hide Castle to keep it running.".into());
+    Some(parts.join(" "))
+}
+/// Confirms actual Quit when sessions, automations or active runs would be stopped.
 pub fn quit(app: &AppHandle) {
-    if !crate::sessions_running(app) {
+    let active = app
+        .state::<crate::automations::Running>()
+        .0
+        .try_lock()
+        .ok()
+        .map(|r| r.len());
+    let Some(notice) = quit_notice(
+        crate::sessions_running(app),
+        app.state::<crate::settings::SettingsStore>()
+            .get()
+            .room_on("automations"),
+        active,
+    ) else {
         app.exit(0);
         return;
-    }
+    };
     show_main(app);
     let handle = app.clone();
     app.dialog()
-        .message("Your companion's session will end with Castle.")
+        .message(notice)
         .title("Quit MemoryCore Castle?")
         .kind(MessageDialogKind::Warning)
-        .buttons(MessageDialogButtons::OkCancelCustom("Quit".into(), "Stay".into()))
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            "Quit".into(),
+            "Stay".into(),
+        ))
         .show(move |quit| {
             if quit {
                 handle.exit(0);
@@ -104,4 +139,23 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
     }
     tray.build(app)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod reliability_tests {
+    use super::*;
+    #[test]
+    fn actual_quit_warns_even_without_a_companion_session() {
+        assert!(quit_notice(false, false, Some(0)).is_none());
+        let automation = quit_notice(false, true, Some(0)).unwrap();
+        assert!(automation.contains("Automations stop"));
+        assert!(automation.contains("Hide Castle"));
+        assert!(quit_notice(false, false, Some(2))
+            .unwrap()
+            .contains("2 run(s)"));
+        assert!(quit_notice(true, false, Some(0))
+            .unwrap()
+            .contains("session will end"));
+        assert!(quit_notice(false, false, None).is_some());
+    }
 }

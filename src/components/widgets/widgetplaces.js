@@ -8,6 +8,7 @@ export const WIDGETS = [
   { id: 'weather', name: 'Weather', about: 'The weather where you are, and the next days. Uses your location if you allow it, or a city you search.' },
   { id: 'disks', name: 'Disks', about: 'How much room each drive of your computer has left.' },
   { id: 'sentinel', name: 'Sentinel', about: 'Your companion keeping watch over this computer: the state, the last patrol and whether the watch is running.' },
+  { id: 'automations', name: 'Automations', about: 'What your automations last reported, and whether they are paused. Shown while the AUTOMATIONS room is on.', room: 'automations' },
   { id: 'sweep', name: 'Sweep', about: 'Frees space: temp files, caches and more, after a preview.' },
   { id: 'usage', name: 'Usage', about: 'How much of your Claude Code and Codex limits is used.' },
   { id: 'today', name: 'Today', about: 'Your reminders for today.' },
@@ -26,6 +27,12 @@ export const WIDGETS = [
 export function hasItsKey(id, keys = []) {
   const key = WIDGETS.find((w) => w.id === id)?.key
   return !key || keys.includes(key)
+}
+
+// A widget that belongs to a room shows only while that room is on (`rooms` is the settings' room switches).
+export function roomIsOn(id, rooms = {}) {
+  const room = WIDGETS.find((w) => w.id === id)?.room
+  return !room || rooms[room] !== false
 }
 
 export const SIZES = { s: 0.85, m: 1, l: 1.15 }

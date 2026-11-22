@@ -47,10 +47,10 @@ pub struct QuickAction {
 
 /// The rooms the member may switch off in Settings (HOME is always on). Off = not available:
 /// the tab is gone and nothing runs for it, but nothing is removed.
-pub const ROOMS: [&str; 15] = ["widgets", "theme", "apps", "myprofile", "diary", "projects", "library", "appearance", "studio", "story", "world", "chat", "dev", "market", "messaging"];
+pub const ROOMS: [&str; 16] = ["widgets", "theme", "apps", "myprofile", "diary", "projects", "library", "appearance", "studio", "story", "world", "chat", "dev", "market", "messaging", "automations"];
 /// Rooms that wait for the member's own switch in Settings > Rooms, for a new Castle and for one
 /// that never stored a choice for them.
-const ROOMS_OFF_AT_FIRST: [&str; 3] = ["library", "market", "messaging"];
+const ROOMS_OFF_AT_FIRST: [&str; 4] = ["library", "market", "messaging", "automations"];
 
 pub const DEFAULT_WORLD: &str = "3d/floating-isles";
 pub const CAMERAS: [&str; 4] = ["director", "follow", "wide", "orbit"];
@@ -207,6 +207,8 @@ pub struct Settings {
     /// The member's MemoryCore folder: the companion's session runs here.
     pub memory_folder: Option<String>,
     pub cli: Cli,
+    pub automations_paused: bool,
+    pub automations_commands: Vec<String>,
     pub companion_name: Option<String>,
     pub member_name: Option<String>,
     pub relationship_style: Option<String>,
@@ -445,6 +447,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             memory_folder: None,
+            automations_paused: false,
+            automations_commands: Vec::new(),
             cli: Cli::Claude,
             companion_name: None,
             member_name: None,
@@ -925,6 +929,8 @@ mod tests {
         let settings = Settings {
             memory_folder: Some("D:\\MemoryCore".into()),
             cli: Cli::Codex,
+            automations_paused: false,
+            automations_commands: Vec::new(),
             companion_name: Some("Lyra".into()),
             member_name: Some("Rin".into()),
             relationship_style: Some("Friendly partner".into()),

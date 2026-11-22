@@ -1236,6 +1236,7 @@ pub fn start(app: &AppHandle) {
             Ok(()) => {
                 state.phase = "ready".into();
                 state.message = format!("Continuing with {}.", target.label());
+                crate::automations::events::emit("provider_switched", format!("Companion provider switched to {}.", target.label()));
             }
             Err(e) => {
                 state.phase = "failed".into();
