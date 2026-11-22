@@ -87,6 +87,7 @@ mod theme;
 mod themes;
 mod workflows;
 mod automations;
+mod calendar;
 mod describe;
 mod market_shop;
 mod keeper;
@@ -454,6 +455,27 @@ pub fn run() {
             automations::automation_program_pick,
             automations::automation_programs_save,
             automations::hook::automation_hook_reset,
+            calendar::calendar_range,
+            calendar::calendar_event_get,
+            calendar::calendar_event_save,
+            calendar::calendar_event_delete,
+            calendar::calendar_event_move,
+            calendar::calendar_event_skip,
+            calendar::calendar_quickadd_preview,
+            calendar::exchange::calendar_ics_preview,
+            calendar::exchange::calendar_ics_import,
+            calendar::exchange::calendar_ics_discard,
+            calendar::exchange::calendar_ics_export,
+            calendar::calendar_subs,
+            calendar::calendar_sub_add,
+            calendar::calendar_sub_set,
+            calendar::calendar_sub_remove,
+            calendar::calendar_sub_refresh,
+            calendar::calendar_link_jobs,
+            calendar::calendar_proposals,
+            calendar::calendar_proposal_decide,
+            calendar::calendar_home,
+            calendar::calendar_notice_dismiss,
             workflows::workflow_list,
             workflows::workflow_check,
             workflows::workflow_save,

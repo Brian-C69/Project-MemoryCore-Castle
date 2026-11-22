@@ -30,7 +30,7 @@ describe('file and web request triggers', () => {
 })
 
 describe('event triggers', () => {
- it('lists exactly the six events Castle can raise, by the names it uses', () => { expect(EVENTS.map(e => e.value)).toEqual(['backup_done', 'backup_failed', 'provider_switched', 'diary_saved', 'task_done', 'reminder_due']); expect(new Set(EVENTS.map(e => e.label)).size).toBe(6) })
+ it('lists exactly the seven events Castle can raise, by the names it uses', () => { expect(EVENTS.map(e => e.value)).toEqual(['backup_done', 'backup_failed', 'provider_switched', 'diary_saved', 'task_done', 'reminder_due', 'calendar_event']); expect(new Set(EVENTS.map(e => e.label)).size).toBe(7) })
  it('describes an event job and starts from a safe default', () => { expect(triggerSummary({ event: 'backup_failed' }, 'event')).toBe('When: Memory backup failed'); expect(triggerSummary({ event: 'task_done' })).toBe('When: Project task ticked'); expect(triggerSummary({ event: 'x' }, 'event')).toBe('When: a Castle event'); expect(triggerDefaults('event')).toEqual({ event: 'backup_failed' }); const a = eventTrigger(); a.event = 'diary_saved'; expect(eventTrigger().event).toBe('backup_failed'); expect(listeningText({ triggerKind: 'event', enabled: 1 })).toBe('Waiting for the event'); expect(listeningText({ triggerKind: 'event', enabled: 0 })).toBe('Switched off') })
 })
 

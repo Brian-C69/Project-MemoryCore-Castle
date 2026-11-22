@@ -546,6 +546,35 @@ export const projectSplitProposals = () => invoke('project_split_proposals')
 export const projectSplitApply = (ids) => invoke('project_split_apply', { ids })
 
 // Automations phase 1: schedules and isolated briefing jobs.
+// Calendar phase 1: what has a date, read where it lives (read only).
+export const calendarRange = (from, to) => invoke('calendar_range', { from, to })
+// Phase 2: the member's own events.
+export const calendarEventGet = (id) => invoke('calendar_event_get', { id })
+export const calendarEventSave = (event) => invoke('calendar_event_save', { event })
+export const calendarEventDelete = (id) => invoke('calendar_event_delete', { id })
+export const calendarEventMove = (id, occurrence, newStartsAt) => invoke('calendar_event_move', { id, occurrence, newStartsAt })
+export const calendarEventSkip = (id, occurrence, undo = false) => invoke('calendar_event_skip', { id, occurrence, undo })
+export const calendarQuickaddPreview = (text) => invoke('calendar_quickadd_preview', { text })
+// Phase 4: the companion's suggestions.
+// Phase 7: calendars the member subscribes to (holidays); fetched once a day, only shown.
+export const calendarSubs = () => invoke('calendar_subs')
+export const calendarSubAdd = ({ preset = null, name = null, url = null }) => invoke('calendar_sub_add', { preset, name, url })
+export const calendarSubSet = (id, enabled, region) => invoke('calendar_sub_set', { id, enabled, region })
+export const calendarSubRemove = (id) => invoke('calendar_sub_remove', { id })
+export const calendarSubRefresh = (id) => invoke('calendar_sub_refresh', { id })
+// Phase 6: calendar files (.ics). The preview reads a file the member chooses and writes nothing.
+export const calendarIcsPreview = () => invoke('calendar_ics_preview')
+export const calendarIcsImport = (token) => invoke('calendar_ics_import', { token })
+export const calendarIcsDiscard = () => invoke('calendar_ics_discard')
+export const calendarIcsExport = (includeDated) => invoke('calendar_ics_export', { includeDated })
+// Phase 5: an event that starts an automation.
+export const calendarLinkJobs = () => invoke('calendar_link_jobs')
+export const calendarProposals = () => invoke('calendar_proposals')
+export const calendarProposalDecide = (id, approve, event = null) => invoke('calendar_proposal_decide', { id, approve, event })
+// Phase 3: reminders.
+export const calendarHome = () => invoke('calendar_home')
+export const calendarNoticeDismiss = (id = null) => invoke('calendar_notice_dismiss', { id })
+export const onCalendar = (fn) => listen('castle://calendar', fn)
 export const automationList = () => invoke('automation_list')
 export const automationSave = (job) => invoke('automation_save', { job })
 export const automationRun = (id, test = false) => invoke('automation_run', { id, test })

@@ -279,6 +279,9 @@ pub fn start(app: &AppHandle) {
                 }
             }
             let _ = app.emit("castle://automations", json!({"health":true}));
+            // CALENDAR's reminders ride this tick but never depend on automations being on or paused.
+            crate::calendar::notices::tick(&app);
+            crate::calendar::subscriptions::tick(&app);
             std::thread::sleep(Duration::from_secs(15));
         }
     });

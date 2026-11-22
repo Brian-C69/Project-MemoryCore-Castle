@@ -95,6 +95,7 @@ onMounted(() => { load(); timer = setInterval(load, 3000) }); onBeforeUnmount(()
    </template>
    <template v-else-if="triggerKind === 'event'">
     <label>Event <GlassSelect aria-label="Castle event" v-model="editor.trigger.event" :options="EVENTS" /></label>
+    <p v-if="editor.trigger.event === 'calendar_event'">This job starts only for the calendar events you link to it: open an event in CALENDAR and choose this job under "Start an automation". It does not start for every event.</p>
     <p>Castle's own events are trusted, so these jobs may use companion session actions. The event text reaches the job as plain text. Events that happen while Castle is closed do not run, and a job whose action would cause its own event is refused.</p>
    </template>
    <template v-else-if="triggerKind === 'webhook'">

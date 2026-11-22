@@ -22,6 +22,11 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 #[derive(Default)]
 pub struct Running(pub Mutex<BTreeSet<u64>>, pub Mutex<bool>);
+/// A short-lived, time-limited connection for other rooms (the calendar). It never migrates.
+pub fn room_connection(store: &SettingsStore) -> Result<Conn, String> {
+    let folder = store.get().memory_folder.ok_or("Choose a MemoryCore folder first.")?;
+    castle_actions::bounded_connection(std::path::Path::new(&folder), std::time::Duration::from_secs(5))
+}
 pub fn connection(store: &SettingsStore) -> Result<Conn, String> {
     let folder = store
         .get()
@@ -214,12 +219,14 @@ pub async fn automation_history(app: AppHandle, id: u64) -> Result<Vec<Value>, S
 #[tauri::command]
 pub async fn automation_archive(app: AppHandle, id: u64) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        connection(&app.state::<SettingsStore>())?
-            .exec_drop(
-                "UPDATE automation_jobs SET state='archived',enabled=0,next_run_at=NULL WHERE id=?",
-                (id,),
-            )
-            .map_err(|_| "Job could not be archived.".to_string())?;
+        let mut c = connection(&app.state::<SettingsStore>())?;
+        c.exec_drop(
+            "UPDATE automation_jobs SET state='archived',enabled=0,next_run_at=NULL WHERE id=?",
+            (id,),
+        )
+        .map_err(|_| "Job could not be archived.".to_string())?;
+        // calendar events that started this job no longer do
+        crate::calendar::unlink_job(&mut c, id);
         // an archived job's web link stops working for good
         let _ = crate::key::hook_secret_forget(id);
         Ok(())

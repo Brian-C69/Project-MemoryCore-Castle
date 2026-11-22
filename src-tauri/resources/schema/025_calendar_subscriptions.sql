@@ -1,0 +1,26 @@
+CREATE TABLE calendar_subscriptions (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ name VARCHAR(80) NOT NULL,
+ url VARCHAR(2048) NOT NULL,
+ preset VARCHAR(24) NOT NULL DEFAULT '',
+ enabled TINYINT NOT NULL DEFAULT 1,
+ region VARCHAR(40) NOT NULL DEFAULT '',
+ last_try_at DATETIME NULL,
+ last_ok_at DATETIME NULL,
+ last_error VARCHAR(300) NOT NULL DEFAULT '',
+ entries INT NOT NULL DEFAULT 0,
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE calendar_holidays (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ sub_id BIGINT UNSIGNED NOT NULL,
+ uid VARCHAR(190) NOT NULL,
+ day DATE NOT NULL,
+ end_day DATE NULL,
+ title VARCHAR(160) NOT NULL,
+ regions VARCHAR(500) NOT NULL DEFAULT '',
+ tentative TINYINT NOT NULL DEFAULT 0,
+ UNIQUE KEY ux_calendar_holiday (sub_id, uid, day),
+ KEY ix_calendar_holiday_day (day),
+ CONSTRAINT fk_calendar_holiday_sub FOREIGN KEY (sub_id) REFERENCES calendar_subscriptions (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
