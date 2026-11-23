@@ -23,5 +23,6 @@ input {
   background: var(--panel-background); border: 1px solid var(--line); border-radius: 14px;
 }
 input::placeholder { color: var(--text-dim); }
-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* one ring, not two: the border itself turns to the accent when the box has focus */
+input:focus, input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 </style>
