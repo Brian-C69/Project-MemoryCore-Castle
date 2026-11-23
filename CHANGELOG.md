@@ -4,6 +4,8 @@ What changed in each MemoryCore Castle release, in plain words. The newest is fi
 
 ## Unreleased
 
+- Changed: companions now know how to set up an automation for you. Their instructions say what a job looks like (trigger, action and delivery kinds) and how to propose one with `castle-memory automation propose`; it waits disabled in AUTOMATIONS until you approve and switch it on.
+
 ## 0.3.0 - 2026-11-23
 
 - Fixed: with AUTOMATIONS on, a message from your approved Telegram, Discord or WhatsApp chat went unanswered whenever the database could not be read. Now it is answered as usual and AUTOMATIONS shows what went wrong.
