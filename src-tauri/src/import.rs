@@ -263,6 +263,34 @@ fn collect_reminders(folder: &Path, bundle: &mut Bundle) {
     }
 }
 
+/// How many characters a project's status and its "last accessed" text hold in the database
+/// (both columns are VARCHAR(64)).
+const PROJECT_TEXT_MAX: usize = 64;
+
+/// `text` cut to at most `max` characters, ending in "…" when something was cut, so a long line
+/// in the project list can never be refused by the column it goes into. The whole list stays
+/// kept as a file in the database either way.
+fn fit(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text.to_string();
+    }
+    let mut cut: String = text.chars().take(max - 1).collect();
+    cut.truncate(cut.trim_end().len());
+    cut.push('…');
+    cut
+}
+
+/// Why a project row was refused, naming the project: the database's own code tells a value that
+/// is too long (1406) from anything else.
+fn project_error(name: &str, error: &mysql::Error) -> String {
+    let why = match error {
+        mysql::Error::MySqlError(e) if e.code == 1406 => "one of its values is longer than the database holds",
+        mysql::Error::MySqlError(_) => "the database refused it",
+        _ => "the database could not be reached",
+    };
+    format!("Moving the project \"{name}\" did not work ({why}), so nothing was changed.")
+}
+
 /// The project list's rows (both shelves), then every project page the list does not name.
 fn collect_projects(folder: &Path, bundle: &mut Bundle) {
     let projects = folder.join("projects");
@@ -290,7 +318,10 @@ fn collect_projects(folder: &Path, bundle: &mut Bundle) {
             };
             let source_file = file.filter(|f| bundle.take(folder, &folder.join(f)));
             let cell_at = |i: usize| cells.get(i).map(|c| c.to_string()).filter(|c| !c.is_empty());
-            bundle.projects.push(ProjectRow { name, status: cell_at(3), archived, last_updated: cell_at(2), source_file });
+            // the list's cells can be a whole sentence; the database's columns hold 64 characters
+            let status = cell_at(3).map(|c| fit(&c, PROJECT_TEXT_MAX));
+            let last_updated = cell_at(2).map(|c| fit(&c, PROJECT_TEXT_MAX));
+            bundle.projects.push(ProjectRow { name, status, archived, last_updated, source_file });
         }
     }
     let mut pages = Vec::new();
@@ -393,7 +424,7 @@ pub fn load(conn: &mut Conn, bundle: &Bundle) -> Result<(), String> {
              ON DUPLICATE KEY UPDATE status = VALUES(status), shelf = VALUES(shelf), body = VALUES(body), source_file = VALUES(source_file), last_updated = VALUES(last_updated)",
             (&row.name, &row.status, shelf, body, &row.source_file, &row.last_updated),
         )
-        .map_err(sql("Moving a project"))?;
+        .map_err(|e| project_error(&row.name, &e))?;
     }
     for path in &bundle.memory {
         crate::mirror::save_memory(&mut tx, path, bundle.body_of(path).unwrap_or_default())?;
@@ -576,6 +607,49 @@ mod tests {
         let mut names = vec!["diary-10.md", "diary-2.md", "diary-1.md", "notes.md"];
         names.sort_by_key(|n| natural_key(n));
         assert_eq!(names, vec!["diary-1.md", "diary-2.md", "diary-10.md", "notes.md"]);
+    }
+
+    #[test]
+    fn a_long_text_is_cut_to_what_the_column_holds_and_a_short_one_is_left_alone() {
+        assert_eq!(fit("LIVE - 2026-11-20", 64), "LIVE - 2026-11-20");
+        let exactly: String = "a".repeat(64);
+        assert_eq!(fit(&exactly, 64), exactly);
+        let long = format!("\u{1F7E2} LIVE - 2026-11-20: {}", "word ".repeat(100));
+        let cut = fit(&long, 64);
+        assert!(cut.chars().count() <= 64, "{} characters", cut.chars().count());
+        assert!(cut.ends_with('\u{2026}') && cut.starts_with("\u{1F7E2} LIVE - 2026-11-20: word"), "{cut}");
+        assert!(!cut.contains(" \u{2026}"), "no space is left before the cut mark");
+    }
+
+    #[test]
+    fn a_status_line_longer_than_the_column_no_longer_stops_the_move() {
+        let root = std::env::temp_dir().join(format!("castle-import-longstatus-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("projects").join("active")).unwrap();
+        std::fs::write(root.join("projects").join("active").join("orbit.md"), "# Orbit\n\nNotes.\n").unwrap();
+        let sentence = "\u{1F7E2} LIVE \u{2014} 2026-11-20: card sharing by link live and the push notifications tested on his phone ".repeat(8);
+        let list = format!(
+            "## Active\n\n| Pos | Project | Last Accessed | Status |\n|-----|---------|---------------|--------|\n| #1 | [Orbit](active/orbit.md) | 2026-11-20 | {sentence} |\n| #2 | [Small](active/small.md) | 2026-11-19 | LIVE |\n"
+        );
+        std::fs::write(root.join("projects").join("project-list.md"), list).unwrap();
+        let bundle = collect(&root);
+        let orbit = bundle.projects.iter().find(|p| p.name == "Orbit").expect("Orbit is listed");
+        let status = orbit.status.as_deref().unwrap();
+        assert!(status.chars().count() <= PROJECT_TEXT_MAX, "{} characters", status.chars().count());
+        assert!(status.ends_with('\u{2026}'));
+        assert_eq!(orbit.source_file.as_deref(), Some("projects/active/orbit.md"), "its page is still attached");
+        assert_eq!(bundle.projects.iter().find(|p| p.name == "Small").unwrap().status.as_deref(), Some("LIVE"), "a short status is untouched");
+        assert!(bundle.body_of("projects/project-list.md").unwrap().contains(sentence.trim()), "the whole list is still kept as a file");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_refused_project_is_named_with_the_reason() {
+        let too_long = mysql::Error::MySqlError(mysql::MySqlError { state: "22001".into(), message: "Data too long for column 'status' at row 1".into(), code: 1406 });
+        let message = project_error("Orbit", &too_long);
+        assert!(message.contains("\"Orbit\"") && message.contains("longer than the database holds") && message.ends_with("so nothing was changed."), "{message}");
+        let other = mysql::Error::MySqlError(mysql::MySqlError { state: "23000".into(), message: "Duplicate entry".into(), code: 1062 });
+        assert!(project_error("Pangkor", &other).contains("the database refused it"));
     }
 
     #[test]
